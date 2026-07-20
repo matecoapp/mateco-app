@@ -524,6 +524,7 @@ function DispatcherApp() {
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
+  const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť appku ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
@@ -617,6 +618,16 @@ function DispatcherApp() {
     if (!profile) return null;
     return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email };
   }, [session, profiles]);
+
+  // Admin si vie appku dočasne "prezrieť" ako iná rola (napr. aby nevidel mazacie
+  // tlačidlá bežne) — mení sa len to, čo appka POVOLÍ v tejto session, skutočná
+  // rola v databáze sa vôbec nemení a admin sa kedykoľvek vráti späť.
+  const effectiveUser = useMemo(() => {
+    if (currentUser && isAdminUser(currentUser) && viewAsRole) {
+      return { ...currentUser, role: viewAsRole };
+    }
+    return currentUser;
+  }, [currentUser, viewAsRole]);
 
   async function signUpNewAccount({ email, password, name }) {
     const { data, error } = await supabase.auth.signUp({
@@ -1258,6 +1269,8 @@ function DispatcherApp() {
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
         currentUser={currentUser}
+        viewAsRole={viewAsRole}
+        onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
       />
@@ -1343,7 +1356,7 @@ function DispatcherApp() {
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
             driverById={driverById}
-            canEdit={canEditPoziciovna(currentUser)}
+            canEdit={canEditPoziciovna(effectiveUser)}
             onAddMachine={() => setShowAddMachine({})}
             onAddJob={(machineId) => setShowAddJob({ machineId })}
             onImport={() => setShowImport(true)}
@@ -1818,7 +1831,7 @@ function DispatcherApp() {
 /* ---------------------------------------------------------
    Header
 --------------------------------------------------------- */
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onLogout, onOpenUserAdmin }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -1903,7 +1916,31 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             {currentUser && (
               <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
                 {currentUser.name} · {roleLabel(currentUser.role)}
+                {isAdminUser(currentUser) && viewAsRole && (
+                  <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>
+                )}
               </div>
+            )}
+            {isAdminUser(currentUser) && (
+              <select
+                value={viewAsRole || ""}
+                onChange={(e) => onSetViewAsRole(e.target.value || null)}
+                title="Dočasne si pozrieť appku ako iná rola (nemení skutočnú rolu v databáze)"
+                style={{
+                  fontSize: 11,
+                  color: viewAsRole ? "#1a1a1a" : "#fff",
+                  background: viewAsRole ? "#ffe08a" : "rgba(255,255,255,.12)",
+                  border: "1px solid rgba(255,255,255,.25)",
+                  borderRadius: 4,
+                  padding: "3px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">Zobraziť ako: Administrátor</option>
+                {ROLES.filter((r) => r.id !== "admin").map((r) => (
+                  <option key={r.id} value={r.id}>Zobraziť ako: {r.label}</option>
+                ))}
+              </select>
             )}
             {isAdminUser(currentUser) && (
               <button
