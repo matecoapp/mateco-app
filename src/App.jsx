@@ -207,9 +207,27 @@ const supabase = createClient(
 
 async function loadKey(key, fallback) {
   try {
-    const { data, error } = await supabase.from("app_data").select("value").eq("key", key).maybeSingle();
+    const { data, error } = await supabase
+      .from("app_data")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+
     if (error || !data) return fallback;
-    return data.value ?? fallback;
+
+    let value = data.value;
+
+    if (typeof value === "string") {
+      try {
+        value = JSON.parse(value);
+      } catch (e) {
+        console.error("JSON parse failed", key, e);
+        return fallback;
+      }
+    }
+
+    return value ?? fallback;
+
   } catch (e) {
     console.error("loadKey failed", key, e);
     return fallback;
