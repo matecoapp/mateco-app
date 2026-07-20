@@ -251,11 +251,18 @@ function sendMailWithClient(client, mail) {
 // Zavolajte odkiaľkoľvek v appke: ak už appka pozná preferenciu, mail sa
 // rovno otvorí; inak sa najprv opýta (a odpoveď si zapamätá).
 function composeMail(mail) {
-  const pref = localStorage.getItem(MAIL_PREF_KEY);
+  let pref = null;
+  try {
+    pref = localStorage.getItem(MAIL_PREF_KEY);
+  } catch (e) {
+    console.error("localStorage nedostupný, appka sa opýta znova", e);
+  }
   if (pref === "web" || pref === "desktop") {
     sendMailWithClient(pref, mail);
   } else if (_mailComposeListener) {
     _mailComposeListener(mail);
+  } else {
+    console.error("composeMail: mailComposeListener ešte nie je zaregistrovaný");
   }
 }
 
@@ -962,6 +969,7 @@ function DispatcherApp() {
   }
   const myNotifications = useMemo(() => {
     if (!currentUser) return [];
+    if (isAdminUser(currentUser)) return notifications; // admin vidí všetko, na testovanie aj dohľad
     return notifications.filter((n) => (n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name));
   }, [notifications, currentUser]);
   const unreadNotificationCount = useMemo(
@@ -2180,7 +2188,13 @@ function MailChoiceModal({ mail, onClose }) {
   const [remember, setRemember] = useState(true);
 
   function choose(client) {
-    if (remember) localStorage.setItem(MAIL_PREF_KEY, client);
+    if (remember) {
+      try {
+        localStorage.setItem(MAIL_PREF_KEY, client);
+      } catch (e) {
+        console.error("Nepodarilo sa uložiť preferenciu (localStorage nedostupný)", e);
+      }
+    }
     sendMailWithClient(client, mail);
     onClose();
   }
