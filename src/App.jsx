@@ -661,6 +661,8 @@ function DispatcherApp() {
   const [notifications, setNotifications] = useState([]);
   const [transportSendLog, setTransportSendLog] = useState([]); // [{id, driverId, date, sentAt, transportIds:[...]}]
   const [customers, setCustomers] = useState([]); // databáza zákazníkov
+  const [depoCheckers, setDepoCheckers] = useState({}); // { "Bratislava": technicianId, ... }
+  const [showDepoCheckerSettings, setShowDepoCheckerSettings] = useState(false);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
@@ -683,6 +685,7 @@ function DispatcherApp() {
 
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
+  const dayAfterTomorrow = addDaysISO(today, 2);
 
   useEffect(() => {
     setSaveStatusListener((status, key) => {
@@ -715,12 +718,12 @@ function DispatcherApp() {
       // Neprihlásený — vyprázdni a označ ako "načítané" (zobrazí sa prihlasovacia obrazovka)
       setMachines([]); setDrivers([]); setJobs([]); setTechnicians([]);
       setAssignments([]); setDamages([]); setWeeklyDuty([]); setNotifications([]);
-      setTransportSendLog([]); setCustomers([]);
+      setTransportSendLog([]); setCustomers([]); setDepoCheckers({});
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, d, j, t, a, dmg, wd, notif, tsl, cust] = await Promise.all([
+      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -731,6 +734,7 @@ function DispatcherApp() {
         loadKey("notifications", []),
         loadKey("transportSendLog", []),
         loadKey("customers", []),
+        loadKey("depoCheckers", {}),
       ]);
       setMachines(m);
       setDrivers(d);
@@ -742,6 +746,7 @@ function DispatcherApp() {
       setNotifications(notif);
       setTransportSendLog(tsl);
       setCustomers(cust);
+      setDepoCheckers(dc);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -873,6 +878,11 @@ function DispatcherApp() {
   const persistCustomers = useCallback((next) => {
     setCustomers(next);
     saveKey("customers", next);
+  }, []);
+
+  const persistDepoCheckers = useCallback((next) => {
+    setDepoCheckers(next);
+    saveKey("depoCheckers", next);
   }, []);
 
   // Nájde/založí zákazníka podľa názvu firmy (case-insensitive) a doplní/aktualizuje kontaktné údaje.
@@ -1339,12 +1349,13 @@ function DispatcherApp() {
       const st = effectiveStatus(j, today);
       return st === "active" && daysBetween(today, j.endDate) <= 2;
     });
+    const endingTomorrow = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate === tomorrow);
     const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
     const revisionSoon = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) >= 0 && daysBetween(today, m.revizia) <= 30);
     const revisionOverdue = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) < 0);
     const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa");
     const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
-    return { overdue, endingSoon, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
+    return { overdue, endingSoon, endingTomorrow, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
   }, [jobs, machines, today, tomorrow, damages]);
 
   const stats = useMemo(() => {
@@ -1480,14 +1491,17 @@ function DispatcherApp() {
   function assignReturnDriver(jobId, driverId) {
     updateJob(jobId, { returnDriverId: driverId || null });
   }
-  function assignChecker(jobId, technicianId) {
-    updateJob(jobId, { checkerId: technicianId || null });
+  // Checker sa už nezadáva ručne — vypočíta sa automaticky podľa depa (nastavenie nižšie).
+  function checkerForDepo(depo) {
+    const techId = depoCheckers[depo];
+    return techId ? technicianByIdTop[techId] : null;
   }
 
   function mailtoDriver(job) {
     const driver = driverById[job.driverId];
     const machine = machineById[job.machineId];
-    if (!driver?.email) return null;
+    if (!driver) return null;
+    const email = driver.email || nameToEmail(driver.name);
     const subject = `Zákazka: stroj ${machine?.code} — ${fmtDate(job.startDate)} → ${fmtDate(job.endDate)}`;
     const body =
       `Dobrý deň ${driver.name},\n\n` +
@@ -1499,7 +1513,7 @@ function DispatcherApp() {
       `Termín: ${fmtDate(job.startDate)} — ${fmtDate(job.endDate)}\n` +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
-    return `mailto:${driver.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
   function mailtoCustomer(job) {
     const machine = machineById[job.machineId];
@@ -1586,6 +1600,7 @@ function DispatcherApp() {
         onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
+        onOpenDepoCheckerSettings={() => setShowDepoCheckerSettings(true)}
         myNotifications={myNotifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationRead={markNotificationRead}
@@ -1599,6 +1614,14 @@ function DispatcherApp() {
           onClose={() => setShowUserAdmin(false)}
           onUpdate={updateProfileInfo}
           onDelete={(id) => askDelete(`používateľa ${profiles.find((p) => p.id === id)?.name || ""}`, () => deleteProfile(id))}
+        />
+      )}
+      {showDepoCheckerSettings && (
+        <DepoCheckerSettingsModal
+          depoCheckers={depoCheckers}
+          technicians={technicians}
+          onSave={persistDepoCheckers}
+          onClose={() => setShowDepoCheckerSettings(false)}
         />
       )}
 
@@ -1721,10 +1744,12 @@ function DispatcherApp() {
             machineById={machineById}
             today={today}
             tomorrow={tomorrow}
+            dayAfterTomorrow={dayAfterTomorrow}
             user={effectiveUser}
             assignDriver={assignDriver}
             assignReturnDriver={assignReturnDriver}
-            assignChecker={assignChecker}
+            depoCheckers={depoCheckers}
+            technicianById={technicianByIdTop}
             technicians={technicians}
             getTransportSendStatus={getTransportSendStatus}
             recordTransportSend={recordTransportSend}
@@ -2094,6 +2119,7 @@ function DispatcherApp() {
           job={completeJobTarget}
           machine={machineById[completeJobTarget.machineId]}
           drivers={drivers}
+          technicians={technicians}
           today={today}
           onClose={() => setCompleteJobTarget(null)}
           onSave={(data) => completeJob(completeJobTarget.id, data)}
@@ -2105,6 +2131,7 @@ function DispatcherApp() {
           machine={machineById[jobDetail.machineId]}
           driverById={driverById}
           technicianById={technicianByIdTop}
+          depoCheckers={depoCheckers}
           user={effectiveUser}
           onClose={() => setJobDetail(null)}
           onEdit={() => {
@@ -2336,7 +2363,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, onOpenDepoCheckerSettings, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -2492,6 +2519,22 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                 👤 Používatelia
               </button>
             )}
+            {isAdminUser(currentUser) && (
+              <button
+                onClick={onOpenDepoCheckerSettings}
+                style={{
+                  fontSize: 11,
+                  color: "#fff",
+                  background: "rgba(255,255,255,.12)",
+                  border: "1px solid rgba(255,255,255,.25)",
+                  borderRadius: 4,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                🔧 Checkeri podľa depa
+              </button>
+            )}
             <button
               onClick={onLogout}
               style={{
@@ -2641,6 +2684,36 @@ function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onO
       ),
     },
     {
+      key: "endingTomorrow",
+      title: "Zákazky končiace zajtra",
+      color: "var(--warn)",
+      items: alerts.endingTomorrow,
+      renderItem: (j) => (
+        <div key={j.id} style={{ fontSize: 13, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>
+            <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
+            {j.customer ? ` · ${j.customer}` : ""}
+            {!j.customerEmail && <span style={{ color: "var(--text-dim)" }}> (bez emailu v karte)</span>}
+          </span>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 10, padding: "2px 7px" }}
+            title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
+            onClick={(e) => {
+              e.stopPropagation();
+              composeMail({
+                to: j.customerEmail || "",
+                subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
+                body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+              });
+            }}
+          >
+            ✉️ Odoslať zákazníkovi
+          </button>
+        </div>
+      ),
+    },
+    {
       key: "endingSoon",
       title: "Zákazka končí čoskoro",
       color: "var(--warn)",
@@ -2651,22 +2724,21 @@ function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onO
             <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
             {j.customer ? ` · ${j.customer}` : ""}
           </span>
-          {j.customerEmail && (
-            <button
-              className="btn btn-ghost"
-              style={{ fontSize: 10, padding: "2px 7px" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                composeMail({
-                  to: j.customerEmail,
-                  subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
-                  body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
-                });
-              }}
-            >
-              ✉️ Upozorniť zákazníka
-            </button>
-          )}
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 10, padding: "2px 7px" }}
+            title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
+            onClick={(e) => {
+              e.stopPropagation();
+              composeMail({
+                to: j.customerEmail || "",
+                subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
+                body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+              });
+            }}
+          >
+            ✉️ Upozorniť zákazníka
+          </button>
         </div>
       ),
     },
@@ -3184,7 +3256,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImp
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user, assignDriver, assignReturnDriver, assignChecker, technicians, getTransportSendStatus, recordTransportSend, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, assignDriver, assignReturnDriver, depoCheckers, technicianById, technicians, getTransportSendStatus, recordTransportSend, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [driverFilter, setDriverFilter] = useState("");
@@ -3204,7 +3276,6 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           type: "vyvoz",
           date: j.startDate,
           driverId: j.driverId || null,
-          checkerId: j.checkerId || null,
           machineId: j.machineId,
           from: j.fromDepo || "—",
           to: j.toLocation || "—",
@@ -3234,14 +3305,14 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
   const summary = useMemo(() => {
     const map = {};
     transports.forEach((t) => {
-      if (t.date !== today && t.date !== tomorrow) return;
+      if (t.date !== today && t.date !== tomorrow && t.date !== dayAfterTomorrow) return;
       const key = t.driverId || "unassigned";
-      if (!map[key]) map[key] = { todayVyvoz: 0, todayZvoz: 0, tomorrowVyvoz: 0, tomorrowZvoz: 0 };
-      const bucket = t.date === today ? "today" : "tomorrow";
+      if (!map[key]) map[key] = { todayVyvoz: 0, todayZvoz: 0, tomorrowVyvoz: 0, tomorrowZvoz: 0, dayAfterVyvoz: 0, dayAfterZvoz: 0 };
+      const bucket = t.date === today ? "today" : t.date === tomorrow ? "tomorrow" : "dayAfter";
       map[key][bucket + (t.type === "vyvoz" ? "Vyvoz" : "Zvoz")] += 1;
     });
     return map;
-  }, [transports, today, tomorrow]);
+  }, [transports, today, tomorrow, dayAfterTomorrow]);
   const summaryDriverIds = [
     ...drivers.filter((d) => !d.archived && summary[d.id]).map((d) => d.id),
     ...(summary.unassigned ? ["unassigned"] : []),
@@ -3289,54 +3360,53 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
       <div
         key={t.id}
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
           padding: "8px 0",
           borderTop: t.overdue ? "1px solid var(--danger)" : "1px solid var(--border)",
-          flexWrap: "wrap",
         }}
       >
-        <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`} style={{ minWidth: 52, textAlign: "center" }}>
-          {isVyvoz ? "Vývoz" : "Zvoz"}
-        </span>
-        <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
-        {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
-        <span className="mono" style={{ fontSize: 12 }}>{machine?.code || "—"}</span>
-        <span style={{ fontSize: 12 }}>
-          {t.from} <span style={{ color: "var(--text-dim)" }}>→</span> {t.to}
-        </span>
-        {t.customer && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>· {t.customer}</span>}
-        {isVyvoz && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Checker:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+          <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`} style={{ minWidth: 52, textAlign: "center" }}>
+            {isVyvoz ? "Vývoz" : "Zvoz"}
+          </span>
+          <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
+          {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
+          <span className="mono" style={{ fontSize: 12 }}>{machine?.code || "—"}</span>
+          <span style={{ fontSize: 12 }}>
+            {t.from} <span style={{ color: "var(--text-dim)" }}>→</span> {t.to}
+          </span>
+          {t.customer && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>· {t.customer}</span>}
+        </div>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>
+              Checker {isVyvoz ? "(vývoz)" : "(zvoz — kontrola po návrate)"}
+            </div>
+            {(() => {
+              const depo = isVyvoz ? t.from : t.to;
+              const techId = depoCheckers?.[depo];
+              const tech = techId ? technicianById?.[techId] : null;
+              return (
+                <span style={{ fontSize: 11, color: tech ? "var(--text)" : "var(--text-dim)" }} title={`Podľa depa: ${depo}`}>
+                  {tech ? tech.name : "— nenastavené pre toto depo —"}
+                </span>
+              );
+            })()}
+          </div>
+          <div>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Šofér</div>
             {can(user, "transport_assign_driver") ? (
               <select
-                value={t.checkerId || ""}
-                onChange={(e) => assignChecker(t.jobId, e.target.value)}
+                value={t.driverId || ""}
+                onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
                 style={{ fontSize: 11, padding: "4px 6px" }}
               >
                 <option value="">— neurčený —</option>
-                {(technicians || []).filter((tc) => !tc.archived).map((tc) => <option key={tc.id} value={tc.id}>{tc.name}</option>)}
+                {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             ) : (
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.checkerId ? technicians?.find((tc) => tc.id === t.checkerId)?.name : "— neurčený —"}</span>
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
             )}
           </div>
-        )}
-        <div style={{ marginLeft: "auto" }}>
-          {can(user, "transport_assign_driver") ? (
-            <select
-              value={t.driverId || ""}
-              onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
-              style={{ fontSize: 11, padding: "4px 6px" }}
-            >
-              <option value="">— neurčený —</option>
-              {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          ) : (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
-          )}
         </div>
       </div>
     );
@@ -3361,7 +3431,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
       {summaryDriverIds.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Rýchly prehľad — dnes / zajtra{driverFilter ? " (len vybraný šofér)" : ""}
+            Rýchly prehľad — dnes / zajtra / pozajtra{driverFilter ? " (len vybraný šofér)" : ""}
           </div>
           <table>
             <thead>
@@ -3371,7 +3441,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                 <th>Zvoz dnes</th>
                 <th>Vývoz zajtra</th>
                 <th>Zvoz zajtra</th>
+                <th>Vývoz pozajtra</th>
+                <th>Zvoz pozajtra</th>
                 <th>Zajtrajšie prepravy</th>
+                <th>Pozajtrajšie prepravy</th>
               </tr>
             </thead>
             <tbody>
@@ -3381,8 +3454,40 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                 const cellClick = (dateVal, type, label) => {
                   setQuickFilter({ key, dateVal, type, label, driverName: driver ? driver.name : "Nepridelené" });
                 };
-                const tomorrowIds = transports.filter((t) => t.driverId === key && t.date === tomorrow).map((t) => t.id);
-                const sendStatus = driver ? getTransportSendStatus(driver.id, tomorrow, tomorrowIds) : null;
+
+                function sendCell(dateVal, dayLabel) {
+                  const ids = transports.filter((t) => t.driverId === key && t.date === dateVal).map((t) => t.id);
+                  const status = driver ? getTransportSendStatus(driver.id, dateVal, ids) : null;
+                  if (!driver || ids.length === 0) return <span style={{ color: "var(--text-dim)", fontSize: 11 }}>—</span>;
+                  if (!can(user, "transport_assign_driver")) {
+                    return <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{status.sent ? "odoslané" : "—"}</span>;
+                  }
+                  return (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: "4px 8px", color: status.sent && !status.newCount ? "var(--ok)" : "var(--accent)" }}
+                      title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
+                      onClick={() => {
+                        const items = transports.filter((t) => t.driverId === driver.id && t.date === dateVal);
+                        const lines = items.map((t) => {
+                          const m = machineById[t.machineId];
+                          const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
+                          return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
+                        });
+                        const body = `Dobrý deň ${driver.name},\n\nna ${dayLabel} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
+                        composeMail({ to: driver.email || nameToEmail(driver.name), subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
+                        recordTransportSend(driver.id, dateVal, items.map((t) => t.id));
+                      }}
+                    >
+                      {!status.sent
+                        ? "📧 Odoslať"
+                        : status.newCount > 0
+                        ? `📧 Odoslať znova (+${status.newCount})`
+                        : `✓ Odoslané ${new Date(status.sentAt).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`}
+                    </button>
+                  );
+                }
+
                 return (
                   <tr key={key}>
                     <td style={{ fontWeight: 600 }}>{driver ? driver.name : "Nepridelené"}</td>
@@ -3390,37 +3495,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                     <td className="mono" style={{ cursor: s.todayZvoz ? "pointer" : "default", textDecoration: s.todayZvoz ? "underline" : "none" }} onClick={() => s.todayZvoz && cellClick(today, "zvoz", "Zvoz dnes")}>{s.todayZvoz || 0}</td>
                     <td className="mono" style={{ cursor: s.tomorrowVyvoz ? "pointer" : "default", textDecoration: s.tomorrowVyvoz ? "underline" : "none" }} onClick={() => s.tomorrowVyvoz && cellClick(tomorrow, "vyvoz", "Vývoz zajtra")}>{s.tomorrowVyvoz || 0}</td>
                     <td className="mono" style={{ cursor: s.tomorrowZvoz ? "pointer" : "default", textDecoration: s.tomorrowZvoz ? "underline" : "none" }} onClick={() => s.tomorrowZvoz && cellClick(tomorrow, "zvoz", "Zvoz zajtra")}>{s.tomorrowZvoz || 0}</td>
-                    <td>
-                      {!driver || tomorrowIds.length === 0 ? (
-                        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>—</span>
-                      ) : !driver.email ? (
-                        <span style={{ color: "var(--text-dim)", fontSize: 11 }} title="Šofér nemá vyplnený email">bez emailu</span>
-                      ) : !can(user, "transport_assign_driver") ? (
-                        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{sendStatus.sent ? "odoslané" : "—"}</span>
-                      ) : (
-                        <button
-                          className="btn btn-ghost"
-                          style={{ fontSize: 11, padding: "4px 8px", color: sendStatus.sent && !sendStatus.newCount ? "var(--ok)" : "var(--accent)" }}
-                          onClick={() => {
-                            const items = transports.filter((t) => t.driverId === driver.id && t.date === tomorrow);
-                            const lines = items.map((t) => {
-                              const m = machineById[t.machineId];
-                              const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
-                              return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
-                            });
-                            const body = `Dobrý deň ${driver.name},\n\nna zajtra (${fmtDate(tomorrow)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                            composeMail({ to: driver.email, subject: `Prepravy na zajtra ${fmtDate(tomorrow)}`, body });
-                            recordTransportSend(driver.id, tomorrow, items.map((t) => t.id));
-                          }}
-                        >
-                          {!sendStatus.sent
-                            ? "📧 Odoslať"
-                            : sendStatus.newCount > 0
-                            ? `📧 Odoslať znova (+${sendStatus.newCount})`
-                            : `✓ Odoslané ${new Date(sendStatus.sentAt).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`}
-                        </button>
-                      )}
-                    </td>
+                    <td className="mono" style={{ cursor: s.dayAfterVyvoz ? "pointer" : "default", textDecoration: s.dayAfterVyvoz ? "underline" : "none" }} onClick={() => s.dayAfterVyvoz && cellClick(dayAfterTomorrow, "vyvoz", "Vývoz pozajtra")}>{s.dayAfterVyvoz || 0}</td>
+                    <td className="mono" style={{ cursor: s.dayAfterZvoz ? "pointer" : "default", textDecoration: s.dayAfterZvoz ? "underline" : "none" }} onClick={() => s.dayAfterZvoz && cellClick(dayAfterTomorrow, "zvoz", "Zvoz pozajtra")}>{s.dayAfterZvoz || 0}</td>
+                    <td>{sendCell(tomorrow, "zajtra")}</td>
+                    <td>{sendCell(dayAfterTomorrow, "pozajtra")}</td>
                   </tr>
                 );
               })}
@@ -3656,7 +3734,7 @@ function AddDriverModal({ existing, onClose, onSave }) {
 /* ---------------------------------------------------------
    Add Job Modal
 --------------------------------------------------------- */
-function CompleteJobModal({ job, machine, drivers, today, onClose, onSave }) {
+function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, onSave }) {
   const [endDate, setEndDate] = useState(job.endDate || today);
   const [returnDepo, setReturnDepo] = useState(job.returnDepo || job.fromDepo || machine?.depo || "");
   const [returnDriverId, setReturnDriverId] = useState(job.returnDriverId || "");
@@ -3694,8 +3772,10 @@ function CompleteJobModal({ job, machine, drivers, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Job detail modal (clicked from Kalendár)
 --------------------------------------------------------- */
-function JobDetailModal({ job, machine, driverById, technicianById, user, onClose, onEdit, onComplete, onReportDamage }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, user, onClose, onEdit, onComplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
+  const checkerVyvoz = depoCheckers?.[job.fromDepo] ? technicianById?.[depoCheckers[job.fromDepo]] : null;
+  const checkerZvoz = depoCheckers?.[job.returnDepo || job.fromDepo] ? technicianById?.[depoCheckers[job.returnDepo || job.fromDepo]] : null;
   return (
     <Modal title={`${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`} onClose={onClose}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
@@ -3707,7 +3787,8 @@ function JobDetailModal({ job, machine, driverById, technicianById, user, onClos
         <CardField label="Koniec" value={fmtDate(job.endDate)} />
         <CardField label="Šofér (vývoz)" value={job.driverId ? driverById[job.driverId]?.name : "— neurčený —"} />
         <CardField label="Šofér (zvoz)" value={job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
-        <CardField label="Checker (vývoz)" value={job.checkerId ? technicianById?.[job.checkerId]?.name : "— neurčený —"} />
+        <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
+        <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
         <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik)} />
         <CardField label="Číslo zmluvy" value={job.cisloZmluvy} />
       </div>
@@ -3735,7 +3816,6 @@ function JobDetailModal({ job, machine, driverById, technicianById, user, onClos
 function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer, prefillMachineId, existing, onClose, onSave, onDelete }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
-  const [checkerId, setCheckerId] = useState(existing?.checkerId || "");
   const machine = machines.find((m) => m.id === machineId);
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
@@ -3767,12 +3847,6 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
           <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
             <option value="">— zatiaľ neurčený —</option>
             {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Checker (pripraví stroj na vývoz)">
-          <select value={checkerId} onChange={(e) => setCheckerId(e.target.value)} style={{ width: "100%" }}>
-            <option value="">— zatiaľ neurčený —</option>
-            {(technicians || []).filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </Field>
         <Field label="Odkiaľ (depo)">
@@ -3828,7 +3902,6 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
             onSave({
               machineId,
               driverId: driverId || null,
-              checkerId: checkerId || null,
               fromDepo: fromDepo.trim(),
               toLocation: toLocation.trim(),
               customer: customer.trim(),
@@ -6359,6 +6432,50 @@ function LoginScreen({ onLogin, onSignUp }) {
    meno, aktívny/neaktívny). Heslá a samotné vytváranie účtov
    rieši Supabase Auth priamo (kolegovia sa registrujú sami).
 --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Nastavenie: ktorý technik je "checker" pre ktoré depo
+   (admin only) — dá sa kedykoľvek zmeniť, napr. pri dovolenke
+   alebo zmene človeka na tejto úlohe.
+--------------------------------------------------------- */
+function DepoCheckerSettingsModal({ depoCheckers, technicians, onSave, onClose }) {
+  const [values, setValues] = useState(depoCheckers || {});
+
+  return (
+    <Modal title="Checkeri podľa depa" onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 16 }}>
+        Kto skontroluje/pripraví stroj na danom depe pri vývoze aj zvoze — appka to už nebude pýtať pri
+        každej zákazke zvlášť. Zmeňte tu kedykoľvek (dovolenka, zmena osoby na tejto úlohe a pod.).
+      </div>
+      {DEPO_OPTIONS.map((depo) => (
+        <Field key={depo} label={depo}>
+          <select
+            value={values[depo] || ""}
+            onChange={(e) => setValues((v) => ({ ...v, [depo]: e.target.value || undefined }))}
+            style={{ width: "100%" }}
+          >
+            <option value="">— nenastavené —</option>
+            {technicians.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+      ))}
+      <button
+        className="btn btn-accent"
+        onClick={() => {
+          // vyčistí prázdne hodnoty, nech sa v databáze nehromadí "undefined"
+          const cleaned = {};
+          Object.entries(values).forEach(([k, v]) => {
+            if (v) cleaned[k] = v;
+          });
+          onSave(cleaned);
+          onClose();
+        }}
+      >
+        Uložiť
+      </button>
+    </Modal>
+  );
+}
+
 function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete }) {
   const [editingId, setEditingId] = useState(null);
 
