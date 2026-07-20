@@ -653,13 +653,29 @@ function DispatcherApp() {
     if (currentUser?.id === id) setCurrentUser(null);
   }
   async function attemptLogin(username, password) {
-    const u = users.find((x) => x.username === username.trim().toLowerCase());
-    if (!u) return { ok: false, message: "Nesprávne meno alebo heslo." };
-    if (u.active === false) return { ok: false, message: "Tento účet je deaktivovaný." };
-    const ok = await verifyPassword(password, u.passwordSalt, u.passwordHash);
-    if (!ok) return { ok: false, message: "Nesprávne meno alebo heslo." };
-    return { ok: true, user: u };
-  }
+  console.log("LOGIN INPUT:", username, password);
+
+  console.log("USERS STATE:", users);
+
+  const u = users.find(
+    (x) => x.username === username.trim().toLowerCase()
+  );
+
+  console.log("FOUND USER:", u);
+
+  if (!u) return { ok: false, message: "Nesprávne meno alebo heslo." };
+
+  console.log("SALT:", u.passwordSalt);
+  console.log("HASH:", u.passwordHash);
+
+  const ok = await verifyPassword(password, u.passwordSalt, u.passwordHash);
+
+  console.log("PASSWORD MATCH:", ok);
+
+  if (!ok) return { ok: false, message: "Nesprávne meno alebo heslo." };
+
+  return { ok: true, user: u };
+}
 
   const persistWeeklyDuty = useCallback((next) => {
     setWeeklyDuty(next);
