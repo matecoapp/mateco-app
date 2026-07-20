@@ -200,6 +200,65 @@ const NO_SALESPERSON_COLOR = "#7C4A1E"; // zákazka bez obchodníka — hnedá
 const salespersonColor = (name) => SALESPEOPLE.find((s) => s.name === name)?.color || null;
 const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const todayISO = () => toLocalISO(new Date());
+
+// meno.priezvisko@matecoslovakia.sk — odstráni diakritiku, zmení na malé písmená
+function nameToEmail(fullName, domain = "matecoslovakia.sk") {
+  if (!fullName) return "";
+  const clean = fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // odstráni diakritiku
+    .trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return `${clean.toLowerCase()}@${domain}`;
+  const first = parts[0].toLowerCase();
+  const last = parts[parts.length - 1].toLowerCase();
+  return `${first}.${last}@${domain}`;
+}
+
+/* ---------------------------------------------------------
+   Email — hybridné odosielanie (Outlook Web / mailto pre desktop appku
+   alebo mobil). Appka si zapamätá voľbu v prehliadači (localStorage).
+--------------------------------------------------------- */
+const MAIL_PREF_KEY = "mateco_mail_client_pref"; // "web" | "desktop"
+let _mailComposeListener = null;
+function setMailComposeListener(fn) {
+  _mailComposeListener = fn;
+}
+function buildMailtoUrl({ to, cc, subject, body }) {
+  const params = new URLSearchParams();
+  if (cc) params.set("cc", cc);
+  if (subject) params.set("subject", subject);
+  if (body) params.set("body", body);
+  const qs = params.toString();
+  return `mailto:${to || ""}${qs ? "?" + qs : ""}`;
+}
+function buildOutlookWebUrl({ to, cc, subject, body }) {
+  const params = new URLSearchParams();
+  params.set("path", "/mail/action/compose");
+  if (to) params.set("to", to);
+  if (cc) params.set("cc", cc);
+  if (subject) params.set("subject", subject);
+  if (body) params.set("body", body);
+  return `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
+}
+function sendMailWithClient(client, mail) {
+  if (client === "web") {
+    window.open(buildOutlookWebUrl(mail), "_blank");
+  } else {
+    window.location.href = buildMailtoUrl(mail);
+  }
+}
+// Zavolajte odkiaľkoľvek v appke: ak už appka pozná preferenciu, mail sa
+// rovno otvorí; inak sa najprv opýta (a odpoveď si zapamätá).
+function composeMail(mail) {
+  const pref = localStorage.getItem(MAIL_PREF_KEY);
+  if (pref === "web" || pref === "desktop") {
+    sendMailWithClient(pref, mail);
+  } else if (_mailComposeListener) {
+    _mailComposeListener(mail);
+  }
+}
+
 const addDaysISO = (iso, days) => {
   const d = new Date(iso + "T00:00:00");
   const shifted = new Date(d.getTime() + days * 86400000);
@@ -570,6 +629,7 @@ function DispatcherApp() {
   const [showAddJob, setShowAddJob] = useState(null); // machineId prefill or true
   const [showImport, setShowImport] = useState(false);
   const [showImportJobs, setShowImportJobs] = useState(false);
+  const [showImportCustomers, setShowImportCustomers] = useState(false);
   const [machineCard, setMachineCard] = useState(null); // machine object for detail modal
   const [confirmDelete, setConfirmDelete] = useState(null); // { label, onConfirm }
   const [archiveTarget, setArchiveTarget] = useState(null); // { label, reasons, onConfirm }
@@ -591,11 +651,15 @@ function DispatcherApp() {
   const [technicianCard, setTechnicianCard] = useState(null);
   const [assignSlot, setAssignSlot] = useState(null); // { technicianId, date }
   const [damages, setDamages] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [transportSendLog, setTransportSendLog] = useState([]); // [{id, driverId, date, sentAt, transportIds:[...]}]
+  const [customers, setCustomers] = useState([]); // databáza zákazníkov
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
+  const [pendingMail, setPendingMail] = useState(null); // { to, cc, subject, body } — čaká na výber Web/Desktop
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť appku ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
@@ -630,6 +694,11 @@ function DispatcherApp() {
   }, []);
 
   useEffect(() => {
+    setMailComposeListener((mail) => setPendingMail(mail));
+    return () => setMailComposeListener(null);
+  }, []);
+
+  useEffect(() => {
     setProtocolMachinesList(machines.map((m) => ({ serial: m.code, model: m.type || "" })));
   }, [machines]);
 
@@ -638,12 +707,13 @@ function DispatcherApp() {
     if (!session) {
       // Neprihlásený — vyprázdni a označ ako "načítané" (zobrazí sa prihlasovacia obrazovka)
       setMachines([]); setDrivers([]); setJobs([]); setTechnicians([]);
-      setAssignments([]); setDamages([]); setWeeklyDuty([]);
+      setAssignments([]); setDamages([]); setWeeklyDuty([]); setNotifications([]);
+      setTransportSendLog([]); setCustomers([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, d, j, t, a, dmg, wd] = await Promise.all([
+      const [m, d, j, t, a, dmg, wd, notif, tsl, cust] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -651,6 +721,9 @@ function DispatcherApp() {
         loadKey("assignments", []),
         loadKey("damages", []),
         loadKey("weeklyDuty", []),
+        loadKey("notifications", []),
+        loadKey("transportSendLog", []),
+        loadKey("customers", []),
       ]);
       setMachines(m);
       setDrivers(d);
@@ -659,6 +732,9 @@ function DispatcherApp() {
       setAssignments(a);
       setDamages(dmg);
       setWeeklyDuty(wd);
+      setNotifications(notif);
+      setTransportSendLog(tsl);
+      setCustomers(cust);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -777,6 +853,121 @@ function DispatcherApp() {
     setDamages(next);
     saveKey("damages", next);
   }, []);
+
+  const persistNotifications = useCallback((next) => {
+    setNotifications(next);
+    saveKey("notifications", next);
+  }, []);
+
+  const persistTransportSendLog = useCallback((next) => {
+    setTransportSendLog(next);
+    saveKey("transportSendLog", next);
+  }, []);
+  const persistCustomers = useCallback((next) => {
+    setCustomers(next);
+    saveKey("customers", next);
+  }, []);
+
+  // Nájde/založí zákazníka podľa názvu firmy (case-insensitive) a doplní/aktualizuje kontaktné údaje.
+  function upsertCustomer({ firma, cisloOdberatela, kontakt, email, telefon }) {
+    if (!firma || !firma.trim()) return;
+    const name = firma.trim();
+    const existing = customers.find((c) => c.firma.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      persistCustomers(
+        customers.map((c) =>
+          c.id === existing.id
+            ? {
+                ...c,
+                cisloOdberatela: cisloOdberatela || c.cisloOdberatela,
+                kontakt: kontakt || c.kontakt,
+                email: email || c.email,
+                telefon: telefon || c.telefon,
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+    } else {
+      persistCustomers([
+        ...customers,
+        {
+          id: uid(),
+          firma: name,
+          cisloOdberatela: cisloOdberatela || "",
+          kontakt: kontakt || "",
+          email: email || "",
+          telefon: telefon || "",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    }
+  }
+  // Hromadný import z ERP (firma + číslo odberateľa) — nepreváži už vyplnené kontaktné údaje.
+  function importCustomers(rows) {
+    let next = [...customers];
+    rows.forEach((row) => {
+      const firma = (row.firma || "").trim();
+      if (!firma) return;
+      const cisloOdberatela = (row.cisloOdberatela || "").trim();
+      const idx = next.findIndex((c) => c.firma.toLowerCase() === firma.toLowerCase());
+      if (idx >= 0) {
+        next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela };
+      } else {
+        next.push({ id: uid(), firma, cisloOdberatela, kontakt: "", email: "", telefon: "", createdAt: new Date().toISOString() });
+      }
+    });
+    persistCustomers(next);
+  }
+
+  // Zaznamená, že preprava daného šoféra na daný deň bola práve odoslaná mailom —
+  // nabudúce appka vie porovnať, či pribudlo niečo nové, a neposielať ticho duplicitu.
+  function recordTransportSend(driverId, date, transportIds) {
+    const withoutOld = transportSendLog.filter((l) => !(l.driverId === driverId && l.date === date));
+    persistTransportSendLog([...withoutOld, { id: uid(), driverId, date, sentAt: new Date().toISOString(), transportIds }]);
+  }
+  function getTransportSendStatus(driverId, date, currentIds) {
+    const log = transportSendLog.find((l) => l.driverId === driverId && l.date === date);
+    if (!log) return { sent: false };
+    const newCount = currentIds.filter((id) => !log.transportIds.includes(id)).length;
+    return { sent: true, sentAt: log.sentAt, newCount };
+  }
+
+  // roles: pole rolí, ktoré majú upozornenie vidieť (napr. ["dispecer_pozicovne","veduci_pozicovne"])
+  // userName: ak je zadané, upozornenie navyše dostane presne ten používateľ, ktorého profilové
+  //           meno sa s týmto textom zhoduje (napr. konkrétny obchodník) — bez ohľadu na jeho rolu
+  function pushNotification({ roles, userName, title, message }) {
+    setNotifications((prev) => {
+      const next = [
+        { id: uid(), createdAt: new Date().toISOString(), roles: roles || [], userName: userName || null, title, message, readBy: [] },
+        ...prev,
+      ].slice(0, 300); // poistka nech to nerastie donekonečna
+      saveKey("notifications", next);
+      return next;
+    });
+  }
+  function markNotificationRead(id) {
+    if (!currentUser) return;
+    persistNotifications(
+      notifications.map((n) => (n.id === id && !n.readBy.includes(currentUser.id) ? { ...n, readBy: [...n.readBy, currentUser.id] } : n))
+    );
+  }
+  function markAllNotificationsRead(visibleIds) {
+    if (!currentUser) return;
+    persistNotifications(
+      notifications.map((n) =>
+        visibleIds.includes(n.id) && !n.readBy.includes(currentUser.id) ? { ...n, readBy: [...n.readBy, currentUser.id] } : n
+      )
+    );
+  }
+  const myNotifications = useMemo(() => {
+    if (!currentUser) return [];
+    return notifications.filter((n) => (n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name));
+  }, [notifications, currentUser]);
+  const unreadNotificationCount = useMemo(
+    () => myNotifications.filter((n) => !n.readBy.includes(currentUser?.id)).length,
+    [myNotifications, currentUser]
+  );
 
   function exportBackup() {
     const backup = {
@@ -911,6 +1102,7 @@ function DispatcherApp() {
       customerContact: machine.currentJob?.customerEmail || "",
       location: machine.currentJob?.toLocation || machine.depo || "",
       customer: machine.currentJob?.customer || "",
+      obchodnik: machine.currentJob?.obchodnik || "", // uložené hneď teraz, nech sa dá spárovať aj keď sa zákazka medzitým zmení/skončí
       dateReported: today,
       popis,
       resolved: false,
@@ -919,6 +1111,11 @@ function DispatcherApp() {
       assignmentId: null,
     };
     persistDamages([...damages, record]);
+    pushNotification({
+      roles: ["dispecer_servisu", "veduci_servisu"],
+      title: "Nové poškodenie",
+      message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis}“.`,
+    });
     setShowDamageReport(null);
   }
   function reportExternalService(data) {
@@ -942,6 +1139,11 @@ function DispatcherApp() {
       assignmentId: null,
     };
     persistDamages([...damages, record]);
+    pushNotification({
+      roles: ["dispecer_servisu", "veduci_servisu"],
+      title: "Nová externá zákazka",
+      message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
+    });
     setShowExternalReport(false);
   }
   function deleteDamage(id) {
@@ -951,11 +1153,21 @@ function DispatcherApp() {
     persistDamages(damages.map((d) => (d.id === id ? { ...d, resolved } : d)));
   }
   function resolveDamage(damageId, stav, opravaDatum, opravaKomentar) {
+    const d = damages.find((x) => x.id === damageId);
     persistDamages(
-      damages.map((d) =>
-        d.id === damageId ? { ...d, stav, resolved: stav === "opravene", opravaDatum, opravaKomentar } : d
+      damages.map((x) =>
+        x.id === damageId ? { ...x, stav, resolved: stav === "opravene", opravaDatum, opravaKomentar } : x
       )
     );
+    if (d && stav === "opravene" && d.type !== "externa") {
+      const where = d.customer || d.location || "—";
+      pushNotification({
+        roles: ["dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu"],
+        userName: d.obchodnik || null,
+        title: "Stroj opravený",
+        message: `Stroj ${d.code} u zákazníka/na depe ${where} bol opravený dňa ${fmtDate(opravaDatum)}.`,
+      });
+    }
     setResolveDamageTarget(null);
   }
   function completeRevision(damageId, performedDate) {
@@ -1073,6 +1285,7 @@ function DispatcherApp() {
   /* ---------------- derived ---------------- */
   const driverById = useMemo(() => Object.fromEntries(drivers.map((d) => [d.id, d])), [drivers]);
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
+  const technicianByIdTop = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   const openDamagesByMachine = useMemo(() => {
     const map = {};
@@ -1259,6 +1472,9 @@ function DispatcherApp() {
   function assignReturnDriver(jobId, driverId) {
     updateJob(jobId, { returnDriverId: driverId || null });
   }
+  function assignChecker(jobId, technicianId) {
+    updateJob(jobId, { checkerId: technicianId || null });
+  }
 
   function mailtoDriver(job) {
     const driver = driverById[job.driverId];
@@ -1362,6 +1578,10 @@ function DispatcherApp() {
         onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
+        myNotifications={myNotifications}
+        unreadNotificationCount={unreadNotificationCount}
+        onMarkNotificationRead={markNotificationRead}
+        onMarkAllNotificationsRead={markAllNotificationsRead}
       />
 
       {showUserAdmin && (
@@ -1473,6 +1693,7 @@ function DispatcherApp() {
             user={effectiveUser}
             onAddJob={() => setShowAddJob({})}
             onImportJobs={() => setShowImportJobs(true)}
+            onImportCustomers={() => setShowImportCustomers(true)}
             onComplete={(job) => setCompleteJobTarget(job)}
             onEdit={(job) => setShowAddJob({ existing: job })}
             onOpenJob={(j) => setJobDetail(j)}
@@ -1495,6 +1716,10 @@ function DispatcherApp() {
             user={effectiveUser}
             assignDriver={assignDriver}
             assignReturnDriver={assignReturnDriver}
+            assignChecker={assignChecker}
+            technicians={technicians}
+            getTransportSendStatus={getTransportSendStatus}
+            recordTransportSend={recordTransportSend}
             onExpand={(c) => setExpandedList(c)}
           />
         )}
@@ -1644,6 +1869,9 @@ function DispatcherApp() {
         <AddJobModal
           machines={machines}
           drivers={drivers}
+          technicians={technicians}
+          customers={customers}
+          onSaveCustomer={upsertCustomer}
           prefillMachineId={showAddJob.machineId}
           existing={showAddJob.existing}
           onClose={() => setShowAddJob(null)}
@@ -1667,6 +1895,15 @@ function DispatcherApp() {
           onImport={(rows) => {
             persistJobs([...jobs, ...rows]);
             setShowImportJobs(false);
+          }}
+        />
+      )}
+      {showImportCustomers && (
+        <ImportCustomersModal
+          onClose={() => setShowImportCustomers(false)}
+          onImport={(rows) => {
+            importCustomers(rows);
+            setShowImportCustomers(false);
           }}
         />
       )}
@@ -1761,7 +1998,7 @@ function DispatcherApp() {
         <DamageReportModal machine={showDamageReport} today={today} onClose={() => setShowDamageReport(null)} onSave={(popis) => reportDamage(showDamageReport, popis)} />
       )}
       {showExternalReport && (
-        <ReportExternalServiceModal today={today} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
+        <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
       )}
       {damageAssignTarget && (
         <DamageAssignModal
@@ -1843,6 +2080,7 @@ function DispatcherApp() {
       {protocolModalData && (
         <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} />
       )}
+      {pendingMail && <MailChoiceModal mail={pendingMail} onClose={() => setPendingMail(null)} />}
       {completeJobTarget && (
         <CompleteJobModal
           job={completeJobTarget}
@@ -1858,6 +2096,7 @@ function DispatcherApp() {
           job={jobDetail}
           machine={machineById[jobDetail.machineId]}
           driverById={driverById}
+          technicianById={technicianByIdTop}
           user={effectiveUser}
           onClose={() => setJobDetail(null)}
           onEdit={() => {
@@ -1934,7 +2173,156 @@ function DispatcherApp() {
 /* ---------------------------------------------------------
    Header
 --------------------------------------------------------- */
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin }) {
+/* ---------------------------------------------------------
+   Výber spôsobu odoslania emailu — Outlook Web alebo mailto (desktop appka/mobil)
+--------------------------------------------------------- */
+function MailChoiceModal({ mail, onClose }) {
+  const [remember, setRemember] = useState(true);
+
+  function choose(client) {
+    if (remember) localStorage.setItem(MAIL_PREF_KEY, client);
+    sendMailWithClient(client, mail);
+    onClose();
+  }
+
+  return (
+    <Modal title="Ako chcete odoslať email?" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+        <button className="btn btn-accent" style={{ padding: "12px 16px", textAlign: "left" }} onClick={() => choose("web")}>
+          🌐 Outlook Web (otvorí v novej karte prehliadača)
+        </button>
+        <button className="btn btn-ghost" style={{ padding: "12px 16px", textAlign: "left" }} onClick={() => choose("desktop")}>
+          💻 Outlook desktop / mobilná appka
+        </button>
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+        Zapamätať si túto voľbu (nabudúce sa už nepýtať)
+      </label>
+    </Modal>
+  );
+}
+
+
+/* ---------------------------------------------------------
+   Notification bell — skutočné upozornenia (nie len vizuálne odznaky)
+--------------------------------------------------------- */
+function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRead, onMarkAllRead }) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...(notifications || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+  function fmtWhen(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString("sk-SK") + " " + d.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          fontSize: 13,
+          color: "#fff",
+          background: unreadCount > 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.12)",
+          border: "1px solid rgba(255,255,255,.25)",
+          borderRadius: 4,
+          padding: "3px 9px",
+          cursor: "pointer",
+          position: "relative",
+        }}
+        title="Upozornenia"
+      >
+        🔔
+        {unreadCount > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: -5,
+              right: -5,
+              background: "var(--danger)",
+              color: "#fff",
+              borderRadius: 10,
+              fontSize: 10,
+              fontWeight: 700,
+              minWidth: 16,
+              height: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 3px",
+            }}
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div
+            className="panel"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 8px)",
+              right: 0,
+              width: 360,
+              maxWidth: "90vw",
+              maxHeight: "70vh",
+              overflowY: "auto",
+              zIndex: 201,
+              padding: 0,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+              <span className="label-font" style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Upozornenia</span>
+              {unreadCount > 0 && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: "3px 8px" }}
+                  onClick={() => onMarkAllRead(sorted.map((n) => n.id))}
+                >
+                  Označiť všetky ako prečítané
+                </button>
+              )}
+            </div>
+            {sorted.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>Zatiaľ žiadne upozornenia.</div>
+            ) : (
+              sorted.map((n) => {
+                const isUnread = !n.readBy.includes(currentUserId);
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => isUnread && onMarkRead(n.id)}
+                    style={{
+                      padding: "10px 14px",
+                      borderBottom: "1px solid var(--border)",
+                      background: isUnread ? "var(--accent-light)" : "transparent",
+                      cursor: isUnread ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      {isUnread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>{n.title}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{n.message}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -2004,7 +2392,15 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                   }}
                 />
               </label>
-            )}            <button
+            )}
+            <NotificationBell
+              notifications={myNotifications}
+              unreadCount={unreadNotificationCount}
+              currentUserId={currentUser?.id}
+              onMarkRead={onMarkNotificationRead}
+              onMarkAllRead={onMarkAllNotificationsRead}
+            />
+            <button
               onClick={onToggleDarkMode}
               style={{
                 fontSize: 11,
@@ -2018,6 +2414,24 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               title="Prepnúť tmavý/svetlý režim"
             >
               {darkMode ? "☀ Svetlý režim" : "🌙 Tmavý režim"}
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem(MAIL_PREF_KEY);
+                alert("Pri ďalšom odosielaní emailu sa appka znova opýta, ako ho chcete otvoriť.");
+              }}
+              style={{
+                fontSize: 11,
+                color: "#fff",
+                background: "rgba(255,255,255,.12)",
+                border: "1px solid rgba(255,255,255,.25)",
+                borderRadius: 4,
+                padding: "3px 10px",
+                cursor: "pointer",
+              }}
+              title="Zabudnúť uloženú voľbu Outlook Web / Desktop a nabudúce sa opýtať znova"
+            >
+              ✉️ Zmeniť spôsob mailu
             </button>
             {currentUser && (
               <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
@@ -2218,9 +2632,27 @@ function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onO
       color: "var(--warn)",
       items: alerts.endingSoon,
       renderItem: (j) => (
-        <div key={j.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
-          {j.customer ? ` · ${j.customer}` : ""}
+        <div key={j.id} style={{ fontSize: 13, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>
+            <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
+            {j.customer ? ` · ${j.customer}` : ""}
+          </span>
+          {j.customerEmail && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 10, padding: "2px 7px" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                composeMail({
+                  to: j.customerEmail,
+                  subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
+                  body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+                });
+              }}
+            >
+              ✉️ Upozorniť zákazníka
+            </button>
+          )}
         </div>
       ),
     },
@@ -2581,7 +3013,7 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImportJobs, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
+function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
@@ -2640,6 +3072,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImp
         />
         <div style={{ display: "flex", gap: 10 }}>
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
+          {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportCustomers}>Import zákazníkov</button>}
           {can(user, "job_add") && <button className="btn btn-accent" onClick={onAddJob}>+ Nová zákazka</button>}
         </div>
       </div>
@@ -2737,7 +3170,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImp
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user, assignDriver, assignReturnDriver, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user, assignDriver, assignReturnDriver, assignChecker, technicians, getTransportSendStatus, recordTransportSend, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [driverFilter, setDriverFilter] = useState("");
@@ -2757,6 +3190,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           type: "vyvoz",
           date: j.startDate,
           driverId: j.driverId || null,
+          checkerId: j.checkerId || null,
           machineId: j.machineId,
           from: j.fromDepo || "—",
           to: j.toLocation || "—",
@@ -2859,6 +3293,23 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           {t.from} <span style={{ color: "var(--text-dim)" }}>→</span> {t.to}
         </span>
         {t.customer && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>· {t.customer}</span>}
+        {isVyvoz && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Checker:</span>
+            {can(user, "transport_assign_driver") ? (
+              <select
+                value={t.checkerId || ""}
+                onChange={(e) => assignChecker(t.jobId, e.target.value)}
+                style={{ fontSize: 11, padding: "4px 6px" }}
+              >
+                <option value="">— neurčený —</option>
+                {(technicians || []).filter((tc) => !tc.archived).map((tc) => <option key={tc.id} value={tc.id}>{tc.name}</option>)}
+              </select>
+            ) : (
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.checkerId ? technicians?.find((tc) => tc.id === t.checkerId)?.name : "— neurčený —"}</span>
+            )}
+          </div>
+        )}
         <div style={{ marginLeft: "auto" }}>
           {can(user, "transport_assign_driver") ? (
             <select
@@ -2906,6 +3357,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                 <th>Zvoz dnes</th>
                 <th>Vývoz zajtra</th>
                 <th>Zvoz zajtra</th>
+                <th>Zajtrajšie prepravy</th>
               </tr>
             </thead>
             <tbody>
@@ -2915,6 +3367,8 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                 const cellClick = (dateVal, type, label) => {
                   setQuickFilter({ key, dateVal, type, label, driverName: driver ? driver.name : "Nepridelené" });
                 };
+                const tomorrowIds = transports.filter((t) => t.driverId === key && t.date === tomorrow).map((t) => t.id);
+                const sendStatus = driver ? getTransportSendStatus(driver.id, tomorrow, tomorrowIds) : null;
                 return (
                   <tr key={key}>
                     <td style={{ fontWeight: 600 }}>{driver ? driver.name : "Nepridelené"}</td>
@@ -2922,6 +3376,37 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
                     <td className="mono" style={{ cursor: s.todayZvoz ? "pointer" : "default", textDecoration: s.todayZvoz ? "underline" : "none" }} onClick={() => s.todayZvoz && cellClick(today, "zvoz", "Zvoz dnes")}>{s.todayZvoz || 0}</td>
                     <td className="mono" style={{ cursor: s.tomorrowVyvoz ? "pointer" : "default", textDecoration: s.tomorrowVyvoz ? "underline" : "none" }} onClick={() => s.tomorrowVyvoz && cellClick(tomorrow, "vyvoz", "Vývoz zajtra")}>{s.tomorrowVyvoz || 0}</td>
                     <td className="mono" style={{ cursor: s.tomorrowZvoz ? "pointer" : "default", textDecoration: s.tomorrowZvoz ? "underline" : "none" }} onClick={() => s.tomorrowZvoz && cellClick(tomorrow, "zvoz", "Zvoz zajtra")}>{s.tomorrowZvoz || 0}</td>
+                    <td>
+                      {!driver || tomorrowIds.length === 0 ? (
+                        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>—</span>
+                      ) : !driver.email ? (
+                        <span style={{ color: "var(--text-dim)", fontSize: 11 }} title="Šofér nemá vyplnený email">bez emailu</span>
+                      ) : !can(user, "transport_assign_driver") ? (
+                        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{sendStatus.sent ? "odoslané" : "—"}</span>
+                      ) : (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 11, padding: "4px 8px", color: sendStatus.sent && !sendStatus.newCount ? "var(--ok)" : "var(--accent)" }}
+                          onClick={() => {
+                            const items = transports.filter((t) => t.driverId === driver.id && t.date === tomorrow);
+                            const lines = items.map((t) => {
+                              const m = machineById[t.machineId];
+                              const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
+                              return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
+                            });
+                            const body = `Dobrý deň ${driver.name},\n\nna zajtra (${fmtDate(tomorrow)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
+                            composeMail({ to: driver.email, subject: `Prepravy na zajtra ${fmtDate(tomorrow)}`, body });
+                            recordTransportSend(driver.id, tomorrow, items.map((t) => t.id));
+                          }}
+                        >
+                          {!sendStatus.sent
+                            ? "📧 Odoslať"
+                            : sendStatus.newCount > 0
+                            ? `📧 Odoslať znova (+${sendStatus.newCount})`
+                            : `✓ Odoslané ${new Date(sendStatus.sentAt).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -3195,7 +3680,7 @@ function CompleteJobModal({ job, machine, drivers, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Job detail modal (clicked from Kalendár)
 --------------------------------------------------------- */
-function JobDetailModal({ job, machine, driverById, user, onClose, onEdit, onComplete, onReportDamage }) {
+function JobDetailModal({ job, machine, driverById, technicianById, user, onClose, onEdit, onComplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
   return (
     <Modal title={`${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`} onClose={onClose}>
@@ -3208,6 +3693,7 @@ function JobDetailModal({ job, machine, driverById, user, onClose, onEdit, onCom
         <CardField label="Koniec" value={fmtDate(job.endDate)} />
         <CardField label="Šofér (vývoz)" value={job.driverId ? driverById[job.driverId]?.name : "— neurčený —"} />
         <CardField label="Šofér (zvoz)" value={job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
+        <CardField label="Checker (vývoz)" value={job.checkerId ? technicianById?.[job.checkerId]?.name : "— neurčený —"} />
         <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik)} />
         <CardField label="Číslo zmluvy" value={job.cisloZmluvy} />
       </div>
@@ -3232,9 +3718,10 @@ function JobDetailModal({ job, machine, driverById, user, onClose, onEdit, onCom
   );
 }
 
-function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, onSave, onDelete }) {
+function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer, prefillMachineId, existing, onClose, onSave, onDelete }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
+  const [checkerId, setCheckerId] = useState(existing?.checkerId || "");
   const machine = machines.find((m) => m.id === machineId);
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
@@ -3245,6 +3732,7 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
   const [startDate, setStartDate] = useState(existing?.startDate || todayISO());
   const [endDate, setEndDate] = useState(existing?.endDate || todayISO());
   const [notes, setNotes] = useState(existing?.notes || "");
+  const [saveCustomer, setSaveCustomer] = useState(!existing);
 
   useEffect(() => {
     if (existing) return;
@@ -3267,6 +3755,12 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
             {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </Field>
+        <Field label="Checker (pripraví stroj na vývoz)">
+          <select value={checkerId} onChange={(e) => setCheckerId(e.target.value)} style={{ width: "100%" }}>
+            <option value="">— zatiaľ neurčený —</option>
+            {(technicians || []).filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
         <Field label="Odkiaľ (depo)">
           <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať depo —</option>
@@ -3274,7 +3768,18 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
           </select>
         </Field>
         <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Zákazník"><input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Zákazník">
+          <CustomerAutocomplete
+            value={customer}
+            onChange={setCustomer}
+            customers={customers || []}
+            placeholder="Názov firmy…"
+            onSelectCustomer={(c) => {
+              setCustomer(c.firma);
+              if (c.email && !customerEmail) setCustomerEmail(c.email);
+            }}
+          />
+        </Field>
         <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Obchodník">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -3292,14 +3797,24 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
         <Field label="Koniec *"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
+      {customer.trim() && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+          <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
+          Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
+        </label>
+      )}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           className="btn btn-accent"
           disabled={!canSave}
-          onClick={() =>
+          onClick={() => {
+            if (saveCustomer && customer.trim()) {
+              onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim() });
+            }
             onSave({
               machineId,
               driverId: driverId || null,
+              checkerId: checkerId || null,
               fromDepo: fromDepo.trim(),
               toLocation: toLocation.trim(),
               customer: customer.trim(),
@@ -3309,8 +3824,8 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
               startDate,
               endDate,
               notes: notes.trim(),
-            })
-          }
+            });
+          }}
         >
           {existing ? "Uložiť zmeny" : "Vytvoriť zákazku"}
         </button>
@@ -3323,6 +3838,121 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
     </Modal>
   );
 }
+
+/* ---------------------------------------------------------
+   Zákazník — vyhľadávanie/autocomplete podľa firmy s voľným zadaním
+--------------------------------------------------------- */
+function CustomerAutocomplete({ value, onChange, customers, onSelectCustomer, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const filtered = value && value.trim() ? customers.filter((c) => c.firma.toLowerCase().includes(value.toLowerCase())).slice(0, 8) : [];
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        style={{ width: "100%" }}
+      />
+      {open && filtered.length > 0 && (
+        <div className="panel" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+          {filtered.map((c) => (
+            <div
+              key={c.id}
+              onMouseDown={() => {
+                onSelectCustomer(c);
+                setOpen(false);
+              }}
+              style={{ padding: "6px 8px", cursor: "pointer", fontSize: 13, borderRadius: 4 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <div style={{ fontWeight: 600 }}>{c.firma}</div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                {[c.cisloOdberatela && `č. odberateľa: ${c.cisloOdberatela}`, c.email].filter(Boolean).join(" · ") || "bez ďalších údajov"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportCustomersModal({ onClose, onImport }) {
+  const [rows, setRows] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapFirma, setMapFirma] = useState("");
+  const [mapCislo, setMapCislo] = useState("");
+  const [fileName, setFileName] = useState("");
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        setHeaders(res.meta.fields || []);
+        setRows(res.data);
+      },
+    });
+  }
+
+  const canImport = mapFirma && rows.length > 0;
+
+  function doImport() {
+    const parsed = rows
+      .map((r) => ({
+        firma: (r[mapFirma] || "").toString().trim(),
+        cisloOdberatela: mapCislo ? (r[mapCislo] || "").toString().trim() : "",
+      }))
+      .filter((c) => c.firma);
+    onImport(parsed);
+  }
+
+  return (
+    <Modal title="Import zákazníkov z ERP (CSV)" onClose={onClose} wide>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+        Naimportuje sa len názov firmy a číslo odberateľa. Kontaktné údaje (email, telefón) sa dopĺňajú
+        postupne priamo v appke pri zakladaní zákaziek — existujúcich zákazníkov to neprepíše.
+      </div>
+      <Field label="Vyberte CSV súbor (exportovaný z ERP)">
+        <input type="file" accept=".csv" onChange={handleFile} />
+      </Field>
+      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
+
+      {headers.length > 0 && (
+        <>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <Field label="Stĺpec = Názov firmy *">
+              <select value={mapFirma} onChange={(e) => setMapFirma(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = Číslo odberateľa">
+              <select value={mapCislo} onChange={(e) => setMapCislo(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+          </div>
+          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+            Importovať {rows.length} zákazníkov
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 
 /* ---------------------------------------------------------
    Import Modal (CSV)
@@ -4272,13 +4902,14 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
   );
 }
 
-function ReportExternalServiceModal({ today, onClose, onSave }) {
+function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose, onSave }) {
   const [customer, setCustomer] = useState("");
   const [location, setLocation] = useState("");
   const [model, setModel] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [assignedDepo, setAssignedDepo] = useState("");
   const [popis, setPopis] = useState("");
+  const [saveCustomer, setSaveCustomer] = useState(true);
   const canSave = popis.trim() && assignedDepo;
 
   return (
@@ -4287,7 +4918,15 @@ function ReportExternalServiceModal({ today, onClose, onSave }) {
         Pre stroje, ktoré nie sú v našej databáze (zákazník má vlastný stroj, servisujeme ho na mieste a pod.).
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Zákazník"><input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Zákazník">
+          <CustomerAutocomplete
+            value={customer}
+            onChange={setCustomer}
+            customers={customers || []}
+            placeholder="Názov firmy…"
+            onSelectCustomer={(c) => setCustomer(c.firma)}
+          />
+        </Field>
         <Field label="Miesto (mesto / adresa)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
         <Field label="Model / typ stroja"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Sériové číslo (ak známe)"><input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} style={{ width: "100%" }} /></Field>
@@ -4301,10 +4940,17 @@ function ReportExternalServiceModal({ today, onClose, onSave }) {
       <Field label="Popis poruchy / zákazky *">
         <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={3} placeholder="Čo treba urobiť…" style={{ width: "100%" }} />
       </Field>
+      {customer.trim() && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+          <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
+          Uložiť tohto zákazníka v databáze zákazníkov
+        </label>
+      )}
       <button
         className="btn btn-accent"
         disabled={!canSave}
-        onClick={() =>
+        onClick={() => {
+          if (saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim() });
           onSave({
             customer: customer.trim(),
             location: location.trim(),
@@ -4312,8 +4958,8 @@ function ReportExternalServiceModal({ today, onClose, onSave }) {
             serialNumber: serialNumber.trim(),
             assignedDepo,
             popis: popis.trim(),
-          })
-        }
+          });
+        }}
       >
         Nahlásiť
       </button>
@@ -5375,14 +6021,17 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   const dutyRecord = (weeklyDuty || []).find((w) => w.technicianId === t.id && iso >= w.weekStart && iso <= w.weekEnd);
                   const onDuty = !!dutyRecord;
                   const isDutyStart = onDuty && iso === dutyRecord.weekStart;
-                  const handleClick = () =>
-                    quickMode === "sluzba"
-                      ? onQuickWeeklyDuty(t.id, iso)
-                      : quickMode
-                      ? onQuickAssign(t.id, iso, quickMode)
-                      : onCellClick(t.id, iso);
-                  const clickTitle =
-                    quickMode === "sluzba"
+                  const canEditPlan = can(user, "plan_assign");
+                  const canQuickEvents = can(user, "plan_quick_events");
+                  const handleClick = () => {
+                    if (quickMode === "sluzba" && canQuickEvents) return onQuickWeeklyDuty(t.id, iso);
+                    if (quickMode && canQuickEvents) return onQuickAssign(t.id, iso, quickMode);
+                    if (!quickMode && canEditPlan) return onCellClick(t.id, iso);
+                  };
+                  const cellClickable = quickMode ? canQuickEvents : canEditPlan;
+                  const clickTitle = !cellClickable
+                    ? "Nemáte oprávnenie upravovať plán servisu"
+                    : quickMode === "sluzba"
                       ? "Nastaviť/zrušiť službu na telefóne pre celý týždeň"
                       : quickMode
                       ? `Pridať "${QUICK_KINDS.find((k) => k.id === quickMode)?.label}"`
@@ -5398,7 +6047,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                             borderRadius: 4,
                             background: isWeekend ? "var(--warn-bg)" : "var(--panel-2)",
                             border: "1px dashed var(--border)",
-                            cursor: "pointer",
+                            cursor: cellClickable ? "pointer" : "default",
                           }}
                         />
                       ) : (
