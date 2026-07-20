@@ -1347,15 +1347,14 @@ function DispatcherApp() {
     const overdue = jobs.filter((j) => effectiveStatus(j, today) === "overdue");
     const endingSoon = jobs.filter((j) => {
       const st = effectiveStatus(j, today);
-      return st === "active" && daysBetween(today, j.endDate) <= 2;
+      return st === "active" && daysBetween(today, j.endDate) <= 5;
     });
-    const endingTomorrow = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate === tomorrow);
     const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
     const revisionSoon = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) >= 0 && daysBetween(today, m.revizia) <= 30);
     const revisionOverdue = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) < 0);
     const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa");
     const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
-    return { overdue, endingSoon, endingTomorrow, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
+    return { overdue, endingSoon, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
   }, [jobs, machines, today, tomorrow, damages]);
 
   const stats = useMemo(() => {
@@ -2684,38 +2683,8 @@ function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onO
       ),
     },
     {
-      key: "endingTomorrow",
-      title: "Zákazky končiace zajtra",
-      color: "var(--warn)",
-      items: alerts.endingTomorrow,
-      renderItem: (j) => (
-        <div key={j.id} style={{ fontSize: 13, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>
-            <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
-            {j.customer ? ` · ${j.customer}` : ""}
-            {!j.customerEmail && <span style={{ color: "var(--text-dim)" }}> (bez emailu v karte)</span>}
-          </span>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 10, padding: "2px 7px" }}
-            title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
-            onClick={(e) => {
-              e.stopPropagation();
-              composeMail({
-                to: j.customerEmail || "",
-                subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
-                body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
-              });
-            }}
-          >
-            ✉️ Odoslať zákazníkovi
-          </button>
-        </div>
-      ),
-    },
-    {
       key: "endingSoon",
-      title: "Zákazka končí čoskoro",
+      title: "Zákazka končí čoskoro (do 5 dní)",
       color: "var(--warn)",
       items: alerts.endingSoon,
       renderItem: (j) => (
@@ -2723,6 +2692,7 @@ function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onO
           <span>
             <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
             {j.customer ? ` · ${j.customer}` : ""}
+            {!j.customerEmail && <span style={{ color: "var(--text-dim)" }}> (bez emailu v karte)</span>}
           </span>
           <button
             className="btn btn-ghost"
@@ -3555,8 +3525,35 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
           const matchesDriver = quickFilter.key === "unassigned" ? !t.driverId : t.driverId === quickFilter.key;
           return matchesDriver && t.date === quickFilter.dateVal && t.type === quickFilter.type;
         });
+        const driver = quickFilter.key !== "unassigned" ? drivers.find((d) => d.id === quickFilter.key) : null;
+        const sendStatus = driver ? getTransportSendStatus(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id)) : null;
         return (
           <Modal title={`${quickFilter.driverName} — ${quickFilter.label} (${liveItems.length})`} onClose={() => setQuickFilter(null)} wide>
+            {driver && liveItems.length > 0 && can(user, "transport_assign_driver") && (
+              <div style={{ marginBottom: 14 }}>
+                <button
+                  className="btn btn-accent"
+                  style={{ fontSize: 12 }}
+                  title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
+                  onClick={() => {
+                    const lines = liveItems.map((t) => {
+                      const m = machineById[t.machineId];
+                      const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
+                      return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
+                    });
+                    const body = `Dobrý deň ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
+                    composeMail({ to: driver.email || nameToEmail(driver.name), subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
+                    recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id));
+                  }}
+                >
+                  {!sendStatus.sent
+                    ? "📧 Odoslať email"
+                    : sendStatus.newCount > 0
+                    ? `📧 Odoslať znova (+${sendStatus.newCount})`
+                    : `✓ Odoslané ${new Date(sendStatus.sentAt).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`}
+                </button>
+              </div>
+            )}
             <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
               {liveItems.length === 0 ? (
                 <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne prepravy.</div>
