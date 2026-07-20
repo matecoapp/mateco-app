@@ -3714,6 +3714,12 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                       const st = effectiveStatus(j, today);
                       const bg = salespersonColor(j.obchodnik) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
+                      // Textový štítok sa nikdy nesmie roztiahnuť viac než samotný farebný blok
+                      // (inak by pri krátkej zákazke prerastal do susedného bloku). Odhad šírky
+                      // dňového stĺpca je zámerne konzervatívny (menší ako reálny), aby to sedelo
+                      // aj na mobile aj na desktope.
+                      const dayCount = endCol - startCol + 1;
+                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
                       return (
                         <div
                           key={j.id}
@@ -3741,7 +3747,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                               position: "sticky",
                               left: "calc(var(--gantt-name-col) + 6px)",
                               display: "inline-block",
-                              maxWidth: 220,
+                              maxWidth: labelMaxWidth,
                               overflow: "hidden",
                               whiteSpace: "nowrap",
                               textOverflow: "ellipsis",
