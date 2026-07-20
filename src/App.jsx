@@ -3728,17 +3728,30 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                             outline: st === "overdue" ? "2px solid var(--danger)" : "none",
                             outlineOffset: st === "overdue" ? "-1px" : 0,
                             borderRadius: 4,
-                            fontSize: 10,
-                            color: "#fff",
-                            padding: "3px 6px",
-                            overflow: "hidden",
-                            whiteSpace: "nowrap",
-                            textOverflow: "ellipsis",
                             fontWeight: 600,
                             cursor: "pointer",
+                            minWidth: 0,
                           }}
                         >
-                          {label}
+                          {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
+                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku mimo záber. */}
+                          <div
+                            className="gantt-cell"
+                            style={{
+                              position: "sticky",
+                              left: "calc(var(--gantt-name-col) + 6px)",
+                              display: "inline-block",
+                              maxWidth: 220,
+                              overflow: "hidden",
+                              whiteSpace: "nowrap",
+                              textOverflow: "ellipsis",
+                              fontSize: 10,
+                              color: "#fff",
+                              padding: "3px 6px",
+                            }}
+                          >
+                            {label}
+                          </div>
                         </div>
                       );
                     })}
@@ -5265,47 +5278,58 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
       )}
       <div className="panel" style={{ padding: 16 }}>
         <div ref={scrollContainerRef} style={{ overflow: "auto", maxHeight: "65vh" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-plan-day-col))`,
-              gap: 2,
-            }}
-          >
-            <div style={{ position: "sticky", top: 0, left: 0, zIndex: 5, background: "var(--panel)" }}></div>
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-              const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-              const isToday = iso === today;
-              const dow = new Date(year, month, d).getDay();
-              const isWeekend = dow === 0 || dow === 6;
-              return (
-                <div
-                  key={d}
-                  ref={isToday ? todayCellRef : null}
-                  className="mono gantt-header-cell"
-                  title={iso}
-                  style={{
-                    textAlign: "center",
-                    fontSize: 11,
-                    color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
-                    fontWeight: isToday ? 700 : 400,
-                    whiteSpace: "nowrap",
-                    borderRight: "1px solid var(--border)",
-                    paddingBottom: 4,
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 3,
-                    background: isWeekend ? "var(--warn-bg)" : "var(--panel)",
-                  }}
-                >
-                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                  <div>{d}</div>
-                </div>
-              );
-            })}
+          <div style={{ minWidth: "max-content" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-plan-day-col))`,
+                gap: 2,
+                position: "sticky",
+                top: 0,
+                zIndex: 4,
+                background: "var(--panel)",
+              }}
+            >
+              <div style={{ position: "sticky", left: 0, zIndex: 5, background: "var(--panel)" }}></div>
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                const isToday = iso === today;
+                const dow = new Date(year, month, d).getDay();
+                const isWeekend = dow === 0 || dow === 6;
+                return (
+                  <div
+                    key={d}
+                    ref={isToday ? todayCellRef : null}
+                    className="mono gantt-header-cell"
+                    title={iso}
+                    style={{
+                      textAlign: "center",
+                      fontSize: 11,
+                      color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
+                      fontWeight: isToday ? 700 : 400,
+                      whiteSpace: "nowrap",
+                      borderRight: "1px solid var(--border)",
+                      paddingBottom: 4,
+                      background: isWeekend ? "var(--warn-bg)" : "var(--panel)",
+                    }}
+                  >
+                    <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
+                    <div>{d}</div>
+                  </div>
+                );
+              })}
+            </div>
 
             {visibleTechnicians.map((t) => (
-              <React.Fragment key={t.id}>
+              <div
+                key={t.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-plan-day-col))`,
+                  gap: 2,
+                  marginBottom: 3,
+                }}
+              >
                 <div
                   onClick={() => onOpenTechnician(t)}
                   style={{
@@ -5320,7 +5344,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     background: "var(--panel)",
                     paddingRight: 6,
                     paddingTop: 4,
-                    marginBottom: 3,
                   }}
                   title="Zobraziť kartu technika"
                 >
@@ -5354,7 +5377,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                       ? `Pridať "${QUICK_KINDS.find((k) => k.id === quickMode)?.label}"`
                       : "Kliknite pre pridelenie";
                   return (
-                    <div key={d} style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 3 }}>
+                    <div key={d} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {dayAssignments.length === 0 ? (
                         <div
                           onClick={handleClick}
@@ -5430,7 +5453,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     </div>
                   );
                 })}
-              </React.Fragment>
+              </div>
             ))}
           </div>
         </div>
