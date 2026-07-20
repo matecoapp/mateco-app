@@ -30,26 +30,6 @@ function isAdminUser(user) {
   return !!user && user.role === "admin";
 }
 
-function bytesToHex(bytes) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function hexToBytes(hex) {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-  return bytes;
-}
-async function hashPassword(password, saltHex) {
-  const enc = new TextEncoder();
-  const salt = saltHex ? hexToBytes(saltHex) : crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const derived = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, 256);
-  return { hash: bytesToHex(new Uint8Array(derived)), salt: bytesToHex(salt) };
-}
-async function verifyPassword(password, salt, expectedHash) {
-  const { hash } = await hashPassword(password, salt);
-  return hash === expectedHash;
-}
-
 // Protokol je zabudovaný priamo v appke (base64) — otvára sa ako samostatná
 // stránka cez Blob URL, takže netreba žiadny druhý súbor ani hosting.
 let _protocolOpenListener = null;
@@ -540,8 +520,9 @@ function DispatcherApp() {
   const [assignSlot, setAssignSlot] = useState(null); // { technicianId, date }
   const [damages, setDamages] = useState([]);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
-  const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null); // session-only, resets on reload — musí sa znova prihlásiť
+  const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
+  const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
+  const [authChecked, setAuthChecked] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
@@ -581,7 +562,7 @@ function DispatcherApp() {
 
   useEffect(() => {
     (async () => {
-      const [m, d, j, t, a, dmg, wd, us] = await Promise.all([
+      const [m, d, j, t, a, dmg, wd] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -589,7 +570,6 @@ function DispatcherApp() {
         loadKey("assignments", []),
         loadKey("damages", []),
         loadKey("weeklyDuty", []),
-        loadKey("users", []),
       ]);
       setMachines(m);
       setDrivers(d);
@@ -598,49 +578,83 @@ function DispatcherApp() {
       setAssignments(a);
       setDamages(dmg);
       setWeeklyDuty(wd);
-      setUsers(us);
       setLoaded(true);
     })();
   }, []);
 
-  const persistUsers = useCallback((next) => {
-    setUsers(next);
-    saveKey("users", next);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthChecked(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      setAuthChecked(true);
+    });
+    return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function addUser({ username, name, password, role }) {
-    const { hash, salt } = await hashPassword(password);
-    const record = {
-      id: uid(),
-      username: username.trim().toLowerCase(),
-      name: name.trim(),
-      role,
-      passwordHash: hash,
-      passwordSalt: salt,
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    persistUsers([...users, record]);
-    return record;
+  const loadProfiles = useCallback(async () => {
+    const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
+    if (!error && data) setProfiles(data);
+  }, []);
+
+  useEffect(() => {
+    if (session) loadProfiles();
+  }, [session, loadProfiles]);
+
+  const currentUser = useMemo(() => {
+    if (!session?.user) return null;
+    const profile = profiles.find((p) => p.id === session.user.id);
+    if (!profile) return null;
+    return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email };
+  }, [session, profiles]);
+
+  async function signUpNewAccount({ email, password, name }) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    if (error) return { ok: false, message: error.message };
+    if (data.session) setSession(data.session);
+    return { ok: true, needsConfirmation: !data.session };
   }
-  function updateUserInfo(id, patch) {
-    persistUsers(users.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  async function attemptLogin(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { ok: false, message: "Nesprávne meno alebo heslo (alebo účet ešte nie je potvrdený emailom)." };
+    setSession(data.session);
+    return { ok: true };
   }
-  async function resetUserPassword(id, newPassword) {
-    const { hash, salt } = await hashPassword(newPassword);
-    persistUsers(users.map((u) => (u.id === id ? { ...u, passwordHash: hash, passwordSalt: salt } : u)));
+  function signOut() {
+    supabase.auth.signOut();
+    setSession(null);
   }
-  function deleteUser(id) {
-    persistUsers(users.filter((u) => u.id !== id));
-    if (currentUser?.id === id) setCurrentUser(null);
+  function updateProfileInfo(id, patch) {
+    supabase
+      .from("profiles")
+      .update(patch)
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) {
+          console.error("Update profile failed", error);
+          return;
+        }
+        setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+      });
   }
-  async function attemptLogin(username, password) {
-    const u = users.find((x) => x.username === username.trim().toLowerCase());
-    if (!u) return { ok: false, message: "Nesprávne meno alebo heslo." };
-    if (u.active === false) return { ok: false, message: "Tento účet je deaktivovaný." };
-    const ok = await verifyPassword(password, u.passwordSalt, u.passwordHash);
-    if (!ok) return { ok: false, message: "Nesprávne meno alebo heslo." };
-    return { ok: true, user: u };
+  function deleteProfile(id) {
+    supabase
+      .from("profiles")
+      .delete()
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) {
+          console.error("Delete profile failed", error);
+          return;
+        }
+        setProfiles((prev) => prev.filter((p) => p.id !== id));
+      });
   }
 
   const persistWeeklyDuty = useCallback((next) => {
@@ -678,7 +692,7 @@ function DispatcherApp() {
       __mateco_backup__: true,
       exportedAt: new Date().toISOString(),
       version: 1,
-      data: { machines, drivers, jobs, technicians, assignments, damages, weeklyDuty, users },
+      data: { machines, drivers, jobs, technicians, assignments, damages, weeklyDuty },
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -704,7 +718,6 @@ function DispatcherApp() {
         if (Array.isArray(data.assignments)) persistAssignments(data.assignments);
         if (Array.isArray(data.damages)) persistDamages(data.damages);
         if (Array.isArray(data.weeklyDuty)) persistWeeklyDuty(data.weeklyDuty);
-        if (Array.isArray(data.users)) persistUsers(data.users);
         alert("Záloha bola úspešne načítaná.");
       } catch (e) {
         console.error("Import failed", e);
@@ -1186,7 +1199,7 @@ function DispatcherApp() {
     return `mailto:${job.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
-  if (!loaded) {
+  if (!loaded || !authChecked) {
     return (
       <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400 }}>
         <GlobalStyle />
@@ -1195,20 +1208,22 @@ function DispatcherApp() {
     );
   }
 
-  if (users.length === 0) {
+  if (!session) {
     return (
       <div className="app-shell">
         <GlobalStyle />
-        <FirstRunSetup onCreateAdmin={async (data) => { await addUser({ ...data, role: "admin" }); }} />
+        <LoginScreen onLogin={attemptLogin} onSignUp={signUpNewAccount} />
       </div>
     );
   }
 
   if (!currentUser) {
+    // Prihlásený v Supabase Auth, ale profil sa ešte nenačítal (alebo bol zmazaný administrátorom)
     return (
-      <div className="app-shell">
+      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400, flexDirection: "column", gap: 14 }}>
         <GlobalStyle />
-        <LoginScreen onLogin={attemptLogin} onSuccess={(u) => setCurrentUser(u)} />
+        <div className="label-font" style={{ color: "var(--text-dim)" }}>Načítavam profil…</div>
+        <button className="btn btn-ghost" onClick={signOut}>Odhlásiť sa</button>
       </div>
     );
   }
@@ -1235,19 +1250,17 @@ function DispatcherApp() {
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
         currentUser={currentUser}
-        onLogout={() => setCurrentUser(null)}
+        onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
       />
 
       {showUserAdmin && (
         <UserAdminModal
-          users={users}
+          profiles={profiles}
           currentUser={currentUser}
           onClose={() => setShowUserAdmin(false)}
-          onAdd={addUser}
-          onUpdate={updateUserInfo}
-          onResetPassword={resetUserPassword}
-          onDelete={(id) => askDelete(`používateľa ${users.find((u) => u.id === id)?.name || ""}`, () => deleteUser(id))}
+          onUpdate={updateProfileInfo}
+          onDelete={(id) => askDelete(`používateľa ${profiles.find((p) => p.id === id)?.name || ""}`, () => deleteProfile(id))}
         />
       )}
 
@@ -5331,154 +5344,163 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
    Global style / design tokens
 --------------------------------------------------------- */
 /* ---------------------------------------------------------
-   First-run setup — creates the very first admin account
+   Login / registrácia — cez Supabase Auth
+   (Prvý človek, čo sa kedy zaregistruje, sa automaticky stane
+   administrátorom — vybaví to databázový trigger, nie appka.)
 --------------------------------------------------------- */
-function FirstRunSetup({ onCreateAdmin }) {
-  const [username, setUsername] = useState("");
+function LoginScreen({ onLogin, onSignUp }) {
+  const [mode, setMode] = useState("login"); // "login" | "signup"
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
-  async function handleCreate() {
-    setError("");
-    if (!username.trim() || !name.trim() || !password) {
-      setError("Vyplňte všetky polia.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Heslo musí mať aspoň 6 znakov.");
-      return;
-    }
-    if (password !== password2) {
-      setError("Heslá sa nezhodujú.");
-      return;
-    }
+  async function handleLogin() {
+    setError(""); setInfo("");
+    if (!email.trim() || !password) { setError("Zadajte email aj heslo."); return; }
     setBusy(true);
-    await onCreateAdmin({ username, name, password });
+    const result = await onLogin(email.trim(), password);
     setBusy(false);
+    if (!result.ok) setError(result.message);
   }
 
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="panel" style={{ padding: 32, width: 380 }}>
-        <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
-        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>Prvé spustenie — vytvorte administrátorský účet</div>
-        <Field label="Prihlasovacie meno *"><input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%" }} autoFocus /></Field>
-        <Field label="Celé meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Heslo *"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Zopakovať heslo *"><input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} /></Field>
-        {error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        <button className="btn btn-accent" style={{ width: "100%" }} disabled={busy} onClick={handleCreate}>
-          {busy ? "Vytváram…" : "Vytvoriť administrátorský účet"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------
-   Login screen
---------------------------------------------------------- */
-function LoginScreen({ onLogin, onSuccess }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit() {
-    setError("");
-    if (!username.trim() || !password) {
-      setError("Zadajte meno aj heslo.");
-      return;
-    }
+  async function handleSignUp() {
+    setError(""); setInfo("");
+    if (!email.trim() || !name.trim() || !password) { setError("Vyplňte všetky polia."); return; }
+    if (password.length < 6) { setError("Heslo musí mať aspoň 6 znakov."); return; }
+    if (password !== password2) { setError("Heslá sa nezhodujú."); return; }
     setBusy(true);
-    const result = await onLogin(username, password);
+    const result = await onSignUp({ email: email.trim(), password, name: name.trim() });
     setBusy(false);
-    if (result.ok) {
-      onSuccess(result.user);
-    } else {
-      setError(result.message);
+    if (!result.ok) { setError(result.message); return; }
+    if (result.needsConfirmation) {
+      setInfo("Účet bol vytvorený. Skontrolujte email a potvrďte ho kliknutím na odkaz, potom sa môžete prihlásiť.");
+      setMode("login");
     }
   }
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="panel" style={{ padding: 32, width: 340 }}>
+      <div className="panel" style={{ padding: 32, width: 360 }}>
         <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
-        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>Interná platforma — prihlásenie</div>
-        <Field label="Prihlasovacie meno">
+        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>
+          {mode === "login" ? "Interná platforma — prihlásenie" : "Vytvorenie nového účtu"}
+        </div>
+
+        <Field label="Email">
           <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && mode === "login" && handleLogin()}
             style={{ width: "100%" }}
             autoFocus
           />
         </Field>
+        {mode === "signup" && (
+          <Field label="Celé meno">
+            <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} />
+          </Field>
+        )}
         <Field label="Heslo">
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            onKeyDown={(e) => e.key === "Enter" && mode === "login" && handleLogin()}
             style={{ width: "100%" }}
           />
         </Field>
+        {mode === "signup" && (
+          <Field label="Zopakovať heslo">
+            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
+          </Field>
+        )}
+
         {error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        <button className="btn btn-accent" style={{ width: "100%" }} disabled={busy} onClick={handleSubmit}>
-          {busy ? "Prihlasujem…" : "Prihlásiť sa"}
+        {info && <div style={{ color: "var(--ok)", fontSize: 13, marginBottom: 12 }}>{info}</div>}
+
+        <button className="btn btn-accent" style={{ width: "100%", marginBottom: 10 }} disabled={busy} onClick={mode === "login" ? handleLogin : handleSignUp}>
+          {busy ? "Chvíľu strpenia…" : mode === "login" ? "Prihlásiť sa" : "Vytvoriť účet"}
         </button>
+        <button
+          className="btn btn-ghost"
+          style={{ width: "100%" }}
+          onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
+        >
+          {mode === "login" ? "Nemám ešte účet — zaregistrovať sa" : "Mám už účet — prihlásiť sa"}
+        </button>
+        {mode === "signup" && (
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 12 }}>
+            Po zaregistrovaní vám administrátor pridelí rolu (čo môžete v appke robiť). Kým sa tak nestane, uvidíte appku len na čítanie.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 /* ---------------------------------------------------------
-   User admin console (admin only)
+   User admin console (admin only) — spravuje profily (rola,
+   meno, aktívny/neaktívny). Heslá a samotné vytváranie účtov
+   rieši Supabase Auth priamo (kolegovia sa registrujú sami).
 --------------------------------------------------------- */
-function UserAdminModal({ users, currentUser, onClose, onAdd, onUpdate, onResetPassword, onDelete }) {
-  const [showForm, setShowForm] = useState(null); // null | {} | { existing }
-  const [pwTargetId, setPwTargetId] = useState(null);
+function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete }) {
+  const [editingId, setEditingId] = useState(null);
 
   return (
     <Modal title="Správa používateľov" onClose={onClose} wide>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-        <button className="btn btn-accent" onClick={() => setShowForm({})}>+ Pridať používateľa</button>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        Noví ľudia sa registrujú sami na prihlasovacej obrazovke — tu im len prideľte rolu, prípadne ich deaktivujte/zmažte.
       </div>
       <table>
         <thead>
           <tr>
             <th>Meno</th>
-            <th>Prihlasovacie meno</th>
+            <th>Email</th>
             <th>Rola</th>
             <th>Stav</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {users.length === 0 && (
+          {profiles.length === 0 && (
             <tr><td colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni používatelia.</td></tr>
           )}
-          {users.map((u) => (
-            <tr key={u.id}>
-              <td style={{ fontWeight: 600 }}>{u.name}{u.id === currentUser?.id ? " (vy)" : ""}</td>
-              <td className="mono">{u.username}</td>
-              <td>{roleLabel(u.role)}</td>
-              <td>{u.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+          {profiles.map((p) => (
+            <tr key={p.id}>
+              <td style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
+              <td className="mono">{p.id === currentUser?.id ? currentUser.email : "—"}</td>
+              <td>
+                {editingId === p.id ? (
+                  <select
+                    autoFocus
+                    defaultValue={p.role}
+                    onChange={(e) => { onUpdate(p.id, { role: e.target.value }); setEditingId(null); }}
+                    onBlur={() => setEditingId(null)}
+                  >
+                    {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditingId(p.id)}>
+                    {roleLabel(p.role)}
+                  </span>
+                )}
+              </td>
+              <td>{p.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
               <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setShowForm({ existing: u })}>Upraviť</button>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setPwTargetId(u.id)}>Zmeniť heslo</button>
                 <button
                   className="btn btn-ghost"
                   style={{ fontSize: 11, padding: "4px 8px" }}
-                  onClick={() => onUpdate(u.id, { active: u.active === false ? true : false })}
+                  onClick={() => onUpdate(p.id, { active: p.active === false ? true : false })}
                 >
-                  {u.active === false ? "Aktivovať" : "Deaktivovať"}
+                  {p.active === false ? "Aktivovať" : "Deaktivovať"}
                 </button>
-                {u.id !== currentUser?.id && (
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(u.id)}>
+                {p.id !== currentUser?.id && (
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(p.id)}>
                     Zmazať
                   </button>
                 )}
@@ -5487,85 +5509,6 @@ function UserAdminModal({ users, currentUser, onClose, onAdd, onUpdate, onResetP
           ))}
         </tbody>
       </table>
-
-      {showForm && (
-        <UserFormModal
-          existing={showForm.existing}
-          onClose={() => setShowForm(null)}
-          onSave={async (data) => {
-            if (showForm.existing) {
-              onUpdate(showForm.existing.id, { name: data.name, username: data.username, role: data.role });
-            } else {
-              await onAdd(data);
-            }
-            setShowForm(null);
-          }}
-        />
-      )}
-      {pwTargetId && (
-        <ResetPasswordModal
-          onClose={() => setPwTargetId(null)}
-          onSave={async (newPassword) => {
-            await onResetPassword(pwTargetId, newPassword);
-            setPwTargetId(null);
-          }}
-        />
-      )}
-    </Modal>
-  );
-}
-
-function UserFormModal({ existing, onClose, onSave }) {
-  const [username, setUsername] = useState(existing?.username || "");
-  const [name, setName] = useState(existing?.name || "");
-  const [role, setRole] = useState(existing?.role || "citatel");
-  const [password, setPassword] = useState("");
-  const canSave = username.trim() && name.trim() && (existing || password.length >= 6);
-
-  return (
-    <Modal title={existing ? "Upraviť používateľa" : "Pridať používateľa"} onClose={onClose}>
-      <Field label="Prihlasovacie meno *"><input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Celé meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Rola *">
-        <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%" }}>
-          {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-        </select>
-      </Field>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>{ROLES.find((r) => r.id === role)?.desc}</div>
-      {!existing && (
-        <Field label="Heslo * (aspoň 6 znakov)"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} /></Field>
-      )}
-      <button
-        className="btn btn-accent"
-        disabled={!canSave}
-        onClick={() => onSave({ username: username.trim(), name: name.trim(), role, password })}
-      >
-        Uložiť
-      </button>
-    </Modal>
-  );
-}
-
-function ResetPasswordModal({ onClose, onSave }) {
-  const [password, setPassword] = useState("");
-  const [password2, setPassword2] = useState("");
-  const [error, setError] = useState("");
-
-  return (
-    <Modal title="Zmeniť heslo" onClose={onClose}>
-      <Field label="Nové heslo * (aspoň 6 znakov)"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Zopakovať heslo *"><input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} /></Field>
-      {error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-      <button
-        className="btn btn-accent"
-        onClick={() => {
-          if (password.length < 6) { setError("Heslo musí mať aspoň 6 znakov."); return; }
-          if (password !== password2) { setError("Heslá sa nezhodujú."); return; }
-          onSave(password);
-        }}
-      >
-        Uložiť nové heslo
-      </button>
     </Modal>
   );
 }
