@@ -2793,7 +2793,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
   const summaryDriverIds = [
     ...drivers.filter((d) => !d.archived && summary[d.id]).map((d) => d.id),
     ...(summary.unassigned ? ["unassigned"] : []),
-  ];
+  ].filter((key) => !driverFilter || key === driverFilter);
 
   let filtered = transports;
   if (driverFilter) filtered = filtered.filter((t) => (driverFilter === "unassigned" ? !t.driverId : t.driverId === driverFilter));
@@ -2874,10 +2874,24 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
 
   return (
     <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <input
+          placeholder="Hľadať sériové číslo, model, depo, zákazníka…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ minWidth: 260 }}
+        />
+        <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
+          <option value="">— všetci šoféri —</option>
+          <option value="unassigned">Nepridelené</option>
+          {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </div>
+
       {summaryDriverIds.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Rýchly prehľad — dnes / zajtra
+            Rýchly prehľad — dnes / zajtra{driverFilter ? " (len vybraný šofér)" : ""}
           </div>
           <table>
             <thead>
@@ -2911,19 +2925,6 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Hľadať sériové číslo, model, depo, zákazníka…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
-        <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
-          <option value="">— všetci šoféri —</option>
-          <option value="unassigned">Nepridelené</option>
-          {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-      </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
           <button
@@ -3604,32 +3605,33 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{monthLabel}</span>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
           {monthOffset !== 0 && (
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
           )}
-          <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px" }} />
-          {depoOptions.map((d) => (
-            <button
-              key={d}
-              className="btn"
-              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-              style={{
-                padding: "5px 10px",
-                fontSize: 11,
-                background: depoFilter === d ? "var(--accent)" : "transparent",
-                color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-              }}
-            >
-              {d}
-            </button>
-          ))}
         </div>
         <input placeholder="Hľadať sériové číslo alebo depo…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ minWidth: 220 }} />
+      </div>
+      <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {depoOptions.map((d) => (
+          <button
+            key={d}
+            className="btn"
+            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+            style={{
+              padding: "5px 10px",
+              fontSize: 11,
+              background: depoFilter === d ? "var(--accent)" : "transparent",
+              color: depoFilter === d ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {d}
+          </button>
+        ))}
       </div>
 
       <div className="panel" style={{ padding: 16 }}>
@@ -3640,11 +3642,11 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
         )}
         {relevantMachines.length > 0 && (
           <div style={{ overflow: "auto", maxHeight: "65vh" }}>
-            <div style={{ minWidth: 150 + daysInMonth * 34 }}>
+            <div style={{ minWidth: "max-content" }}>
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `150px repeat(${daysInMonth}, 1fr)`,
+                  gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-day-col))`,
                   gap: 2,
                   marginBottom: 4,
                   position: "sticky",
@@ -3660,7 +3662,8 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                   return (
                     <div
                       key={d}
-                      className="mono"
+                      className="mono gantt-header-cell"
+                      title={iso}
                       style={{
                         textAlign: "center",
                         fontSize: 11,
@@ -3671,7 +3674,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                         paddingBottom: 4,
                       }}
                     >
-                      {d}.{month + 1}.
+                      {d}
                     </div>
                   );
                 })}
@@ -3686,7 +3689,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                     onClick={() => onOpenCard(m)}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: `150px repeat(${daysInMonth}, 1fr)`,
+                      gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-day-col))`,
                       gap: 2,
                       alignItems: "center",
                       marginBottom: 3,
@@ -5044,6 +5047,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   const [monthOffset, setMonthOffset] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [depoFilter, setDepoFilter] = useState(null);
+  const [technicianFilter, setTechnicianFilter] = useState("");
   const [quickMode, setQuickMode] = useState(null); // null | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const QUICK_KINDS = [
     { id: "pohotovost", label: "Pohotovosť", color: "var(--danger)" },
@@ -5057,6 +5061,9 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   }
   const depoOptions = DEPO_OPTIONS;
   let visibleTechnicians = showArchived ? technicians : technicians.filter((t) => !t.archived);
+  if (technicianFilter) {
+    visibleTechnicians = visibleTechnicians.filter((t) => t.id === technicianFilter);
+  }
   if (depoFilter) {
     visibleTechnicians = visibleTechnicians.filter((t) => (t.depo || "").toLowerCase() === depoFilter.toLowerCase());
   }
@@ -5174,6 +5181,12 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
+        <select value={technicianFilter} onChange={(e) => setTechnicianFilter(e.target.value)} style={{ minWidth: 200 }}>
+          <option value="">— všetci technici —</option>
+          {technicians.filter((t) => !t.archived).map((t) => (
+            <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
+          ))}
+        </select>
         <div style={{ flex: 1 }} />
         {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
       </div>
@@ -5255,7 +5268,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `150px repeat(${daysInMonth}, minmax(64px, max-content))`,
+              gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, var(--gantt-plan-day-col))`,
               gap: 2,
             }}
           >
@@ -5269,7 +5282,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 <div
                   key={d}
                   ref={isToday ? todayCellRef : null}
-                  className="mono"
+                  className="mono gantt-header-cell"
+                  title={iso}
                   style={{
                     textAlign: "center",
                     fontSize: 11,
@@ -5285,7 +5299,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   }}
                 >
                   <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                  <div>{d}.{month + 1}.</div>
+                  <div>{d}</div>
                 </div>
               );
             })}
@@ -5379,9 +5393,12 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                                 alignItems: "center",
                                 justifyContent: "center",
                                 whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
                                 cursor: "pointer",
-                                padding: "0 6px",
+                                padding: "0 4px",
                               }}
+                              className="gantt-cell"
                             >
                               {label}
                             </div>
@@ -5728,6 +5745,9 @@ function GlobalStyle() {
         --ok-bg: #eaf3de;
         --warn: #854f0b;
         --warn-bg: #faeeda;
+        --gantt-name-col: 150px;
+        --gantt-day-col: 34px;
+        --gantt-plan-day-col: 72px;
         --danger: #A32D2D;
         --danger-bg: #fcebeb;
         --danger-row-bg: rgba(227,6,19,.13);
@@ -5781,36 +5801,54 @@ function GlobalStyle() {
          MOBILE — telefóny a malé tablety
          ══════════════════════════════════════════════════════ */
       @media (max-width: 720px) {
-        .app-main { padding: 12px !important; }
-        .header-topbar { padding: 8px 12px !important; gap: 8px !important; }
-        .header-navbar { padding: 8px 12px !important; gap: 10px !important; }
+        :root {
+          --gantt-name-col: 92px;
+          --gantt-day-col: 26px;
+          --gantt-plan-day-col: 46px;
+        }
+        .app-main { padding: 10px !important; }
+        .header-topbar { padding: 7px 10px !important; gap: 6px !important; }
+        .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
         .header-divider, .header-subtitle, .company-badge { display: none !important; }
-        .header-top-actions { gap: 6px !important; }
+        .header-top-actions { gap: 5px !important; }
         .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
           font-size: 10px !important;
-          padding: 4px 7px !important;
+          padding: 4px 6px !important;
         }
+        .panel { padding: 12px !important; }
+        .quick-filters { flex-wrap: wrap !important; }
 
         /* Info-grid karty (Karta stroja, zákazky, šoféra, technika…) — jeden stĺpec pod sebou */
         .resp-grid { grid-template-columns: 1fr !important; }
 
         /* Modálne okná — takmer celá obrazovka, menší padding */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 14px !important; }
-        .modal-header h3 { font-size: 16px !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; }
+        .modal-header h3 { font-size: 15px !important; }
 
         /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
         .panel { overflow-x: auto; }
-        table { font-size: 12px; }
-        th, td { padding: 7px 8px !important; }
+        table { font-size: 11px; }
+        th, td { padding: 6px 7px !important; }
+        table th:first-child, table td:first-child {
+          position: sticky;
+          left: 0;
+          background: var(--panel);
+          z-index: 1;
+          box-shadow: 2px 0 4px rgba(0,0,0,.08);
+        }
 
         /* Väčšie, na dotyk pohodlnejšie tlačidlá */
-        .btn { padding: 8px 12px; font-size: 13px; }
+        .btn { padding: 7px 11px; font-size: 12px; }
 
         /* Formulárové polia nech nikdy nepretečú cez okraj obrazovky */
-        input, select, textarea { min-width: 0 !important; max-width: 100%; }
+        input, select, textarea { min-width: 0 !important; max-width: 100%; font-size: 13px; }
 
         h3.label-font { word-break: break-word; }
+
+        /* Gantty (Kalendár, Plán servisu) — kompaktnejšie stĺpce, menšie písmo */
+        .gantt-cell { font-size: 9px !important; }
+        .gantt-header-cell { font-size: 9px !important; padding: 2px !important; }
       }
 
       @media (max-width: 480px) {
