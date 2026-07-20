@@ -2748,7 +2748,9 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
     const list = [];
     jobs.forEach((j) => {
       if (j.status === "completed") return;
-      if (j.startDate >= today) {
+      // Po termíne sa ukáže len kým nemá priradeného šoféra — akonáhle je vybavené,
+      // zmizne rovnako ako doteraz, nech sa zoznam nezapĺňa navždy starými záznamami.
+      if (j.startDate >= today || !j.driverId) {
         list.push({
           id: j.id + "-vyvoz",
           jobId: j.id,
@@ -2759,9 +2761,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           from: j.fromDepo || "—",
           to: j.toLocation || "—",
           customer: j.customer,
+          overdue: j.startDate < today,
         });
       }
-      if (j.endDate >= today) {
+      if (j.endDate >= today || !j.returnDriverId) {
         list.push({
           id: j.id + "-zvoz",
           jobId: j.id,
@@ -2772,6 +2775,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           from: j.toLocation || "—",
           to: j.returnDepo || j.fromDepo || "—",
           customer: j.customer,
+          overdue: j.endDate < today,
         });
       }
     });
@@ -2841,14 +2845,15 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user,
           alignItems: "center",
           gap: 10,
           padding: "8px 0",
-          borderTop: "1px solid var(--border)",
+          borderTop: t.overdue ? "1px solid var(--danger)" : "1px solid var(--border)",
           flexWrap: "wrap",
         }}
       >
         <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`} style={{ minWidth: 52, textAlign: "center" }}>
           {isVyvoz ? "Vývoz" : "Zvoz"}
         </span>
-        <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmtDate(t.date)}</span>
+        <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
+        {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
         <span className="mono" style={{ fontSize: 12 }}>{machine?.code || "—"}</span>
         <span style={{ fontSize: 12 }}>
           {t.from} <span style={{ color: "var(--text-dim)" }}>→</span> {t.to}
