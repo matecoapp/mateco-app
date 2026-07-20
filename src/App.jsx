@@ -13,21 +13,91 @@ const DEPO_OPTIONS = ["Bratislava", "Nitra", "Zvolen", "Žilina", "Prešov"];
 --------------------------------------------------------- */
 const ROLES = [
   { id: "admin", label: "Administrátor", desc: "Plný prístup ku všetkému, vrátane správy používateľov." },
-  { id: "dispecer", label: "Dispečer (Požičovňa)", desc: "Plný prístup k Požičovni. Servis len na čítanie." },
-  { id: "servis", label: "Servisný technik/dispečer", desc: "Plný prístup k Servisu. Požičovňa len na čítanie." },
-  { id: "citatel", label: "Len na čítanie", desc: "Vidí všetko, nič nemôže meniť." },
+  { id: "veduci_pozicovne", label: "Vedúci požičovne", desc: "" },
+  { id: "veduci_servisu", label: "Vedúci servisu", desc: "" },
+  { id: "obchodnik", label: "Obchodník", desc: "" },
+  { id: "dispecer_pozicovne", label: "Dispečer požičovne", desc: "" },
+  { id: "sofer", label: "Šofér", desc: "" },
+  { id: "dispecer_servisu", label: "Dispečer servisu", desc: "" },
+  { id: "technik", label: "Technik", desc: "" },
 ];
 function roleLabel(roleId) {
   return ROLES.find((r) => r.id === roleId)?.label || roleId;
 }
-function canEditPoziciovna(user) {
-  return !!user && (user.role === "admin" || user.role === "dispecer");
-}
-function canEditServis(user) {
-  return !!user && (user.role === "admin" || user.role === "servis");
-}
 function isAdminUser(user) {
   return !!user && user.role === "admin";
+}
+
+// ============================================================
+// Presné rozdelenie práv podľa vyplneného excelu (pristupy-podla-roli.xlsx)
+// Kľúč = akcia, hodnota = zoznam rolí, ktoré ju smú robiť.
+// Admin má vždy všetko (aj keby chýbal v zozname nižšie).
+// ============================================================
+const PERM = {
+  // Požičovňa — stroje
+  machine_add: ["veduci_pozicovne"],
+  machine_import_csv: [],
+  machine_clear_all: [],
+  machine_edit: ["veduci_pozicovne", "veduci_servisu", "dispecer_pozicovne"],
+  machine_archive: ["veduci_pozicovne"],
+  machine_delete: [],
+  machine_track_toggle: ["veduci_pozicovne", "dispecer_pozicovne"],
+  machine_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik"], // všetci
+
+  // Požičovňa — zákazky
+  job_add: ["veduci_pozicovne", "dispecer_pozicovne"],
+  job_import_csv: [],
+  job_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
+  job_complete: ["veduci_pozicovne", "dispecer_pozicovne"],
+  job_email: ["veduci_pozicovne", "dispecer_pozicovne"],
+  job_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik"], // všetci
+
+  // Požičovňa — prepravy / šoféri
+  transport_assign_driver: ["veduci_pozicovne", "dispecer_pozicovne"],
+  driver_add: ["veduci_pozicovne", "dispecer_pozicovne"],
+  driver_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
+  driver_archive: ["veduci_pozicovne"],
+  driver_delete: [],
+
+  // Servis — poškodenia / externé zákazky
+  damage_assign: ["veduci_servisu", "dispecer_servisu"],
+  damage_status: ["veduci_servisu", "dispecer_servisu"],
+  damage_delete: ["veduci_servisu", "dispecer_servisu"],
+  external_add: ["veduci_servisu", "dispecer_servisu"],
+  external_assign: ["veduci_servisu", "dispecer_servisu"],
+  external_status: ["veduci_servisu", "dispecer_servisu"],
+  external_delete: ["veduci_servisu", "dispecer_servisu"],
+
+  // Servis — revízie / úradné skúšky
+  revision_assign: ["veduci_servisu", "dispecer_servisu"],
+  revision_complete: ["veduci_servisu", "dispecer_servisu"],
+  uradnaskuska_assign: ["veduci_servisu", "dispecer_servisu"],
+  uradnaskuska_complete: ["veduci_servisu", "dispecer_servisu"],
+
+  // Servis — plán servisu / technici
+  plan_assign: ["veduci_servisu", "dispecer_servisu"],
+  plan_quick_events: ["veduci_servisu", "dispecer_servisu"],
+  technician_add: ["veduci_servisu"],
+  technician_edit: ["veduci_servisu"],
+  technician_archive: ["veduci_servisu"],
+  technician_delete: [],
+
+  // Protokol
+  protocol_write: ["technik"],
+
+  // Spoločné
+  backup_export: [],
+  backup_import: [],
+  user_admin: [],
+  view_as_role: [],
+};
+
+function can(user, key) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const allowed = PERM[key];
+  if (!allowed) return false;
+  return allowed.includes(user.role);
 }
 
 // Protokol je zabudovaný priamo v appke (base64) — otvára sa ako samostatná
@@ -333,6 +403,7 @@ function StatusBadge({ status }) {
 function Modal({ title, onClose, children, wide }) {
   return (
     <div
+      className="modal-overlay"
       style={{
         position: "fixed",
         inset: 0,
@@ -347,11 +418,11 @@ function Modal({ title, onClose, children, wide }) {
       onClick={onClose}
     >
       <div
-        className="panel"
+        className="panel modal-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: wide ? 640 : 460, padding: 20 }}
+        style={{ width: wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
             {title}
           </h3>
@@ -1269,6 +1340,7 @@ function DispatcherApp() {
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
         currentUser={currentUser}
+        effectiveUser={effectiveUser}
         viewAsRole={viewAsRole}
         onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
@@ -1300,7 +1372,7 @@ function DispatcherApp() {
         </div>
       )}
 
-      <div style={{ padding: "20px 24px", maxWidth: 1400, margin: "0 auto" }}>
+      <div className="app-main" style={{ padding: "20px 24px", maxWidth: 1400, margin: "0 auto" }}>
         {module === "poziciovna" && view === "dashboard" && (() => {
           const hasAlerts =
             alerts.overdue.length > 0 ||
@@ -1356,7 +1428,7 @@ function DispatcherApp() {
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
             driverById={driverById}
-            canEdit={canEditPoziciovna(effectiveUser)}
+            user={effectiveUser}
             onAddMachine={() => setShowAddMachine({})}
             onAddJob={(machineId) => setShowAddJob({ machineId })}
             onImport={() => setShowImport(true)}
@@ -1381,6 +1453,7 @@ function DispatcherApp() {
             machineById={machineById}
             driverById={driverById}
             today={today}
+            user={effectiveUser}
             onAddJob={() => setShowAddJob({})}
             onImportJobs={() => setShowImportJobs(true)}
             onComplete={(job) => setCompleteJobTarget(job)}
@@ -1402,6 +1475,7 @@ function DispatcherApp() {
             machineById={machineById}
             today={today}
             tomorrow={tomorrow}
+            user={effectiveUser}
             assignDriver={assignDriver}
             assignReturnDriver={assignReturnDriver}
             onExpand={(c) => setExpandedList(c)}
@@ -1413,6 +1487,7 @@ function DispatcherApp() {
             drivers={drivers}
             jobs={jobs}
             today={today}
+            user={effectiveUser}
             onAdd={() => setShowAddDriver({})}
             onOpenCard={(d) => setDriverCard(d)}
           />
@@ -1438,6 +1513,7 @@ function DispatcherApp() {
             damages={damages}
             weeklyDuty={weeklyDuty}
             today={today}
+            user={effectiveUser}
             onCellClick={(technicianId, date) => setAssignSlot({ technicianId, date })}
             onQuickAssign={addQuickAssignment}
             onQuickWeeklyDuty={toggleWeeklyDuty}
@@ -1451,6 +1527,7 @@ function DispatcherApp() {
             damages={damages}
             technicians={technicians}
             machineById={enrichedMachineById}
+            user={effectiveUser}
             onAssign={(d) => setDamageAssignTarget(d)}
             onDelete={(id) => {
               const d = damages.find((x) => x.id === id);
@@ -1466,6 +1543,7 @@ function DispatcherApp() {
           <ExternalServiceView
             damages={damages}
             technicians={technicians}
+            user={effectiveUser}
             onAdd={() => setShowExternalReport(true)}
             onAssign={(d) => setDamageAssignTarget(d)}
             onDelete={(id) => {
@@ -1483,6 +1561,7 @@ function DispatcherApp() {
             damages={damages}
             technicians={technicians}
             machineById={enrichedMachineById}
+            user={effectiveUser}
             onAssign={(d) => setDamageAssignTarget(d)}
             onComplete={(d) => setCompleteRevisionTarget(d)}
             onResolve={setDamageResolved}
@@ -1496,6 +1575,7 @@ function DispatcherApp() {
             technicians={technicians}
             machineById={enrichedMachineById}
             today={today}
+            user={effectiveUser}
             onAssign={(d) => setDamageAssignTarget(d)}
             onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
             onResolve={setDamageResolved}
@@ -1515,6 +1595,7 @@ function DispatcherApp() {
           driver={driverCard}
           jobs={jobs}
           today={today}
+          user={effectiveUser}
           onClose={() => setDriverCard(null)}
           onEdit={() => {
             setShowAddDriver({ existing: driverCard });
@@ -1576,6 +1657,7 @@ function DispatcherApp() {
         <MachineCardModal
           machine={machineCard}
           history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
+          user={effectiveUser}
           onClose={() => setMachineCard(null)}
           onEditMachine={() => {
             setShowAddMachine({ existing: machineCard });
@@ -1737,6 +1819,7 @@ function DispatcherApp() {
           machine={assignmentDetail.machine}
           damage={assignmentDetail.damage}
           technicians={technicians}
+          user={effectiveUser}
           onClose={() => setAssignmentDetail(null)}
         />
       )}
@@ -1758,6 +1841,7 @@ function DispatcherApp() {
           job={jobDetail}
           machine={machineById[jobDetail.machineId]}
           driverById={driverById}
+          user={effectiveUser}
           onClose={() => setJobDetail(null)}
           onEdit={() => {
             setShowAddJob({ existing: jobDetail });
@@ -1783,6 +1867,7 @@ function DispatcherApp() {
           assignments={assignments}
           machines={machines}
           today={today}
+          user={effectiveUser}
           onClose={() => setTechnicianCard(null)}
           onEdit={() => {
             setShowAddTechnician({ existing: technicianCard });
@@ -1819,6 +1904,7 @@ function DispatcherApp() {
           damages={damages}
           machineById={enrichedMachineById}
           technicians={technicians}
+          user={effectiveUser}
           onClose={() => setAssignSlot(null)}
           onSave={saveAssignment}
           onDelete={deleteAssignment}
@@ -1831,7 +1917,7 @@ function DispatcherApp() {
 /* ---------------------------------------------------------
    Header
 --------------------------------------------------------- */
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -1852,53 +1938,56 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
   return (
     <div style={{ borderBottom: "1px solid var(--border)", background: "var(--panel)" }}>
       <div style={{ background: "var(--accent)" }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="header-topbar" style={{ maxWidth: 1400, margin: "0 auto", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6 }}>
           <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
-          <span style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
-          <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
+          <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
+          <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
             Interná platforma
           </span>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              onClick={onExportBackup}
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-              title="Stiahnuť zálohu všetkých dát (stroje, technici, zákazky…) do jedného súboru"
-            >
-              ⬇ Export dát
-            </button>
-            <label
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-              title="Načítať zálohu zo súboru (prepíše aktuálne dáta v tomto chate)"
-            >
-              ⬆ Import dát
-              <input
-                type="file"
-                accept="application/json,.json"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onImportBackup(file);
-                  e.target.value = "";
+          <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
+            {can(effectiveUser, "backup_export") && (
+              <button
+                onClick={onExportBackup}
+                style={{
+                  fontSize: 11,
+                  color: "#fff",
+                  background: "rgba(255,255,255,.12)",
+                  border: "1px solid rgba(255,255,255,.25)",
+                  borderRadius: 4,
+                  padding: "3px 10px",
+                  cursor: "pointer",
                 }}
-              />
-            </label>
-            <button
+                title="Stiahnuť zálohu všetkých dát (stroje, technici, zákazky…) do jedného súboru"
+              >
+                ⬇ Export dát
+              </button>
+            )}
+            {can(effectiveUser, "backup_import") && (
+              <label
+                style={{
+                  fontSize: 11,
+                  color: "#fff",
+                  background: "rgba(255,255,255,.12)",
+                  border: "1px solid rgba(255,255,255,.25)",
+                  borderRadius: 4,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                }}
+                title="Načítať zálohu zo súboru (prepíše aktuálne dáta v tomto chate)"
+              >
+                ⬆ Import dát
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onImportBackup(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}            <button
               onClick={onToggleDarkMode}
               style={{
                 fontSize: 11,
@@ -1972,13 +2061,13 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             >
               Odhlásiť sa
             </button>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,.8)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
+            <div className="company-badge" style={{ fontSize: 11, color: "rgba(255,255,255,.8)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
               mateco Slovakia s.r.o.
             </div>
           </div>
         </div>
       </div>
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "10px 24px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+      <div className="header-navbar" style={{ maxWidth: 1400, margin: "0 auto", padding: "10px 24px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", borderRadius: 8, padding: 3 }}>
           {[
             { id: "poziciovna", label: "Požičovňa" },
@@ -2005,7 +2094,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             </button>
           ))}
         </div>
-        <nav style={{ display: "flex", gap: 4 }}>
+        <nav style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -2061,7 +2150,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             </button>
           ))}
         </nav>
-        {module === "servis" && (
+        {module === "servis" && can(effectiveUser, "protocol_write") && (
           <button
             onClick={() => openProtocol({})}
             className="btn btn-accent"
@@ -2217,7 +2306,7 @@ function ExpandListModal({ title, items, renderItem, onClose }) {
 /* ---------------------------------------------------------
    Assignment detail modal ("karta zákazky" from Servis Prehľad)
 --------------------------------------------------------- */
-function AssignmentDetailModal({ assignment, machine, damage, technicians, onClose }) {
+function AssignmentDetailModal({ assignment, machine, damage, technicians, user, onClose }) {
   const a = assignment;
   const technician = technicians.find((t) => t.id === a.technicianId);
   const protocolParams = damage
@@ -2233,7 +2322,7 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, onClo
 
   return (
     <Modal title={`${machine?.code || a.stroj || "Zákazka"}${machine?.type ? " · " + machine.type : ""}`} onClose={onClose} wide>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Technik" value={technician?.name} />
         <CardField label="Dátum" value={fmtDate(a.date)} />
         <CardField label="Umiestnenie" value={a.umiestnenie} />
@@ -2247,9 +2336,11 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, onClo
           Stav: {damageLabel(damage)}
         </div>
       )}
-      <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
-        Vypísať protokol
-      </button>
+      {can(user, "protocol_write") && (
+        <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
+          Vypísať protokol
+        </button>
+      )}
     </Modal>
   );
 }
@@ -2307,7 +2398,7 @@ function Dashboard({
   statusFilter,
   setStatusFilter,
   driverById,
-  canEdit,
+  user,
   onAddMachine,
   onAddJob,
   onImport,
@@ -2347,14 +2438,16 @@ function Dashboard({
           <option value="overdue">Po termíne</option>
         </select>
         <div style={{ flex: 1 }} />
-        {canEdit && (
-          <>
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-              Vymazať všetky stroje
-            </button>
-            <button className="btn btn-ghost" onClick={onImport}>Import CSV</button>
-            <button className="btn btn-accent" onClick={onAddMachine}>+ Pridať stroj</button>
-          </>
+        {can(user, "machine_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky stroje
+          </button>
+        )}
+        {can(user, "machine_import_csv") && (
+          <button className="btn btn-ghost" onClick={onImport}>Import CSV</button>
+        )}
+        {can(user, "machine_add") && (
+          <button className="btn btn-accent" onClick={onAddMachine}>+ Pridať stroj</button>
         )}
       </div>
 
@@ -2471,7 +2564,7 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, machineById, driverById, today, onAddJob, onImportJobs, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
+function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImportJobs, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
@@ -2529,8 +2622,8 @@ function JobsBoard({ jobs, machineById, driverById, today, onAddJob, onImportJob
           style={{ minWidth: 260 }}
         />
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>
-          <button className="btn btn-accent" onClick={onAddJob}>+ Nová zákazka</button>
+          {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
+          {can(user, "job_add") && <button className="btn btn-accent" onClick={onAddJob}>+ Nová zákazka</button>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
@@ -2602,12 +2695,14 @@ function JobsBoard({ jobs, machineById, driverById, today, onAddJob, onImportJob
                   {j.notes && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Pozn.: {j.notes}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(j)}>
-                    Upraviť
-                  </button>
-                  {dEmail && <a className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} href={dEmail}>Email šoférovi</a>}
-                  {cEmail && <a className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} href={cEmail}>Email zákazníkovi</a>}
-                  {st !== "completed" && (
+                  {can(user, "job_edit") && (
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(j)}>
+                      Upraviť
+                    </button>
+                  )}
+                  {can(user, "job_email") && dEmail && <a className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} href={dEmail}>Email šoférovi</a>}
+                  {can(user, "job_email") && cEmail && <a className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} href={cEmail}>Email zákazníkovi</a>}
+                  {st !== "completed" && can(user, "job_complete") && (
                     <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onComplete(j)}>
                       Ukončiť
                     </button>
@@ -2625,7 +2720,7 @@ function JobsBoard({ jobs, machineById, driverById, today, onAddJob, onImportJob
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, assignDriver, assignReturnDriver, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, user, assignDriver, assignReturnDriver, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [driverFilter, setDriverFilter] = useState("");
@@ -2743,14 +2838,18 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, assig
         </span>
         {t.customer && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>· {t.customer}</span>}
         <div style={{ marginLeft: "auto" }}>
-          <select
-            value={t.driverId || ""}
-            onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
-            style={{ fontSize: 11, padding: "4px 6px" }}
-          >
-            <option value="">— neurčený —</option>
-            {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+          {can(user, "transport_assign_driver") ? (
+            <select
+              value={t.driverId || ""}
+              onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
+              style={{ fontSize: 11, padding: "4px 6px" }}
+            >
+              <option value="">— neurčený —</option>
+              {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
+          )}
         </div>
       </div>
     );
@@ -2875,7 +2974,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, assig
 /* ---------------------------------------------------------
    Drivers view
 --------------------------------------------------------- */
-function DriversView({ drivers, jobs, today, onAdd, onOpenCard }) {
+function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
   const [showArchived, setShowArchived] = useState(false);
   const visible = drivers.filter((d) => (showArchived ? true : !d.archived));
   return (
@@ -2885,7 +2984,7 @@ function DriversView({ drivers, jobs, today, onAdd, onOpenCard }) {
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
-        <button className="btn btn-accent" onClick={onAdd}>+ Pridať šoféra</button>
+        {can(user, "driver_add") && <button className="btn btn-accent" onClick={onAdd}>+ Pridať šoféra</button>}
       </div>
       <div className="panel">
         <table>
@@ -2926,7 +3025,7 @@ function DriversView({ drivers, jobs, today, onAdd, onOpenCard }) {
 /* ---------------------------------------------------------
    Driver card modal (karta šoféra)
 --------------------------------------------------------- */
-function DriverCardModal({ driver, jobs, today, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
+function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
   const d = driver;
   const upcoming = jobs
     .filter((j) => j.driverId === d.id && j.status !== "completed" && j.endDate >= today)
@@ -2935,7 +3034,7 @@ function DriverCardModal({ driver, jobs, today, onClose, onEdit, onArchive, onUn
 
   return (
     <Modal title={d.name} onClose={onClose} wide>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Telefón" value={d.phone} />
         <CardField label="Email" value={d.email} />
         <CardField label="Depo" value={d.depo} />
@@ -2958,13 +3057,17 @@ function DriverCardModal({ driver, jobs, today, onClose, onEdit, onArchive, onUn
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>
-        <button className="btn btn-ghost" onClick={() => (d.archived ? onUnarchive() : onArchive())}>
-          {d.archived ? "Vrátiť z archívu" : "Archivovať"}
-        </button>
-        <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
-          Zmazať šoféra
-        </button>
+        {can(user, "driver_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>}
+        {can(user, "driver_archive") && (
+          <button className="btn btn-ghost" onClick={() => (d.archived ? onUnarchive() : onArchive())}>
+            {d.archived ? "Vrátiť z archívu" : "Archivovať"}
+          </button>
+        )}
+        {can(user, "driver_delete") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
+            Zmazať šoféra
+          </button>
+        )}
       </div>
     </Modal>
   );
@@ -3069,11 +3172,11 @@ function CompleteJobModal({ job, machine, drivers, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Job detail modal (clicked from Kalendár)
 --------------------------------------------------------- */
-function JobDetailModal({ job, machine, driverById, onClose, onEdit, onComplete, onReportDamage }) {
+function JobDetailModal({ job, machine, driverById, user, onClose, onEdit, onComplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
   return (
     <Modal title={`${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`} onClose={onClose}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={job.customer} />
         <CardField label="Stav" value={{ overdue: "Po termíne", active: "Na zákazke", planned: "Naplánovaná", completed: "Ukončená" }[st]} danger={st === "overdue"} />
         <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
@@ -3092,11 +3195,11 @@ function JobDetailModal({ job, machine, driverById, onClose, onEdit, onComplete,
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={onEdit}>Upraviť zákazku</button>
-        {job.status !== "completed" && (
+        {can(user, "job_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť zákazku</button>}
+        {job.status !== "completed" && can(user, "job_complete") && (
           <button className="btn btn-accent" onClick={onComplete}>Ukončiť zákazku</button>
         )}
-        {machine && onReportDamage && (
+        {machine && onReportDamage && can(user, "job_report_damage") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportDamage}>
             Nahlásiť poškodenie
           </button>
@@ -3131,7 +3234,7 @@ function AddJobModal({ machines, drivers, prefillMachineId, existing, onClose, o
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : "Nová zákazka"} onClose={onClose} wide>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Stroj *">
           <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" />
         </Field>
@@ -3250,7 +3353,7 @@ function ImportModal({ onClose, onImport }) {
 
       {headers.length > 0 && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
             <Field label="Stĺpec = Sériové číslo *">
               <select value={mapCode} onChange={(e) => setMapCode(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
@@ -3378,7 +3481,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
 
       {headers.length > 0 && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
             <Field label="Stĺpec = Sériové číslo *">
               <select value={mapMachineCode} onChange={(e) => setMapMachineCode(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
@@ -3642,7 +3745,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, history, onClose, onReportDamage, onAddJob, onEditJob, onCompleteJob, onOpenDamage, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine }) {
+function MachineCardModal({ machine, history, user, onClose, onReportDamage, onAddJob, onEditJob, onCompleteJob, onOpenDamage, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine }) {
   const m = machine;
   const notTracked = m.trackRevisions === false;
   const reviziaOverdue = !notTracked && m.revizia && daysBetween(todayISO(), m.revizia) < 0;
@@ -3651,7 +3754,7 @@ function MachineCardModal({ machine, history, onClose, onReportDamage, onAddJob,
   const skuskaOverdue = !skuskaNotTracked && skuskaYear && !Number.isNaN(skuskaYear) && skuskaYear < Number(todayISO().slice(0, 4));
   return (
     <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
         <CardField
@@ -3673,37 +3776,51 @@ function MachineCardModal({ machine, history, onClose, onReportDamage, onAddJob,
           Karta zatiaľ zobrazuje polia z lokálnych dát mockupu — po napojení na databázu strojov sa doplnia automaticky.
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-ghost" onClick={onEditMachine}>
-            Upraviť údaje
-          </button>
-          <button className="btn btn-ghost" onClick={onAddJob}>
-            + Zákazka
-          </button>
-          {m.currentJob && (
+          {can(user, "machine_edit") && (
+            <button className="btn btn-ghost" onClick={onEditMachine}>
+              Upraviť údaje
+            </button>
+          )}
+          {can(user, "job_add") && (
+            <button className="btn btn-ghost" onClick={onAddJob}>
+              + Zákazka
+            </button>
+          )}
+          {m.currentJob && can(user, "job_edit") && (
             <button className="btn btn-ghost" onClick={onEditJob}>
               Upraviť zákazku
             </button>
           )}
-          {m.currentJob && (
+          {m.currentJob && can(user, "job_complete") && (
             <button className="btn btn-ghost" onClick={onCompleteJob}>
               Ukončiť zákazku
             </button>
           )}
-          <button className="btn btn-ghost" style={{ color: "var(--danger)", flexShrink: 0 }} onClick={onReportDamage}>
-            Nahlásiť poškodenie
-          </button>
-          <button className="btn btn-ghost" onClick={onToggleTrackRevisions}>
-            {notTracked ? "Sledovať revízie" : "Nesledovať revízie"}
-          </button>
-          <button className="btn btn-ghost" onClick={onToggleTrackUradnaSkuska}>
-            {skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky"}
-          </button>
-          <button className="btn btn-ghost" onClick={() => (m.archived ? onUnarchive() : onArchive())}>
-            {m.archived ? "Vrátiť z archívu" : "Archivovať"}
-          </button>
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(m.id)}>
-            Zmazať stroj
-          </button>
+          {can(user, "machine_report_damage") && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)", flexShrink: 0 }} onClick={onReportDamage}>
+              Nahlásiť poškodenie
+            </button>
+          )}
+          {can(user, "machine_track_toggle") && (
+            <button className="btn btn-ghost" onClick={onToggleTrackRevisions}>
+              {notTracked ? "Sledovať revízie" : "Nesledovať revízie"}
+            </button>
+          )}
+          {can(user, "machine_track_toggle") && (
+            <button className="btn btn-ghost" onClick={onToggleTrackUradnaSkuska}>
+              {skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky"}
+            </button>
+          )}
+          {can(user, "machine_archive") && (
+            <button className="btn btn-ghost" onClick={() => (m.archived ? onUnarchive() : onArchive())}>
+              {m.archived ? "Vrátiť z archívu" : "Archivovať"}
+            </button>
+          )}
+          {can(user, "machine_delete") && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(m.id)}>
+              Zmazať stroj
+            </button>
+          )}
         </div>
       </div>
       {history && history.length > 0 && (
@@ -3767,7 +3884,7 @@ function DamageReportModal({ machine, today, onClose, onSave }) {
           Pred ďalším nahlásením skontrolujte históriu v karte stroja, či nejde o to isté.
         </div>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={model} />
         <CardField label="Sériové číslo" value={machine.code} />
         <CardField label="Dátum nahlásenia" value={fmtDate(today)} />
@@ -3787,7 +3904,13 @@ function DamageReportModal({ machine, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Damages view (list of reported machine damage)
 --------------------------------------------------------- */
-function ServiceEventCard({ d, technicianById, onAssign, onDelete, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
+const PERM_GROUP = {
+  damage: { assign: "damage_assign", status: "damage_status", del: "damage_delete" },
+  external: { assign: "external_assign", status: "external_status", del: "external_delete" },
+  revision: { assign: "revision_assign", status: "revision_complete", del: null },
+  uradnaskuska: { assign: "uradnaskuska_assign", status: "uradnaskuska_complete", del: null },
+};
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const assignedTech = techIds.length ? technicianById[techIds[0]] : null;
   const assignedTechNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ");
@@ -3795,6 +3918,8 @@ function ServiceEventCard({ d, technicianById, onAssign, onDelete, onResolve, on
   const barColor = isSimple ? (d.resolved ? "var(--ok)" : assignedTech ? "var(--info)" : "var(--danger)") : damageColor(d);
   const isDone = isSimple ? d.resolved : damageDisplayStav(d) === "opravene";
   const completeLabel = variant === "revizia" ? "Revízia vykonaná" : variant === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Upraviť stav zákazky";
+  const permGroup = d.type === "externa" ? "external" : variant === "revizia" ? "revision" : variant === "uradnaSkuska" ? "uradnaskuska" : "damage";
+  const perm = PERM_GROUP[permGroup];
   return (
     <div className="panel" style={{ padding: 14, borderLeft: `3px solid ${barColor}`, opacity: isDone ? 0.7 : 1 }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -3834,12 +3959,12 @@ function ServiceEventCard({ d, technicianById, onAssign, onDelete, onResolve, on
           )}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
-          {!isDone && (
+          {!isDone && can(user, perm.assign) && (
             <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onAssign(d)}>
               {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
             </button>
           )}
-          {isSimple ? (
+          {can(user, perm.status) && (isSimple ? (
             d.resolved ? (
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onResolve(d.id, false)}>
                 Otvoriť znova
@@ -3853,13 +3978,13 @@ function ServiceEventCard({ d, technicianById, onAssign, onDelete, onResolve, on
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onComplete(d)}>
               {completeLabel}
             </button>
-          )}
-          {onDelete && (
+          ))}
+          {onDelete && perm.del && can(user, perm.del) && (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px", color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
               Zmazať
             </button>
           )}
-          {onProtocol && (
+          {onProtocol && can(user, "protocol_write") && (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onProtocol(d)}>
               Vypísať protokol
             </button>
@@ -3870,7 +3995,7 @@ function ServiceEventCard({ d, technicianById, onAssign, onDelete, onResolve, on
   );
 }
 
-function DamagesView({ damages, technicians, machineById, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -3975,7 +4100,7 @@ function DamagesView({ damages, technicians, machineById, onAssign, onDelete, on
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
         ))}
       </div>
     </div>
@@ -3985,7 +4110,7 @@ function DamagesView({ damages, technicians, machineById, onAssign, onDelete, on
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, onAdd, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -4046,7 +4171,7 @@ function ExternalServiceView({ damages, technicians, onAdd, onAssign, onDelete, 
           onChange={(e) => setSearch(e.target.value)}
           style={{ minWidth: 260 }}
         />
-        <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>
+        {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -4096,7 +4221,7 @@ function ExternalServiceView({ damages, technicians, onAdd, onAssign, onDelete, 
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
         ))}
       </div>
     </div>
@@ -4117,7 +4242,7 @@ function ReportExternalServiceModal({ today, onClose, onSave }) {
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Pre stroje, ktoré nie sú v našej databáze (zákazník má vlastný stroj, servisujeme ho na mieste a pod.).
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Zákazník"><input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Miesto (mesto / adresa)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
         <Field label="Model / typ stroja"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
@@ -4155,7 +4280,7 @@ function ReportExternalServiceModal({ today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, onAssign, onComplete, onResolve, onProtocol }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -4251,7 +4376,7 @@ function RevisionsView({ damages, technicians, machineById, onAssign, onComplete
           </button>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <div className="label-font" style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10, fontWeight: 700 }}>
             Revízie po splatnosti — {overdue.length}
@@ -4267,6 +4392,7 @@ function RevisionsView({ damages, technicians, machineById, onAssign, onComplete
                 key={d.id}
                 d={d}
                 technicianById={technicianById}
+                user={user}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -4292,6 +4418,7 @@ function RevisionsView({ damages, technicians, machineById, onAssign, onComplete
                 key={d.id}
                 d={d}
                 technicianById={technicianById}
+                user={user}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -4310,7 +4437,7 @@ function RevisionsView({ damages, technicians, machineById, onAssign, onComplete
 /* ---------------------------------------------------------
    Úradné skúšky view — same mechanics as revisions, year-based
 --------------------------------------------------------- */
-function UradneSkuskyView({ damages, technicians, machineById, today, onAssign, onComplete, onResolve, onProtocol }) {
+function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -4407,7 +4534,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, onAssign, 
           </button>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <div className="label-font" style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10, fontWeight: 700 }}>
             Úradné skúšky po termíne — {overdue.length}
@@ -4423,6 +4550,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, onAssign, 
                 key={d.id}
                 d={d}
                 technicianById={technicianById}
+                user={user}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -4448,6 +4576,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, onAssign, 
                 key={d.id}
                 d={d}
                 technicianById={technicianById}
+                user={user}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -4580,7 +4709,7 @@ function DamageResolutionModal({ damage, onClose }) {
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
     <Modal title={`${title} · ${d.code}`} onClose={onClose}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
         <CardField label={isSimple ? "Dátum vykonania" : "Dátum opravy"} value={doneDate ? fmtDate(doneDate) : null} />
       </div>
@@ -4659,7 +4788,7 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
   return (
     <Modal title={existing ? "Upraviť technika" : "Pridať technika"} onClose={onClose}>
       <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Skratka (ERP)"><input value={skratka} onChange={(e) => setSkratka(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
         <Field label="ŠPZ servisného auta"><input value={spz} onChange={(e) => setSpz(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
       </div>
@@ -4837,7 +4966,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
 /* ---------------------------------------------------------
    Technician card modal (karta technika)
 --------------------------------------------------------- */
-function TechnicianCardModal({ technician, assignments, machines, today, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
+function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
   const t = technician;
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const upcoming = assignments
@@ -4847,7 +4976,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 
   return (
     <Modal title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Skratka (ERP)" value={t.skratka} />
         <CardField label="ŠPZ servisného auta" value={t.spz} />
         <CardField label="Depo" value={t.depo} />
@@ -4875,13 +5004,17 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>
-        <button className="btn btn-ghost" onClick={() => (t.archived ? onUnarchive() : onArchive())}>
-          {t.archived ? "Vrátiť z archívu" : "Archivovať"}
-        </button>
-        <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(t.id)}>
-          Zmazať technika
-        </button>
+        {can(user, "technician_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>}
+        {can(user, "technician_archive") && (
+          <button className="btn btn-ghost" onClick={() => (t.archived ? onUnarchive() : onArchive())}>
+            {t.archived ? "Vrátiť z archívu" : "Archivovať"}
+          </button>
+        )}
+        {can(user, "technician_delete") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(t.id)}>
+            Zmazať technika
+          </button>
+        )}
       </div>
     </Modal>
   );
@@ -4890,7 +5023,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, onCellClick, onQuickAssign, onQuickWeeklyDuty, onAddTechnician, onOpenTechnician }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickWeeklyDuty, onAddTechnician, onOpenTechnician }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [depoFilter, setDepoFilter] = useState(null);
@@ -4991,7 +5124,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
       <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
         Zatiaľ nie sú pridaní žiadni technici.
         <div style={{ marginTop: 12 }}>
-          <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>
+          {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
         </div>
       </div>
     );
@@ -5025,7 +5158,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           Zobraziť archivovaných
         </label>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>
+        {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
       </div>
       {monthlySummary.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
@@ -5074,30 +5207,32 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           </button>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
-        {QUICK_KINDS.map((k) => (
-          <button
-            key={k.id}
-            className="btn"
-            onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: quickMode === k.id ? k.color : "transparent",
-              color: quickMode === k.id ? "#fff" : k.color,
-              border: "1px solid " + k.color,
-            }}
-          >
-            {k.label}
-          </button>
-        ))}
-        {quickMode && (
-          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
-          </span>
-        )}
-      </div>
+      {can(user, "plan_quick_events") && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
+          {QUICK_KINDS.map((k) => (
+            <button
+              key={k.id}
+              className="btn"
+              onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
+              style={{
+                padding: "5px 10px",
+                fontSize: 11,
+                background: quickMode === k.id ? k.color : "transparent",
+                color: quickMode === k.id ? "#fff" : k.color,
+                border: "1px solid " + k.color,
+              }}
+            >
+              {k.label}
+            </button>
+          ))}
+          {quickMode && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
+            </span>
+          )}
+        </div>
+      )}
       <div className="panel" style={{ padding: 16 }}>
         <div ref={scrollContainerRef} style={{ overflow: "auto", maxHeight: "65vh" }}>
           <div
@@ -5270,7 +5405,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   );
 }
 
-function AssignSlotModal({ slot, assignments, machines, damages, machineById, technicians, onClose, onSave, onDelete }) {
+function AssignSlotModal({ slot, assignments, machines, damages, machineById, technicians, user, onClose, onSave, onDelete }) {
   const technician = technicians.find((t) => t.id === slot.technicianId);
   const dayAssignments = assignments.filter((a) => a.technicianId === slot.technicianId && a.date === slot.date);
   const [editingId, setEditingId] = useState(dayAssignments.length ? null : "new");
@@ -5306,9 +5441,9 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   {a.poznamka && <div style={{ fontSize: 12, marginTop: 4 }}>{a.poznamka}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(a.id)}>Zmazať</button>
+                  {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
+                  {can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
+                  {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(a.id)}>Zmazať</button>}
                 </div>
               </div>
             );
@@ -5316,7 +5451,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
         </div>
       )}
 
-      {editingId === null && (
+      {editingId === null && can(user, "plan_assign") && (
         <button className="btn btn-accent" onClick={() => setEditingId("new")}>+ Pridať ďalšiu zákazku</button>
       )}
 
@@ -5356,7 +5491,7 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
       <Field label="…alebo stroj mimo evidencie (voľný text)">
         <input value={stroj} onChange={(e) => { setStroj(e.target.value); setMachineId(""); }} placeholder="napr. externý stroj zákazníka" style={{ width: "100%" }} />
       </Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Umiestnenie"><input value={umiestnenie} onChange={(e) => setUmiestnenie(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Firma"><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
@@ -5429,7 +5564,7 @@ function LoginScreen({ onLogin, onSignUp }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="panel" style={{ padding: 32, width: 360 }}>
+      <div className="panel" style={{ padding: 32, width: 360, maxWidth: "90vw" }}>
         <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
         <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>
           {mode === "login" ? "Interná platforma — prihlásenie" : "Vytvorenie nového účtu"}
@@ -5624,6 +5759,46 @@ function GlobalStyle() {
       th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); }
       td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
       tr:hover td { background: var(--accent-light); }
+
+      /* ══════════════════════════════════════════════════════
+         MOBILE — telefóny a malé tablety
+         ══════════════════════════════════════════════════════ */
+      @media (max-width: 720px) {
+        .app-main { padding: 12px !important; }
+        .header-topbar { padding: 8px 12px !important; gap: 8px !important; }
+        .header-navbar { padding: 8px 12px !important; gap: 10px !important; }
+        .header-divider, .header-subtitle, .company-badge { display: none !important; }
+        .header-top-actions { gap: 6px !important; }
+        .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
+          font-size: 10px !important;
+          padding: 4px 7px !important;
+        }
+
+        /* Info-grid karty (Karta stroja, zákazky, šoféra, technika…) — jeden stĺpec pod sebou */
+        .resp-grid { grid-template-columns: 1fr !important; }
+
+        /* Modálne okná — takmer celá obrazovka, menší padding */
+        .modal-overlay { padding: 0 !important; align-items: stretch !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 14px !important; }
+        .modal-header h3 { font-size: 16px !important; }
+
+        /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
+        .panel { overflow-x: auto; }
+        table { font-size: 12px; }
+        th, td { padding: 7px 8px !important; }
+
+        /* Väčšie, na dotyk pohodlnejšie tlačidlá */
+        .btn { padding: 8px 12px; font-size: 13px; }
+
+        /* Formulárové polia nech nikdy nepretečú cez okraj obrazovky */
+        input, select, textarea { min-width: 0 !important; max-width: 100%; }
+
+        h3.label-font { word-break: break-word; }
+      }
+
+      @media (max-width: 480px) {
+        .header-topbar span.label-font { font-size: 17px !important; }
+      }
     `}</style>
   );
 }
