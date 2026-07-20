@@ -20,6 +20,7 @@ const ROLES = [
   { id: "sofer", label: "Šofér", desc: "" },
   { id: "dispecer_servisu", label: "Dispečer servisu", desc: "" },
   { id: "technik", label: "Technik", desc: "" },
+  { id: "nezaradeny", label: "Nezaradený (čaká na rolu)", desc: "Nevidí žiadne dáta appky, kým nedostane pridelenú rolu." },
 ];
 function roleLabel(roleId) {
   return ROLES.find((r) => r.id === roleId)?.label || roleId;
@@ -1314,6 +1315,22 @@ function DispatcherApp() {
         <GlobalStyle />
         <div className="label-font" style={{ color: "var(--text-dim)" }}>Načítavam profil…</div>
         <button className="btn btn-ghost" onClick={signOut}>Odhlásiť sa</button>
+      </div>
+    );
+  }
+
+  if (currentUser.role === "nezaradeny") {
+    return (
+      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+        <GlobalStyle />
+        <div className="panel" style={{ padding: 32, width: 420, maxWidth: "90vw", textAlign: "center" }}>
+          <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 12, textTransform: "lowercase" }}>mateco</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Účet čaká na schválenie</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 20 }}>
+            Ste úspešne prihlásený ako <strong>{currentUser.name}</strong>, ale administrátor vám ešte nepridelil rolu. Kým sa tak nestane, appka vám neukáže žiadne dáta. Ozvite sa prosím administrátorovi, nech vám v appke (👤 Používatelia) pridelí rolu.
+          </div>
+          <button className="btn btn-ghost" onClick={signOut}>Odhlásiť sa</button>
+        </div>
       </div>
     );
   }
