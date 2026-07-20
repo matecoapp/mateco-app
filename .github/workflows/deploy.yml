@@ -24,10 +24,10 @@ jobs:
       - name: Nastavenie Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Inštalácia závislostí
-        run: npm ci
+        run: npm install
 
       - name: Build appky
         run: npm run build
@@ -35,6 +35,9 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        
       - name: Príprava na GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
