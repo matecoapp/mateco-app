@@ -561,6 +561,14 @@ function DispatcherApp() {
   }, [machines]);
 
   useEffect(() => {
+    if (!authChecked) return; // ešte nevieme, či je niekto prihlásený — počkaj
+    if (!session) {
+      // Neprihlásený — vyprázdni a označ ako "načítané" (zobrazí sa prihlasovacia obrazovka)
+      setMachines([]); setDrivers([]); setJobs([]); setTechnicians([]);
+      setAssignments([]); setDamages([]); setWeeklyDuty([]);
+      setLoaded(true);
+      return;
+    }
     (async () => {
       const [m, d, j, t, a, dmg, wd] = await Promise.all([
         loadKey("machines", []),
@@ -580,7 +588,7 @@ function DispatcherApp() {
       setWeeklyDuty(wd);
       setLoaded(true);
     })();
-  }, []);
+  }, [authChecked, session?.user?.id]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
