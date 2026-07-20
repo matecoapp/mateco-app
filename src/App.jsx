@@ -207,27 +207,9 @@ const supabase = createClient(
 
 async function loadKey(key, fallback) {
   try {
-    const { data, error } = await supabase
-      .from("app_data")
-      .select("value")
-      .eq("key", key)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("app_data").select("value").eq("key", key).maybeSingle();
     if (error || !data) return fallback;
-
-    let value = data.value;
-
-    if (typeof value === "string") {
-      try {
-        value = JSON.parse(value);
-      } catch (e) {
-        console.error("JSON parse failed", key, e);
-        return fallback;
-      }
-    }
-
-    return value ?? fallback;
-
+    return data.value ?? fallback;
   } catch (e) {
     console.error("loadKey failed", key, e);
     return fallback;
@@ -653,29 +635,13 @@ function DispatcherApp() {
     if (currentUser?.id === id) setCurrentUser(null);
   }
   async function attemptLogin(username, password) {
-  console.log("LOGIN INPUT:", username, password);
-
-  console.log("USERS STATE:", users);
-
-  const u = users.find(
-    (x) => x.username === username.trim().toLowerCase()
-  );
-
-  console.log("FOUND USER:", u);
-
-  if (!u) return { ok: false, message: "Nesprávne meno alebo heslo." };
-
-  console.log("SALT:", u.passwordSalt);
-  console.log("HASH:", u.passwordHash);
-
-  const ok = await verifyPassword(password, u.passwordSalt, u.passwordHash);
-
-  console.log("PASSWORD MATCH:", ok);
-
-  if (!ok) return { ok: false, message: "Nesprávne meno alebo heslo." };
-
-  return { ok: true, user: u };
-}
+    const u = users.find((x) => x.username === username.trim().toLowerCase());
+    if (!u) return { ok: false, message: "Nesprávne meno alebo heslo." };
+    if (u.active === false) return { ok: false, message: "Tento účet je deaktivovaný." };
+    const ok = await verifyPassword(password, u.passwordSalt, u.passwordHash);
+    if (!ok) return { ok: false, message: "Nesprávne meno alebo heslo." };
+    return { ok: true, user: u };
+  }
 
   const persistWeeklyDuty = useCallback((next) => {
     setWeeklyDuty(next);
