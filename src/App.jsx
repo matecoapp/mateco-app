@@ -40,6 +40,17 @@ const ROLES = [
   { id: "technik", label: "Technik", desc: "" },
   { id: "nezaradeny", label: "Nezaradený (čaká na rolu)", desc: "Nevidí žiadne dáta appky, kým nedostane pridelenú rolu." },
 ];
+// Ktorý modul sa má otvoriť ako prvý hneď po prihlásení, podľa role.
+const ROLE_DEFAULT_MODULE = {
+  admin: "poziciovna",
+  veduci_pozicovne: "poziciovna",
+  dispecer_pozicovne: "poziciovna",
+  obchodnik: "poziciovna",
+  sofer: "poziciovna",
+  veduci_servisu: "servis",
+  dispecer_servisu: "servis",
+  technik: "servis",
+};
 function roleLabel(roleId) {
   return ROLES.find((r) => r.id === roleId)?.label || roleId;
 }
@@ -838,6 +849,17 @@ function DispatcherApp() {
     }
     return currentUser;
   }, [currentUser, viewAsRole]);
+
+  // Hneď po prihlásení appku otvor na module, ktorý dáva zmysel pre danú rolu
+  // (napr. vedúci servisu rovno v Servise) — len raz, nezasahuje do ďalšej navigácie.
+  const didSetLandingModule = useRef(false);
+  useEffect(() => {
+    if (currentUser && !didSetLandingModule.current) {
+      didSetLandingModule.current = true;
+      const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "poziciovna";
+      setModule(landingModule);
+    }
+  }, [currentUser]);
 
   async function signUpNewAccount({ email, password, name }) {
     const { data, error } = await supabase.auth.signUp({
@@ -6562,20 +6584,23 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   const isDutyStart = onDuty && iso === dutyRecord.weekStart;
                   const canEditPlan = can(user, "plan_assign");
                   const canQuickEvents = can(user, "plan_quick_events");
+                  const hasContent = dayAssignments.length > 0;
                   const handleClick = () => {
                     if (quickMode === "udalost" && canQuickEvents) return setPendingEventCell({ technicianId: t.id, date: iso });
                     if (quickMode === "sluzba" && canQuickEvents) return onQuickWeeklyDuty(t.id, iso);
                     if (quickMode && canQuickEvents) return onQuickAssign(t.id, iso, quickMode);
-                    if (!quickMode && canEditPlan) return onCellClick(t.id, iso);
+                    if (!quickMode && (canEditPlan || hasContent)) return onCellClick(t.id, iso);
                   };
-                  const cellClickable = quickMode ? canQuickEvents : canEditPlan;
+                  const cellClickable = quickMode ? canQuickEvents : (canEditPlan || hasContent);
                   const clickTitle = !cellClickable
                     ? "Nemáte oprávnenie upravovať plán servisu"
                     : quickMode === "sluzba"
                       ? "Nastaviť/zrušiť službu na telefóne pre celý týždeň"
                       : quickMode
                       ? `Pridať "${QUICK_KINDS.find((k) => k.id === quickMode)?.label}"`
-                      : "Kliknite pre pridelenie";
+                      : canEditPlan
+                      ? "Kliknite pre pridelenie"
+                      : "Kliknite pre zobrazenie";
                   return (
                     <div key={d} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {dayAssignments.length === 0 ? (
