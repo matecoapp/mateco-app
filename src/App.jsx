@@ -1849,7 +1849,13 @@ function DispatcherApp() {
           onClose={() => setShowUserAdmin(false)}
           onUpdate={updateProfileInfo}
           onDelete={(id) => askDelete(`používateľa ${profiles.find((p) => p.id === id)?.name || ""}`, () => deleteProfile(id))}
-          onResetPassword={resetUserPassword}
+          onResetPassword={(email) =>
+            setConfirmAction({
+              message: `Naozaj chcete odoslať mail na nastavenie nového hesla na adresu ${email}?`,
+              confirmLabel: "Áno, odoslať",
+              onConfirm: () => resetUserPassword(email),
+            })
+          }
         />
       )}
       {showDepoCheckerSettings && (
