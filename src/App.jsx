@@ -11,7 +11,11 @@ const DEPO_OPTIONS = ["Bratislava", "Nitra", "Zvolen", "Žilina", "Prešov"];
 // dopĺňajú sa podľa toho, aké konkrétne dokumenty budú potrebné.
 const DOCUMENT_SUBTABS = {
   poziciovna: [
-    // { id: "napr-zmluvy", label: "Zmluvy" },
+    { id: "ramcove-zmluvy", label: "Zoznam rámcových zmlúv" },
+    { id: "blacklist", label: "BLACKLIST zákazníkov" },
+    { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
+    { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx" },
+    { id: "foto", label: "Foto strojov", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FFotky%20strojov&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
   ],
   servis: [
     { id: "protokoly", label: "Odoslané protokoly", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FProtokoly&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4&newTargetListUrl=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty&viewpath=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FForms%2FAllItems%2Easpx" },
@@ -105,6 +109,7 @@ const PERM = {
   backup_import: [],
   user_admin: [],
   view_as_role: [],
+  documents_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
 };
 
 function can(user, key) {
@@ -699,6 +704,8 @@ function DispatcherApp() {
   const [notifications, setNotifications] = useState([]);
   const [transportSendLog, setTransportSendLog] = useState([]); // [{id, driverId, date, sentAt, transportIds:[...]}]
   const [customers, setCustomers] = useState([]); // databáza zákazníkov
+  const [framoveZmluvy, setFramoveZmluvy] = useState([]);
+  const [blacklist, setBlacklist] = useState([]);
   const [depoCheckers, setDepoCheckers] = useState({}); // { "Bratislava": technicianId, ... }
   const [showDepoCheckerSettings, setShowDepoCheckerSettings] = useState(false);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
@@ -757,11 +764,12 @@ function DispatcherApp() {
       setMachines([]); setDrivers([]); setJobs([]); setTechnicians([]);
       setAssignments([]); setDamages([]); setWeeklyDuty([]); setNotifications([]);
       setTransportSendLog([]); setCustomers([]); setDepoCheckers({});
+      setFramoveZmluvy([]); setBlacklist([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc] = await Promise.all([
+      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc, fz, bl] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -773,6 +781,8 @@ function DispatcherApp() {
         loadKey("transportSendLog", []),
         loadKey("customers", []),
         loadKey("depoCheckers", {}),
+        loadKey("framoveZmluvy", []),
+        loadKey("blacklist", []),
       ]);
       setMachines(m);
       setDrivers(d);
@@ -785,6 +795,8 @@ function DispatcherApp() {
       setTransportSendLog(tsl);
       setCustomers(cust);
       setDepoCheckers(dc);
+      setFramoveZmluvy(fz);
+      setBlacklist(bl);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -922,6 +934,34 @@ function DispatcherApp() {
     setDepoCheckers(next);
     saveKey("depoCheckers", next);
   }, []);
+
+  const persistFramoveZmluvy = useCallback((next) => {
+    setFramoveZmluvy(next);
+    saveKey("framoveZmluvy", next);
+  }, []);
+  function addFramovaZmluva(values) {
+    persistFramoveZmluvy([...framoveZmluvy, { id: uid(), ...values }]);
+  }
+  function importFramoveZmluvy(rows) {
+    persistFramoveZmluvy([...framoveZmluvy, ...rows.map((r) => ({ id: uid(), ...r }))]);
+  }
+  function deleteFramovaZmluva(id) {
+    persistFramoveZmluvy(framoveZmluvy.filter((r) => r.id !== id));
+  }
+
+  const persistBlacklist = useCallback((next) => {
+    setBlacklist(next);
+    saveKey("blacklist", next);
+  }, []);
+  function addBlacklistEntry(values) {
+    persistBlacklist([...blacklist, { id: uid(), ...values }]);
+  }
+  function importBlacklist(rows) {
+    persistBlacklist([...blacklist, ...rows.map((r) => ({ id: uid(), ...r }))]);
+  }
+  function deleteBlacklistEntry(id) {
+    persistBlacklist(blacklist.filter((r) => r.id !== id));
+  }
 
   // Nájde/založí zákazníka podľa názvu firmy (case-insensitive) a doplní/aktualizuje kontaktné údaje.
   function upsertCustomer({ firma, cisloOdberatela, kontakt, email, telefon }) {
@@ -1787,7 +1827,19 @@ function DispatcherApp() {
         )}
 
         {module === "poziciovna" && view === "dokumenty" && (
-          <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.poziciovna} />
+          <DocumentsView
+            subView={documentsSubView}
+            subTabs={DOCUMENT_SUBTABS.poziciovna}
+            framoveZmluvy={framoveZmluvy}
+            blacklist={blacklist}
+            onAddFramovaZmluva={addFramovaZmluva}
+            onImportFramoveZmluvy={importFramoveZmluvy}
+            onDeleteFramovaZmluva={(id) => askDelete("túto rámcovú zmluvu", () => deleteFramovaZmluva(id))}
+            onAddBlacklist={addBlacklistEntry}
+            onImportBlacklist={importBlacklist}
+            onDeleteBlacklist={(id) => askDelete("tento záznam z blacklistu", () => deleteBlacklistEntry(id))}
+            canEdit={can(effectiveUser, "documents_edit")}
+          />
         )}
 
         {module === "servis" && view === "prehlad" && (
@@ -2647,10 +2699,207 @@ function DocumentsTabButton({ active, subTabs, onPick }) {
 }
 
 /* ---------------------------------------------------------
-   Dokumenty — obsah (zatiaľ len pripravené miesto)
+   Generické komponenty pre jednoduché zoznamové dokumenty
+   (rámcové zmluvy, blacklist) — tabuľka + pridanie + CSV import
 --------------------------------------------------------- */
-function DocumentsView({ subView, subTabs }) {
+const FRAMOVA_ZMLUVA_FIELDS = [
+  { key: "najomca", label: "Nájomca", required: true },
+  { key: "ico", label: "IČO" },
+  { key: "cisloRZ", label: "Číslo RZ" },
+  { key: "zmluvaOdoslanaDna", label: "Zmluva odoslaná dňa", type: "date" },
+  { key: "sanon", label: "Šanón" },
+  { key: "podpisZoDna", label: "Podpis zo dňa", type: "date" },
+  { key: "kaucia", label: "Kaucia / záloha" },
+  { key: "poznamka", label: "Poznámka" },
+];
+
+const BLACKLIST_FIELDS = [
+  { key: "nazovZakaznika", label: "Názov zákazníka", required: true },
+  { key: "kontaktnaOsoba", label: "Kontaktná osoba" },
+  { key: "dovod", label: "Dôvod / poznámka" },
+  { key: "aktualnyStav", label: "Aktuálny stav" },
+  { key: "povolenia", label: "Povolenia" },
+  { key: "riesenie", label: "Riešenie" },
+];
+
+function AddRecordModal({ title, fields, onClose, onSave }) {
+  const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.key, ""])));
+  const canSave = fields.filter((f) => f.required).every((f) => (values[f.key] || "").trim());
+  return (
+    <Modal title={title} onClose={onClose}>
+      {fields.map((f) => (
+        <Field key={f.key} label={f.label + (f.required ? " *" : "")}>
+          <input type={f.type || "text"} value={values[f.key]} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} style={{ width: "100%" }} />
+        </Field>
+      ))}
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(values)}>
+        Uložiť
+      </button>
+    </Modal>
+  );
+}
+
+function GenericCsvImportModal({ title, fields, onClose, onImport }) {
+  const [rows, setRows] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [fileName, setFileName] = useState("");
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        setHeaders(res.meta.fields || []);
+        setRows(res.data);
+      },
+    });
+  }
+
+  const requiredFields = fields.filter((f) => f.required);
+  const canImport = rows.length > 0 && requiredFields.every((f) => mapping[f.key]);
+
+  function doImport() {
+    const parsed = rows
+      .map((r) => {
+        const obj = {};
+        fields.forEach((f) => {
+          obj[f.key] = mapping[f.key] ? (r[mapping[f.key]] || "").toString().trim() : "";
+        });
+        return obj;
+      })
+      .filter((obj) => requiredFields.every((f) => obj[f.key]));
+    onImport(parsed);
+  }
+
+  return (
+    <Modal title={title} onClose={onClose} wide>
+      <Field label="Vyberte CSV súbor">
+        <input type="file" accept=".csv" onChange={handleFile} />
+      </Field>
+      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
+      {headers.length > 0 && (
+        <>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            {fields.map((f) => (
+              <Field key={f.key} label={`Stĺpec = ${f.label}${f.required ? " *" : ""}`}>
+                <select value={mapping[f.key] || ""} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))} style={{ width: "100%" }}>
+                  <option value="">—</option>
+                  {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </Field>
+            ))}
+          </div>
+          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+            Importovať {rows.length} záznamov
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, canEdit, recordLabel }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <span className="label-font" style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowImport(true)}>Import CSV</button>
+            <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Pridať</button>
+          </div>
+        )}
+      </div>
+      <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
+        <table>
+          <thead>
+            <tr>
+              {fields.map((f) => <th key={f.key}>{f.label}</th>)}
+              {canEdit && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 && (
+              <tr><td colSpan={fields.length + 1} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne záznamy.</td></tr>
+            )}
+            {items.map((item) => (
+              <tr key={item.id}>
+                {fields.map((f) => <td key={f.key}>{item[f.key] || "—"}</td>)}
+                {canEdit && (
+                  <td>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={() => onDelete(item.id)}>
+                      Zmazať
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {showAdd && (
+        <AddRecordModal title={`Pridať — ${title}`} fields={fields} onClose={() => setShowAdd(false)} onSave={(v) => { onAdd(v); setShowAdd(false); }} />
+      )}
+      {showImport && (
+        <GenericCsvImportModal title={`Import — ${title}`} fields={fields} onClose={() => setShowImport(false)} onImport={(rows) => { onImport(rows); setShowImport(false); }} />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Dokumenty — obsah
+--------------------------------------------------------- */
+function DocumentsView({
+  subView,
+  subTabs,
+  framoveZmluvy,
+  blacklist,
+  onAddFramovaZmluva,
+  onImportFramoveZmluvy,
+  onDeleteFramovaZmluva,
+  onAddBlacklist,
+  onImportBlacklist,
+  onDeleteBlacklist,
+  canEdit,
+}) {
   const active = subTabs.find((s) => s.id === subView);
+
+  if (subView === "ramcove-zmluvy") {
+    return (
+      <RecordsTableView
+        title="Zoznam rámcových zmlúv"
+        fields={FRAMOVA_ZMLUVA_FIELDS}
+        items={framoveZmluvy}
+        onAdd={onAddFramovaZmluva}
+        onImport={onImportFramoveZmluvy}
+        onDelete={onDeleteFramovaZmluva}
+        canEdit={canEdit}
+        recordLabel="rámcovú zmluvu"
+      />
+    );
+  }
+  if (subView === "blacklist") {
+    return (
+      <RecordsTableView
+        title="BLACKLIST zákazníkov"
+        fields={BLACKLIST_FIELDS}
+        items={blacklist}
+        onAdd={onAddBlacklist}
+        onImport={onImportBlacklist}
+        onDelete={onDeleteBlacklist}
+        canEdit={canEdit}
+        recordLabel="blacklistovaného zákazníka"
+      />
+    );
+  }
+
   return (
     <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
       {active ? (
