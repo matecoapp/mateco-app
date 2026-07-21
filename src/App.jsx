@@ -728,6 +728,7 @@ function DispatcherApp() {
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť appku ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
+  const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
@@ -1263,6 +1264,25 @@ function DispatcherApp() {
       message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
     });
     setShowExternalReport(false);
+  }
+  function updateExternalService(id, data) {
+    persistDamages(
+      damages.map((d) =>
+        d.id === id
+          ? {
+              ...d,
+              code: data.serialNumber || (data.customer ? `EXT · ${data.customer}` : "Externá zákazka"),
+              model: data.model || "",
+              serialNumber: data.serialNumber || "",
+              location: data.location || "",
+              customer: data.customer || "",
+              assignedDepo: data.assignedDepo || "",
+              popis: data.popis,
+            }
+          : d
+      )
+    );
+    setEditExternalTarget(null);
   }
   function deleteDamage(id) {
     persistDamages(damages.filter((d) => d.id !== id));
@@ -1989,6 +2009,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
             }}
+            onEdit={(d) => setEditExternalTarget(d)}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2200,6 +2221,16 @@ function DispatcherApp() {
       )}
       {showExternalReport && (
         <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
+      )}
+      {editExternalTarget && (
+        <ReportExternalServiceModal
+          existing={editExternalTarget}
+          today={today}
+          customers={customers}
+          onSaveCustomer={upsertCustomer}
+          onClose={() => setEditExternalTarget(null)}
+          onSave={(data) => updateExternalService(editExternalTarget.id, data)}
+        />
       )}
       {damageAssignTarget && (
         <DamageAssignModal
@@ -2733,7 +2764,7 @@ function DocumentsTabButton({ active, subTabs, onPick }) {
 --------------------------------------------------------- */
 const FRAMOVA_ZMLUVA_FIELDS = [
   { key: "najomca", label: "Nájomca", required: true },
-  { key: "ico", label: "IČO" },
+  { key: "ico", label: "IČO", required: true },
   { key: "cisloRZ", label: "Číslo RZ" },
   { key: "zmluvaOdoslanaDna", label: "Zmluva odoslaná dňa", type: "date" },
   { key: "sanon", label: "Šanón" },
@@ -2745,7 +2776,7 @@ const FRAMOVA_ZMLUVA_FIELDS = [
 const BLACKLIST_FIELDS = [
   { key: "nazovZakaznika", label: "Názov zákazníka", required: true },
   { key: "kontaktnaOsoba", label: "Kontaktná osoba" },
-  { key: "dovod", label: "Dôvod / poznámka" },
+  { key: "dovod", label: "Dôvod / poznámka", required: true },
   { key: "aktualnyStav", label: "Aktuálny stav" },
   { key: "povolenia", label: "Povolenia" },
   { key: "riesenie", label: "Riešenie" },
@@ -4136,8 +4167,8 @@ function AddMachineModal({ existing, onClose, onSave }) {
   return (
     <Modal title={existing ? "Upraviť údaje stroja" : "Pridať stroj"} onClose={onClose}>
       <Field label="Sériové číslo *"><input value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Model stroja"><input value={type} onChange={(e) => setType(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Depo">
+      <Field label="Model stroja *"><input value={type} onChange={(e) => setType(e.target.value)} style={{ width: "100%" }} /></Field>
+      <Field label="Depo *">
         <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
           {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -4147,7 +4178,7 @@ function AddMachineModal({ existing, onClose, onSave }) {
       <Field label="Rok úradnej skúšky"><input value={uradnaSkuska} onChange={(e) => setUradnaSkuska(e.target.value)} style={{ width: "100%" }} /></Field>
       <button
         className="btn btn-accent"
-        disabled={!code.trim()}
+        disabled={!code.trim() || !type.trim() || !depo.trim()}
         onClick={() => onSave({ code: code.trim(), type: type.trim(), depo: depo.trim(), revizia, uradnaSkuska: uradnaSkuska.trim() })}
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
@@ -4169,13 +4200,13 @@ function AddDriverModal({ existing, onClose, onSave }) {
       <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Depo">
+      <Field label="Depo *">
         <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
           {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
       </Field>
-      <button className="btn btn-accent" disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), phone: phone.trim(), email: email.trim(), depo })}>
+      <button className="btn btn-accent" disabled={!name.trim() || !depo.trim()} onClick={() => onSave({ name: name.trim(), phone: phone.trim(), email: email.trim(), depo })}>
         {existing ? "Uložiť zmeny" : "Uložiť"}
       </button>
     </Modal>
@@ -4286,7 +4317,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
   }, [machineId]);
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId && toLocation.trim() && startDate && endDate;
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate && endDate;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -4300,14 +4331,14 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
             {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </Field>
-        <Field label="Odkiaľ (depo)">
+        <Field label="Odkiaľ (depo) *">
           <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať depo —</option>
             {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </Field>
         <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Zákazník">
+        <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
             onChange={setCustomer}
@@ -4319,7 +4350,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
             }}
           />
         </Field>
-        <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Email zákazníka *"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Obchodník">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {obchodnik && (
@@ -5122,7 +5153,7 @@ const PERM_GROUP = {
   revision: { assign: "revision_assign", status: "revision_complete", del: null },
   uradnaskuska: { assign: "uradnaskuska_assign", status: "uradnaskuska_complete", del: null },
 };
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const assignedTech = techIds.length ? technicianById[techIds[0]] : null;
   const assignedTechNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ");
@@ -5191,6 +5222,11 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onResol
               {completeLabel}
             </button>
           ))}
+          {onEdit && permGroup === "external" && can(user, "external_add") && (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onEdit(d)}>
+              Upraviť
+            </button>
+          )}
           {onDelete && perm.del && can(user, perm.del) && (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px", color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
               Zmazať
@@ -5332,7 +5368,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onEdit, onResolve, onComplete, onProtocol }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -5443,30 +5479,30 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onEdit={onEdit} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
         ))}
       </div>
     </div>
   );
 }
 
-function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose, onSave }) {
-  const [customer, setCustomer] = useState("");
-  const [location, setLocation] = useState("");
-  const [model, setModel] = useState("");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [assignedDepo, setAssignedDepo] = useState("");
-  const [popis, setPopis] = useState("");
-  const [saveCustomer, setSaveCustomer] = useState(true);
-  const canSave = popis.trim() && assignedDepo;
+function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer, onClose, onSave }) {
+  const [customer, setCustomer] = useState(existing?.customer || "");
+  const [location, setLocation] = useState(existing?.location || "");
+  const [model, setModel] = useState(existing?.model || "");
+  const [serialNumber, setSerialNumber] = useState(existing?.serialNumber || "");
+  const [assignedDepo, setAssignedDepo] = useState(existing?.assignedDepo || "");
+  const [popis, setPopis] = useState(existing?.popis || "");
+  const [saveCustomer, setSaveCustomer] = useState(!existing);
+  const canSave = customer.trim() && location.trim() && model.trim() && serialNumber.trim() && assignedDepo && popis.trim();
 
   return (
-    <Modal title="Nahlásiť externú servisnú zákazku" onClose={onClose} wide>
+    <Modal title={existing ? "Upraviť externú servisnú zákazku" : "Nahlásiť externú servisnú zákazku"} onClose={onClose} wide>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Pre stroje, ktoré nie sú v našej databáze (zákazník má vlastný stroj, servisujeme ho na mieste a pod.).
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Zákazník">
+        <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
             onChange={setCustomer}
@@ -5475,9 +5511,9 @@ function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose,
             onSelectCustomer={(c) => setCustomer(c.firma)}
           />
         </Field>
-        <Field label="Miesto (mesto / adresa)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
-        <Field label="Model / typ stroja"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Sériové číslo (ak známe)"><input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Miesto (mesto / adresa) *"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
+        <Field label="Model / typ stroja *"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Sériové číslo *"><input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Rieši depo *">
           <select value={assignedDepo} onChange={(e) => setAssignedDepo(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať depo —</option>
@@ -5488,7 +5524,7 @@ function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose,
       <Field label="Popis poruchy / zákazky *">
         <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={3} placeholder="Čo treba urobiť…" style={{ width: "100%" }} />
       </Field>
-      {customer.trim() && (
+      {!existing && customer.trim() && (
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
           <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
           Uložiť tohto zákazníka v databáze zákazníkov
@@ -5498,7 +5534,7 @@ function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose,
         className="btn btn-accent"
         disabled={!canSave}
         onClick={() => {
-          if (saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim() });
+          if (!existing && saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim() });
           onSave({
             customer: customer.trim(),
             location: location.trim(),
@@ -5509,7 +5545,7 @@ function ReportExternalServiceModal({ today, customers, onSaveCustomer, onClose,
           });
         }}
       >
-        Nahlásiť
+        {existing ? "Uložiť zmeny" : "Nahlásiť"}
       </button>
     </Modal>
   );
@@ -5837,6 +5873,7 @@ function DamageAssignModal({ damage, technicians, today, onClose, onSave }) {
   const [technicianIds, setTechnicianIds] = useState(damage.technicianIds || (damage.technicianId ? [damage.technicianId] : []));
   const [date, setDate] = useState(damage.assignedDate || today);
   const canSave = technicianIds.length > 0 && date;
+  const hasExistingAssignment = (damage.technicianIds && damage.technicianIds.length > 0) || !!damage.technicianId;
 
   function toggle(id) {
     setTechnicianIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -5855,9 +5892,21 @@ function DamageAssignModal({ damage, technicians, today, onClose, onSave }) {
         </div>
       </Field>
       <Field label="Deň *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
-        Uložiť pridelenie
-      </button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
+          Uložiť pridelenie
+        </button>
+        {hasExistingAssignment && (
+          <button
+            className="btn btn-ghost"
+            style={{ color: "var(--danger)" }}
+            onClick={() => { onSave([], date); onClose(); }}
+            title="Odoberie technika/technikov a zmaže záznam aj z Plánu servisu"
+          >
+            Zrušiť priradenie
+          </button>
+        )}
+      </div>
     </Modal>
   );
 }
@@ -5906,31 +5955,31 @@ function CompleteUradnaSkuskaModal({ damage, today, onClose, onSave }) {
    Resolve damage modal (Označiť ako vyriešené — dátum opravy + komentár)
 --------------------------------------------------------- */
 function ResolveDamageModal({ damage, today, onClose, onSave }) {
-  const [stav, setStav] = useState(damage.stav || (damage.resolved ? "opravene" : ""));
-  const [date, setDate] = useState(damage.opravaDatum || today);
-  const [comment, setComment] = useState(damage.opravaKomentar || "");
   const options = [
     { id: "opravene", label: "Opravené" },
     { id: "dalsi_zasah", label: "Potrebný ďalší servisný zásah" },
     { id: "caka_diely", label: "Čaká na diely" },
     { id: "zavazna_porucha", label: "Závažná porucha" },
   ];
+  const [stav, setStav] = useState(damage.stav || (damage.resolved ? "opravene" : options[0].id));
+  const [date, setDate] = useState(damage.opravaDatum || today);
+  const [comment, setComment] = useState(damage.opravaKomentar || "");
+  const canSave = stav && date && comment.trim();
   return (
     <Modal title={`Upraviť stav zákazky · ${damage.code}`} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
       <Field label="Stav *">
         <select value={stav} onChange={(e) => setStav(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— späť na "pridelené" (zrušiť stav) —</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
       </Field>
       <Field label="Dátum *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <Field label="Čo sa zistilo / vykonalo">
+      <Field label="Čo sa zistilo / vykonalo *">
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Popis zásahu…" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!date} onClick={() => onSave(stav || null, date, comment.trim())}>
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim())}>
         Uložiť
       </button>
     </Modal>
@@ -6030,7 +6079,7 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
         <Field label="Skratka (ERP)"><input value={skratka} onChange={(e) => setSkratka(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
         <Field label="ŠPZ servisného auta"><input value={spz} onChange={(e) => setSpz(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
       </div>
-      <Field label="Depo">
+      <Field label="Depo *">
         <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
           {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -6040,7 +6089,7 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
       <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
       <button
         className="btn btn-accent"
-        disabled={!name.trim()}
+        disabled={!name.trim() || !depo.trim()}
         onClick={() => onSave({ name: name.trim(), skratka: skratka.trim(), spz: spz.trim(), depo: depo.trim(), phone: phone.trim(), email: email.trim() })}
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
@@ -6764,7 +6813,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   {a.poznamka && <div style={{ fontSize: 12, marginTop: 4 }}>{a.poznamka}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
-                  {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
+                  {!a.kind && can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
                   {!a.kind && can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
                   {!a.kind && can(user, "protocol_write") && (
                     <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
@@ -6815,11 +6864,12 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
   const [poznamka, setPoznamka] = useState(existing?.poznamka || "");
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId || externyModel.trim() || externeSC.trim();
+  const hasMachine = !!machineId || (externyModel.trim() && externeSC.trim());
+  const canSave = hasMachine && umiestnenie.trim() && firma.trim();
 
   return (
     <div>
-      <Field label="Stroj (vybrať zo zoznamu)">
+      <Field label="Stroj (vybrať zo zoznamu) *">
         <SearchSelect
           options={machineOptions}
           value={machineId}
@@ -6828,16 +6878,16 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
         />
       </Field>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="…alebo externý stroj — model">
+        <Field label="…alebo externý stroj — model *">
           <input value={externyModel} onChange={(e) => { setExternyModel(e.target.value); setMachineId(""); }} placeholder="napr. Genie GS-1932" style={{ width: "100%" }} />
         </Field>
-        <Field label="…externý stroj — sériové číslo">
+        <Field label="…externý stroj — sériové číslo *">
           <input value={externeSC} onChange={(e) => { setExterneSC(e.target.value); setMachineId(""); }} placeholder="napr. GS19-12345" style={{ width: "100%" }} />
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Umiestnenie"><input value={umiestnenie} onChange={(e) => setUmiestnenie(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Firma"><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Umiestnenie *"><input value={umiestnenie} onChange={(e) => setUmiestnenie(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Firma *"><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
       <Field label="Poznámka (čo tam je, aké diely vziať…)">
         <textarea value={poznamka} onChange={(e) => setPoznamka(e.target.value)} rows={3} style={{ width: "100%" }} />
