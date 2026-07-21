@@ -1317,6 +1317,12 @@ function DispatcherApp() {
       { id: uid(), technicianId, date, kind, stroj: QUICK_KIND_LABELS[kind] || kind, umiestnenie: "", firma: "", poznamka: QUICK_KIND_LABELS[kind] || kind },
     ]);
   }
+  function addQuickEventNote(technicianId, date, text) {
+    persistAssignments([
+      ...assignments,
+      { id: uid(), technicianId, date, kind: "udalost", stroj: text, umiestnenie: "", firma: "", poznamka: text },
+    ]);
+  }
   function toggleWeeklyDuty(technicianId, dateIso) {
     const { weekStart, weekEnd } = weekRangeFor(dateIso);
     const existing = weeklyDuty.find(
@@ -1910,6 +1916,7 @@ function DispatcherApp() {
                 setDepoFilter={setPlanDepoFilter}
                 onCellClick={(technicianId, date) => setAssignSlot({ technicianId, date })}
                 onQuickAssign={addQuickAssignment}
+                onQuickEventNote={addQuickEventNote}
                 onQuickWeeklyDuty={toggleWeeklyDuty}
                 onAddTechnician={() => setShowAddTechnician({})}
                 onOpenTechnician={(t) => setTechnicianCard(t)}
@@ -6156,7 +6163,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
   function jobLine(a) {
     const machine = a.machineId ? machineById[a.machineId] : null;
     const linkedDamage = a.damageId ? damageById[a.damageId] : null;
-    const label = a.kind ? QUICK_KIND_LABELS[a.kind] || a.kind : (machine?.code || a.stroj || "— stroj neurčený —");
+    const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : a.kind ? QUICK_KIND_LABELS[a.kind] || a.kind : (machine?.code || a.stroj || "— stroj neurčený —");
     const clickable = !a.kind;
     return (
       <div
@@ -6315,11 +6322,13 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickWeeklyDuty, onAddTechnician, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onAddTechnician, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
-  const [quickMode, setQuickMode] = useState(null); // null | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
+  const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
+  const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
   const QUICK_KINDS = [
+    { id: "udalost", label: "Udalosť", color: "#0EA5E9", freeText: true },
     { id: "pohotovost", label: "Pohotovosť", color: "var(--danger)" },
     { id: "dovolenka", label: "Dovolenka", color: "var(--ok)" },
     { id: "pn", label: "PN / Doktor", color: "var(--warn)" },
@@ -6554,6 +6563,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   const canEditPlan = can(user, "plan_assign");
                   const canQuickEvents = can(user, "plan_quick_events");
                   const handleClick = () => {
+                    if (quickMode === "udalost" && canQuickEvents) return setPendingEventCell({ technicianId: t.id, date: iso });
                     if (quickMode === "sluzba" && canQuickEvents) return onQuickWeeklyDuty(t.id, iso);
                     if (quickMode && canQuickEvents) return onQuickAssign(t.id, iso, quickMode);
                     if (!quickMode && canEditPlan) return onCellClick(t.id, iso);
@@ -6586,8 +6596,10 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const linkedDamage = a.damageId ? damageById[a.damageId] : null;
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
                           const bg = quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
-                          const label = quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
-                          const tooltip = quickKind
+                          const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
+                          const tooltip = a.kind === "udalost"
+                            ? (a.poznamka || "Udalosť")
+                            : quickKind
                             ? quickKind.label
                             : `${machine?.code || a.stroj || "—"} · ${a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}`;
                           return (
@@ -6648,7 +6660,37 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           </div>
         </div>
       </div>
+      {pendingEventCell && (
+        <QuickEventNoteModal
+          onClose={() => setPendingEventCell(null)}
+          onSave={(text) => {
+            onQuickEventNote(pendingEventCell.technicianId, pendingEventCell.date, text);
+            setPendingEventCell(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function QuickEventNoteModal({ onClose, onSave }) {
+  const [text, setText] = useState("");
+  return (
+    <Modal title="Nová udalosť" onClose={onClose}>
+      <Field label="Text udalosti *">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="napr. Auto do servisu o 8:00"
+          style={{ width: "100%" }}
+          autoFocus
+          onKeyDown={(e) => e.key === "Enter" && text.trim() && onSave(text.trim())}
+        />
+      </Field>
+      <button className="btn btn-accent" disabled={!text.trim()} onClick={() => onSave(text.trim())}>
+        Pridať
+      </button>
+    </Modal>
   );
 }
 
@@ -6689,13 +6731,13 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
                   {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
-                  {can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
-                  {can(user, "protocol_write") && (
+                  {!a.kind && can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
+                  {!a.kind && can(user, "protocol_write") && (
                     <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
                       Meranie VTZ EZ ↗
                     </a>
                   )}
-                  {can(user, "protocol_write") && (
+                  {!a.kind && can(user, "protocol_write") && (
                     <a href="https://matecoapp.netlify.app/fotky" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
                       Odfotiť stroj ↗
                     </a>
