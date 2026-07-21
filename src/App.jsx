@@ -1823,6 +1823,18 @@ function DispatcherApp() {
                 📋 Prehľad najbližších 5 dní
               </button>
             </div>
+            <div style={{ marginBottom: 14 }}>
+              <select
+                value={planTechnicianFilter}
+                onChange={(e) => setPlanTechnicianFilter(e.target.value)}
+                style={{ minWidth: 160, fontSize: 11, padding: "3px 6px" }}
+              >
+                <option value="">— všetci technici —</option>
+                {technicians.filter((t) => !t.archived).map((t) => (
+                  <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
+                ))}
+              </select>
+            </div>
             {planMode === "gantt" ? (
               <TechnicianPlanner
                 technicians={technicians}
@@ -5879,14 +5891,6 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <select value={technicianFilter} onChange={(e) => setTechnicianFilter(e.target.value)} style={{ minWidth: 220 }}>
-          <option value="">— všetci technici —</option>
-          {technicians.filter((t) => !t.archived).map((t) => (
-            <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
-          ))}
-        </select>
-      </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
           <button
@@ -6118,12 +6122,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
-        <select value={technicianFilter} onChange={(e) => setTechnicianFilter(e.target.value)} style={{ minWidth: 200 }}>
-          <option value="">— všetci technici —</option>
-          {technicians.filter((t) => !t.archived).map((t) => (
-            <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
-          ))}
-        </select>
         <div style={{ flex: 1 }} />
         {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
       </div>
