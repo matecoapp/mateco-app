@@ -420,6 +420,41 @@ function saveKey(key, value) {
 /* ---------------------------------------------------------
    Searchable select
 --------------------------------------------------------- */
+function SearchInput({ value, onChange, placeholder, style }) {
+  return (
+    <div style={{ position: "relative", display: "inline-block", ...style }}>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ width: "100%", paddingRight: value ? 26 : undefined }}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          title="Vymazať"
+          style={{
+            position: "absolute",
+            right: 4,
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "transparent",
+            border: "none",
+            color: "var(--text-dim)",
+            cursor: "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+            padding: 4,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SearchSelect({ options, value, onChange, placeholder, disabled }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -3533,12 +3568,7 @@ function Dashboard({
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Hľadať sériové číslo, typ, depo, zákazníka…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="all">Všetky stavy</option>
           <option value="free">Voľné</option>
@@ -3755,12 +3785,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Hľadať sériové číslo, model, depo, zákazníka…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ display: "flex", gap: 10 }}>
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportCustomers}>Import zákazníkov</button>}
@@ -4068,12 +4093,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Hľadať sériové číslo, model, depo, zákazníka…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
           <option value="">— všetci šoféri —</option>
           <option value="unassigned">Nepridelené</option>
@@ -5021,7 +5041,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
           )}
         </div>
-        <input placeholder="Hľadať sériové číslo alebo depo…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ minWidth: 220 }} />
+        <SearchInput placeholder="Hľadať sériové číslo alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
       </div>
       <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
@@ -5619,12 +5639,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
   return (
     <div>
       <div style={{ marginBottom: 10 }}>
-        <input
-          placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -5753,12 +5768,7 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
@@ -5937,12 +5947,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   return (
     <div>
       <div style={{ marginBottom: 10 }}>
-        <input
-          placeholder="Hľadať sériové číslo, typ, depo, zákazku…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -6097,12 +6102,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
   return (
     <div>
       <div style={{ marginBottom: 10 }}>
-        <input
-          placeholder="Hľadať sériové číslo, typ, depo, zákazku…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
