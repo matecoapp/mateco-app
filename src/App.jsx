@@ -270,6 +270,20 @@ const addDaysISO = (iso, days) => {
   const shifted = new Date(d.getTime() + days * 86400000);
   return toLocalISO(shifted);
 };
+function compressDates(dates) {
+  const sorted = [...dates].sort();
+  if (sorted.length === 0) return "";
+  const ranges = [];
+  let start = sorted[0], prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    const d = sorted[i];
+    if (d === addDaysISO(prev, 1)) { prev = d; continue; }
+    ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
+    start = d; prev = d;
+  }
+  ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
+  return ranges.join(", ");
+}
 function weekRangeFor(iso) {
   const d = new Date(iso + "T00:00:00");
   const dow = d.getDay();
@@ -643,6 +657,7 @@ function DispatcherApp() {
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
+  const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [darkMode, setDarkMode] = useState(false);
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
@@ -1746,32 +1761,73 @@ function DispatcherApp() {
         )}
 
         {module === "servis" && view === "prehlad" && (
-          <TechniciansOverview
+          <ServisOverview
+            damages={damages}
             technicians={technicians}
             assignments={assignments}
-            machines={machines}
-            damages={damages}
             weeklyDuty={weeklyDuty}
             today={today}
-            onOpenAssignment={(a, machine, damage) => setAssignmentDetail({ assignment: a, machine, damage })}
+            onNavigate={(v) => setView(v)}
           />
         )}
 
         {module === "servis" && view === "plan" && (
-          <TechnicianPlanner
-            technicians={technicians}
-            assignments={assignments}
-            machines={machines}
-            damages={damages}
-            weeklyDuty={weeklyDuty}
-            today={today}
-            user={effectiveUser}
-            onCellClick={(technicianId, date) => setAssignSlot({ technicianId, date })}
-            onQuickAssign={addQuickAssignment}
-            onQuickWeeklyDuty={toggleWeeklyDuty}
-            onAddTechnician={() => setShowAddTechnician({})}
-            onOpenTechnician={(t) => setTechnicianCard(t)}
-          />
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+              <button
+                className="btn"
+                onClick={() => setPlanMode("gantt")}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  background: planMode === "gantt" ? "var(--accent)" : "transparent",
+                  color: planMode === "gantt" ? "#fff" : "var(--text-dim)",
+                  border: "1px solid " + (planMode === "gantt" ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                📊 Kalendár
+              </button>
+              <button
+                className="btn"
+                onClick={() => setPlanMode("zoznam")}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  background: planMode === "zoznam" ? "var(--accent)" : "transparent",
+                  color: planMode === "zoznam" ? "#fff" : "var(--text-dim)",
+                  border: "1px solid " + (planMode === "zoznam" ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                📋 Prehľad najbližších 5 dní
+              </button>
+            </div>
+            {planMode === "gantt" ? (
+              <TechnicianPlanner
+                technicians={technicians}
+                assignments={assignments}
+                machines={machines}
+                damages={damages}
+                weeklyDuty={weeklyDuty}
+                today={today}
+                user={effectiveUser}
+                onCellClick={(technicianId, date) => setAssignSlot({ technicianId, date })}
+                onQuickAssign={addQuickAssignment}
+                onQuickWeeklyDuty={toggleWeeklyDuty}
+                onAddTechnician={() => setShowAddTechnician({})}
+                onOpenTechnician={(t) => setTechnicianCard(t)}
+              />
+            ) : (
+              <TechniciansOverview
+                technicians={technicians}
+                assignments={assignments}
+                machines={machines}
+                damages={damages}
+                weeklyDuty={weeklyDuty}
+                today={today}
+                onOpenAssignment={(a, machine, damage) => setAssignmentDetail({ assignment: a, machine, damage })}
+              />
+            )}
+          </div>
         )}
 
         {module === "servis" && view === "poskodenia" && (
@@ -5531,6 +5587,99 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
 /* ---------------------------------------------------------
    Technicians overview (today + tomorrow, per technician)
 --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Servis — Prehľad: štatistika + rýchly prehľad mesiaca
+   (rovnaká logika ako Prehľad Požičovne — dlaždice, klik = presmerovanie)
+--------------------------------------------------------- */
+function ServisOverview({ damages, technicians, assignments, weeklyDuty, today, onNavigate }) {
+  const newDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId);
+  const assignedDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && d.technicianId);
+  const newExterna = damages.filter((d) => d.type === "externa" && !d.resolved);
+  const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
+  const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
+  const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
+
+  const tiles = [
+    { key: "new", label: "Nové poškodenia (nepridelené)", color: "var(--danger)", count: newDamages.length, view: "poskodenia" },
+    { key: "assigned", label: "Pridelené poškodenia", color: "var(--info)", count: assignedDamages.length, view: "poskodenia" },
+    { key: "externa", label: "Nové externé zákazky", color: "var(--danger)", count: newExterna.length, view: "externe" },
+    { key: "revOverdue", label: "Revízia po termíne", color: "var(--danger)", count: revisionOverdue.length, view: "revizie" },
+    { key: "revSoon", label: "Revízia do 30 dní", color: "var(--warn)", count: revisionSoon.length, view: "revizie" },
+    { key: "skusky", label: "Úradné skúšky", color: "var(--warn)", count: uradneSkusky.length, view: "uradne_skusky" },
+  ];
+
+  const today0 = today;
+  const monthStartISO = today0.slice(0, 7) + "-01";
+  const lastDay = new Date(Number(today0.slice(0, 4)), Number(today0.slice(5, 7)), 0).getDate();
+  const monthEndISO = today0.slice(0, 7) + "-" + String(lastDay).padStart(2, "0");
+  const monthLabel = new Date(today0 + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+
+  const monthlySummary = technicians
+    .filter((t) => !t.archived)
+    .map((t) => {
+      const kindDates = { pohotovost: [], dovolenka: [], pn: [] };
+      assignments.forEach((a) => {
+        if (a.technicianId !== t.id || !a.kind || !(a.kind in kindDates)) return;
+        if (a.date < monthStartISO || a.date > monthEndISO) return;
+        kindDates[a.kind].push(a.date);
+      });
+      const dutyWeeks = (weeklyDuty || [])
+        .filter((w) => w.technicianId === t.id && w.weekStart <= monthEndISO && w.weekEnd >= monthStartISO)
+        .sort((a, b) => (a.weekStart < b.weekStart ? -1 : 1));
+      return { technician: t, kindDates, dutyWeeks };
+    })
+    .filter((s) => s.dutyWeeks.length > 0 || Object.values(s.kindDates).some((arr) => arr.length > 0));
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {tiles.filter((t) => t.count > 0).map((t) => (
+          <div
+            key={t.key}
+            className="panel"
+            onClick={() => onNavigate(t.view)}
+            style={{ padding: "12px 14px", borderLeft: `3px solid ${t.color}`, cursor: "pointer" }}
+            title="Kliknutím prejdete na podrobný zoznam"
+          >
+            <div className="label-font" style={{ color: t.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{t.count}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {monthlySummary.length > 0 && (
+        <div className="panel" style={{ padding: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+            Rýchly prehľad — {monthLabel}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {monthlySummary.map((s) => (
+              <div key={s.technician.id} style={{ fontSize: 13, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                <span style={{ fontWeight: 600 }}>{s.technician.name}:</span>
+                {s.kindDates.pohotovost.length > 0 && (
+                  <span><span style={{ color: "var(--danger)", fontWeight: 600 }}>Pohotovosť</span> {compressDates(s.kindDates.pohotovost)}</span>
+                )}
+                {s.kindDates.dovolenka.length > 0 && (
+                  <span>{s.kindDates.pohotovost.length > 0 ? " · " : ""}<span style={{ color: "var(--ok)", fontWeight: 600 }}>Dovolenka</span> {compressDates(s.kindDates.dovolenka)}</span>
+                )}
+                {s.kindDates.pn.length > 0 && (
+                  <span>{(s.kindDates.pohotovost.length > 0 || s.kindDates.dovolenka.length > 0) ? " · " : ""}<span style={{ color: "var(--warn)", fontWeight: 600 }}>PN / Doktor</span> {compressDates(s.kindDates.pn)}</span>
+                )}
+                {s.dutyWeeks.map((w) => (
+                  <span key={w.id}>
+                    {(s.kindDates.pohotovost.length > 0 || s.kindDates.dovolenka.length > 0 || s.kindDates.pn.length > 0) ? " · " : ""}
+                    <span style={{ color: "#6b7280", fontWeight: 600 }}>☎ Služba</span> {fmtDate(w.weekStart)}–{fmtDate(w.weekEnd)}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, onOpenAssignment }) {
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const damageById = useMemo(() => Object.fromEntries((damages || []).map((d) => [d.id, d])), [damages]);
@@ -5784,21 +5933,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   const monthStartISO = `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const monthEndISO = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
-
-  function compressDates(dates) {
-    const sorted = [...dates].sort();
-    if (sorted.length === 0) return "";
-    const ranges = [];
-    let start = sorted[0], prev = sorted[0];
-    for (let i = 1; i < sorted.length; i++) {
-      const d = sorted[i];
-      if (d === addDaysISO(prev, 1)) { prev = d; continue; }
-      ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
-      start = d; prev = d;
-    }
-    ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
-    return ranges.join(", ");
-  }
 
   const monthlySummary = useMemo(() => {
     return visibleTechnicians
