@@ -1456,8 +1456,8 @@ function DispatcherApp() {
       return st === "active" && daysBetween(today, j.endDate) <= 5;
     });
     const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
-    const revisionSoon = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) >= 0 && daysBetween(today, m.revizia) <= 30);
-    const revisionOverdue = machines.filter((m) => m.revizia && m.trackRevisions !== false && daysBetween(today, m.revizia) < 0);
+    const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
+    const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
     const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa");
     const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
     return { overdue, endingSoon, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
@@ -6734,12 +6734,12 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
     if (machine) {
       // Skutočný požičovňový stroj vybraný zo zoznamu — bežný protokol, appka nájde model sama
       params.serial = machine.code;
-    } else if (a.stroj) {
-      // Stroj napísaný ako voľný text ("mimo evidencie") — protokol sa správa ako pri externej
-      // zákazke: zaškrtne "Externý stroj", text sa predvyplní ako sériové číslo (technik si ho
-      // môže priamo v protokole upraviť) a model si dopíše ručne.
+    } else if (a.externeSerioveCislo || a.externyModel || a.stroj) {
+      // Externý stroj (mimo evidencie) — protokol sa správa ako pri externej zákazke:
+      // zaškrtne "Externý stroj" a predvyplní model aj sériové číslo do samostatných polí.
       params.external = "1";
-      params.serial = a.stroj;
+      params.serial = a.externeSerioveCislo || a.stroj || "";
+      if (a.externyModel) params.model = a.externyModel;
     }
     if (technician?.name) params.tech = technician.name;
     if (a.umiestnenie) params.address = a.umiestnenie;
@@ -6808,22 +6808,33 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
 
 function AssignJobForm({ existing, machines, onCancel, onSave }) {
   const [machineId, setMachineId] = useState(existing?.machineId || "");
-  const [stroj, setStroj] = useState(existing?.stroj || "");
+  const [externyModel, setExternyModel] = useState(existing?.externyModel || (!existing?.machineId ? existing?.stroj || "" : ""));
+  const [externeSC, setExterneSC] = useState(existing?.externeSerioveCislo || "");
   const [umiestnenie, setUmiestnenie] = useState(existing?.umiestnenie || "");
   const [firma, setFirma] = useState(existing?.firma || "");
   const [poznamka, setPoznamka] = useState(existing?.poznamka || "");
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId || stroj.trim();
+  const canSave = machineId || externyModel.trim() || externeSC.trim();
 
   return (
     <div>
       <Field label="Stroj (vybrať zo zoznamu)">
-        <SearchSelect options={machineOptions} value={machineId} onChange={(v) => { setMachineId(v); setStroj(""); }} placeholder="Vybrať stroj…" />
+        <SearchSelect
+          options={machineOptions}
+          value={machineId}
+          onChange={(v) => { setMachineId(v); setExternyModel(""); setExterneSC(""); }}
+          placeholder="Vybrať stroj…"
+        />
       </Field>
-      <Field label="…alebo stroj mimo evidencie (voľný text)">
-        <input value={stroj} onChange={(e) => { setStroj(e.target.value); setMachineId(""); }} placeholder="napr. externý stroj zákazníka" style={{ width: "100%" }} />
-      </Field>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="…alebo externý stroj — model">
+          <input value={externyModel} onChange={(e) => { setExternyModel(e.target.value); setMachineId(""); }} placeholder="napr. Genie GS-1932" style={{ width: "100%" }} />
+        </Field>
+        <Field label="…externý stroj — sériové číslo">
+          <input value={externeSC} onChange={(e) => { setExterneSC(e.target.value); setMachineId(""); }} placeholder="napr. GS19-12345" style={{ width: "100%" }} />
+        </Field>
+      </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Umiestnenie"><input value={umiestnenie} onChange={(e) => setUmiestnenie(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Firma"><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
@@ -6838,7 +6849,9 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
           onClick={() =>
             onSave({
               machineId: machineId || null,
-              stroj: machineId ? "" : stroj.trim(),
+              stroj: machineId ? "" : [externyModel.trim(), externeSC.trim()].filter(Boolean).join(" · "),
+              externyModel: machineId ? "" : externyModel.trim(),
+              externeSerioveCislo: machineId ? "" : externeSC.trim(),
               umiestnenie: umiestnenie.trim(),
               firma: firma.trim(),
               poznamka: poznamka.trim(),
