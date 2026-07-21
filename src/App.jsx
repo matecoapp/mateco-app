@@ -729,6 +729,7 @@ function DispatcherApp() {
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
+  const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
@@ -1992,6 +1993,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`hlásenie poškodenia ${d?.code || ""}`, () => deleteDamage(id));
             }}
+            onOpenDetail={(d) => setServiceEventDetail(d)}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2009,7 +2011,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
             }}
-            onEdit={(d) => setEditExternalTarget(d)}
+            onOpenDetail={(d) => setServiceEventDetail(d)}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2230,6 +2232,18 @@ function DispatcherApp() {
           onSaveCustomer={upsertCustomer}
           onClose={() => setEditExternalTarget(null)}
           onSave={(data) => updateExternalService(editExternalTarget.id, data)}
+        />
+      )}
+      {serviceEventDetail && (
+        <ServiceEventDetailModal
+          d={serviceEventDetail}
+          technicianById={technicianByIdTop}
+          user={effectiveUser}
+          onEdit={(d) => {
+            setServiceEventDetail(null);
+            setEditExternalTarget(d);
+          }}
+          onClose={() => setServiceEventDetail(null)}
         />
       )}
       {damageAssignTarget && (
@@ -5153,7 +5167,55 @@ const PERM_GROUP = {
   revision: { assign: "revision_assign", status: "revision_complete", del: null },
   uradnaskuska: { assign: "uradnaskuska_assign", status: "uradnaskuska_complete", del: null },
 };
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
+/* ---------------------------------------------------------
+   Detail karta poškodenia / externej zákazky — podrobné údaje
+   z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
+--------------------------------------------------------- */
+function ServiceEventDetailModal({ d, technicianById, user, onEdit, onClose }) {
+  const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
+  const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
+  const isExterna = d.type === "externa";
+
+  return (
+    <Modal title={d.code || "Detail"} onClose={onClose} wide>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+        {isExterna ? (
+          <>
+            <CardField label="Zákazník" value={d.customer} />
+            <CardField label="Miesto" value={d.location} />
+            <CardField label="Model" value={d.model} />
+            <CardField label="Sériové číslo" value={d.serialNumber} />
+            <CardField label="Rieši depo" value={d.assignedDepo} />
+          </>
+        ) : (
+          <>
+            <CardField label="Zákazník / lokalita" value={d.customer || d.location} />
+            <CardField label="Model" value={d.model} />
+          </>
+        )}
+        <CardField label="Nahlásené dňa" value={fmtDate(d.dateReported)} />
+        <CardField label="Pridelený technik" value={techNames} />
+        <CardField label="Dátum pridelenia" value={d.assignedDate ? fmtDate(d.assignedDate) : null} />
+        <CardField label="Stav" value={damageLabel(d)} danger={damageDisplayStav(d) === "zavazna_porucha"} />
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Popis poruchy / zákazky</div>
+      <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.popis || "—"}</div>
+      {d.resolved && (
+        <>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Čo sa zistilo / vykonalo</div>
+          <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.opravaKomentar || "—"}</div>
+        </>
+      )}
+      {isExterna && can(user, "external_add") && (
+        <button className="btn btn-accent" onClick={() => onEdit(d)}>
+          Upraviť zákazku
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const assignedTech = techIds.length ? technicianById[techIds[0]] : null;
   const assignedTechNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ");
@@ -5168,7 +5230,19 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-            <span className="mono" style={{ fontWeight: 600, fontSize: 15 }}>{d.code}</span>
+            <span
+              className="mono"
+              style={{
+                fontWeight: 600,
+                fontSize: 15,
+                color: onOpenDetail ? "var(--accent)" : "inherit",
+                textDecoration: onOpenDetail ? "underline" : "none",
+                cursor: onOpenDetail ? "pointer" : "default",
+              }}
+              onClick={onOpenDetail ? () => onOpenDetail(d) : undefined}
+            >
+              {d.code}
+            </span>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
             {isSimple ? (
               d.resolved ? (
@@ -5222,11 +5296,6 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               {completeLabel}
             </button>
           ))}
-          {onEdit && permGroup === "external" && can(user, "external_add") && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onEdit(d)}>
-              Upraviť
-            </button>
-          )}
           {onDelete && perm.del && can(user, perm.del) && (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px", color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
               Zmazať
@@ -5253,7 +5322,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onResolve, onComplete, onProtocol }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -5358,7 +5427,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
         ))}
       </div>
     </div>
@@ -5368,7 +5437,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onEdit, onResolve, onComplete, onProtocol }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -5479,7 +5548,7 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onEdit={onEdit} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
         ))}
       </div>
     </div>
