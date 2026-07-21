@@ -3184,6 +3184,27 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             Interná platforma
           </span>
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
+            <button
+              onClick={() =>
+                composeMail({
+                  to: "radoslav.podusel@matecoslovakia.sk",
+                  subject: "Pripomienky k mateco App",
+                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
+                })
+              }
+              style={{
+                fontSize: 11,
+                color: "#fff",
+                background: "rgba(255,255,255,.12)",
+                border: "1px solid rgba(255,255,255,.25)",
+                borderRadius: 4,
+                padding: "3px 10px",
+                cursor: "pointer",
+              }}
+              title="Otvorí email s pripomienkami k appke"
+            >
+              ✉️ Odoslať mail s pripomienkami
+            </button>
             <NotificationBell
               notifications={myNotifications}
               unreadCount={unreadNotificationCount}
