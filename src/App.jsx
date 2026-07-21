@@ -731,6 +731,7 @@ function DispatcherApp() {
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
   const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
+  const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
@@ -1119,11 +1120,21 @@ function DispatcherApp() {
     setView(link.view);
     if (link.damageId) {
       setHighlightDamageId(link.damageId);
+      setHighlightLocation({ module: link.module, view: link.view });
     }
     if (link.machineId) {
       const m = enrichedMachineById[link.machineId];
       if (m) setMachineCard(m);
     }
+  }
+  function dismissHighlight() {
+    setHighlightDamageId(null);
+    setHighlightLocation(null);
+  }
+  function goToHighlight() {
+    if (!highlightLocation) return;
+    setModule(highlightLocation.module);
+    setView(highlightLocation.view);
   }
   function markAllNotificationsRead(visibleIds) {
     if (!currentUser) return;
@@ -2060,7 +2071,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`hlásenie poškodenia ${d?.code || ""}`, () => deleteDamage(id));
             }}
-            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
+            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2079,7 +2090,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
             }}
-            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
+            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2097,7 +2108,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteRevisionTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
+            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
           />
         )}
 
@@ -2112,7 +2123,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
+            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
           />
         )}
 
@@ -2390,6 +2401,50 @@ function DispatcherApp() {
         <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} />
       )}
       {pendingMail && <MailChoiceModal mail={pendingMail} onClose={() => setPendingMail(null)} />}
+      {highlightDamageId && (() => {
+        const hd = damages.find((d) => d.id === highlightDamageId);
+        if (!hd) return null;
+        const away = !(module === highlightLocation?.module && view === highlightLocation?.view);
+        return (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 20,
+              right: 20,
+              zIndex: 300,
+              maxWidth: 320,
+              background: "var(--accent)",
+              color: "#fff",
+              borderRadius: 10,
+              padding: "12px 14px",
+              boxShadow: "0 6px 20px rgba(0,0,0,.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+              📍 <strong>{hd.code}</strong> čaká na zobrazenie — otvorte záznam, nech sa vypne dočasný filter "Vyriešené".
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {away && (
+                <button
+                  onClick={goToHighlight}
+                  style={{ flex: 1, background: "#fff", color: "var(--accent)", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Prejsť na záznam
+                </button>
+              )}
+              <button
+                onClick={dismissHighlight}
+                style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                Zavrieť
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       {completeJobTarget && (
         <CompleteJobModal
           job={completeJobTarget}
