@@ -724,6 +724,7 @@ function DispatcherApp() {
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
+  const [showSetNewPassword, setShowSetNewPassword] = useState(false);
   const [pendingMail, setPendingMail] = useState(null); // { to, cc, subject, body } — čaká na výber Web/Desktop
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť appku ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
@@ -862,9 +863,10 @@ function DispatcherApp() {
       setSession(session);
       setAuthChecked(true);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
       setAuthChecked(true);
+      if (event === "PASSWORD_RECOVERY") setShowSetNewPassword(true);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -951,6 +953,20 @@ function DispatcherApp() {
         }
         setProfiles((prev) => prev.filter((p) => p.id !== id));
       });
+  }
+  async function resetUserPassword(email) {
+    if (!email) {
+      alert("Tento používateľ nemá appke známy email — nedá sa mu odoslať reset hesla.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) {
+      alert("Nepodarilo sa odoslať mail: " + error.message);
+    } else {
+      alert(`Mail na nastavenie nového hesla bol odoslaný na ${email}.`);
+    }
   }
 
   const persistWeeklyDuty = useCallback((next) => {
@@ -1734,6 +1750,17 @@ function DispatcherApp() {
     return `mailto:${job.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
+  if (showSetNewPassword) {
+    return (
+      <div className="app-shell">
+        <GlobalStyle />
+        <SetNewPasswordScreen
+          onDone={() => setShowSetNewPassword(false)}
+        />
+      </div>
+    );
+  }
+
   if (!loaded || !authChecked) {
     return (
       <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400 }}>
@@ -1822,6 +1849,7 @@ function DispatcherApp() {
           onClose={() => setShowUserAdmin(false)}
           onUpdate={updateProfileInfo}
           onDelete={(id) => askDelete(`používateľa ${profiles.find((p) => p.id === id)?.name || ""}`, () => deleteProfile(id))}
+          onResetPassword={resetUserPassword}
         />
       )}
       {showDepoCheckerSettings && (
@@ -7203,6 +7231,68 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
    (Prvý človek, čo sa kedy zaregistruje, sa automaticky stane
    administrátorom — vybaví to databázový trigger, nie appka.)
 --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Nastavenie nového hesla — appka sem príde po kliknutí na
+   odkaz z mailu (reset hesla od admina alebo zabudnuté heslo)
+--------------------------------------------------------- */
+function SetNewPasswordScreen({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function handleSave() {
+    setError("");
+    if (password.length < 6) {
+      setError("Heslo musí mať aspoň 6 znakov.");
+      return;
+    }
+    if (password !== password2) {
+      setError("Heslá sa nezhodujú.");
+      return;
+    }
+    setBusy(true);
+    const { error: err } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setDone(true);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
+      <div className="panel" style={{ padding: 32, width: 360, maxWidth: "90vw" }}>
+        <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
+        {done ? (
+          <>
+            <div style={{ fontSize: 14, marginBottom: 20 }}>Heslo bolo úspešne zmenené. Môžete pokračovať do appky.</div>
+            <button className="btn btn-accent" style={{ width: "100%" }} onClick={onDone}>
+              Pokračovať
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>Nastavte si nové heslo</div>
+            <Field label="Nové heslo">
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} autoFocus />
+            </Field>
+            <Field label="Zopakovať heslo">
+              <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
+            </Field>
+            {error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+            <button className="btn btn-accent" style={{ width: "100%" }} disabled={busy} onClick={handleSave}>
+              {busy ? "Ukladám…" : "Uložiť nové heslo"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ onLogin, onSignUp }) {
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
@@ -7347,7 +7437,7 @@ function DepoCheckerSettingsModal({ depoCheckers, technicians, onSave, onClose }
   );
 }
 
-function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete }) {
+function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, onResetPassword }) {
   const [editingId, setEditingId] = useState(null);
 
   return (
@@ -7372,7 +7462,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete }) 
           {profiles.map((p) => (
             <tr key={p.id}>
               <td style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
-              <td className="mono">{p.id === currentUser?.id ? currentUser.email : "—"}</td>
+              <td className="mono">{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
               <td>
                 {editingId === p.id ? (
                   <select
@@ -7391,6 +7481,16 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete }) 
               </td>
               <td>{p.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
               <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                {(p.email || p.id === currentUser?.id) && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: "4px 8px" }}
+                    onClick={() => onResetPassword(p.email || currentUser.email)}
+                    title="Pošle používateľovi mail s odkazom na nastavenie nového hesla"
+                  >
+                    Resetovať heslo
+                  </button>
+                )}
                 <button
                   className="btn btn-ghost"
                   style={{ fontSize: 11, padding: "4px 8px" }}
