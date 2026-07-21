@@ -4057,7 +4057,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>
-              Checker {isVyvoz ? "(vývoz)" : "(zvoz — kontrola po návrate)"}
+              Checker {isVyvoz ? "(vývoz)" : "(zvoz)"}
             </div>
             {(() => {
               const depo = isVyvoz ? t.from : t.to;
