@@ -730,6 +730,7 @@ function DispatcherApp() {
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
+  const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
@@ -1096,10 +1097,10 @@ function DispatcherApp() {
   // roles: pole rolí, ktoré majú upozornenie vidieť (napr. ["dispecer_pozicovne","veduci_pozicovne"])
   // userName: ak je zadané, upozornenie navyše dostane presne ten používateľ, ktorého profilové
   //           meno sa s týmto textom zhoduje (napr. konkrétny obchodník) — bez ohľadu na jeho rolu
-  function pushNotification({ roles, userName, title, message }) {
+  function pushNotification({ roles, userName, title, message, link }) {
     setNotifications((prev) => {
       const next = [
-        { id: uid(), createdAt: new Date().toISOString(), roles: roles || [], userName: userName || null, title, message, readBy: [] },
+        { id: uid(), createdAt: new Date().toISOString(), roles: roles || [], userName: userName || null, title, message, link: link || null, readBy: [] },
         ...prev,
       ].slice(0, 300); // poistka nech to nerastie donekonečna
       saveKey("notifications", next);
@@ -1111,6 +1112,19 @@ function DispatcherApp() {
     persistNotifications(
       notifications.map((n) => (n.id === id && !n.readBy.includes(currentUser.id) ? { ...n, readBy: [...n.readBy, currentUser.id] } : n))
     );
+  }
+  function navigateFromNotification(link) {
+    if (!link) return;
+    setModule(link.module);
+    setView(link.view);
+    if (link.damageId) {
+      setHighlightDamageId(link.damageId);
+      setTimeout(() => setHighlightDamageId((cur) => (cur === link.damageId ? null : cur)), 4000);
+    }
+    if (link.machineId) {
+      const m = enrichedMachineById[link.machineId];
+      if (m) setMachineCard(m);
+    }
   }
   function markAllNotificationsRead(visibleIds) {
     if (!currentUser) return;
@@ -1276,6 +1290,7 @@ function DispatcherApp() {
       roles: ["dispecer_servisu", "veduci_servisu"],
       title: "Nové poškodenie",
       message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis}“.`,
+      link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
     setShowDamageReport(null);
   }
@@ -1304,6 +1319,7 @@ function DispatcherApp() {
       roles: ["dispecer_servisu", "veduci_servisu"],
       title: "Nová externá zákazka",
       message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
+      link: { module: "servis", view: "externe", damageId: record.id },
     });
     setShowExternalReport(false);
   }
@@ -1346,6 +1362,7 @@ function DispatcherApp() {
         userName: d.obchodnik || null,
         title: "Stroj opravený",
         message: `Stroj ${d.code} u zákazníka/na depe ${where} bol opravený dňa ${fmtDate(opravaDatum)}.`,
+        link: { module: "poziciovna", view: "dashboard", machineId: d.machineId },
       });
     }
     setResolveDamageTarget(null);
@@ -1776,6 +1793,7 @@ function DispatcherApp() {
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationRead={markNotificationRead}
         onMarkAllNotificationsRead={markAllNotificationsRead}
+        onNavigateNotification={navigateFromNotification}
       />
 
       {showUserAdmin && (
@@ -2038,6 +2056,7 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            highlightDamageId={highlightDamageId}
           />
         )}
 
@@ -2056,6 +2075,7 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            highlightDamageId={highlightDamageId}
           />
         )}
 
@@ -2631,7 +2651,7 @@ function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggle
 /* ---------------------------------------------------------
    Notification bell — skutočné upozornenia (nie len vizuálne odznaky)
 --------------------------------------------------------- */
-function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRead, onMarkAllRead }) {
+function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRead, onMarkAllRead, onNavigate }) {
   const [open, setOpen] = useState(false);
   const sorted = [...(notifications || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
@@ -2718,20 +2738,28 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
             ) : (
               sorted.map((n) => {
                 const isUnread = !n.readBy.includes(currentUserId);
+                const clickable = isUnread || !!n.link;
                 return (
                   <div
                     key={n.id}
-                    onClick={() => isUnread && onMarkRead(n.id)}
+                    onClick={() => {
+                      if (isUnread) onMarkRead(n.id);
+                      if (n.link) {
+                        onNavigate?.(n.link);
+                        setOpen(false);
+                      }
+                    }}
                     style={{
                       padding: "10px 14px",
                       borderBottom: "1px solid var(--border)",
                       background: isUnread ? "var(--accent-light)" : "transparent",
-                      cursor: isUnread ? "pointer" : "default",
+                      cursor: clickable ? "pointer" : "default",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                       {isUnread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                       <span style={{ fontSize: 12, fontWeight: 700 }}>{n.title}</span>
+                      {n.link && <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>zobraziť →</span>}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{n.message}</div>
                     <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
@@ -3029,7 +3057,7 @@ function DocumentsView({
 }
 
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, onOpenDepoCheckerSettings, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onPickDocumentsSubView }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, onOpenDepoCheckerSettings, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -3065,6 +3093,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               currentUserId={currentUser?.id}
               onMarkRead={onMarkNotificationRead}
               onMarkAllRead={onMarkAllNotificationsRead}
+              onNavigate={onNavigateNotification}
             />
             {currentUser && (
               <UserMenu
@@ -5278,7 +5307,13 @@ function ServiceEventDetailModal({ d, technicianById, user, onEdit, onClose }) {
   );
 }
 
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel }) {
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel, highlighted }) {
+  const cardRef = useRef(null);
+  useEffect(() => {
+    if (highlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlighted]);
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const assignedTech = techIds.length ? technicianById[techIds[0]] : null;
   const assignedTechNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ");
@@ -5289,7 +5324,18 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   const permGroup = d.type === "externa" ? "external" : variant === "revizia" ? "revision" : variant === "uradnaSkuska" ? "uradnaskuska" : "damage";
   const perm = PERM_GROUP[permGroup];
   return (
-    <div className="panel" style={{ padding: 14, borderLeft: `3px solid ${barColor}`, opacity: isDone ? 0.7 : 1 }}>
+    <div
+      ref={cardRef}
+      className="panel"
+      style={{
+        padding: 14,
+        borderLeft: `3px solid ${barColor}`,
+        opacity: isDone ? 0.7 : 1,
+        outline: highlighted ? "2px solid var(--accent)" : "none",
+        boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "none",
+        transition: "box-shadow .3s, outline .3s",
+      }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
@@ -5385,7 +5431,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -5490,7 +5536,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} />
         ))}
       </div>
     </div>
@@ -5500,7 +5546,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -5611,7 +5657,7 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} />
         ))}
       </div>
     </div>
