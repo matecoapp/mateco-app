@@ -6731,10 +6731,19 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
       return buildProtocolParams(linkedDamage, technicians, machineById || {});
     }
     const params = {};
-    const serial = machine?.code || a.stroj || "";
-    if (serial) params.serial = serial;
+    if (machine) {
+      // Skutočný požičovňový stroj vybraný zo zoznamu — bežný protokol, appka nájde model sama
+      params.serial = machine.code;
+    } else if (a.stroj) {
+      // Stroj napísaný ako voľný text ("mimo evidencie") — protokol sa správa ako pri externej
+      // zákazke: zaškrtne "Externý stroj", text sa predvyplní ako sériové číslo (technik si ho
+      // môže priamo v protokole upraviť) a model si dopíše ručne.
+      params.external = "1";
+      params.serial = a.stroj;
+    }
     if (technician?.name) params.tech = technician.name;
     if (a.umiestnenie) params.address = a.umiestnenie;
+    if (a.firma) params.client = a.firma;
     return params;
   }
 
