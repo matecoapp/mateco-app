@@ -640,10 +640,9 @@ function DispatcherApp() {
   const [confirmDelete, setConfirmDelete] = useState(null); // { label, onConfirm }
   const [archiveTarget, setArchiveTarget] = useState(null); // { label, reasons, onConfirm }
   const [confirmAction, setConfirmAction] = useState(null); // { message, confirmLabel, onConfirm }
-  const [expandedList, setExpandedList] = useState(null); // { title, items, renderItem }
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
-  const [showAlertsPanel, setShowAlertsPanel] = useState(true);
+  const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
   const [darkMode, setDarkMode] = useState(false);
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
@@ -1649,39 +1648,15 @@ function DispatcherApp() {
             alerts.inService.length > 0 ||
             alerts.uradneSkusky.length > 0;
           if (!hasAlerts) return null;
-          const totalAlerts =
-            alerts.overdue.length + alerts.endingSoon.length + alerts.tomorrowUnassigned.length +
-            alerts.revisionSoon.length + alerts.revisionOverdue.length + alerts.inService.length + alerts.uradneSkusky.length;
-          if (!showAlertsPanel) {
-            return (
-              <div
-                className="panel"
-                style={{ padding: "8px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-                onClick={() => setShowAlertsPanel(true)}
-              >
-                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                  Prehľad upozornení je skrytý ({totalAlerts})
-                </span>
-                <span style={{ fontSize: 12, color: "var(--accent)", marginLeft: "auto", fontWeight: 600 }}>Zobraziť</span>
-              </div>
-            );
-          }
           return (
-            <div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => setShowAlertsPanel(false)}>
-                  Skryť prehľad
-                </button>
-              </div>
-              <AlertsPanel
-                alerts={alerts}
-                machineById={enrichedMachineById}
-                driverById={driverById}
-                onExpand={(c) => setExpandedList(c)}
-                onOpenJob={(j) => setJobDetail(j)}
-                onOpenMachine={(m) => m && setMachineCard(m)}
-              />
-            </div>
+            <AlertsPanel
+              alerts={alerts}
+              onNavigate={(nav) => {
+                setModule(nav.module);
+                setView(nav.view);
+                if (nav.quick) setJobsQuickCategory(nav.quick);
+              }}
+            />
           );
         })()}
 
@@ -1720,6 +1695,8 @@ function DispatcherApp() {
             driverById={driverById}
             today={today}
             user={effectiveUser}
+            initialQuickCategory={jobsQuickCategory}
+            onQuickCategoryConsumed={() => setJobsQuickCategory(null)}
             onAddJob={() => setShowAddJob({})}
             onImportJobs={() => setShowImportJobs(true)}
             onImportCustomers={() => setShowImportCustomers(true)}
@@ -1751,7 +1728,6 @@ function DispatcherApp() {
             technicians={technicians}
             getTransportSendStatus={getTransportSendStatus}
             recordTransportSend={recordTransportSend}
-            onExpand={(c) => setExpandedList(c)}
           />
         )}
 
@@ -2088,14 +2064,6 @@ function DispatcherApp() {
           confirmLabel={confirmAction.confirmLabel}
           onClose={() => setConfirmAction(null)}
           onConfirm={confirmAction.onConfirm}
-        />
-      )}
-      {expandedList && (
-        <ExpandListModal
-          title={expandedList.title}
-          items={expandedList.items}
-          renderItem={expandedList.renderItem}
-          onClose={() => setExpandedList(null)}
         />
       )}
       {assignmentDetail && (
@@ -2524,9 +2492,13 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             Interná platforma
           </span>
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
-            <div className="company-badge" style={{ fontSize: 11, color: "rgba(255,255,255,.8)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
-              mateco Slovakia s.r.o.
-            </div>
+            <NotificationBell
+              notifications={myNotifications}
+              unreadCount={unreadNotificationCount}
+              currentUserId={currentUser?.id}
+              onMarkRead={onMarkNotificationRead}
+              onMarkAllRead={onMarkAllNotificationsRead}
+            />
             {currentUser && (
               <UserMenu
                 currentUser={currentUser}
@@ -2543,13 +2515,6 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                 onLogout={onLogout}
               />
             )}
-            <NotificationBell
-              notifications={myNotifications}
-              unreadCount={unreadNotificationCount}
-              currentUserId={currentUser?.id}
-              onMarkRead={onMarkNotificationRead}
-              onMarkAllRead={onMarkAllNotificationsRead}
-            />
           </div>
         </div>
       </div>
@@ -2653,137 +2618,29 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
 /* ---------------------------------------------------------
    Alerts
 --------------------------------------------------------- */
-function AlertsPanel({ alerts, machineById, driverById, onExpand, onOpenJob, onOpenMachine }) {
-  function SerialLink({ onClick, children }) {
-    return (
-      <span
-        className="mono"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-        style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
-      >
-        {children}
-      </span>
-    );
-  }
+function AlertsPanel({ alerts, onNavigate }) {
   const categories = [
-    {
-      key: "overdue",
-      title: "Zákazka po termíne",
-      color: "var(--danger)",
-      items: alerts.overdue,
-      renderItem: (j) => (
-        <div key={j.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — mal skončiť {fmtDate(j.endDate)}
-          {j.customer ? ` · ${j.customer}` : ""}
-        </div>
-      ),
-    },
-    {
-      key: "endingSoon",
-      title: "Zákazka končí čoskoro (do 5 dní)",
-      color: "var(--warn)",
-      items: alerts.endingSoon,
-      renderItem: (j) => (
-        <div key={j.id} style={{ fontSize: 13, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>
-            <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — do {fmtDate(j.endDate)}
-            {j.customer ? ` · ${j.customer}` : ""}
-            {!j.customerEmail && <span style={{ color: "var(--text-dim)" }}> (bez emailu v karte)</span>}
-          </span>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 10, padding: "2px 7px" }}
-            title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
-            onClick={(e) => {
-              e.stopPropagation();
-              composeMail({
-                to: j.customerEmail || "",
-                subject: `Blížiaci sa koniec prenájmu — ${machineById[j.machineId]?.code || ""}`,
-                body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${machineById[j.machineId]?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
-              });
-            }}
-          >
-            ✉️ Upozorniť zákazníka
-          </button>
-        </div>
-      ),
-    },
-    {
-      key: "tomorrowUnassigned",
-      title: "Zákazka bez šoféra",
-      color: "var(--info)",
-      items: alerts.tomorrowUnassigned,
-      renderItem: (j) => (
-        <div key={j.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenJob(j)}>{machineById[j.machineId]?.code}</SerialLink> — od {fmtDate(j.startDate)} → {j.toLocation}
-        </div>
-      ),
-    },
-    {
-      key: "inService",
-      title: "V servisnom stave",
-      color: "var(--danger)",
-      items: alerts.inService,
-      renderItem: (d) => (
-        <div key={d.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenMachine(machineById[d.machineId])}>{d.code}</SerialLink> — {d.popis}
-        </div>
-      ),
-    },
-    {
-      key: "revisionOverdue",
-      title: "Revízia po termíne",
-      color: "var(--danger)",
-      items: alerts.revisionOverdue,
-      renderItem: (m) => (
-        <div key={m.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenMachine(machineById[m.id])}>{m.code}</SerialLink> — mala byť {fmtDate(m.revizia)}
-        </div>
-      ),
-    },
-    {
-      key: "revisionSoon",
-      title: "Revízia končí do 30 dní",
-      color: "var(--warn)",
-      items: alerts.revisionSoon,
-      renderItem: (m) => (
-        <div key={m.id} style={{ fontSize: 13, marginBottom: 4 }}>
-          <SerialLink onClick={() => onOpenMachine(machineById[m.id])}>{m.code}</SerialLink> — {fmtDate(m.revizia)}
-        </div>
-      ),
-    },
-    {
-      key: "uradneSkusky",
-      title: "Končiace úradné skúšky",
-      color: "var(--warn)",
-      items: alerts.uradneSkusky,
-      renderItem: (d) => (
-        <div key={d.id} style={{ fontSize: 13, marginBottom: 4, color: d.overdue ? "var(--danger)" : "inherit" }}>
-          <SerialLink onClick={() => onOpenMachine(machineById[d.machineId])}>{d.code}</SerialLink> — {d.overdue ? "po termíne" : "tento rok"} ({d.uradnaSkuskaRok})
-        </div>
-      ),
-    },
+    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, nav: { module: "poziciovna", view: "zakazky", quick: "overdue" } },
+    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "zakazky", quick: "endingSoon" } },
+    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "zakazky", quick: "noDriver" } },
+    { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
+    { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
+    { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
+    { key: "uradneSkusky", title: "Končiace úradné skúšky", color: "var(--warn)", count: alerts.uradneSkusky.length, nav: { module: "servis", view: "uradne_skusky" } },
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
-      {categories.filter((c) => c.items.length > 0).map((c) => (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
+      {categories.filter((c) => c.count > 0).map((c) => (
         <div
           key={c.key}
           className="panel"
-          onClick={() => onExpand(c)}
-          style={{ padding: 14, borderLeft: `3px solid ${c.color}`, cursor: "pointer" }}
+          onClick={() => onNavigate(c.nav)}
+          style={{ padding: "12px 14px", borderLeft: `3px solid ${c.color}`, cursor: "pointer" }}
+          title="Kliknutím prejdete na podrobný zoznam"
         >
-          <div className="label-font" style={{ color: c.color, fontSize: 12, marginBottom: 6 }}>
-            {c.title} — {c.items.length}
-          </div>
-          {c.items.slice(0, 4).map(c.renderItem)}
-          {c.items.length > 4 && (
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Kliknite pre celý zoznam →</div>
-          )}
+          <div className="label-font" style={{ color: c.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{c.count}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{c.title}</div>
         </div>
       ))}
     </div>
@@ -3068,11 +2925,30 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
+function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
+  const [quickCategory, setQuickCategory] = useState(initialQuickCategory || null);
   const depoOptions = DEPO_OPTIONS;
+
+  useEffect(() => {
+    if (initialQuickCategory) {
+      setQuickCategory(initialQuickCategory);
+      onQuickCategoryConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuickCategory]);
+
+  const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue");
+  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && daysBetween(today, j.endDate) <= 5);
+  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
+  const quickTiles = [
+    { id: "overdue", label: "Zákazka po termíne", color: "var(--danger)", items: overdueJobs },
+    { id: "endingSoon", label: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", items: endingSoonJobs },
+    { id: "noDriver", label: "Zákazka bez šoféra", color: "var(--info)", items: noDriverJobs },
+  ];
+  const activeTile = quickTiles.find((t) => t.id === quickCategory);
 
   function statusBucket(j) {
     const st = effectiveStatus(j, today);
@@ -3118,6 +2994,19 @@ function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImp
   const sorted = [...filtered].sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
   return (
     <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+        {quickTiles.filter((t) => t.items.length > 0).map((t) => (
+          <div
+            key={t.id}
+            className="panel"
+            onClick={() => setQuickCategory(t.id)}
+            style={{ padding: "12px 14px", borderLeft: `3px solid ${t.color}`, cursor: "pointer" }}
+          >
+            <div className="label-font" style={{ color: t.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{t.items.length}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
+          </div>
+        ))}
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           placeholder="Hľadať sériové číslo, model, depo, zákazníka…"
@@ -3218,6 +3107,52 @@ function JobsBoard({ jobs, machineById, driverById, today, user, onAddJob, onImp
           );
         })}
       </div>
+      {activeTile && (
+        <Modal title={`${activeTile.label} (${activeTile.items.length})`} onClose={() => setQuickCategory(null)} wide>
+          <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            {activeTile.items.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
+            ) : (
+              activeTile.items.map((j) => {
+                const m = machineById[j.machineId];
+                return (
+                  <div key={j.id} className="panel" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span
+                      className="mono"
+                      style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
+                      onClick={() => onOpenJob(j)}
+                    >
+                      {m?.code || "—"}
+                    </span>
+                    <span style={{ fontSize: 13 }}>
+                      {activeTile.id === "overdue" && `mal skončiť ${fmtDate(j.endDate)}`}
+                      {activeTile.id === "endingSoon" && `do ${fmtDate(j.endDate)}`}
+                      {activeTile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
+                      {j.customer ? ` · ${j.customer}` : ""}
+                    </span>
+                    {activeTile.id === "endingSoon" && (
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: "4px 8px", marginLeft: "auto" }}
+                        title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
+                        onClick={() => {
+                          composeMail({
+                            to: j.customerEmail || "",
+                            subject: `Blížiaci sa koniec prenájmu — ${m?.code || ""}`,
+                            body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${m?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+                          });
+                        }}
+                      >
+                        ✉️ Upozorniť zákazníka
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6619,7 +6554,7 @@ function GlobalStyle() {
         .app-main { padding: 10px !important; }
         .header-topbar { padding: 7px 10px !important; gap: 6px !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
-        .header-divider, .header-subtitle, .company-badge { display: none !important; }
+        .header-divider, .header-subtitle { display: none !important; }
         .header-top-actions { gap: 5px !important; }
         .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
           font-size: 10px !important;
