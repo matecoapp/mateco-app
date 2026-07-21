@@ -1119,7 +1119,6 @@ function DispatcherApp() {
     setView(link.view);
     if (link.damageId) {
       setHighlightDamageId(link.damageId);
-      setTimeout(() => setHighlightDamageId((cur) => (cur === link.damageId ? null : cur)), 4000);
     }
     if (link.machineId) {
       const m = enrichedMachineById[link.machineId];
@@ -2061,7 +2060,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`hlásenie poškodenia ${d?.code || ""}`, () => deleteDamage(id));
             }}
-            onOpenDetail={(d) => setServiceEventDetail(d)}
+            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2080,7 +2079,7 @@ function DispatcherApp() {
               const d = damages.find((x) => x.id === id);
               askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
             }}
-            onOpenDetail={(d) => setServiceEventDetail(d)}
+            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
             onResolve={setDamageResolved}
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
@@ -2098,7 +2097,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteRevisionTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => setServiceEventDetail(d)}
+            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
           />
         )}
 
@@ -2113,7 +2112,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => setServiceEventDetail(d)}
+            onOpenDetail={(d) => { setServiceEventDetail(d); setHighlightDamageId((cur) => (cur === d.id ? null : cur)); }}
           />
         )}
 
