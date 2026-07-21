@@ -814,6 +814,47 @@ function DispatcherApp() {
     })();
   }, [authChecked, session?.user?.id]);
 
+  // Živé prepojenie — keď kolega niečo zmení, appka sa o tom dozvie sama
+  // (Supabase Realtime), bez toho, aby ste museli obnoviť stránku.
+  useEffect(() => {
+    if (!session) return;
+    const KEY_SETTERS = {
+      machines: setMachines,
+      drivers: setDrivers,
+      jobs: setJobs,
+      technicians: setTechnicians,
+      assignments: setAssignments,
+      damages: setDamages,
+      weeklyDuty: setWeeklyDuty,
+      notifications: setNotifications,
+      transportSendLog: setTransportSendLog,
+      customers: setCustomers,
+      depoCheckers: setDepoCheckers,
+      framoveZmluvy: setFramoveZmluvy,
+      blacklist: setBlacklist,
+    };
+    const channel = supabase
+      .channel("app_data_live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "app_data" },
+        (payload) => {
+          const key = payload.new?.key || payload.old?.key;
+          const setter = KEY_SETTERS[key];
+          if (!setter) return;
+          if (payload.eventType === "DELETE") {
+            setter(key === "depoCheckers" ? {} : []);
+          } else {
+            setter(payload.new.value);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
