@@ -1499,6 +1499,8 @@ function DispatcherApp() {
     const machine = machineById[job.machineId];
     if (!driver) return null;
     const email = driver.email || nameToEmail(driver.name);
+    const checkerId = depoCheckers?.[job.fromDepo];
+    const checker = checkerId ? technicianByIdTop?.[checkerId] : null;
     const subject = `Zákazka: stroj ${machine?.code} — ${fmtDate(job.startDate)} → ${fmtDate(job.endDate)}`;
     const body =
       `Dobrý deň ${driver.name},\n\n` +
@@ -1508,6 +1510,7 @@ function DispatcherApp() {
       `Kam: ${job.toLocation}\n` +
       `Zákazník: ${job.customer || "—"}\n` +
       `Termín: ${fmtDate(job.startDate)} — ${fmtDate(job.endDate)}\n` +
+      (checker ? `Checker: ${checker.name}\n` : "") +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
     return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -2620,9 +2623,9 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
 --------------------------------------------------------- */
 function AlertsPanel({ alerts, onNavigate }) {
   const categories = [
-    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, nav: { module: "poziciovna", view: "zakazky", quick: "overdue" } },
-    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "zakazky", quick: "endingSoon" } },
-    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "zakazky", quick: "noDriver" } },
+    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, nav: { module: "poziciovna", view: "jobs", quick: "overdue" } },
+    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "jobs", quick: "endingSoon" } },
+    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "jobs", quick: "noDriver" } },
     { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
     { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
     { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
@@ -3376,7 +3379,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                         const lines = items.map((t) => {
                           const m = machineById[t.machineId];
                           const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
-                          return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
+                          const depo = t.type === "vyvoz" ? t.from : t.to;
+                          const checkerId = depoCheckers?.[depo];
+                          const checker = checkerId ? technicianById?.[checkerId] : null;
+                          return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                         });
                         const body = `Dobrý deň ${driver.name},\n\nna ${dayLabel} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
                         composeMail({ to: driver.email || nameToEmail(driver.name), subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
@@ -3473,7 +3479,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                     const lines = liveItems.map((t) => {
                       const m = machineById[t.machineId];
                       const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
-                      return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}`;
+                      const depo = t.type === "vyvoz" ? t.from : t.to;
+                      const checkerId = depoCheckers?.[depo];
+                      const checker = checkerId ? technicianById?.[checkerId] : null;
+                      return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                     });
                     const body = `Dobrý deň ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
                     composeMail({ to: driver.email || nameToEmail(driver.name), subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
