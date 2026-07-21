@@ -14,7 +14,11 @@ const DOCUMENT_SUBTABS = {
     // { id: "napr-zmluvy", label: "Zmluvy" },
   ],
   servis: [
-    // { id: "napr-revizne-spravy", label: "Revízne správy" },
+    { id: "protokoly", label: "Odoslané protokoly", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FProtokoly&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4&newTargetListUrl=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty&viewpath=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FForms%2FAllItems%2Easpx" },
+    { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
+    { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx" },
+    { id: "navody", label: "Návody k strojom", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/_layouts/15/Doc.aspx?sourcedoc={d1a06eda-b8a0-4ac9-9373-aecf45a09eb0}&action=edit&wd=target%28Sekcia%20bez%20n%C3%A1zvu.one%7C966b76c2-f607-43eb-b36a-6570b2199fd8%2FKatal%C3%B3gy%20dod%C3%A1vate%C4%BEov%7C0174beec-8e55-4bb2-b983-b4233b5a924a%2F%29&wdorigin=NavigationUrl" },
+    { id: "foto", label: "Foto strojov", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FFotky%20strojov&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
   ],
 };
 
@@ -671,9 +675,13 @@ function DispatcherApp() {
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
   const [planDepoFilter, setPlanDepoFilter] = useState(null);
   const [documentsSubView, setDocumentsSubView] = useState(null);
-  function pickDocumentsSubView(subId) {
+  function pickDocumentsSubView(subTab) {
+    if (subTab.url) {
+      window.open(subTab.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setView("dokumenty");
-    setDocumentsSubView(subId);
+    setDocumentsSubView(subTab.id);
   }
   const [darkMode, setDarkMode] = useState(false);
   function askDelete(label, onConfirm) {
@@ -2606,11 +2614,13 @@ function DocumentsTabButton({ active, subTabs, onPick }) {
                 <button
                   key={st.id}
                   onClick={() => {
-                    onPick(st.id);
+                    onPick(st);
                     setOpen(false);
                   }}
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     width: "100%",
                     textAlign: "left",
                     background: "transparent",
@@ -2625,6 +2635,7 @@ function DocumentsTabButton({ active, subTabs, onPick }) {
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   {st.label}
+                  {st.url && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)" }}>↗</span>}
                 </button>
               ))
             )}
@@ -2742,7 +2753,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                 key={t.id}
                 active={view === t.id}
                 subTabs={DOCUMENT_SUBTABS[module] || []}
-                onPick={(subId) => onPickDocumentsSubView(subId)}
+                onPick={(st) => onPickDocumentsSubView(st)}
               />
             ) : (
             <button
@@ -2801,13 +2812,29 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           )}
         </nav>
         {module === "servis" && can(effectiveUser, "protocol_write") && (
-          <button
-            onClick={() => openProtocol({})}
-            className="btn btn-accent"
-            style={{ marginLeft: "auto", fontSize: 12 }}
-          >
-            Vypísať protokol
-          </button>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
+              Vypísať protokol
+            </button>
+            <a
+              href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost"
+              style={{ fontSize: 12 }}
+            >
+              Záznam z merania pre VTZ EZ ↗
+            </a>
+            <a
+              href="https://matecoapp.netlify.app/fotky"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost"
+              style={{ fontSize: 12 }}
+            >
+              Odfotiť stroj požičovne ↗
+            </a>
+          </div>
         )}
       </div>
     </div>
@@ -2897,9 +2924,17 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
         </div>
       )}
       {can(user, "protocol_write") && (
-        <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
-          Vypísať protokol
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
+            Vypísať protokol
+          </button>
+          <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">
+            Záznam z merania pre VTZ EZ ↗
+          </a>
+          <a href="https://matecoapp.netlify.app/fotky" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">
+            Odfotiť stroj požičovne ↗
+          </a>
+        </div>
       )}
     </Modal>
   );
@@ -4888,6 +4923,16 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onResol
               Vypísať protokol
             </button>
           )}
+          {onProtocol && can(user, "protocol_write") && (
+            <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }}>
+              Záznam z merania VTZ EZ ↗
+            </a>
+          )}
+          {onProtocol && can(user, "protocol_write") && (
+            <a href="https://matecoapp.netlify.app/fotky" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }}>
+              Odfotiť stroj ↗
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -6396,6 +6441,16 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
                   {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
                   {can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
+                  {can(user, "protocol_write") && (
+                    <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
+                      Meranie VTZ EZ ↗
+                    </a>
+                  )}
+                  {can(user, "protocol_write") && (
+                    <a href="https://matecoapp.netlify.app/fotky" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
+                      Odfotiť stroj ↗
+                    </a>
+                  )}
                   {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(a.id)}>Zmazať</button>}
                 </div>
               </div>
