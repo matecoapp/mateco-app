@@ -225,21 +225,20 @@ function setMailComposeListener(fn) {
   _mailComposeListener = fn;
 }
 function buildMailtoUrl({ to, cc, subject, body }) {
-  const params = new URLSearchParams();
-  if (cc) params.set("cc", cc);
-  if (subject) params.set("subject", subject);
-  if (body) params.set("body", body);
-  const qs = params.toString();
+  const parts = [];
+  if (cc) parts.push(`cc=${encodeURIComponent(cc)}`);
+  if (subject) parts.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) parts.push(`body=${encodeURIComponent(body)}`);
+  const qs = parts.join("&");
   return `mailto:${to || ""}${qs ? "?" + qs : ""}`;
 }
 function buildOutlookWebUrl({ to, cc, subject, body }) {
-  const params = new URLSearchParams();
-  params.set("path", "/mail/action/compose");
-  if (to) params.set("to", to);
-  if (cc) params.set("cc", cc);
-  if (subject) params.set("subject", subject);
-  if (body) params.set("body", body);
-  return `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
+  const parts = [`path=${encodeURIComponent("/mail/action/compose")}`];
+  if (to) parts.push(`to=${encodeURIComponent(to)}`);
+  if (cc) parts.push(`cc=${encodeURIComponent(cc)}`);
+  if (subject) parts.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) parts.push(`body=${encodeURIComponent(body)}`);
+  return `https://outlook.office.com/mail/deeplink/compose?${parts.join("&")}`;
 }
 function sendMailWithClient(client, mail) {
   if (client === "web") {
@@ -2245,6 +2244,141 @@ function MailChoiceModal({ mail, onClose }) {
 
 
 /* ---------------------------------------------------------
+   User menu — jedno rozbaľovacie miesto pre všetky nastavenia
+   (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
+--------------------------------------------------------- */
+function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onOpenDepoCheckerSettings, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const isAdmin = isAdminUser(currentUser);
+
+  const itemStyle = {
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    background: "transparent",
+    border: "none",
+    padding: "8px 10px",
+    fontSize: 13,
+    color: "var(--text)",
+    cursor: "pointer",
+    borderRadius: 5,
+  };
+  const sectionLabel = { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim)", padding: "8px 10px 2px" };
+  const divider = { height: 1, background: "var(--border)", margin: "4px 0" };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          fontSize: 11,
+          color: "#fff",
+          background: "rgba(255,255,255,.12)",
+          border: "1px solid rgba(255,255,255,.25)",
+          borderRadius: 4,
+          padding: "3px 10px",
+          cursor: "pointer",
+        }}
+      >
+        {currentUser.name} · {roleLabel(currentUser.role)}
+        {isAdmin && viewAsRole && <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>}
+        <span style={{ marginLeft: 6 }}>▾</span>
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div
+            className="panel"
+            style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 290, zIndex: 201, padding: 6 }}
+          >
+            <button style={itemStyle} onClick={() => { onToggleDarkMode(); }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              {darkMode ? "☀ Svetlý režim" : "🌙 Tmavý režim"}
+            </button>
+            <button
+              style={itemStyle}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onClick={() => {
+                try {
+                  localStorage.removeItem(MAIL_PREF_KEY);
+                } catch (e) {}
+                alert("Pri ďalšom odosielaní emailu sa appka znova opýta, ako ho chcete otvoriť.");
+                setOpen(false);
+              }}
+            >
+              ✉️ Zmeniť spôsob mailu
+            </button>
+
+            {isAdmin && (
+              <>
+                <div style={divider} />
+                <div style={sectionLabel}>Zobraziť appku ako</div>
+                <div style={{ padding: "2px 10px 8px" }}>
+                  <select
+                    value={viewAsRole || ""}
+                    onChange={(e) => onSetViewAsRole(e.target.value || null)}
+                    title="Dočasne si pozrieť appku ako iná rola (nemení skutočnú rolu v databáze)"
+                    style={{ width: "100%", fontSize: 12 }}
+                  >
+                    <option value="">Administrátor (skutočná rola)</option>
+                    {ROLES.filter((r) => r.id !== "admin").map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={divider} />
+                <div style={sectionLabel}>Administrácia</div>
+                <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenUserAdmin(); setOpen(false); }}>
+                  👤 Používatelia
+                </button>
+                <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenDepoCheckerSettings(); setOpen(false); }}>
+                  🔧 Checkeri podľa depa
+                </button>
+                {canExport && (
+                  <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onExportBackup(); setOpen(false); }}>
+                    ⬇ Export dát
+                  </button>
+                )}
+                {canImport && (
+                  <label
+                    style={{ ...itemStyle, display: "block" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    ⬆ Import dát
+                    <input
+                      type="file"
+                      accept="application/json,.json"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) onImportBackup(file);
+                        e.target.value = "";
+                        setOpen(false);
+                      }}
+                    />
+                  </label>
+                )}
+              </>
+            )}
+
+            <div style={divider} />
+            <button
+              style={{ ...itemStyle, color: "var(--danger)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onClick={onLogout}
+            >
+              Odhlásiť sa
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
    Notification bell — skutočné upozornenia (nie len vizuálne odznaky)
 --------------------------------------------------------- */
 function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRead, onMarkAllRead }) {
@@ -2390,48 +2524,24 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             Interná platforma
           </span>
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
-            {can(effectiveUser, "backup_export") && (
-              <button
-                onClick={onExportBackup}
-                style={{
-                  fontSize: 11,
-                  color: "#fff",
-                  background: "rgba(255,255,255,.12)",
-                  border: "1px solid rgba(255,255,255,.25)",
-                  borderRadius: 4,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                }}
-                title="Stiahnuť zálohu všetkých dát (stroje, technici, zákazky…) do jedného súboru"
-              >
-                ⬇ Export dát
-              </button>
-            )}
-            {can(effectiveUser, "backup_import") && (
-              <label
-                style={{
-                  fontSize: 11,
-                  color: "#fff",
-                  background: "rgba(255,255,255,.12)",
-                  border: "1px solid rgba(255,255,255,.25)",
-                  borderRadius: 4,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                }}
-                title="Načítať zálohu zo súboru (prepíše aktuálne dáta v tomto chate)"
-              >
-                ⬆ Import dát
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) onImportBackup(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+            <div className="company-badge" style={{ fontSize: 11, color: "rgba(255,255,255,.8)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
+              mateco Slovakia s.r.o.
+            </div>
+            {currentUser && (
+              <UserMenu
+                currentUser={currentUser}
+                viewAsRole={viewAsRole}
+                onSetViewAsRole={onSetViewAsRole}
+                darkMode={darkMode}
+                onToggleDarkMode={onToggleDarkMode}
+                onOpenUserAdmin={onOpenUserAdmin}
+                onOpenDepoCheckerSettings={onOpenDepoCheckerSettings}
+                onExportBackup={onExportBackup}
+                onImportBackup={onImportBackup}
+                canExport={can(effectiveUser, "backup_export")}
+                canImport={can(effectiveUser, "backup_import")}
+                onLogout={onLogout}
+              />
             )}
             <NotificationBell
               notifications={myNotifications}
@@ -2440,117 +2550,6 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               onMarkRead={onMarkNotificationRead}
               onMarkAllRead={onMarkAllNotificationsRead}
             />
-            <button
-              onClick={onToggleDarkMode}
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-              title="Prepnúť tmavý/svetlý režim"
-            >
-              {darkMode ? "☀ Svetlý režim" : "🌙 Tmavý režim"}
-            </button>
-            <button
-              onClick={() => {
-                localStorage.removeItem(MAIL_PREF_KEY);
-                alert("Pri ďalšom odosielaní emailu sa appka znova opýta, ako ho chcete otvoriť.");
-              }}
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-              title="Zabudnúť uloženú voľbu Outlook Web / Desktop a nabudúce sa opýtať znova"
-            >
-              ✉️ Zmeniť spôsob mailu
-            </button>
-            {currentUser && (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
-                {currentUser.name} · {roleLabel(currentUser.role)}
-                {isAdminUser(currentUser) && viewAsRole && (
-                  <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>
-                )}
-              </div>
-            )}
-            {isAdminUser(currentUser) && (
-              <select
-                value={viewAsRole || ""}
-                onChange={(e) => onSetViewAsRole(e.target.value || null)}
-                title="Dočasne si pozrieť appku ako iná rola (nemení skutočnú rolu v databáze)"
-                style={{
-                  fontSize: 11,
-                  color: viewAsRole ? "#1a1a1a" : "#fff",
-                  background: viewAsRole ? "#ffe08a" : "rgba(255,255,255,.12)",
-                  border: "1px solid rgba(255,255,255,.25)",
-                  borderRadius: 4,
-                  padding: "3px 8px",
-                  cursor: "pointer",
-                }}
-              >
-                <option value="">Zobraziť ako: Administrátor</option>
-                {ROLES.filter((r) => r.id !== "admin").map((r) => (
-                  <option key={r.id} value={r.id}>Zobraziť ako: {r.label}</option>
-                ))}
-              </select>
-            )}
-            {isAdminUser(currentUser) && (
-              <button
-                onClick={onOpenUserAdmin}
-                style={{
-                  fontSize: 11,
-                  color: "#fff",
-                  background: "rgba(255,255,255,.12)",
-                  border: "1px solid rgba(255,255,255,.25)",
-                  borderRadius: 4,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                }}
-              >
-                👤 Používatelia
-              </button>
-            )}
-            {isAdminUser(currentUser) && (
-              <button
-                onClick={onOpenDepoCheckerSettings}
-                style={{
-                  fontSize: 11,
-                  color: "#fff",
-                  background: "rgba(255,255,255,.12)",
-                  border: "1px solid rgba(255,255,255,.25)",
-                  borderRadius: 4,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                }}
-              >
-                🔧 Checkeri podľa depa
-              </button>
-            )}
-            <button
-              onClick={onLogout}
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-            >
-              Odhlásiť sa
-            </button>
-            <div className="company-badge" style={{ fontSize: 11, color: "rgba(255,255,255,.8)", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, padding: "3px 10px" }}>
-              mateco Slovakia s.r.o.
-            </div>
           </div>
         </div>
       </div>
