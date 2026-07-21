@@ -2028,6 +2028,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteRevisionTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            onOpenDetail={(d) => setServiceEventDetail(d)}
           />
         )}
 
@@ -2042,6 +2043,7 @@ function DispatcherApp() {
             onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            onOpenDetail={(d) => setServiceEventDetail(d)}
           />
         )}
 
@@ -5175,6 +5177,9 @@ function ServiceEventDetailModal({ d, technicianById, user, onEdit, onClose }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
+  const isRevizia = d.type === "revizia";
+  const isUradnaSkuska = d.type === "uradnaSkuska";
+  const isSimple = isRevizia || isUradnaSkuska;
 
   return (
     <Modal title={d.code || "Detail"} onClose={onClose} wide>
@@ -5187,6 +5192,18 @@ function ServiceEventDetailModal({ d, technicianById, user, onEdit, onClose }) {
             <CardField label="Sériové číslo" value={d.serialNumber} />
             <CardField label="Rieši depo" value={d.assignedDepo} />
           </>
+        ) : isRevizia ? (
+          <>
+            <CardField label="Model" value={d.model} />
+            <CardField label="Depo" value={d.location} />
+            <CardField label="Platnosť revízie" value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
+          </>
+        ) : isUradnaSkuska ? (
+          <>
+            <CardField label="Model" value={d.model} />
+            <CardField label="Depo" value={d.location} />
+            <CardField label="Rok úradnej skúšky" value={d.uradnaSkuskaRok} danger={d.overdue} />
+          </>
         ) : (
           <>
             <CardField label="Zákazník / lokalita" value={d.customer || d.location} />
@@ -5196,13 +5213,18 @@ function ServiceEventDetailModal({ d, technicianById, user, onEdit, onClose }) {
         <CardField label="Nahlásené dňa" value={fmtDate(d.dateReported)} />
         <CardField label="Pridelený technik" value={techNames} />
         <CardField label="Dátum pridelenia" value={d.assignedDate ? fmtDate(d.assignedDate) : null} />
-        <CardField label="Stav" value={damageLabel(d)} danger={damageDisplayStav(d) === "zavazna_porucha"} />
+        <CardField label="Stav" value={isSimple ? (d.resolved ? "Vykonaná" : (techIds.length ? "Pridelené" : "Nové")) : damageLabel(d)} danger={!isSimple && damageDisplayStav(d) === "zavazna_porucha"} />
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Popis poruchy / zákazky</div>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>{isSimple ? "Poznámka" : "Popis poruchy / zákazky"}</div>
       <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.popis || "—"}</div>
-      {d.resolved && (
+      {d.resolved && isSimple && (
+        <div style={{ fontSize: 12, color: "var(--ok)", marginBottom: 14 }}>
+          Vykonané dňa {d.vykonanaDatum ? fmtDate(d.vykonanaDatum) : "—"}
+        </div>
+      )}
+      {d.resolved && !isSimple && (
         <>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Čo sa zistilo / vykonalo</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Čo sa zistilo / vykonalo ({d.opravaDatum ? fmtDate(d.opravaDatum) : "—"})</div>
           <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.opravaKomentar || "—"}</div>
         </>
       )}
@@ -5623,7 +5645,7 @@ function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -5736,6 +5758,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 d={d}
                 technicianById={technicianById}
                 user={user}
+                onOpenDetail={onOpenDetail}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -5762,6 +5785,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 d={d}
                 technicianById={technicianById}
                 user={user}
+                onOpenDetail={onOpenDetail}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -5780,7 +5804,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 /* ---------------------------------------------------------
    Úradné skúšky view — same mechanics as revisions, year-based
 --------------------------------------------------------- */
-function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol }) {
+function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -5894,6 +5918,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 d={d}
                 technicianById={technicianById}
                 user={user}
+                onOpenDetail={onOpenDetail}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
@@ -5920,6 +5945,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 d={d}
                 technicianById={technicianById}
                 user={user}
+                onOpenDetail={onOpenDetail}
                 onAssign={onAssign}
                 onResolve={onResolve}
                 onComplete={onComplete}
