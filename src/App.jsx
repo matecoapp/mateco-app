@@ -1287,7 +1287,8 @@ function DispatcherApp() {
     };
     persistDamages([...damages, record]);
     pushNotification({
-      roles: ["dispecer_servisu", "veduci_servisu"],
+      roles: ["dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
+      userName: record.obchodnik || null,
       title: "Nové poškodenie",
       message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis}“.`,
       link: { module: "servis", view: "poskodenia", damageId: record.id },
@@ -1358,11 +1359,19 @@ function DispatcherApp() {
     if (d && stav === "opravene" && d.type !== "externa") {
       const where = d.customer || d.location || "—";
       pushNotification({
-        roles: ["dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu"],
+        roles: ["dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"],
         userName: d.obchodnik || null,
         title: "Stroj opravený",
         message: `Stroj ${d.code} u zákazníka/na depe ${where} bol opravený dňa ${fmtDate(opravaDatum)}.`,
         link: { module: "poziciovna", view: "dashboard", machineId: d.machineId },
+      });
+    } else if (d && stav === "opravene" && d.type === "externa") {
+      const where = d.customer || d.location || "—";
+      pushNotification({
+        roles: ["dispecer_servisu", "veduci_servisu"],
+        title: "Externá servisná zákazka ukončená",
+        message: `Externá servisná zákazka ${d.code}${where !== "—" ? " — " + where : ""} bola ukončená dňa ${fmtDate(opravaDatum)}.`,
+        link: { module: "servis", view: "externe", damageId: d.id },
       });
     }
     setResolveDamageTarget(null);
@@ -5436,6 +5445,23 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
   const depoOptions = DEPO_OPTIONS;
+
+  // Ak appka navigovala sem kvôli konkrétnemu záznamu (klik na notifikáciu),
+  // uisti sa, že ho aktuálne filtre neschovávajú (napr. medzitým vyriešený).
+  // Bez aktívneho zvýraznenia sa filter vždy vráti na predvolený stav.
+  useEffect(() => {
+    if (highlightDamageId) {
+      const target = damages.find((x) => x.id === highlightDamageId);
+      if (target) {
+        const status = target.resolved ? "resolved" : target.technicianId ? "assigned" : "new";
+        setActiveFilters((prev) => (prev.has(status) ? prev : new Set([...prev, status])));
+        setDepoFilter(null);
+        setSearch("");
+        return;
+      }
+    }
+    setActiveFilters(new Set(["new", "assigned"]));
+  }, [highlightDamageId, damages]);
   const filtered = damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa");
   let statusFiltered = filtered.filter((d) => {
     const status = d.resolved ? "resolved" : d.technicianId ? "assigned" : "new";
@@ -5551,6 +5577,23 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
   const depoOptions = DEPO_OPTIONS;
+
+  // Ak appka navigovala sem kvôli konkrétnemu záznamu (klik na notifikáciu),
+  // uisti sa, že ho aktuálne filtre neschovávajú (napr. medzitým vyriešený).
+  // Bez aktívneho zvýraznenia sa filter vždy vráti na predvolený stav.
+  useEffect(() => {
+    if (highlightDamageId) {
+      const target = damages.find((x) => x.id === highlightDamageId);
+      if (target) {
+        const status = target.resolved ? "resolved" : target.technicianId ? "assigned" : "new";
+        setActiveFilters((prev) => (prev.has(status) ? prev : new Set([...prev, status])));
+        setDepoFilter(null);
+        setSearch("");
+        return;
+      }
+    }
+    setActiveFilters(new Set(["new", "assigned"]));
+  }, [highlightDamageId, damages]);
   const filtered = damages.filter((d) => d.type === "externa");
   let statusFiltered = filtered.filter((d) => {
     const status = d.resolved ? "resolved" : d.technicianId ? "assigned" : "new";
