@@ -85,6 +85,9 @@ const PERM = {
   job_add: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_import_csv: [],
   job_clear_all: [],
+  reservation_add: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"],
+  reservation_convert: ["dispecer_pozicovne", "veduci_pozicovne"],
+  reservation_delete: ["dispecer_pozicovne", "veduci_pozicovne"],
   job_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_complete: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_email: ["veduci_pozicovne", "dispecer_pozicovne"],
@@ -721,6 +724,8 @@ function DispatcherApp() {
   const [showAddDriver, setShowAddDriver] = useState(null); // null | {} | { existing: driver }
   const [driverCard, setDriverCard] = useState(null);
   const [showAddJob, setShowAddJob] = useState(null); // machineId prefill or true
+  const [showAddReservation, setShowAddReservation] = useState(null); // null | { machineId? }
+  const [reservationCardTarget, setReservationCardTarget] = useState(null); // rezervácia zobrazená v karte
   const [showImport, setShowImport] = useState(false);
   const [showImportJobs, setShowImportJobs] = useState(false);
   const [showImportCustomers, setShowImportCustomers] = useState(false);
@@ -763,6 +768,7 @@ function DispatcherApp() {
   const [blacklist, setBlacklist] = useState([]);
   const [depoCheckers, setDepoCheckers] = useState({}); // { "Bratislava": technicianId, ... }
   const [checkerSubstitutions, setCheckerSubstitutions] = useState([]); // [{id, depo, originalTechnicianId, substituteTechnicianId, startDate, endDate}]
+  const [reservations, setReservations] = useState([]); // nezáväzné rezervácie strojov
   const [showDepoCheckerSettings, setShowDepoCheckerSettings] = useState(false);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
@@ -827,11 +833,12 @@ function DispatcherApp() {
       setAssignments([]); setDamages([]); setWeeklyDuty([]); setNotifications([]);
       setTransportSendLog([]); setCustomers([]); setDepoCheckers({});
       setFramoveZmluvy([]); setBlacklist([]); setCheckerSubstitutions([]);
+      setReservations([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs] = await Promise.all([
+      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -846,6 +853,7 @@ function DispatcherApp() {
         loadKey("framoveZmluvy", []),
         loadKey("blacklist", []),
         loadKey("checkerSubstitutions", []),
+        loadKey("reservations", []),
       ]);
       setMachines(m);
       setDrivers(d);
@@ -861,6 +869,7 @@ function DispatcherApp() {
       setFramoveZmluvy(fz);
       setBlacklist(bl);
       setCheckerSubstitutions(cs);
+      setReservations(res);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -1353,6 +1362,37 @@ function DispatcherApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machines, today, loaded]);
 
+  const persistReservations = useCallback((next) => {
+    setReservations(next);
+    saveKey("reservations", next);
+  }, []);
+  function addReservation(data) {
+    const record = {
+      id: uid(),
+      machineId: data.machineId,
+      customer: data.customer,
+      toLocation: data.toLocation,
+      obchodnik: data.obchodnik,
+      expectedStart: data.expectedStart,
+      expectedEnd: data.expectedEnd || null,
+      notes: data.notes || "",
+      createdBy: currentUser?.name || "",
+      createdAt: new Date().toISOString(),
+    };
+    persistReservations([...reservations, record]);
+    const machine = machineById[data.machineId];
+    pushNotification({
+      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Nezáväzná rezervácia",
+      message: `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`,
+      link: { module: "poziciovna", view: "calendar" },
+    });
+    return record;
+  }
+  function deleteReservation(id) {
+    persistReservations(reservations.filter((r) => r.id !== id));
+  }
+
   function reportDamage(machine, popis) {
     const record = {
       id: uid(),
@@ -1786,6 +1826,9 @@ function DispatcherApp() {
       setShowAddJob(null);
     } else {
       addJob(data);
+      if (showAddJob?.prefillReservation) {
+        deleteReservation(showAddJob.prefillReservation.id);
+      }
     }
   }
   function completeJob(jobId, data) {
@@ -2056,7 +2099,18 @@ function DispatcherApp() {
         )}
 
         {module === "poziciovna" && view === "calendar" && (
-          <CalendarView machines={enrichedMachines} jobs={jobs} today={today} driverById={driverById} onOpenCard={(m) => setMachineCard(m)} onOpenJob={(j) => setJobDetail(j)} />
+          <CalendarView
+            machines={enrichedMachines}
+            jobs={jobs}
+            reservations={reservations}
+            today={today}
+            driverById={driverById}
+            user={effectiveUser}
+            onOpenCard={(m) => setMachineCard(m)}
+            onOpenJob={(j) => setJobDetail(j)}
+            onAddReservation={() => setShowAddReservation({})}
+            onOpenReservation={(r) => setReservationCardTarget(r)}
+          />
         )}
 
         {module === "poziciovna" && view === "prepravy" && (
@@ -2318,10 +2372,41 @@ function DispatcherApp() {
           customers={customers}
           onSaveCustomer={upsertCustomer}
           prefillMachineId={showAddJob.machineId}
+          prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
           onClose={() => setShowAddJob(null)}
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id))}
+        />
+      )}
+      {showAddReservation && (
+        <AddReservationModal
+          machines={machines}
+          prefillMachineId={showAddReservation.machineId}
+          currentUser={currentUser}
+          onClose={() => setShowAddReservation(null)}
+          onSave={(data) => {
+            addReservation(data);
+            setShowAddReservation(null);
+          }}
+        />
+      )}
+      {reservationCardTarget && (
+        <ReservationCardModal
+          reservation={reservationCardTarget}
+          machine={machineById[reservationCardTarget.machineId]}
+          user={effectiveUser}
+          onClose={() => setReservationCardTarget(null)}
+          onDelete={() => {
+            askDelete(`nezáväznú rezerváciu (${machineById[reservationCardTarget.machineId]?.code || ""})`, () => {
+              deleteReservation(reservationCardTarget.id);
+              setReservationCardTarget(null);
+            });
+          }}
+          onConvert={() => {
+            setShowAddJob({ prefillReservation: reservationCardTarget });
+            setReservationCardTarget(null);
+          }}
         />
       )}
       {showImport && (
@@ -2368,6 +2453,10 @@ function DispatcherApp() {
           }}
           onAddJob={() => {
             setShowAddJob({ machineId: machineCard.id });
+            setMachineCard(null);
+          }}
+          onAddReservation={() => {
+            setShowAddReservation({ machineId: machineCard.id });
             setMachineCard(null);
           }}
           onEditJob={() => {
@@ -4653,19 +4742,116 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer, prefillMachineId, existing, onClose, onSave, onDelete }) {
-  const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
+/* ---------------------------------------------------------
+   Nezáväzná rezervácia stroja — pre obchodníkov (aj dispečera/vedúceho
+   požičovne, ktorí si ju vedia rovno aj sami schváliť).
+--------------------------------------------------------- */
+function AddReservationModal({ machines, prefillMachineId, currentUser, onClose, onSave }) {
+  const [machineId, setMachineId] = useState(prefillMachineId || "");
+  const [customer, setCustomer] = useState("");
+  const [toLocation, setToLocation] = useState("");
+  const [obchodnik, setObchodnik] = useState(SALESPEOPLE.some((s) => s.name === currentUser?.name) ? currentUser.name : "");
+  const [expectedStart, setExpectedStart] = useState(todayISO());
+  const [expectedEnd, setExpectedEnd] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
+  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart;
+
+  return (
+    <Modal title="Nezáväzná rezervácia stroja" onClose={onClose} wide>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+        Nič to nezaväzuje ani nezablokuje stroj — len upozorní dispečera a vedúceho požičovne, že sa
+        o tento stroj rokuje. Ak obchod vyjde, premenia ju priamo na skutočnú zákazku.
+      </div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Stroj *">
+          <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!prefillMachineId} />
+        </Field>
+        <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Zákazník *"><input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Obchodník *">
+          <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
+            <option value="">— vybrať obchodníka —</option>
+            {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Predpokladaný začiatok *"><input type="date" value={expectedStart} onChange={(e) => setExpectedStart(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Predpokladaný koniec"><input type="date" value={expectedEnd} onChange={(e) => setExpectedEnd(e.target.value)} style={{ width: "100%" }} /></Field>
+      </div>
+      <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
+      <button
+        className="btn btn-accent"
+        disabled={!canSave}
+        onClick={() =>
+          onSave({
+            machineId,
+            customer: customer.trim(),
+            toLocation: toLocation.trim(),
+            obchodnik,
+            expectedStart,
+            expectedEnd: expectedEnd || null,
+            notes: notes.trim(),
+          })
+        }
+      >
+        Vytvoriť rezerváciu
+      </button>
+    </Modal>
+  );
+}
+
+/* ---------------------------------------------------------
+   Karta nezáväznej rezervácie — obchodník si len pozrie,
+   dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
+--------------------------------------------------------- */
+function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert }) {
+  const r = reservation;
+  return (
+    <Modal title={`Nezáväzná rezervácia · ${machine?.code || "—"}`} onClose={onClose}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+        <CardField label="Zákazník" value={r.customer} />
+        <CardField label="Kam" value={r.toLocation} />
+        <CardField label="Obchodník" value={r.obchodnik} dotColor={salespersonColor(r.obchodnik)} />
+        <CardField label="Vytvoril" value={r.createdBy} />
+        <CardField label="Predpokladaný začiatok" value={fmtDate(r.expectedStart)} />
+        <CardField label="Predpokladaný koniec" value={r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"} />
+      </div>
+      {r.notes && (
+        <>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Poznámka</div>
+          <div style={{ fontSize: 13, marginBottom: 14 }}>{r.notes}</div>
+        </>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {can(user, "reservation_convert") && (
+          <button className="btn btn-accent" onClick={onConvert}>
+            Premeniť na zákazku
+          </button>
+        )}
+        {can(user, "reservation_delete") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDelete}>
+            Zmazať rezerváciu
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
+  const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
   const machine = machines.find((m) => m.id === machineId);
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
-  const [toLocation, setToLocation] = useState(existing?.toLocation || "");
-  const [customer, setCustomer] = useState(existing?.customer || "");
+  const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
+  const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
   const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
-  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || "");
+  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
-  const [startDate, setStartDate] = useState(existing?.startDate || todayISO());
-  const [endDate, setEndDate] = useState(existing?.endDate || "");
-  const [notes, setNotes] = useState(existing?.notes || "");
+  const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || todayISO());
+  const [endDate, setEndDate] = useState(existing?.endDate || prefillReservation?.expectedEnd || "");
+  const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
 
   useEffect(() => {
@@ -4678,7 +4864,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
   const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate;
 
   return (
-    <Modal title={existing ? "Upraviť zákazku" : "Nová zákazka"} onClose={onClose} wide>
+    <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Stroj *">
           <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" />
@@ -5127,7 +5313,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
 /* ---------------------------------------------------------
    Calendar / Gantt view
 --------------------------------------------------------- */
-function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob }) {
+function CalendarView({ machines, jobs, reservations, today, driverById, user, onOpenCard, onOpenJob, onAddReservation, onOpenReservation }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -5151,6 +5337,15 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
     });
     return map;
   }, [jobs, monthStartISO, monthEndISO]);
+
+  const reservationsByMachine = useMemo(() => {
+    const map = {};
+    (reservations || []).forEach((r) => {
+      if ((r.expectedEnd && r.expectedEnd < monthStartISO) || r.expectedStart > monthEndISO) return;
+      (map[r.machineId] = map[r.machineId] || []).push(r);
+    });
+    return map;
+  }, [reservations, monthStartISO, monthEndISO]);
 
   let relevantMachines = machines;
   if (depoFilter) {
@@ -5176,6 +5371,11 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
           {monthOffset !== 0 && (
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
+          )}
+          {can(user, "reservation_add") && (
+            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => onAddReservation()}>
+              + Nezáväzná rezervácia
+            </button>
           )}
         </div>
         <SearchInput placeholder="Hľadať sériové číslo alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
@@ -5247,6 +5447,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
 
               {relevantMachines.map((m, idx) => {
                 const mJobs = jobsByMachine[m.id] || [];
+                const mReservations = reservationsByMachine[m.id] || [];
                 const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
                 return (
                   <div
@@ -5327,6 +5528,53 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                         </div>
                       );
                     })}
+                    {mReservations.map((r) => {
+                      const startCol = r.expectedStart < monthStartISO ? 1 : dayIndex(r.expectedStart);
+                      const noEnd = !r.expectedEnd;
+                      const endCol = noEnd || r.expectedEnd > monthEndISO ? daysInMonth : dayIndex(r.expectedEnd);
+                      const bg = salespersonColor(r.obchodnik) || NO_SALESPERSON_COLOR;
+                      const dayCount = endCol - startCol + 1;
+                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
+                      return (
+                        <div
+                          key={r.id}
+                          title={`REZERVÁCIA (nezáväzná) · ${r.customer} · ${fmtDate(r.expectedStart)} – ${noEnd ? "?" : fmtDate(r.expectedEnd)}${r.obchodnik ? " · " + r.obchodnik : ""}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenReservation(r);
+                          }}
+                          style={{
+                            gridColumn: `${startCol + 1} / ${endCol + 2}`,
+                            background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(255,255,255,.35) 6px, rgba(255,255,255,.35) 12px)`,
+                            outline: "2px dashed var(--text-dim)",
+                            outlineOffset: "-1px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            minWidth: 0,
+                            opacity: 0.85,
+                          }}
+                        >
+                          <div
+                            className="gantt-cell"
+                            style={{
+                              position: "sticky",
+                              left: "calc(var(--gantt-name-col) + 6px)",
+                              display: "inline-block",
+                              maxWidth: labelMaxWidth,
+                              overflow: "hidden",
+                              whiteSpace: "nowrap",
+                              textOverflow: "ellipsis",
+                              fontSize: 10,
+                              color: "#fff",
+                              padding: "3px 6px",
+                            }}
+                          >
+                            📋 {r.customer}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -5337,6 +5585,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
       <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-dim)", marginTop: 12, flexWrap: "wrap" }}>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
       </div>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap" }}>
         {SALESPEOPLE.map((s) => (
@@ -5350,7 +5599,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, history, user, onClose, onReportDamage, onAddJob, onEditJob, onCompleteJob, onOpenDamage, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine }) {
+function MachineCardModal({ machine, history, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine }) {
   const m = machine;
   const notTracked = m.trackRevisions === false;
   const reviziaOverdue = !notTracked && m.revizia && daysBetween(todayISO(), m.revizia) < 0;
@@ -5389,6 +5638,11 @@ function MachineCardModal({ machine, history, user, onClose, onReportDamage, onA
           {can(user, "job_add") && (
             <button className="btn btn-ghost" onClick={onAddJob}>
               + Zákazka
+            </button>
+          )}
+          {can(user, "reservation_add") && (
+            <button className="btn btn-ghost" onClick={onAddReservation}>
+              Nezáväzná rezervácia
             </button>
           )}
           {m.currentJob && can(user, "job_edit") && (
