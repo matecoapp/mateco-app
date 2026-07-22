@@ -2108,11 +2108,14 @@ function DispatcherApp() {
           return (
             <AlertsPanel
               alerts={alerts}
+              machineById={machineById}
               onNavigate={(nav) => {
                 setModule(nav.module);
                 setView(nav.view);
                 if (nav.quick) setJobsQuickCategory(nav.quick);
               }}
+              onOpenJob={(j) => setJobDetail(j)}
+              onOpenReservation={(r) => setReservationCardTarget(r)}
             />
           );
         })()}
@@ -3666,13 +3669,14 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
 /* ---------------------------------------------------------
    Alerts
 --------------------------------------------------------- */
-function AlertsPanel({ alerts, onNavigate }) {
+function AlertsPanel({ alerts, machineById, onNavigate, onOpenJob, onOpenReservation }) {
+  const [drilldownTile, setDrilldownTile] = useState(null);
   const categories = [
-    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, nav: { module: "poziciovna", view: "jobs", quick: "overdue" } },
-    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "jobs", quick: "endingSoon" } },
-    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "jobs", quick: "noDriver" } },
-    { key: "noEndDate", title: "Zákazka bez dátumu ukončenia", color: "var(--warn)", count: alerts.noEndDate.length, nav: { module: "poziciovna", view: "jobs", quick: "noEndDate" } },
-    { key: "approvedReservations", title: "Schválené nezáväzné rezervácie", color: "var(--accent)", count: alerts.approvedReservations.length, nav: { module: "poziciovna", view: "calendar" } },
+    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, items: alerts.overdue, label: "Zákazka po termíne" },
+    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, items: alerts.endingSoon, label: "Zákazka končí čoskoro (do 5 dní)" },
+    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, items: alerts.tomorrowUnassigned, label: "Zákazka bez šoféra", tileId: "noDriver" },
+    { key: "noEndDate", title: "Zákazka bez dátumu ukončenia", color: "var(--warn)", count: alerts.noEndDate.length, items: alerts.noEndDate, label: "Zákazka bez dátumu ukončenia" },
+    { key: "approvedReservations", title: "Schválené nezáväzné rezervácie", color: "var(--accent)", count: alerts.approvedReservations.length, items: alerts.approvedReservations, label: "Nezáväzné rezervácie (schválené)", tileId: "reservations", isReservation: true },
     { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
     { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
     { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
@@ -3685,7 +3689,7 @@ function AlertsPanel({ alerts, onNavigate }) {
         <div
           key={c.key}
           className="panel"
-          onClick={() => onNavigate(c.nav)}
+          onClick={() => (c.items ? setDrilldownTile({ id: c.tileId || c.key, label: c.label, items: c.items, isReservation: c.isReservation }) : onNavigate(c.nav))}
           style={{ padding: "12px 14px", borderLeft: `3px solid ${c.color}`, cursor: "pointer" }}
           title="Kliknutím prejdete na podrobný zoznam"
         >
@@ -3693,6 +3697,15 @@ function AlertsPanel({ alerts, onNavigate }) {
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{c.title}</div>
         </div>
       ))}
+      {drilldownTile && (
+        <JobsQuickDrilldownModal
+          tile={drilldownTile}
+          machineById={machineById}
+          onClose={() => setDrilldownTile(null)}
+          onOpenJob={onOpenJob}
+          onOpenReservation={onOpenReservation}
+        />
+      )}
     </div>
   );
 }
@@ -4040,26 +4053,6 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
   ];
   const activeTile = quickTiles.find((t) => t.id === quickCategory);
 
-  // Rýchle filtre PODĽA DEPA a PODĽA OBCHODNÍKA priamo v otvorenom rýchlom
-  // prehľade (drilldowne) — nezávislé od hlavného filtra nad tabuľkou nižšie.
-  const [drillDepoFilter, setDrillDepoFilter] = useState(null);
-  const [drillObchodnikFilter, setDrillObchodnikFilter] = useState("");
-  useEffect(() => {
-    setDrillDepoFilter(null);
-    setDrillObchodnikFilter("");
-  }, [quickCategory]);
-  function itemDepo(item, isReservation) {
-    if (isReservation) return machineById[item.machineId]?.depo || "";
-    return item.fromDepo || item.returnDepo || "";
-  }
-  const drillItems = activeTile
-    ? activeTile.items.filter(
-        (item) =>
-          (!drillDepoFilter || itemDepo(item, activeTile.isReservation).toLowerCase() === drillDepoFilter.toLowerCase()) &&
-          (!drillObchodnikFilter || item.obchodnik === drillObchodnikFilter)
-      )
-    : [];
-
   function statusBucket(j) {
     const st = effectiveStatus(j, today);
     if (st === "completed") return "completed";
@@ -4221,101 +4214,125 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
         })}
       </div>
       {activeTile && (
-        <Modal title={`${activeTile.label} (${drillItems.length}${drillItems.length !== activeTile.items.length ? ` z ${activeTile.items.length}` : ""})`} onClose={() => setQuickCategory(null)} wide>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-            {DEPO_OPTIONS.map((d) => (
-              <button
-                key={d}
-                className="btn"
-                onClick={() => setDrillDepoFilter(drillDepoFilter === d ? null : d)}
-                style={{
-                  padding: "4px 9px",
-                  fontSize: 11,
-                  background: drillDepoFilter === d ? "var(--accent)" : "transparent",
-                  color: drillDepoFilter === d ? "#fff" : "var(--text-dim)",
-                  border: "1px solid " + (drillDepoFilter === d ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <select value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px" }}>
-              <option value="">— všetci obchodníci —</option>
-              {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-            </select>
-          </div>
-          <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-            {drillItems.length === 0 ? (
-              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
-            ) : activeTile.isReservation ? (
-              drillItems.map((r) => {
-                const m = machineById[r.machineId];
-                return (
-                  <div key={r.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                      <span
-                        className="mono"
-                        style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
-                        onClick={() => onOpenReservation(r)}
-                      >
-                        {m?.code || "—"}
-                      </span>
-                      <span style={{ fontSize: 13 }}>
-                        od {fmtDate(r.expectedStart)}{r.expectedEnd ? ` do ${fmtDate(r.expectedEnd)}` : ""} · {r.customer}
-                        {r.obchodnik ? ` · ${r.obchodnik}` : ""}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              drillItems.map((j) => {
-                const m = machineById[j.machineId];
-                return (
-                  <div key={j.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                      <span
-                        className="mono"
-                        style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
-                        onClick={() => onOpenJob(j)}
-                      >
-                        {m?.code || "—"}
-                      </span>
-                      <span style={{ fontSize: 13 }}>
-                        {activeTile.id === "overdue" && `mal skončiť ${fmtDate(j.endDate)}`}
-                        {activeTile.id === "endingSoon" && `do ${fmtDate(j.endDate)}`}
-                        {activeTile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
-                        {activeTile.id === "noEndDate" && `beží od ${fmtDate(j.startDate)} — dátum konca nezadaný`}
-                        {j.customer ? ` · ${j.customer}` : ""}
-                        {j.obchodnik ? ` · ${j.obchodnik}` : ""}
-                      </span>
-                    </div>
-                    {activeTile.id === "endingSoon" && (
-                      <button
-                        className="btn btn-ghost quick-job-btn"
-                        style={{ fontSize: 11, padding: "4px 8px", marginLeft: "auto" }}
-                        title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
-                        onClick={() => {
-                          composeMail({
-                            to: j.customerEmail || "",
-                            subject: `Blížiaci sa koniec prenájmu — ${m?.code || ""}`,
-                            body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${m?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
-                          });
-                        }}
-                      >
-                        ✉️ Upozorniť zákazníka
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Modal>
+        <JobsQuickDrilldownModal tile={activeTile} machineById={machineById} onClose={() => setQuickCategory(null)} onOpenJob={onOpenJob} onOpenReservation={onOpenReservation} />
       )}
     </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Zdieľané rozbaľovacie okno pre rýchle prehľady zákaziek/rezervácií —
+   používané v Zákazkách aj v Prehľade Požičovne (rovnaké chovanie,
+   rovnaké rýchle filtre podľa depa a obchodníka).
+--------------------------------------------------------- */
+function JobsQuickDrilldownModal({ tile, machineById, onClose, onOpenJob, onOpenReservation }) {
+  const [drillDepoFilter, setDrillDepoFilter] = useState(null);
+  const [drillObchodnikFilter, setDrillObchodnikFilter] = useState("");
+
+  function itemDepo(item, isReservation) {
+    if (isReservation) return machineById[item.machineId]?.depo || "";
+    return item.fromDepo || item.returnDepo || "";
+  }
+  const drillItems = tile.items.filter(
+    (item) =>
+      (!drillDepoFilter || itemDepo(item, tile.isReservation).toLowerCase() === drillDepoFilter.toLowerCase()) &&
+      (!drillObchodnikFilter || item.obchodnik === drillObchodnikFilter)
+  );
+
+  return (
+    <Modal title={`${tile.label} (${drillItems.length}${drillItems.length !== tile.items.length ? ` z ${tile.items.length}` : ""})`} onClose={onClose} wide>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+        {DEPO_OPTIONS.map((d) => (
+          <button
+            key={d}
+            className="btn"
+            onClick={() => setDrillDepoFilter(drillDepoFilter === d ? null : d)}
+            style={{
+              padding: "4px 9px",
+              fontSize: 11,
+              background: drillDepoFilter === d ? "var(--accent)" : "transparent",
+              color: drillDepoFilter === d ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (drillDepoFilter === d ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <select value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px" }}>
+          <option value="">— všetci obchodníci —</option>
+          {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+        </select>
+      </div>
+      <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+        {drillItems.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
+        ) : tile.isReservation ? (
+          drillItems.map((r) => {
+            const m = machineById[r.machineId];
+            return (
+              <div key={r.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                  <span
+                    className="mono"
+                    style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+                    onClick={() => onOpenReservation(r)}
+                  >
+                    {m?.code || "—"}
+                  </span>
+                  <span style={{ fontSize: 13 }}>
+                    od {fmtDate(r.expectedStart)}{r.expectedEnd ? ` do ${fmtDate(r.expectedEnd)}` : ""} · {r.customer}
+                    {r.obchodnik ? ` · ${r.obchodnik}` : ""}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          drillItems.map((j) => {
+            const m = machineById[j.machineId];
+            return (
+              <div key={j.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                  <span
+                    className="mono"
+                    style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+                    onClick={() => onOpenJob(j)}
+                  >
+                    {m?.code || "—"}
+                  </span>
+                  <span style={{ fontSize: 13 }}>
+                    {tile.id === "overdue" && `mal skončiť ${fmtDate(j.endDate)}`}
+                    {tile.id === "endingSoon" && `do ${fmtDate(j.endDate)}`}
+                    {tile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
+                    {tile.id === "noEndDate" && `beží od ${fmtDate(j.startDate)} — dátum konca nezadaný`}
+                    {j.customer ? ` · ${j.customer}` : ""}
+                    {j.obchodnik ? ` · ${j.obchodnik}` : ""}
+                  </span>
+                </div>
+                {tile.id === "endingSoon" && (
+                  <button
+                    className="btn btn-ghost quick-job-btn"
+                    style={{ fontSize: 11, padding: "4px 8px", marginLeft: "auto" }}
+                    title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
+                    onClick={() => {
+                      composeMail({
+                        to: j.customerEmail || "",
+                        subject: `Blížiaci sa koniec prenájmu — ${m?.code || ""}`,
+                        body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${m?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+                      });
+                    }}
+                  >
+                    ✉️ Upozorniť zákazníka
+                  </button>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </Modal>
   );
 }
 
