@@ -1754,12 +1754,13 @@ function DispatcherApp() {
     });
     const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && filteredIds.has(j.machineId));
     const noEndDate = jobs.filter((j) => j.status !== "completed" && !j.endDate && filteredIds.has(j.machineId));
+    const approvedReservations = (reservations || []).filter((r) => r.status === "approved" && filteredIds.has(r.machineId));
     const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue && filteredIds.has(d.machineId));
     const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue && filteredIds.has(d.machineId));
     const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && filteredIds.has(d.machineId));
     const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved && filteredIds.has(d.machineId));
-    return { overdue, endingSoon, tomorrowUnassigned: unassigned, noEndDate, revisionSoon, revisionOverdue, inService, uradneSkusky };
-  }, [jobs, machines, today, tomorrow, damages, filteredMachines]);
+    return { overdue, endingSoon, tomorrowUnassigned: unassigned, noEndDate, approvedReservations, revisionSoon, revisionOverdue, inService, uradneSkusky };
+  }, [jobs, machines, today, tomorrow, damages, filteredMachines, reservations]);
 
   const stats = useMemo(() => {
     const total = machines.length;
@@ -2149,6 +2150,7 @@ function DispatcherApp() {
         {module === "poziciovna" && view === "jobs" && (
           <JobsBoard
             jobs={jobs}
+            reservations={reservations}
             machineById={machineById}
             driverById={driverById}
             today={today}
@@ -2161,6 +2163,7 @@ function DispatcherApp() {
             onComplete={(job) => setCompleteJobTarget(job)}
             onEdit={(job) => setShowAddJob({ existing: job })}
             onOpenJob={(j) => setJobDetail(j)}
+            onOpenReservation={(r) => setReservationCardTarget(r)}
             mailtoDriver={mailtoDriver}
             mailtoCustomer={mailtoCustomer}
             onClearAll={() => askDelete(`VŠETKY zákazky (${jobs.length}) — pripravené na nový import z CSV`, clearAllJobs)}
@@ -3669,6 +3672,7 @@ function AlertsPanel({ alerts, onNavigate }) {
     { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "jobs", quick: "endingSoon" } },
     { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "jobs", quick: "noDriver" } },
     { key: "noEndDate", title: "Zákazka bez dátumu ukončenia", color: "var(--warn)", count: alerts.noEndDate.length, nav: { module: "poziciovna", view: "jobs", quick: "noEndDate" } },
+    { key: "approvedReservations", title: "Schválené nezáväzné rezervácie", color: "var(--accent)", count: alerts.approvedReservations.length, nav: { module: "poziciovna", view: "calendar" } },
     { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
     { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
     { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
@@ -3975,7 +3979,7 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer, onClearAll }) {
+function JobsBoard({ jobs, reservations, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, onOpenReservation, mailtoDriver, mailtoCustomer, onClearAll }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
@@ -4012,13 +4016,49 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
   const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
   const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && matchesSearchAndDepo(j));
   const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j));
+  function matchesSearchAndDepoRes(r) {
+    const m = machineById[r.machineId];
+    if (depoFilter && (m?.depo || "").toLowerCase() !== depoFilter.toLowerCase()) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const hit =
+        (m?.code || "").toLowerCase().includes(q) ||
+        (m?.type || "").toLowerCase().includes(q) ||
+        (m?.depo || "").toLowerCase().includes(q) ||
+        (r.customer || "").toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
+  }
+  const approvedReservations = (reservations || []).filter((r) => r.status === "approved" && matchesSearchAndDepoRes(r));
   const quickTiles = [
     { id: "overdue", label: "Zákazka po termíne", color: "var(--danger)", items: overdueJobs },
     { id: "endingSoon", label: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", items: endingSoonJobs },
     { id: "noDriver", label: "Zákazka bez šoféra", color: "var(--info)", items: noDriverJobs },
     { id: "noEndDate", label: "Zákazka bez dátumu ukončenia", color: "var(--warn)", items: noEndDateJobs },
+    { id: "reservations", label: "Nezáväzné rezervácie (schválené)", color: "var(--accent)", items: approvedReservations, isReservation: true },
   ];
   const activeTile = quickTiles.find((t) => t.id === quickCategory);
+
+  // Rýchle filtre PODĽA DEPA a PODĽA OBCHODNÍKA priamo v otvorenom rýchlom
+  // prehľade (drilldowne) — nezávislé od hlavného filtra nad tabuľkou nižšie.
+  const [drillDepoFilter, setDrillDepoFilter] = useState(null);
+  const [drillObchodnikFilter, setDrillObchodnikFilter] = useState("");
+  useEffect(() => {
+    setDrillDepoFilter(null);
+    setDrillObchodnikFilter("");
+  }, [quickCategory]);
+  function itemDepo(item, isReservation) {
+    if (isReservation) return machineById[item.machineId]?.depo || "";
+    return item.fromDepo || item.returnDepo || "";
+  }
+  const drillItems = activeTile
+    ? activeTile.items.filter(
+        (item) =>
+          (!drillDepoFilter || itemDepo(item, activeTile.isReservation).toLowerCase() === drillDepoFilter.toLowerCase()) &&
+          (!drillObchodnikFilter || item.obchodnik === drillObchodnikFilter)
+      )
+    : [];
 
   function statusBucket(j) {
     const st = effectiveStatus(j, today);
@@ -4181,12 +4221,57 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
         })}
       </div>
       {activeTile && (
-        <Modal title={`${activeTile.label} (${activeTile.items.length})`} onClose={() => setQuickCategory(null)} wide>
+        <Modal title={`${activeTile.label} (${drillItems.length}${drillItems.length !== activeTile.items.length ? ` z ${activeTile.items.length}` : ""})`} onClose={() => setQuickCategory(null)} wide>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+            {DEPO_OPTIONS.map((d) => (
+              <button
+                key={d}
+                className="btn"
+                onClick={() => setDrillDepoFilter(drillDepoFilter === d ? null : d)}
+                style={{
+                  padding: "4px 9px",
+                  fontSize: 11,
+                  background: drillDepoFilter === d ? "var(--accent)" : "transparent",
+                  color: drillDepoFilter === d ? "#fff" : "var(--text-dim)",
+                  border: "1px solid " + (drillDepoFilter === d ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <select value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px" }}>
+              <option value="">— všetci obchodníci —</option>
+              {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+            </select>
+          </div>
           <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-            {activeTile.items.length === 0 ? (
+            {drillItems.length === 0 ? (
               <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
+            ) : activeTile.isReservation ? (
+              drillItems.map((r) => {
+                const m = machineById[r.machineId];
+                return (
+                  <div key={r.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                      <span
+                        className="mono"
+                        style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+                        onClick={() => onOpenReservation(r)}
+                      >
+                        {m?.code || "—"}
+                      </span>
+                      <span style={{ fontSize: 13 }}>
+                        od {fmtDate(r.expectedStart)}{r.expectedEnd ? ` do ${fmtDate(r.expectedEnd)}` : ""} · {r.customer}
+                        {r.obchodnik ? ` · ${r.obchodnik}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
-              activeTile.items.map((j) => {
+              drillItems.map((j) => {
                 const m = machineById[j.machineId];
                 return (
                   <div key={j.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -4204,6 +4289,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
                         {activeTile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
                         {activeTile.id === "noEndDate" && `beží od ${fmtDate(j.startDate)} — dátum konca nezadaný`}
                         {j.customer ? ` · ${j.customer}` : ""}
+                        {j.obchodnik ? ` · ${j.obchodnik}` : ""}
                       </span>
                     </div>
                     {activeTile.id === "endingSoon" && (
