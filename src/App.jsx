@@ -1764,6 +1764,7 @@ function DispatcherApp() {
     const email = driver.email || nameToEmail(driver.name);
     const checkerId = depoCheckers?.[job.fromDepo];
     const checker = checkerId ? technicianByIdTop?.[checkerId] : null;
+    const checkerEmail = checker ? checker.email || nameToEmail(checker.name) : "";
     const subject = `Zákazka: stroj ${machine?.code} — ${fmtDate(job.startDate)} → ${fmtDate(job.endDate)}`;
     const body =
       `Dobrý deň ${driver.name},\n\n` +
@@ -1776,7 +1777,9 @@ function DispatcherApp() {
       (checker ? `Checker: ${checker.name}\n` : "") +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
-    return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const params = [`subject=${encodeURIComponent(subject)}`, `body=${encodeURIComponent(body)}`];
+    if (checkerEmail) params.push(`cc=${encodeURIComponent(checkerEmail)}`);
+    return `mailto:${email}?${params.join("&")}`;
   }
   function mailtoCustomer(job) {
     const machine = machineById[job.machineId];
@@ -4190,16 +4193,18 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                       title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
                       onClick={() => {
                         const items = transports.filter((t) => t.driverId === driver.id && t.date === dateVal);
+                        const checkerEmails = new Set();
                         const lines = items.map((t) => {
                           const m = machineById[t.machineId];
                           const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
                           const depo = t.type === "vyvoz" ? t.from : t.to;
                           const checkerId = depoCheckers?.[depo];
                           const checker = checkerId ? technicianById?.[checkerId] : null;
+                          if (checker) checkerEmails.add(checker.email || nameToEmail(checker.name));
                           return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                         });
                         const body = `Dobrý deň ${driver.name},\n\nna ${dayLabel} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                        composeMail({ to: driver.email || nameToEmail(driver.name), subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
+                        composeMail({ to: driver.email || nameToEmail(driver.name), cc: [...checkerEmails].join(","), subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
                         recordTransportSend(driver.id, dateVal, items.map((t) => t.id));
                       }}
                     >
@@ -4290,16 +4295,18 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                   style={{ fontSize: 12 }}
                   title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
                   onClick={() => {
+                    const checkerEmails = new Set();
                     const lines = liveItems.map((t) => {
                       const m = machineById[t.machineId];
                       const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
                       const depo = t.type === "vyvoz" ? t.from : t.to;
                       const checkerId = depoCheckers?.[depo];
                       const checker = checkerId ? technicianById?.[checkerId] : null;
+                      if (checker) checkerEmails.add(checker.email || nameToEmail(checker.name));
                       return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                     });
                     const body = `Dobrý deň ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                    composeMail({ to: driver.email || nameToEmail(driver.name), subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
+                    composeMail({ to: driver.email || nameToEmail(driver.name), cc: [...checkerEmails].join(","), subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
                     recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id));
                   }}
                 >
