@@ -7621,13 +7621,15 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
                     Resetovať heslo
                   </button>
                 )}
-                <button
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: "4px 8px" }}
-                  onClick={() => onUpdate(p.id, { active: p.active === false ? true : false })}
-                >
-                  {p.active === false ? "Aktivovať" : "Deaktivovať"}
-                </button>
+                {p.id !== currentUser?.id && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: "4px 8px" }}
+                    onClick={() => onUpdate(p.id, { active: p.active === false ? true : false })}
+                  >
+                    {p.active === false ? "Aktivovať" : "Deaktivovať"}
+                  </button>
+                )}
                 {p.id !== currentUser?.id && (
                   <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(p.id)}>
                     Zmazať
