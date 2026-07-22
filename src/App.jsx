@@ -7587,7 +7587,14 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
               <td style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
               <td className="mono">{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
               <td>
-                {editingId === p.id ? (
+                {p.id === currentUser?.id ? (
+                  <span
+                    style={{ color: "var(--text-dim)" }}
+                    title="Svoju vlastnú rolu si nemôžete zmeniť — musí ju zmeniť iný administrátor (poistka, aby appka neostala bez admina)"
+                  >
+                    {roleLabel(p.role)}
+                  </span>
+                ) : editingId === p.id ? (
                   <select
                     autoFocus
                     defaultValue={p.role}
