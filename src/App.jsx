@@ -2327,11 +2327,7 @@ function DispatcherApp() {
           }}
           onOpenDamage={(d) => {
             setReturnToMachine(machineCard);
-            if (d.resolved) {
-              setViewResolutionTarget(d);
-            } else {
-              setDamageAssignTarget(d);
-            }
+            setViewResolutionTarget(d);
             setMachineCard(null);
           }}
           onToggleTrackRevisions={() => {
@@ -2452,6 +2448,7 @@ function DispatcherApp() {
       {viewResolutionTarget && (
         <DamageResolutionModal
           damage={viewResolutionTarget}
+          technicianById={technicianByIdTop}
           onClose={() => { setViewResolutionTarget(null); setReturnToMachine(null); }}
           onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setViewResolutionTarget(null); } : null}
         />
@@ -6402,9 +6399,35 @@ function ResolveDamageModal({ damage, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Damage resolution modal (read-only view from machine card history)
 --------------------------------------------------------- */
-function DamageResolutionModal({ damage, onClose, onBack }) {
+function DamageResolutionModal({ damage, technicianById, onClose, onBack }) {
   const d = damage;
   const isSimple = d.type === "revizia" || d.type === "uradnaSkuska";
+  const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
+  const techNames = techIds.map((id) => technicianById?.[id]?.name).filter(Boolean).join(", ");
+
+  if (!d.resolved) {
+    // Nové / Pridelené — len na čítanie. Reálne pridelenie sa dá robiť
+    // len zo záložky Poškodenia/Externé, kde sú práva nastavené správne.
+    const stavLabel = techIds.length ? "Pridelené" : "Nové";
+    return (
+      <Modal title={`${stavLabel} · ${d.code}`} onClose={onClose}>
+        {onBack && (
+          <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
+            ← Späť na kartu stroja
+          </button>
+        )}
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+          <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
+          <CardField label="Stav" value={stavLabel} danger={!techIds.length} />
+          <CardField label="Pridelené komu" value={techNames || "— zatiaľ nikomu —"} />
+          <CardField label="Na kedy" value={d.assignedDate ? fmtDate(d.assignedDate) : null} />
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Popis</div>
+        <div style={{ fontSize: 13 }}>{d.popis}</div>
+      </Modal>
+    );
+  }
+
   const title = d.type === "revizia" ? "Revízia vykonaná" : d.type === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Poškodenie vyriešené";
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
