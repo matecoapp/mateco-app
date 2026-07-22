@@ -1213,6 +1213,10 @@ function DispatcherApp() {
       const m = enrichedMachineById[link.machineId];
       if (m) setMachineCard(m);
     }
+    if (link.reservationId) {
+      const r = reservations.find((x) => x.id === link.reservationId);
+      if (r) setReservationCardTarget(r);
+    }
   }
   function dismissHighlight() {
     setHighlightDamageId(null);
@@ -1385,12 +1389,35 @@ function DispatcherApp() {
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Nezáväzná rezervácia",
       message: `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`,
-      link: { module: "poziciovna", view: "calendar" },
+      link: { module: "poziciovna", view: "calendar", reservationId: record.id },
     });
     return record;
   }
   function deleteReservation(id) {
     persistReservations(reservations.filter((r) => r.id !== id));
+  }
+  function updateReservation(id, data) {
+    persistReservations(reservations.map((r) => (r.id === id ? { ...r, ...data } : r)));
+  }
+  // Obchodník sám nič nemení — len "pošle podnet" dispečerovi/vedúcemu požičovne,
+  // nech vedia, že sa majú na rezerváciu pozrieť (namiesto volania/písania).
+  function requestReservationConvert(r) {
+    const machine = machineById[r.machineId];
+    pushNotification({
+      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Podnet: premeniť rezerváciu na zákazku",
+      message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) na skutočnú zákazku.`,
+      link: { module: "poziciovna", view: "calendar", reservationId: r.id },
+    });
+  }
+  function requestReservationDelete(r) {
+    const machine = machineById[r.machineId];
+    pushNotification({
+      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Podnet: zmazať rezerváciu",
+      message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) — obchod pravdepodobne nevyšiel.`,
+      link: { module: "poziciovna", view: "calendar", reservationId: r.id },
+    });
   }
 
   function reportDamage(machine, popis) {
@@ -2383,10 +2410,15 @@ function DispatcherApp() {
         <AddReservationModal
           machines={machines}
           prefillMachineId={showAddReservation.machineId}
+          existing={showAddReservation.existing}
           currentUser={currentUser}
           onClose={() => setShowAddReservation(null)}
           onSave={(data) => {
-            addReservation(data);
+            if (showAddReservation.existing) {
+              updateReservation(showAddReservation.existing.id, data);
+            } else {
+              addReservation(data);
+            }
             setShowAddReservation(null);
           }}
         />
@@ -2406,6 +2438,20 @@ function DispatcherApp() {
           onConvert={() => {
             setShowAddJob({ prefillReservation: reservationCardTarget });
             setReservationCardTarget(null);
+          }}
+          onEdit={() => {
+            setShowAddReservation({ existing: reservationCardTarget });
+            setReservationCardTarget(null);
+          }}
+          onRequestConvert={() => {
+            requestReservationConvert(reservationCardTarget);
+            setReservationCardTarget(null);
+            alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o premenu na zákazku.");
+          }}
+          onRequestDelete={() => {
+            requestReservationDelete(reservationCardTarget);
+            setReservationCardTarget(null);
+            alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o zmazanie rezervácie.");
           }}
         />
       )}
@@ -4746,20 +4792,20 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
    Nezáväzná rezervácia stroja — pre obchodníkov (aj dispečera/vedúceho
    požičovne, ktorí si ju vedia rovno aj sami schváliť).
 --------------------------------------------------------- */
-function AddReservationModal({ machines, prefillMachineId, currentUser, onClose, onSave }) {
-  const [machineId, setMachineId] = useState(prefillMachineId || "");
-  const [customer, setCustomer] = useState("");
-  const [toLocation, setToLocation] = useState("");
-  const [obchodnik, setObchodnik] = useState(SALESPEOPLE.some((s) => s.name === currentUser?.name) ? currentUser.name : "");
-  const [expectedStart, setExpectedStart] = useState(todayISO());
-  const [expectedEnd, setExpectedEnd] = useState("");
-  const [notes, setNotes] = useState("");
+function AddReservationModal({ machines, prefillMachineId, existing, currentUser, onClose, onSave }) {
+  const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
+  const [customer, setCustomer] = useState(existing?.customer || "");
+  const [toLocation, setToLocation] = useState(existing?.toLocation || "");
+  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || (SALESPEOPLE.some((s) => s.name === currentUser?.name) ? currentUser.name : ""));
+  const [expectedStart, setExpectedStart] = useState(existing?.expectedStart || todayISO());
+  const [expectedEnd, setExpectedEnd] = useState(existing?.expectedEnd || "");
+  const [notes, setNotes] = useState(existing?.notes || "");
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
   const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart;
 
   return (
-    <Modal title="Nezáväzná rezervácia stroja" onClose={onClose} wide>
+    <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} wide>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Nič to nezaväzuje ani nezablokuje stroj — len upozorní dispečera a vedúceho požičovne, že sa
         o tento stroj rokuje. Ak obchod vyjde, premenia ju priamo na skutočnú zákazku.
@@ -4795,9 +4841,10 @@ function AddReservationModal({ machines, prefillMachineId, currentUser, onClose,
           })
         }
       >
-        Vytvoriť rezerváciu
+        {existing ? "Uložiť zmeny" : "Vytvoriť rezerváciu"}
       </button>
     </Modal>
+
   );
 }
 
@@ -4805,8 +4852,9 @@ function AddReservationModal({ machines, prefillMachineId, currentUser, onClose,
    Karta nezáväznej rezervácie — obchodník si len pozrie,
    dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
 --------------------------------------------------------- */
-function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert }) {
+function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert, onEdit, onRequestConvert, onRequestDelete }) {
   const r = reservation;
+  const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
   return (
     <Modal title={`Nezáväzná rezervácia · ${machine?.code || "—"}`} onClose={onClose}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
@@ -4824,15 +4872,30 @@ function ReservationCardModal({ reservation, machine, user, onClose, onDelete, o
         </>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {can(user, "reservation_convert") && (
+        {can(user, "reservation_add") && (
+          <button className="btn btn-ghost" onClick={onEdit}>
+            Upraviť
+          </button>
+        )}
+        {canActDirectly && (
           <button className="btn btn-accent" onClick={onConvert}>
             Premeniť na zákazku
           </button>
         )}
-        {can(user, "reservation_delete") && (
+        {canActDirectly && can(user, "reservation_delete") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDelete}>
             Zmazať rezerváciu
           </button>
+        )}
+        {!canActDirectly && can(user, "reservation_add") && (
+          <>
+            <button className="btn btn-accent" onClick={onRequestConvert}>
+              📣 Nahlásiť ako zákazku
+            </button>
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onRequestDelete}>
+              📣 Nahlásiť na zmazanie
+            </button>
+          </>
         )}
       </div>
     </Modal>
@@ -5545,7 +5608,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                           }}
                           style={{
                             gridColumn: `${startCol + 1} / ${endCol + 2}`,
-                            background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(255,255,255,.35) 6px, rgba(255,255,255,.35) 12px)`,
+                            background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
                             outline: "2px dashed var(--text-dim)",
                             outlineOffset: "-1px",
                             borderRadius: 4,
@@ -5567,6 +5630,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                               textOverflow: "ellipsis",
                               fontSize: 10,
                               color: "#fff",
+                              textShadow: "0 1px 2px rgba(0,0,0,.6)",
                               padding: "3px 6px",
                             }}
                           >
