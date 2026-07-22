@@ -1879,6 +1879,9 @@ function DispatcherApp() {
     }
     setCompleteJobTarget(null);
   }
+  function uncompleteJob(jobId) {
+    updateJob(jobId, { status: "planned" });
+  }
   function assignDriver(jobId, driverId) {
     updateJob(jobId, { driverId: driverId || null });
   }
@@ -2768,6 +2771,10 @@ function DispatcherApp() {
           }}
           onComplete={() => {
             setCompleteJobTarget(jobDetail);
+            setJobDetail(null);
+          }}
+          onUncomplete={() => {
+            uncompleteJob(jobDetail.id);
             setJobDetail(null);
           }}
           onReportDamage={() => {
@@ -4764,7 +4771,7 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
 /* ---------------------------------------------------------
    Job detail modal (clicked from Kalendár)
 --------------------------------------------------------- */
-function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, user, onClose, onEdit, onComplete, onReportDamage }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
   const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
@@ -4797,6 +4804,16 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         {job.status !== "completed" && can(user, "job_complete") && (
           <button className="btn btn-accent" onClick={onComplete}>Ukončiť zákazku</button>
         )}
+        {job.status === "completed" && can(user, "job_complete") && (
+          <button
+            className="btn btn-ghost"
+            style={{ color: "var(--warn)" }}
+            onClick={onUncomplete}
+            title="Vráti zákazku späť medzi aktívne — napr. keď sa na poslednú chvíľu niečo zmení"
+          >
+            ↺ Zrušiť ukončenie
+          </button>
+        )}
         {machine && onReportDamage && can(user, "job_report_damage") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportDamage}>
             Nahlásiť poškodenie
@@ -4823,13 +4840,16 @@ function AddReservationModal({ machines, jobs, reservations, prefillMachineId, e
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
 
   // Skontroluje, či na zvolenom stroji a termíne nie je už zákazka alebo iná
-  // (schválená) rezervácia — appka to appka nedovolí odoslať, kým sa to nevyrieši.
+  // (schválená) rezervácia — appka to nedovolí odoslať, kým sa to nevyrieši.
+  // Zámerne sa NEIGNORUJÚ ukončené zákazky: ak je zákazka ukončená s budúcim
+  // dátumom konca (napr. papierovo hotovo dnes, fyzický odvoz o pár dní), stroj
+  // je do toho dátumu stále obsadený — dátumový prekryv sám o sebe vylúči staré,
+  // dávno ukončené zákazky, netreba to riešiť cez stav.
   const conflict = useMemo(() => {
     if (!machineId || !expectedStart) return null;
     const job = (jobs || []).find(
       (j) =>
         j.machineId === machineId &&
-        j.status !== "completed" &&
         rangesOverlap(expectedStart, expectedEnd || null, j.startDate, j.endDate)
     );
     if (job) return { type: "job", label: job.customer || job.toLocation || "zákazka" };
@@ -5466,7 +5486,6 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
   const jobsByMachine = useMemo(() => {
     const map = {};
     jobs.forEach((j) => {
-      if (j.status === "completed") return;
       if ((j.endDate && j.endDate < monthStartISO) || j.startDate > monthEndISO) return;
       (map[j.machineId] = map[j.machineId] || []).push(j);
     });
@@ -5612,6 +5631,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                     </div>
                     {mJobs.map((j) => {
                       const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
+                      const isDone = j.status === "completed";
                       const noEnd = !j.endDate;
                       const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
                       const st = effectiveStatus(j, today);
@@ -5626,7 +5646,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                       return (
                         <div
                           key={j.id}
-                          title={`${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}`}
+                          title={`${isDone ? "UKONČENÁ · " : ""}${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onOpenJob(j);
@@ -5634,8 +5654,9 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                           style={{
                             gridColumn: `${startCol + 1} / ${endCol + 2}`,
                             background: bg,
-                            outline: st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
-                            outlineOffset: st === "overdue" || noEnd ? "-1px" : 0,
+                            opacity: isDone ? 0.45 : 1,
+                            outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
+                            outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
                             borderRadius: 4,
                             fontWeight: 600,
                             cursor: "pointer",
@@ -5659,7 +5680,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                               padding: "3px 6px",
                             }}
                           >
-                            {noEnd ? `⚠ ${label}` : label}
+                            {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                           </div>
                         </div>
                       );
