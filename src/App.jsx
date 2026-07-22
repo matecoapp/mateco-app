@@ -1223,6 +1223,10 @@ function DispatcherApp() {
       const r = reservations.find((x) => x.id === link.reservationId);
       if (r) setReservationCardTarget(r);
     }
+    if (link.jobId) {
+      const j = jobs.find((x) => x.id === link.jobId);
+      if (j) setJobDetail(j);
+    }
   }
   function dismissHighlight() {
     setHighlightDamageId(null);
@@ -1404,7 +1408,18 @@ function DispatcherApp() {
     return record;
   }
   function approveReservation(id) {
-    persistReservations(reservations.map((r) => (r.id === id ? { ...r, status: "approved" } : r)));
+    const r = reservations.find((x) => x.id === id);
+    persistReservations(reservations.map((x) => (x.id === id ? { ...x, status: "approved" } : x)));
+    if (r) {
+      const machine = machineById[r.machineId];
+      pushNotification({
+        roles: [],
+        userName: r.obchodnik || null,
+        title: "Rezervácia schválená",
+        message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola schválená.`,
+        link: { module: "poziciovna", view: "calendar", reservationId: r.id },
+      });
+    }
   }
   function deleteReservation(id) {
     persistReservations(reservations.filter((r) => r.id !== id));
@@ -1850,8 +1865,10 @@ function DispatcherApp() {
     );
   }
   function addJob(data) {
-    persistJobs([...jobs, { id: uid(), status: "planned", ...data }]);
+    const record = { id: uid(), status: "planned", ...data };
+    persistJobs([...jobs, record]);
     setShowAddJob(null);
+    return record;
   }
   function updateJob(id, patch) {
     persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)));
@@ -1865,9 +1882,18 @@ function DispatcherApp() {
       updateJob(showAddJob.existing.id, data);
       setShowAddJob(null);
     } else {
-      addJob(data);
+      const newJob = addJob(data);
       if (showAddJob?.prefillReservation) {
-        deleteReservation(showAddJob.prefillReservation.id);
+        const r = showAddJob.prefillReservation;
+        const machine = machineById[r.machineId];
+        pushNotification({
+          roles: [],
+          userName: r.obchodnik || null,
+          title: "Rezervácia premenená na zákazku",
+          message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola premenená na skutočnú zákazku.`,
+          link: { module: "poziciovna", view: "jobs", jobId: newJob.id },
+        });
+        deleteReservation(r.id);
       }
     }
   }
@@ -2449,7 +2475,15 @@ function DispatcherApp() {
           onClose={() => setReservationCardTarget(null)}
           onDelete={() => {
             askDelete(`nezáväznú rezerváciu (${machineById[reservationCardTarget.machineId]?.code || ""})`, () => {
-              deleteReservation(reservationCardTarget.id);
+              const r = reservationCardTarget;
+              const machine = machineById[r.machineId];
+              pushNotification({
+                roles: [],
+                userName: r.obchodnik || null,
+                title: "Rezervácia zmazaná",
+                message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná.`,
+              });
+              deleteReservation(r.id);
               setReservationCardTarget(null);
             });
           }}
