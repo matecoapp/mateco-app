@@ -707,6 +707,7 @@ function DispatcherApp() {
   const [view, setView] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dashboardDepoFilter, setDashboardDepoFilter] = useState(null);
 
   const [showAddMachine, setShowAddMachine] = useState(null); // null | {} | { existing: machine }
   const [showAddDriver, setShowAddDriver] = useState(null); // null | {} | { existing: driver }
@@ -1585,6 +1586,7 @@ function DispatcherApp() {
   const filteredMachines = useMemo(() => {
     let list = enrichedMachines;
     if (statusFilter !== "all") list = list.filter((m) => m.status === statusFilter);
+    if (dashboardDepoFilter) list = list.filter((m) => (m.depo || "").toLowerCase() === dashboardDepoFilter.toLowerCase());
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -1596,21 +1598,25 @@ function DispatcherApp() {
       );
     }
     return list;
-  }, [enrichedMachines, statusFilter, search]);
+  }, [enrichedMachines, statusFilter, dashboardDepoFilter, search]);
 
   const alerts = useMemo(() => {
-    const overdue = jobs.filter((j) => effectiveStatus(j, today) === "overdue");
+    // Rovnaké filtre (hľadanie / stav / depo), čo sú nad tabuľkou strojov v Prehľade,
+    // platia aj pre rýchly prehľad hore — dlaždica ukazuje len to, čo sa týka
+    // momentálne vyfiltrovaných strojov.
+    const filteredIds = new Set(filteredMachines.map((m) => m.id));
+    const overdue = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && filteredIds.has(j.machineId));
     const endingSoon = jobs.filter((j) => {
       const st = effectiveStatus(j, today);
-      return st === "active" && daysBetween(today, j.endDate) <= 5;
+      return st === "active" && daysBetween(today, j.endDate) <= 5 && filteredIds.has(j.machineId);
     });
-    const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
-    const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
-    const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
-    const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa");
-    const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
+    const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && filteredIds.has(j.machineId));
+    const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue && filteredIds.has(d.machineId));
+    const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue && filteredIds.has(d.machineId));
+    const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && filteredIds.has(d.machineId));
+    const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved && filteredIds.has(d.machineId));
     return { overdue, endingSoon, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
-  }, [jobs, machines, today, tomorrow, damages]);
+  }, [jobs, machines, today, tomorrow, damages, filteredMachines]);
 
   const stats = useMemo(() => {
     const total = machines.length;
@@ -1948,6 +1954,8 @@ function DispatcherApp() {
             setSearch={setSearch}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
+            depoFilter={dashboardDepoFilter}
+            setDepoFilter={setDashboardDepoFilter}
             driverById={driverById}
             user={effectiveUser}
             onAddMachine={() => setShowAddMachine({})}
@@ -3540,6 +3548,8 @@ function Dashboard({
   setSearch,
   statusFilter,
   setStatusFilter,
+  depoFilter,
+  setDepoFilter,
   driverById,
   user,
   onAddMachine,
@@ -3550,7 +3560,6 @@ function Dashboard({
   onClearAll,
   today,
 }) {
-  const [depoFilter, setDepoFilter] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const depoOptions = DEPO_OPTIONS;
   let visibleMachines = showArchived ? filteredMachines : filteredMachines.filter((m) => !m.archived);
@@ -3717,9 +3726,27 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuickCategory]);
 
-  const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue");
-  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && daysBetween(today, j.endDate) <= 5);
-  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today);
+  function matchesSearchAndDepo(j) {
+    if (depoFilter && (j.fromDepo || "").toLowerCase() !== depoFilter.toLowerCase() && (j.returnDepo || "").toLowerCase() !== depoFilter.toLowerCase()) {
+      return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const m = machineById[j.machineId];
+      const hit =
+        (m?.code || "").toLowerCase().includes(q) ||
+        (m?.type || "").toLowerCase().includes(q) ||
+        (j.fromDepo || "").toLowerCase().includes(q) ||
+        (j.returnDepo || "").toLowerCase().includes(q) ||
+        (j.customer || "").toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
+  }
+
+  const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && matchesSearchAndDepo(j));
+  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
+  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && matchesSearchAndDepo(j));
   const quickTiles = [
     { id: "overdue", label: "Zákazka po termíne", color: "var(--danger)", items: overdueJobs },
     { id: "endingSoon", label: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", items: endingSoonJobs },
@@ -3979,18 +4006,39 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     return list.sort((a, b) => (a.date < b.date ? -1 : 1));
   }, [jobs, today]);
 
-  // Today/tomorrow summary per driver — counts regardless of other filters below
+  function matchesDepoAndSearch(t) {
+    if (depoFilter && t.from.toLowerCase() !== depoFilter.toLowerCase() && t.to.toLowerCase() !== depoFilter.toLowerCase()) {
+      return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const m = machineById[t.machineId];
+      const hit =
+        (m?.code || "").toLowerCase().includes(q) ||
+        (m?.type || "").toLowerCase().includes(q) ||
+        t.from.toLowerCase().includes(q) ||
+        t.to.toLowerCase().includes(q) ||
+        (t.customer || "").toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
+  }
+
+  // Rýchly prehľad dnes/zajtra/pozajtra teraz rešpektuje rovnaké filtre depa
+  // a hľadania, čo sú nižšie nad zoznamom (filter na šoféra ostáva samostatný,
+  // ten sa už rieši cez summaryDriverIds).
   const summary = useMemo(() => {
     const map = {};
     transports.forEach((t) => {
       if (t.date !== today && t.date !== tomorrow && t.date !== dayAfterTomorrow) return;
+      if (!matchesDepoAndSearch(t)) return;
       const key = t.driverId || "unassigned";
       if (!map[key]) map[key] = { todayVyvoz: 0, todayZvoz: 0, tomorrowVyvoz: 0, tomorrowZvoz: 0, dayAfterVyvoz: 0, dayAfterZvoz: 0 };
       const bucket = t.date === today ? "today" : t.date === tomorrow ? "tomorrow" : "dayAfter";
       map[key][bucket + (t.type === "vyvoz" ? "Vyvoz" : "Zvoz")] += 1;
     });
     return map;
-  }, [transports, today, tomorrow, dayAfterTomorrow]);
+  }, [transports, today, tomorrow, dayAfterTomorrow, depoFilter, search]);
   const summaryDriverIds = [
     ...drivers.filter((d) => !d.archived && summary[d.id]).map((d) => d.id),
     ...(summary.unassigned ? ["unassigned"] : []),
@@ -6440,12 +6488,18 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
    (rovnaká logika ako Prehľad Požičovne — dlaždice, klik = presmerovanie)
 --------------------------------------------------------- */
 function ServisOverview({ damages, technicians, assignments, weeklyDuty, today, onNavigate }) {
-  const newDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId);
-  const assignedDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && d.technicianId);
-  const newExterna = damages.filter((d) => d.type === "externa" && !d.resolved);
-  const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
-  const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
-  const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
+  const [depoFilter, setDepoFilter] = useState(null);
+  const depoOptions = DEPO_OPTIONS;
+  const damageDepo = (d) => (d.type === "externa" ? d.assignedDepo : d.location) || "";
+  const damagesInDepo = depoFilter ? damages.filter((d) => damageDepo(d).toLowerCase() === depoFilter.toLowerCase()) : damages;
+  const techniciansInDepo = depoFilter ? technicians.filter((t) => (t.depo || "").toLowerCase() === depoFilter.toLowerCase()) : technicians;
+
+  const newDamages = damagesInDepo.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId);
+  const assignedDamages = damagesInDepo.filter((d) => d.type === "poskodenie" && !d.resolved && d.technicianId);
+  const newExterna = damagesInDepo.filter((d) => d.type === "externa" && !d.resolved);
+  const revisionOverdue = damagesInDepo.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
+  const revisionSoon = damagesInDepo.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
+  const uradneSkusky = damagesInDepo.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
 
   const tiles = [
     { key: "new", label: "Nové poškodenia (nepridelené)", color: "var(--danger)", count: newDamages.length, view: "poskodenia" },
@@ -6462,7 +6516,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, today, 
   const monthEndISO = today0.slice(0, 7) + "-" + String(lastDay).padStart(2, "0");
   const monthLabel = new Date(today0 + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
 
-  const monthlySummary = technicians
+  const monthlySummary = techniciansInDepo
     .filter((t) => !t.archived)
     .map((t) => {
       const kindDates = { pohotovost: [], dovolenka: [], pn: [] };
@@ -6480,6 +6534,24 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, today, 
 
   return (
     <div>
+      <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {depoOptions.map((d) => (
+          <button
+            key={d}
+            className="btn"
+            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+            style={{
+              padding: "5px 10px",
+              fontSize: 11,
+              background: depoFilter === d ? "var(--accent)" : "transparent",
+              color: depoFilter === d ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
         {tiles.filter((t) => t.count > 0).map((t) => (
           <div
