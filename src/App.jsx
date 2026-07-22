@@ -77,6 +77,7 @@ const PERM = {
   // Požičovňa — zákazky
   job_add: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_import_csv: [],
+  job_clear_all: [],
   job_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_complete: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_email: ["veduci_pozicovne", "dispecer_pozicovne"],
@@ -774,6 +775,7 @@ function DispatcherApp() {
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
   const [resolveDamageTarget, setResolveDamageTarget] = useState(null); // poškodenie being resolved (date+comment form)
   const [viewResolutionTarget, setViewResolutionTarget] = useState(null); // resolved damage/revision being viewed from machine card history
+  const [returnToMachine, setReturnToMachine] = useState(null); // stroj, na ktorý sa vrátiť tlačidlom "Späť"
 
   function setModule(m) {
     setModuleRaw(m);
@@ -1650,6 +1652,9 @@ function DispatcherApp() {
     persistJobs([]);
     persistDamages([]);
   }
+  function clearAllJobs() {
+    persistJobs([]);
+  }
   function deleteMachine(id) {
     persistMachines(machines.filter((m) => m.id !== id));
   }
@@ -1996,6 +2001,7 @@ function DispatcherApp() {
             onOpenJob={(j) => setJobDetail(j)}
             mailtoDriver={mailtoDriver}
             mailtoCustomer={mailtoCustomer}
+            onClearAll={() => askDelete(`VŠETKY zákazky (${jobs.length}) — pripravené na nový import z CSV`, clearAllJobs)}
           />
         )}
 
@@ -2320,6 +2326,7 @@ function DispatcherApp() {
             setMachineCard(null);
           }}
           onOpenDamage={(d) => {
+            setReturnToMachine(machineCard);
             if (d.resolved) {
               setViewResolutionTarget(d);
             } else {
@@ -2413,8 +2420,9 @@ function DispatcherApp() {
           damage={damageAssignTarget}
           technicians={technicians}
           today={today}
-          onClose={() => setDamageAssignTarget(null)}
+          onClose={() => { setDamageAssignTarget(null); setReturnToMachine(null); }}
           onSave={(technicianIds, date) => assignDamage(damageAssignTarget.id, technicianIds, date)}
+          onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setDamageAssignTarget(null); } : null}
         />
       )}
       {completeRevisionTarget && (
@@ -2442,7 +2450,11 @@ function DispatcherApp() {
         />
       )}
       {viewResolutionTarget && (
-        <DamageResolutionModal damage={viewResolutionTarget} onClose={() => setViewResolutionTarget(null)} />
+        <DamageResolutionModal
+          damage={viewResolutionTarget}
+          onClose={() => { setViewResolutionTarget(null); setReturnToMachine(null); }}
+          onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setViewResolutionTarget(null); } : null}
+        />
       )}
       {confirmDelete && (
         <ConfirmDeleteModal
@@ -3714,7 +3726,7 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer }) {
+function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, mailtoDriver, mailtoCustomer, onClearAll }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
@@ -3817,6 +3829,11 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ display: "flex", gap: 10 }}>
+          {can(user, "job_clear_all") && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+              Vymazať všetky zákazky
+            </button>
+          )}
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportCustomers}>Import zákazníkov</button>}
           {can(user, "job_add") && <button className="btn btn-accent" onClick={onAddJob}>+ Nová zákazka</button>}
@@ -6260,7 +6277,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 /* ---------------------------------------------------------
    Damage assign modal (assign a damage report to a technician/day)
 --------------------------------------------------------- */
-function DamageAssignModal({ damage, technicians, today, onClose, onSave }) {
+function DamageAssignModal({ damage, technicians, today, onClose, onSave, onBack }) {
   const [technicianIds, setTechnicianIds] = useState(damage.technicianIds || (damage.technicianId ? [damage.technicianId] : []));
   const [date, setDate] = useState(damage.assignedDate || today);
   const canSave = technicianIds.length > 0 && date;
@@ -6272,6 +6289,11 @@ function DamageAssignModal({ damage, technicians, today, onClose, onSave }) {
 
   return (
     <Modal title={`Prideliť · ${damage.code}`} onClose={onClose}>
+      {onBack && (
+        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
+          ← Späť na kartu stroja
+        </button>
+      )}
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
           {technicians.filter((t) => !t.archived).map((t) => (
@@ -6380,13 +6402,18 @@ function ResolveDamageModal({ damage, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Damage resolution modal (read-only view from machine card history)
 --------------------------------------------------------- */
-function DamageResolutionModal({ damage, onClose }) {
+function DamageResolutionModal({ damage, onClose, onBack }) {
   const d = damage;
   const isSimple = d.type === "revizia" || d.type === "uradnaSkuska";
   const title = d.type === "revizia" ? "Revízia vykonaná" : d.type === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Poškodenie vyriešené";
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
     <Modal title={`${title} · ${d.code}`} onClose={onClose}>
+      {onBack && (
+        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
+          ← Späť na kartu stroja
+        </button>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
         <CardField label={isSimple ? "Dátum vykonania" : "Dátum opravy"} value={doneDate ? fmtDate(doneDate) : null} />
@@ -6893,24 +6920,12 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         {monthOffset !== 0 && (
           <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
         )}
-        <button
-          className="btn btn-ghost"
-          style={{ padding: "5px 10px", fontSize: 11 }}
-          onClick={() => {
-            if (monthOffset !== 0) {
-              setMonthOffset(0);
-              setTimeout(scrollToToday, 60);
-            } else {
-              scrollToToday();
-            }
-          }}
-        >
-          → Choď na dnešný deň
-        </button>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          Zobraziť archivovaných
-        </label>
+        {can(user, "technician_archive") && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Zobraziť archivovaných
+          </label>
+        )}
         <div style={{ flex: 1 }} />
         {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
       </div>
