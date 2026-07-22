@@ -14,6 +14,12 @@ function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
   if (sub) return sub.substituteTechnicianId;
   return depoCheckers?.[depo] || null;
 }
+// Prekrývajú sa dva dátumové rozsahy? Chýbajúci koniec (null) = bez konca (do nekonečna).
+function rangesOverlap(aStart, aEnd, bStart, bEnd) {
+  const aEndsAt = aEnd || "9999-12-31";
+  const bEndsAt = bEnd || "9999-12-31";
+  return aStart <= bEndsAt && bStart <= aEndsAt;
+}
 // Podzáložky pod "Dokumenty" (rozbaľovacie menu) — zatiaľ pripravené prázdne,
 // dopĺňajú sa podľa toho, aké konkrétne dokumenty budú potrebné.
 const DOCUMENT_SUBTABS = {
@@ -1371,6 +1377,7 @@ function DispatcherApp() {
     saveKey("reservations", next);
   }, []);
   function addReservation(data) {
+    const autoApproved = can(currentUser, "reservation_convert"); // dispečer/vedúci požičovne si schvália sami
     const record = {
       id: uid(),
       machineId: data.machineId,
@@ -1380,6 +1387,7 @@ function DispatcherApp() {
       expectedStart: data.expectedStart,
       expectedEnd: data.expectedEnd || null,
       notes: data.notes || "",
+      status: autoApproved ? "approved" : "pending",
       createdBy: currentUser?.name || "",
       createdAt: new Date().toISOString(),
     };
@@ -1387,11 +1395,16 @@ function DispatcherApp() {
     const machine = machineById[data.machineId];
     pushNotification({
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
-      title: "Nezáväzná rezervácia",
-      message: `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`,
+      title: autoApproved ? "Nezáväzná rezervácia" : "Žiadosť o nezáväznú rezerváciu",
+      message: autoApproved
+        ? `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`
+        : `${currentUser?.name || "Obchodník"} žiada o nezáväznú rezerváciu: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Čaká na schválenie.`,
       link: { module: "poziciovna", view: "calendar", reservationId: record.id },
     });
     return record;
+  }
+  function approveReservation(id) {
+    persistReservations(reservations.map((r) => (r.id === id ? { ...r, status: "approved" } : r)));
   }
   function deleteReservation(id) {
     persistReservations(reservations.filter((r) => r.id !== id));
@@ -2409,6 +2422,8 @@ function DispatcherApp() {
       {showAddReservation && (
         <AddReservationModal
           machines={machines}
+          jobs={jobs}
+          reservations={reservations}
           prefillMachineId={showAddReservation.machineId}
           existing={showAddReservation.existing}
           currentUser={currentUser}
@@ -2441,6 +2456,10 @@ function DispatcherApp() {
           }}
           onEdit={() => {
             setShowAddReservation({ existing: reservationCardTarget });
+            setReservationCardTarget(null);
+          }}
+          onApprove={() => {
+            approveReservation(reservationCardTarget.id);
             setReservationCardTarget(null);
           }}
           onRequestConvert={() => {
@@ -4792,7 +4811,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
    Nezáväzná rezervácia stroja — pre obchodníkov (aj dispečera/vedúceho
    požičovne, ktorí si ju vedia rovno aj sami schváliť).
 --------------------------------------------------------- */
-function AddReservationModal({ machines, prefillMachineId, existing, currentUser, onClose, onSave }) {
+function AddReservationModal({ machines, jobs, reservations, prefillMachineId, existing, currentUser, onClose, onSave }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
@@ -4802,7 +4821,30 @@ function AddReservationModal({ machines, prefillMachineId, existing, currentUser
   const [notes, setNotes] = useState(existing?.notes || "");
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart;
+
+  // Skontroluje, či na zvolenom stroji a termíne nie je už zákazka alebo iná
+  // (schválená) rezervácia — appka to appka nedovolí odoslať, kým sa to nevyrieši.
+  const conflict = useMemo(() => {
+    if (!machineId || !expectedStart) return null;
+    const job = (jobs || []).find(
+      (j) =>
+        j.machineId === machineId &&
+        j.status !== "completed" &&
+        rangesOverlap(expectedStart, expectedEnd || null, j.startDate, j.endDate)
+    );
+    if (job) return { type: "job", label: job.customer || job.toLocation || "zákazka" };
+    const otherReservation = (reservations || []).find(
+      (r) =>
+        r.machineId === machineId &&
+        r.status === "approved" &&
+        r.id !== existing?.id &&
+        rangesOverlap(expectedStart, expectedEnd || null, r.expectedStart, r.expectedEnd)
+    );
+    if (otherReservation) return { type: "reservation", label: otherReservation.customer || "iná rezervácia" };
+    return null;
+  }, [machineId, expectedStart, expectedEnd, jobs, reservations, existing]);
+
+  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict;
 
   return (
     <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} wide>
@@ -4822,9 +4864,28 @@ function AddReservationModal({ machines, prefillMachineId, existing, currentUser
             {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
         </Field>
-        <Field label="Predpokladaný začiatok *"><input type="date" value={expectedStart} onChange={(e) => setExpectedStart(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Predpokladaný koniec"><input type="date" value={expectedEnd} onChange={(e) => setExpectedEnd(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Predpokladaný začiatok *">
+          <input
+            type="date"
+            value={expectedStart}
+            onChange={(e) => setExpectedStart(e.target.value)}
+            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+          />
+        </Field>
+        <Field label="Predpokladaný koniec">
+          <input
+            type="date"
+            value={expectedEnd}
+            onChange={(e) => setExpectedEnd(e.target.value)}
+            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+          />
+        </Field>
       </div>
+      {conflict && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má zákazku" : "má inú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
+        </div>
+      )}
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
       <button
         className="btn btn-accent"
@@ -4852,11 +4913,17 @@ function AddReservationModal({ machines, prefillMachineId, existing, currentUser
    Karta nezáväznej rezervácie — obchodník si len pozrie,
    dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
 --------------------------------------------------------- */
-function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert, onEdit, onRequestConvert, onRequestDelete }) {
+function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete }) {
   const r = reservation;
   const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
+  const isPending = r.status === "pending";
   return (
-    <Modal title={`Nezáväzná rezervácia · ${machine?.code || "—"}`} onClose={onClose}>
+    <Modal title={`${isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"} · ${machine?.code || "—"}`} onClose={onClose}>
+      {isPending && (
+        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ⏳ Čaká na schválenie — kým ju dispečer alebo vedúci požičovne neschváli, v kalendári sa nezobrazí.
+        </div>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={r.customer} />
         <CardField label="Kam" value={r.toLocation} />
@@ -4875,6 +4942,11 @@ function ReservationCardModal({ reservation, machine, user, onClose, onDelete, o
         {can(user, "reservation_add") && (
           <button className="btn btn-ghost" onClick={onEdit}>
             Upraviť
+          </button>
+        )}
+        {canActDirectly && isPending && (
+          <button className="btn btn-accent" onClick={onApprove}>
+            ✓ Schváliť
           </button>
         )}
         {canActDirectly && (
@@ -5404,6 +5476,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
   const reservationsByMachine = useMemo(() => {
     const map = {};
     (reservations || []).forEach((r) => {
+      if (r.status !== "approved") return;
       if ((r.expectedEnd && r.expectedEnd < monthStartISO) || r.expectedStart > monthEndISO) return;
       (map[r.machineId] = map[r.machineId] || []).push(r);
     });
@@ -5417,7 +5490,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
   if (search.trim()) {
     const q = search.toLowerCase();
     relevantMachines = relevantMachines.filter(
-      (m) => m.code.toLowerCase().includes(q) || (m.depo || "").toLowerCase().includes(q)
+      (m) => m.code.toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q) || (m.depo || "").toLowerCase().includes(q)
     );
   }
 
@@ -5441,7 +5514,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
             </button>
           )}
         </div>
-        <SearchInput placeholder="Hľadať sériové číslo alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
       </div>
       <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
