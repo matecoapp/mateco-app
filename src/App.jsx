@@ -2439,6 +2439,8 @@ function DispatcherApp() {
           drivers={drivers}
           technicians={technicians}
           customers={customers}
+          jobs={jobs}
+          reservations={reservations}
           onSaveCustomer={upsertCustomer}
           prefillMachineId={showAddJob.machineId}
           prefillReservation={showAddJob.prefillReservation}
@@ -5028,7 +5030,7 @@ function ReservationCardModal({ reservation, machine, user, onClose, onDelete, o
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
+function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
   const machine = machines.find((m) => m.id === machineId);
@@ -5050,7 +5052,30 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
   }, [machineId]);
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate;
+
+  // Rovnaká kontrola ako pri nezáväzných rezerváciách — stroj sa nesmie
+  // omylom prideliť na dve prekrývajúce sa zákazky naraz.
+  const conflict = useMemo(() => {
+    if (!machineId || !startDate) return null;
+    const otherJob = (jobs || []).find(
+      (j) =>
+        j.machineId === machineId &&
+        j.id !== existing?.id &&
+        rangesOverlap(startDate, endDate || null, j.startDate, j.endDate)
+    );
+    if (otherJob) return { type: "job", label: otherJob.customer || otherJob.toLocation || "zákazka" };
+    const otherReservation = (reservations || []).find(
+      (r) =>
+        r.machineId === machineId &&
+        r.status === "approved" &&
+        r.id !== prefillReservation?.id &&
+        rangesOverlap(startDate, endDate || null, r.expectedStart, r.expectedEnd)
+    );
+    if (otherReservation) return { type: "reservation", label: otherReservation.customer || "nezáväzná rezervácia" };
+    return null;
+  }, [machineId, startDate, endDate, jobs, reservations, existing, prefillReservation]);
+
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate && !conflict;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -5096,12 +5121,29 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
           </div>
         </Field>
         <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Začiatok *"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Začiatok *">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+          />
+        </Field>
         <Field label="Koniec">
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+          />
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
         </Field>
       </div>
+      {conflict && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má už inú zákazku" : "má schválenú nezáväznú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
+        </div>
+      )}
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
       {customer.trim() && (
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
