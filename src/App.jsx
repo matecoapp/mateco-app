@@ -1377,7 +1377,7 @@ function DispatcherApp() {
     saveKey("reservations", next);
   }, []);
   function addReservation(data) {
-    const autoApproved = can(currentUser, "reservation_convert"); // dispečer/vedúci požičovne si schvália sami
+    const autoApproved = can(effectiveUser, "reservation_convert"); // dispečer/vedúci požičovne si schvália sami
     const record = {
       id: uid(),
       machineId: data.machineId,
