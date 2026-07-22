@@ -1778,8 +1778,8 @@ function DispatcherApp() {
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
     const params = [`subject=${encodeURIComponent(subject)}`, `body=${encodeURIComponent(body)}`];
-    if (checkerEmail) params.push(`cc=${encodeURIComponent(checkerEmail)}`);
-    return `mailto:${email}?${params.join("&")}`;
+    const toList = [email, checkerEmail].filter(Boolean).join(",");
+    return `mailto:${toList}?${params.join("&")}`;
   }
   function mailtoCustomer(job) {
     const machine = machineById[job.machineId];
@@ -4204,7 +4204,8 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                           return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                         });
                         const body = `Dobrý deň ${driver.name},\n\nna ${dayLabel} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                        composeMail({ to: driver.email || nameToEmail(driver.name), cc: [...checkerEmails].join(","), subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
+                        const toAll = [driver.email || nameToEmail(driver.name), ...checkerEmails].join(",");
+                        composeMail({ to: toAll, subject: `Prepravy na ${dayLabel} ${fmtDate(dateVal)}`, body });
                         recordTransportSend(driver.id, dateVal, items.map((t) => t.id));
                       }}
                     >
@@ -4306,7 +4307,8 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                       return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                     });
                     const body = `Dobrý deň ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                    composeMail({ to: driver.email || nameToEmail(driver.name), cc: [...checkerEmails].join(","), subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
+                    const toAll = [driver.email || nameToEmail(driver.name), ...checkerEmails].join(",");
+                    composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
                     recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id));
                   }}
                 >
