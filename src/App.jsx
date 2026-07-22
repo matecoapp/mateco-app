@@ -346,7 +346,7 @@ function effectiveStatus(job, today) {
   if (!job) return null;
   if (job.status === "completed") return "completed";
   if (today < job.startDate) return "planned";
-  if (today > job.endDate) return "overdue";
+  if (job.endDate && today > job.endDate) return "overdue";
   return "active";
 }
 
@@ -1655,14 +1655,15 @@ function DispatcherApp() {
     const overdue = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && filteredIds.has(j.machineId));
     const endingSoon = jobs.filter((j) => {
       const st = effectiveStatus(j, today);
-      return st === "active" && daysBetween(today, j.endDate) <= 5 && filteredIds.has(j.machineId);
+      return st === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && filteredIds.has(j.machineId);
     });
     const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && filteredIds.has(j.machineId));
+    const noEndDate = jobs.filter((j) => j.status !== "completed" && !j.endDate && filteredIds.has(j.machineId));
     const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue && filteredIds.has(d.machineId));
     const revisionSoon = damages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue && filteredIds.has(d.machineId));
     const inService = damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && filteredIds.has(d.machineId));
     const uradneSkusky = damages.filter((d) => d.type === "uradnaSkuska" && !d.resolved && filteredIds.has(d.machineId));
-    return { overdue, endingSoon, tomorrowUnassigned: unassigned, revisionSoon, revisionOverdue, inService, uradneSkusky };
+    return { overdue, endingSoon, tomorrowUnassigned: unassigned, noEndDate, revisionSoon, revisionOverdue, inService, uradneSkusky };
   }, [jobs, machines, today, tomorrow, damages, filteredMachines]);
 
   const stats = useMemo(() => {
@@ -1816,7 +1817,7 @@ function DispatcherApp() {
     const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
     const checker = checkerId ? technicianByIdTop?.[checkerId] : null;
     const checkerEmail = checker ? checker.email || nameToEmail(checker.name) : "";
-    const subject = `Zákazka: stroj ${machine?.code} — ${fmtDate(job.startDate)} → ${fmtDate(job.endDate)}`;
+    const subject = `Zákazka: stroj ${machine?.code} — ${fmtDate(job.startDate)} → ${job.endDate ? fmtDate(job.endDate) : "bez konca"}`;
     const body =
       `Dobrý deň ${driver.name},\n\n` +
       `máte pridelenú nasledovnú zákazku:\n\n` +
@@ -1824,7 +1825,7 @@ function DispatcherApp() {
       `Odkiaľ: ${job.fromDepo}\n` +
       `Kam: ${job.toLocation}\n` +
       `Zákazník: ${job.customer || "—"}\n` +
-      `Termín: ${fmtDate(job.startDate)} — ${fmtDate(job.endDate)}\n` +
+      `Termín: ${fmtDate(job.startDate)} — ${job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}\n` +
       (checker ? `Checker: ${checker.name}\n` : "") +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
@@ -1839,7 +1840,7 @@ function DispatcherApp() {
     const body =
       `Dobrý deň,\n\n` +
       `potvrdzujeme dodanie stroja ${machine?.code} na adresu: ${job.toLocation}.\n` +
-      `Termín: ${fmtDate(job.startDate)} — ${fmtDate(job.endDate)}\n` +
+      `Termín: ${fmtDate(job.startDate)} — ${job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}\n` +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nS pozdravom,\nDispečing`;
     return `mailto:${job.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -1913,6 +1914,7 @@ function DispatcherApp() {
           alerts.overdue.length +
           alerts.endingSoon.length +
           alerts.tomorrowUnassigned.length +
+          alerts.noEndDate.length +
           alerts.revisionSoon.length +
           alerts.revisionOverdue.length +
           alerts.inService.length
@@ -3469,6 +3471,7 @@ function AlertsPanel({ alerts, onNavigate }) {
     { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, nav: { module: "poziciovna", view: "jobs", quick: "overdue" } },
     { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, nav: { module: "poziciovna", view: "jobs", quick: "endingSoon" } },
     { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, nav: { module: "poziciovna", view: "jobs", quick: "noDriver" } },
+    { key: "noEndDate", title: "Zákazka bez dátumu ukončenia", color: "var(--warn)", count: alerts.noEndDate.length, nav: { module: "poziciovna", view: "jobs", quick: "noEndDate" } },
     { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
     { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
     { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
@@ -3737,7 +3740,7 @@ function Dashboard({
                     )}
                   </td>
                   <td>{m.currentJob ? (m.currentJob.customer || m.currentJob.toLocation) : "— voľný —"}</td>
-                  <td className="mono">{m.currentJob ? fmtDate(m.currentJob.endDate) : "—"}</td>
+                  <td className="mono">{m.currentJob ? (m.currentJob.endDate ? fmtDate(m.currentJob.endDate) : <span style={{ color: "var(--warn)" }}>bez konca</span>) : "—"}</td>
                   <td style={{ color: "var(--text-dim)" }}>
                     {m.nextJob ? `${fmtDate(m.nextJob.startDate)} → ${m.nextJob.toLocation}` : "—"}
                   </td>
@@ -3809,12 +3812,14 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
   }
 
   const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && matchesSearchAndDepo(j));
-  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
+  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
   const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && matchesSearchAndDepo(j));
+  const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j));
   const quickTiles = [
     { id: "overdue", label: "Zákazka po termíne", color: "var(--danger)", items: overdueJobs },
     { id: "endingSoon", label: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", items: endingSoonJobs },
     { id: "noDriver", label: "Zákazka bez šoféra", color: "var(--info)", items: noDriverJobs },
+    { id: "noEndDate", label: "Zákazka bez dátumu ukončenia", color: "var(--warn)", items: noEndDateJobs },
   ];
   const activeTile = quickTiles.find((t) => t.id === quickCategory);
 
@@ -3947,12 +3952,15 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                     <span className="mono" style={{ fontWeight: 600, fontSize: 15, color: onOpenJob ? "var(--accent)" : "inherit" }}>{machineById[j.machineId]?.code || "?"}</span>
                     <StatusBadge status={st} />
+                    {!j.endDate && j.status !== "completed" && (
+                      <span className="badge badge-warn" title="Zákazka nemá zadaný dátum ukončenia">⚠ Bez konca</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
                     {j.fromDepo} → {j.toLocation} {j.customer ? `· ${j.customer}` : ""}
                   </div>
                   <div className="mono" style={{ fontSize: 12, marginTop: 4 }}>
-                    {fmtDate(j.startDate)} — {fmtDate(j.endDate)} · Šofér: {driverById[j.driverId]?.name || "— neurčený —"}
+                    {fmtDate(j.startDate)} — {j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · Šofér: {driverById[j.driverId]?.name || "— neurčený —"}
                   </div>
                   {j.notes && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Pozn.: {j.notes}</div>}
                 </div>
@@ -3997,6 +4005,7 @@ function JobsBoard({ jobs, machineById, driverById, today, user, initialQuickCat
                         {activeTile.id === "overdue" && `mal skončiť ${fmtDate(j.endDate)}`}
                         {activeTile.id === "endingSoon" && `do ${fmtDate(j.endDate)}`}
                         {activeTile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
+                        {activeTile.id === "noEndDate" && `beží od ${fmtDate(j.startDate)} — dátum konca nezadaný`}
                         {j.customer ? ` · ${j.customer}` : ""}
                       </span>
                     </div>
@@ -4057,7 +4066,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
           overdue: j.startDate < today,
         });
       }
-      if (j.endDate >= today || !j.returnDriverId) {
+      if (j.endDate && (j.endDate >= today || !j.returnDriverId)) {
         list.push({
           id: j.id + "-zvoz",
           jobId: j.id,
@@ -4432,7 +4441,7 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
               <tr><td colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
             )}
             {visible.map((d) => {
-              const activeJob = jobs.find((j) => j.driverId === d.id && j.status !== "completed" && j.startDate <= today && j.endDate >= today);
+              const activeJob = jobs.find((j) => j.driverId === d.id && j.status !== "completed" && j.startDate <= today && (!j.endDate || j.endDate >= today));
               return (
                 <tr key={d.id} onClick={() => onOpenCard(d)} style={{ cursor: "pointer", opacity: d.archived ? 0.6 : 1 }}>
                   <td style={{ fontWeight: 600 }}>{d.name}{d.archived ? " (archivovaný)" : ""}</td>
@@ -4457,7 +4466,7 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
   const d = driver;
   const upcoming = jobs
-    .filter((j) => j.driverId === d.id && j.status !== "completed" && j.endDate >= today)
+    .filter((j) => j.driverId === d.id && j.status !== "completed" && (!j.endDate || j.endDate >= today))
     .sort((a, b) => (a.startDate < b.startDate ? -1 : 1))
     .slice(0, 8);
 
@@ -4604,7 +4613,7 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
 function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, user, onClose, onEdit, onComplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
-  const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate);
+  const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
   const checkerVyvoz = checkerVyvozId ? technicianById?.[checkerVyvozId] : null;
   const checkerZvoz = checkerZvozId ? technicianById?.[checkerZvozId] : null;
   return (
@@ -4615,7 +4624,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
         <CardField label="Kam" value={job.toLocation} />
         <CardField label="Začiatok" value={fmtDate(job.startDate)} />
-        <CardField label="Koniec" value={fmtDate(job.endDate)} />
+        <CardField label="Koniec" value={job.endDate ? fmtDate(job.endDate) : "— bez určeného konca —"} danger={!job.endDate && job.status !== "completed"} />
         <CardField label="Šofér (vývoz)" value={job.driverId ? driverById[job.driverId]?.name : "— neurčený —"} />
         <CardField label="Šofér (zvoz)" value={job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
         <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
@@ -4655,7 +4664,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || "");
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
   const [startDate, setStartDate] = useState(existing?.startDate || todayISO());
-  const [endDate, setEndDate] = useState(existing?.endDate || todayISO());
+  const [endDate, setEndDate] = useState(existing?.endDate || "");
   const [notes, setNotes] = useState(existing?.notes || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
 
@@ -4666,7 +4675,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
   }, [machineId]);
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate && endDate;
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -4713,7 +4722,10 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
         </Field>
         <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Začiatok *"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Koniec *"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Koniec">
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} />
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
+        </Field>
       </div>
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
       {customer.trim() && (
@@ -4740,7 +4752,7 @@ function AddJobModal({ machines, drivers, technicians, customers, onSaveCustomer
               obchodnik: obchodnik || null,
               cisloZmluvy: cisloZmluvy.trim(),
               startDate,
-              endDate,
+              endDate: endDate || null,
               notes: notes.trim(),
             });
           }}
@@ -5134,7 +5146,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
     const map = {};
     jobs.forEach((j) => {
       if (j.status === "completed") return;
-      if (j.endDate < monthStartISO || j.startDate > monthEndISO) return;
+      if ((j.endDate && j.endDate < monthStartISO) || j.startDate > monthEndISO) return;
       (map[j.machineId] = map[j.machineId] || []).push(j);
     });
     return map;
@@ -5263,7 +5275,8 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                     </div>
                     {mJobs.map((j) => {
                       const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
-                      const endCol = j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
+                      const noEnd = !j.endDate;
+                      const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
                       const st = effectiveStatus(j, today);
                       const bg = salespersonColor(j.obchodnik) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
@@ -5276,7 +5289,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                       return (
                         <div
                           key={j.id}
-                          title={`${j.customer || "—"} · ${fmtDate(j.startDate)} – ${fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}`}
+                          title={`${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onOpenJob(j);
@@ -5284,8 +5297,8 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                           style={{
                             gridColumn: `${startCol + 1} / ${endCol + 2}`,
                             background: bg,
-                            outline: st === "overdue" ? "2px solid var(--danger)" : "none",
-                            outlineOffset: st === "overdue" ? "-1px" : 0,
+                            outline: st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
+                            outlineOffset: st === "overdue" || noEnd ? "-1px" : 0,
                             borderRadius: 4,
                             fontWeight: 600,
                             cursor: "pointer",
@@ -5309,7 +5322,7 @@ function CalendarView({ machines, jobs, today, driverById, onOpenCard, onOpenJob
                               padding: "3px 6px",
                             }}
                           >
-                            {label}
+                            {noEnd ? `⚠ ${label}` : label}
                           </div>
                         </div>
                       );
