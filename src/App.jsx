@@ -70,6 +70,20 @@ function roleLabel(roleId) {
 function isAdminUser(user) {
   return !!user && user.role === "admin";
 }
+// Ktoré role smie daný človek v module Administratíva prideľovať zamestnancovi —
+// vedúci prideľujú len role z vlastnej oblasti, admin ktorúkoľvek (okrem "nezaradený",
+// to je len technický stav pred pridelením role).
+function assignableRolesFor(user) {
+  if (isAdminUser(user)) return ROLES.filter((r) => r.id !== "nezaradeny");
+  if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "dispecer_pozicovne"].includes(r.id));
+  if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu"].includes(r.id));
+  return [];
+}
+// Ktoré role smie daný človek v Administratíve vôbec VIDIEŤ/spravovať (pridávať,
+// upravovať, archivovať) — rovnaké obmedzenie ako pri prideľovaní role.
+function manageableEmployeeRoles(user) {
+  return assignableRolesFor(user).map((r) => r.id);
+}
 
 // ============================================================
 // Presné rozdelenie práv podľa vyplneného excelu (pristupy-podla-roli.xlsx)
@@ -138,6 +152,7 @@ const PERM = {
   user_admin: [],
   view_as_role: [],
   documents_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
+  employee_manage: ["veduci_pozicovne", "veduci_servisu"],
 };
 
 function can(user, key) {
@@ -718,7 +733,10 @@ function DispatcherApp() {
   const [loaded, setLoaded] = useState(false);
   const [saveErrors, setSaveErrors] = useState([]); // keys currently failing to persist
   const [machines, setMachines] = useState([]);
-  const [drivers, setDrivers] = useState([]);
+  const [employees, setEmployees] = useState([]); // zjednotený zoznam osôb (technici, šoféri, obchodníci, dispečeri...)
+  const technicians = useMemo(() => employees.filter((e) => e.role === "technik"), [employees]);
+  const drivers = useMemo(() => employees.filter((e) => e.role === "sofer"), [employees]);
+  const salespeople = useMemo(() => employees.filter((e) => e.role === "obchodnik" && !e.archived), [employees]);
   const [jobs, setJobs] = useState([]);
   const [module, setModuleRaw] = useState("poziciovna");
   const [view, setView] = useState("dashboard");
@@ -761,9 +779,10 @@ function DispatcherApp() {
   const [completeJobTarget, setCompleteJobTarget] = useState(null); // job object being completed
   const [jobDetail, setJobDetail] = useState(null); // job object clicked from calendar
 
-  const [technicians, setTechnicians] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [showAddTechnician, setShowAddTechnician] = useState(null); // null | {} | { existing: technician }
+  const [showAddEmployee, setShowAddEmployee] = useState(null); // null | {} | { existing: employee } — modul Administratíva
+  const [linkAccountTarget, setLinkAccountTarget] = useState(null); // employee, ktorému sa práve prepája účet
   const [technicianCard, setTechnicianCard] = useState(null);
   const [assignSlot, setAssignSlot] = useState(null); // { technicianId, date }
   const [damages, setDamages] = useState([]);
@@ -835,7 +854,7 @@ function DispatcherApp() {
     if (!authChecked) return; // ešte nevieme, či je niekto prihlásený — počkaj
     if (!session) {
       // Neprihlásený — vyprázdni a označ ako "načítané" (zobrazí sa prihlasovacia obrazovka)
-      setMachines([]); setDrivers([]); setJobs([]); setTechnicians([]);
+      setMachines([]); setJobs([]); setEmployees([]);
       setAssignments([]); setDamages([]); setWeeklyDuty([]); setNotifications([]);
       setTransportSendLog([]); setCustomers([]); setDepoCheckers({});
       setFramoveZmluvy([]); setBlacklist([]); setCheckerSubstitutions([]);
@@ -844,7 +863,7 @@ function DispatcherApp() {
       return;
     }
     (async () => {
-      const [m, d, j, t, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res] = await Promise.all([
+      const [m, oldDrivers, j, oldTechnicians, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp] = await Promise.all([
         loadKey("machines", []),
         loadKey("drivers", []),
         loadKey("jobs", []),
@@ -860,11 +879,10 @@ function DispatcherApp() {
         loadKey("blacklist", []),
         loadKey("checkerSubstitutions", []),
         loadKey("reservations", []),
+        loadKey("employees", []),
       ]);
       setMachines(m);
-      setDrivers(d);
       setJobs(j);
-      setTechnicians(t);
       setAssignments(a);
       setDamages(dmg);
       setWeeklyDuty(wd);
@@ -876,6 +894,31 @@ function DispatcherApp() {
       setBlacklist(bl);
       setCheckerSubstitutions(cs);
       setReservations(res);
+
+      // Jednorazová migrácia: kým appka nemala jednotný zoznam osôb, technici a šoféri
+      // boli v samostatných zoznamoch a obchodníci len napevno zapísaní v kóde appky.
+      // Ak je nový zoznam "employees" ešte prázdny, appka ho pri prvom načítaní zloží
+      // z toho, čo už existuje — nič sa nestratí, ID záznamov zostávajú rovnaké.
+      let finalEmployees = emp;
+      if (finalEmployees.length === 0 && (oldTechnicians.length > 0 || oldDrivers.length > 0)) {
+        finalEmployees = [
+          ...oldTechnicians.map((t) => ({ ...t, role: "technik", linkedUserId: t.linkedUserId || null })),
+          ...oldDrivers.map((d) => ({ ...d, role: "sofer", linkedUserId: d.linkedUserId || null })),
+          ...SALESPEOPLE.map((s) => ({
+            id: uid(),
+            name: s.name,
+            role: "obchodnik",
+            color: s.color,
+            depo: "",
+            phone: "",
+            email: "",
+            archived: false,
+            linkedUserId: null,
+          })),
+        ];
+        saveKey("employees", finalEmployees);
+      }
+      setEmployees(finalEmployees);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -960,6 +1003,10 @@ function DispatcherApp() {
     return currentUser;
   }, [currentUser, viewAsRole]);
 
+  // Vlastný záznam zamestnanca prihláseného človeka (podľa REÁLNEJ identity, nie podľa
+  // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
+  const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
+
   // Hneď po prihlásení appku otvor na module, ktorý dáva zmysel pre danú rolu
   // (napr. vedúci servisu rovno v Servise) — len raz, nezasahuje do ďalšej navigácie.
   const didSetLandingModule = useRef(false);
@@ -970,6 +1017,16 @@ function DispatcherApp() {
       setModule(landingModule);
     }
   }, [currentUser]);
+
+  // Technik sa po prihlásení pozerá prioritne na svoj vlastný Plán servisu —
+  // prednastaví sa len raz, technik si to kedykoľvek vie sám odkliknúť.
+  const didSetOwnTechnicianFilter = useRef(false);
+  useEffect(() => {
+    if (myEmployee && myEmployee.role === "technik" && !didSetOwnTechnicianFilter.current) {
+      didSetOwnTechnicianFilter.current = true;
+      setPlanTechnicianFilter(myEmployee.id);
+    }
+  }, [myEmployee]);
 
   async function signUpNewAccount({ email, password, name }) {
     const { data, error } = await supabase.auth.signUp({
@@ -1041,18 +1098,45 @@ function DispatcherApp() {
     setMachines(next);
     saveKey("machines", next);
   }, []);
-  const persistDrivers = useCallback((next) => {
-    setDrivers(next);
-    saveKey("drivers", next);
+  const persistEmployees = useCallback((next) => {
+    setEmployees(next);
+    saveKey("employees", next);
   }, []);
+  function addEmployee(data) {
+    persistEmployees([...employees, { id: uid(), archived: false, linkedUserId: null, ...data }]);
+  }
+  function updateEmployee(id, patch) {
+    persistEmployees(employees.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }
+  function setEmployeeArchived(id, archived, reason, note) {
+    persistEmployees(
+      employees.map((e) =>
+        e.id === id
+          ? archived
+            ? { ...e, archived: true, archivedReason: reason, archivedNote: note, archivedDate: todayISO() }
+            : { ...e, archived: false, archivedReason: null, archivedNote: null, archivedDate: null }
+          : e
+      )
+    );
+  }
+  function deleteEmployee(id) {
+    persistEmployees(employees.filter((e) => e.id !== id));
+  }
+  function linkEmployeeToUser(employeeId, userId) {
+    persistEmployees(employees.map((e) => (e.id === employeeId ? { ...e, linkedUserId: userId || null } : e)));
+  }
+  // Spätne kompatibilné "persist" funkcie pre šoférov/technikov — teraz zapisujú
+  // do jednotného zoznamu osôb (employees), zvyšok appky sa nemusí meniť.
+  function persistDrivers(list) {
+    persistEmployees([...employees.filter((e) => e.role !== "sofer"), ...list.map((d) => ({ ...d, role: "sofer" }))]);
+  }
   const persistJobs = useCallback((next) => {
     setJobs(next);
     saveKey("jobs", next);
   }, []);
-  const persistTechnicians = useCallback((next) => {
-    setTechnicians(next);
-    saveKey("technicians", next);
-  }, []);
+  function persistTechnicians(list) {
+    persistEmployees([...employees.filter((e) => e.role !== "technik"), ...list.map((t) => ({ ...t, role: "technik" }))]);
+  }
   const persistAssignments = useCallback((next) => {
     setAssignments(next);
     saveKey("assignments", next);
@@ -2109,6 +2193,7 @@ function DispatcherApp() {
             <AlertsPanel
               alerts={alerts}
               machineById={machineById}
+              salespeople={salespeople}
               onNavigate={(nav) => {
                 setModule(nav.module);
                 setView(nav.view);
@@ -2158,6 +2243,8 @@ function DispatcherApp() {
             driverById={driverById}
             today={today}
             user={effectiveUser}
+            myEmployee={myEmployee}
+            salespeople={salespeople}
             initialQuickCategory={jobsQuickCategory}
             onQuickCategoryConsumed={() => setJobsQuickCategory(null)}
             onAddJob={() => setShowAddJob({})}
@@ -2197,6 +2284,7 @@ function DispatcherApp() {
             tomorrow={tomorrow}
             dayAfterTomorrow={dayAfterTomorrow}
             user={effectiveUser}
+            myEmployee={myEmployee}
             assignDriver={assignDriver}
             assignReturnDriver={assignReturnDriver}
             depoCheckers={depoCheckers}
@@ -2398,7 +2486,56 @@ function DispatcherApp() {
         {module === "servis" && view === "dokumenty" && (
           <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
         )}
+
+        {module === "administrativa" && (
+          <AdministrativaView
+            employees={employees}
+            profiles={profiles}
+            user={effectiveUser}
+            onAdd={() => setShowAddEmployee({})}
+            onEdit={(e) => setShowAddEmployee({ existing: e })}
+            onArchive={(e) =>
+              e.archived
+                ? setEmployeeArchived(e.id, false)
+                : setArchiveTarget({
+                    label: `zamestnanca ${e.name}`,
+                    reasons: ["Odchod z firmy", "Zmena pozície", "Iné"],
+                    onConfirm: (reason, note) => setEmployeeArchived(e.id, true, reason, note),
+                  })
+            }
+            onDelete={(id) => {
+              const e = employees.find((x) => x.id === id);
+              askDelete(`zamestnanca ${e?.name || ""}`, () => deleteEmployee(id));
+            }}
+            onLinkAccount={(e) => setLinkAccountTarget(e)}
+          />
+        )}
       </div>
+
+      {showAddEmployee && (
+        <AddEmployeeModal
+          existing={showAddEmployee.existing}
+          assignableRoles={assignableRolesFor(effectiveUser)}
+          onClose={() => setShowAddEmployee(null)}
+          onSave={(data) => {
+            if (showAddEmployee.existing) {
+              updateEmployee(showAddEmployee.existing.id, data);
+            } else {
+              addEmployee(data);
+            }
+            setShowAddEmployee(null);
+          }}
+        />
+      )}
+      {linkAccountTarget && (
+        <LinkAccountModal
+          employee={linkAccountTarget}
+          profiles={profiles}
+          employees={employees}
+          onClose={() => setLinkAccountTarget(null)}
+          onLink={(userId) => linkEmployeeToUser(linkAccountTarget.id, userId)}
+        />
+      )}
 
       {showAddMachine && (
         <AddMachineModal existing={showAddMachine.existing} onClose={() => setShowAddMachine(null)} onSave={saveMachineModal} />
@@ -2447,6 +2584,7 @@ function DispatcherApp() {
           customers={customers}
           jobs={jobs}
           reservations={reservations}
+          salespeople={salespeople}
           onSaveCustomer={upsertCustomer}
           prefillMachineId={showAddJob.machineId}
           prefillReservation={showAddJob.prefillReservation}
@@ -2461,6 +2599,7 @@ function DispatcherApp() {
           machines={machines}
           jobs={jobs}
           reservations={reservations}
+          salespeople={salespeople}
           prefillMachineId={showAddReservation.machineId}
           existing={showAddReservation.existing}
           currentUser={currentUser}
@@ -3484,7 +3623,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "uradne_skusky", label: "Úradné skúšky" },
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
-  const tabs = module === "servis" ? servisTabs : poziciovnaTabs;
+  const tabs = module === "servis" ? servisTabs : module === "administrativa" ? [] : poziciovnaTabs;
 
   return (
     <div style={{ borderBottom: "1px solid var(--border)", background: "var(--panel)" }}>
@@ -3549,6 +3688,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           {[
             { id: "poziciovna", label: "Požičovňa" },
             { id: "servis", label: "Servis" },
+            ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva" }] : []),
           ].map((m) => (
             <button
               key={m.id}
@@ -3669,7 +3809,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
 /* ---------------------------------------------------------
    Alerts
 --------------------------------------------------------- */
-function AlertsPanel({ alerts, machineById, onNavigate, onOpenJob, onOpenReservation }) {
+function AlertsPanel({ alerts, machineById, salespeople, onNavigate, onOpenJob, onOpenReservation }) {
   const [drilldownTile, setDrilldownTile] = useState(null);
   const categories = [
     { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, items: alerts.overdue, label: "Zákazka po termíne" },
@@ -3701,6 +3841,7 @@ function AlertsPanel({ alerts, machineById, onNavigate, onOpenJob, onOpenReserva
         <JobsQuickDrilldownModal
           tile={drilldownTile}
           machineById={machineById}
+          salespeople={salespeople}
           onClose={() => setDrilldownTile(null)}
           onOpenJob={onOpenJob}
           onOpenReservation={onOpenReservation}
@@ -3992,12 +4133,16 @@ function StatCard({ label, value, color }) {
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, reservations, machineById, driverById, today, user, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, onOpenReservation, mailtoDriver, mailtoCustomer, onClearAll }) {
+function JobsBoard({ jobs, reservations, machineById, driverById, today, user, myEmployee, salespeople, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onImportCustomers, onComplete, onEdit, onOpenJob, onOpenReservation, mailtoDriver, mailtoCustomer, onClearAll }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["planned", "active"]));
   const [quickCategory, setQuickCategory] = useState(initialQuickCategory || null);
   const depoOptions = DEPO_OPTIONS;
+  // Obchodník sa po prihlásení pozerá prioritne na svoje vlastné zákazky —
+  // appka to prednastaví, ale dá sa to jedným klikom zrušiť a vidieť všetky.
+  const isMyselfObchodnik = user?.role === "obchodnik" && myEmployee?.role === "obchodnik";
+  const [obchodnikFilter, setObchodnikFilter] = useState(() => (isMyselfObchodnik ? myEmployee.name : ""));
 
   useEffect(() => {
     if (initialQuickCategory) {
@@ -4008,6 +4153,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
   }, [initialQuickCategory]);
 
   function matchesSearchAndDepo(j) {
+    if (obchodnikFilter && j.obchodnik !== obchodnikFilter) return false;
     if (depoFilter && (j.fromDepo || "").toLowerCase() !== depoFilter.toLowerCase() && (j.returnDepo || "").toLowerCase() !== depoFilter.toLowerCase()) {
       return false;
     }
@@ -4030,6 +4176,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
   const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && matchesSearchAndDepo(j));
   const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j));
   function matchesSearchAndDepoRes(r) {
+    if (obchodnikFilter && r.obchodnik !== obchodnikFilter) return false;
     const m = machineById[r.machineId];
     if (depoFilter && (m?.depo || "").toLowerCase() !== depoFilter.toLowerCase()) return false;
     if (search.trim()) {
@@ -4075,6 +4222,9 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
   }
 
   let filtered = jobs.filter((j) => activeFilters.has(statusBucket(j)));
+  if (obchodnikFilter) {
+    filtered = filtered.filter((j) => j.obchodnik === obchodnikFilter);
+  }
   if (search.trim()) {
     const q = search.toLowerCase();
     filtered = filtered.filter((j) => {
@@ -4110,6 +4260,23 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
           </div>
         ))}
       </div>
+      {isMyselfObchodnik && (
+        <div style={{ marginBottom: 10 }}>
+          <button
+            className="btn"
+            onClick={() => setObchodnikFilter(obchodnikFilter ? "" : myEmployee.name)}
+            style={{
+              padding: "5px 12px",
+              fontSize: 12,
+              background: obchodnikFilter ? "var(--accent)" : "transparent",
+              color: obchodnikFilter ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (obchodnikFilter ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {obchodnikFilter ? "👤 Zobrazujem len moje — klik pre všetky" : "Zobraziť len moje zákazky"}
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ display: "flex", gap: 10 }}>
@@ -4214,7 +4381,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
         })}
       </div>
       {activeTile && (
-        <JobsQuickDrilldownModal tile={activeTile} machineById={machineById} onClose={() => setQuickCategory(null)} onOpenJob={onOpenJob} onOpenReservation={onOpenReservation} />
+        <JobsQuickDrilldownModal tile={activeTile} machineById={machineById} salespeople={salespeople} onClose={() => setQuickCategory(null)} onOpenJob={onOpenJob} onOpenReservation={onOpenReservation} />
       )}
     </div>
   );
@@ -4225,7 +4392,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, i
    používané v Zákazkách aj v Prehľade Požičovne (rovnaké chovanie,
    rovnaké rýchle filtre podľa depa a obchodníka).
 --------------------------------------------------------- */
-function JobsQuickDrilldownModal({ tile, machineById, onClose, onOpenJob, onOpenReservation }) {
+function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOpenJob, onOpenReservation }) {
   const [drillDepoFilter, setDrillDepoFilter] = useState(null);
   const [drillObchodnikFilter, setDrillObchodnikFilter] = useState("");
 
@@ -4262,7 +4429,7 @@ function JobsQuickDrilldownModal({ tile, machineById, onClose, onOpenJob, onOpen
       <div style={{ marginBottom: 14 }}>
         <select value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px" }}>
           <option value="">— všetci obchodníci —</option>
-          {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
         </select>
       </div>
       <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -4339,10 +4506,11 @@ function JobsQuickDrilldownModal({ tile, machineById, onClose, onOpenJob, onOpen
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, assignDriver, assignReturnDriver, depoCheckers, checkerSubstitutions, technicianById, technicians, getTransportSendStatus, recordTransportSend, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, depoCheckers, checkerSubstitutions, technicianById, technicians, getTransportSendStatus, recordTransportSend, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
-  const [driverFilter, setDriverFilter] = useState("");
+  const isMyselfSofer = user?.role === "sofer" && myEmployee?.role === "sofer";
+  const [driverFilter, setDriverFilter] = useState(() => (isMyselfSofer ? myEmployee.id : ""));
   const [quickFilter, setQuickFilter] = useState(null); // { key, dateVal, type, label, driverName } — recomputed live, never frozen
   const depoOptions = DEPO_OPTIONS;
 
@@ -4712,6 +4880,165 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
 /* ---------------------------------------------------------
    Drivers view
 --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Administratíva — jednotný zoznam osôb (technici, šoféri, obchodníci,
+   dispečeri...), viditeľné len pre vedúceho požičovne/servisu a admina.
+   Každý vidí a spravuje len role z vlastnej oblasti (okrem admina).
+--------------------------------------------------------- */
+function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchive, onDelete, onLinkAccount }) {
+  const [showArchived, setShowArchived] = useState(false);
+  const manageableRoles = manageableEmployeeRoles(user);
+  const visible = employees.filter((e) => manageableRoles.includes(e.role) && (showArchived || !e.archived));
+  const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        Zoznam zamestnancov — odtiaľto appka ťahá zoznamy technikov, šoférov a obchodníkov na
+        ostatných miestach. Vidíte a spravujete len role z vlastnej oblasti.
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Zobraziť archivovaných
+        </label>
+        <button className="btn btn-accent" onClick={onAdd}>+ Pridať zamestnanca</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Meno</th>
+            <th>Rola</th>
+            <th>Depo</th>
+            <th>Telefón</th>
+            <th>Email</th>
+            <th>Prepojený účet</th>
+            <th>Stav</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.length === 0 && (
+            <tr><td colSpan={8} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zamestnanci.</td></tr>
+          )}
+          {visible.map((e) => {
+            const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
+            return (
+              <tr key={e.id}>
+                <td style={{ fontWeight: 600 }}>{e.name}</td>
+                <td>{roleLabel(e.role)}</td>
+                <td>{e.depo || "—"}</td>
+                <td>{e.phone || "—"}</td>
+                <td>{e.email || "—"}</td>
+                <td>
+                  {linkedProfile ? (
+                    <span className="badge badge-ok">{linkedProfile.name}</span>
+                  ) : (
+                    <span style={{ color: "var(--text-dim)" }}>— nepriradený —</span>
+                  )}
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", marginLeft: 6 }} onClick={() => onLinkAccount(e)}>
+                    {linkedProfile ? "Zmeniť" : "Prepojiť"}
+                  </button>
+                </td>
+                <td>{e.archived ? <span className="badge badge-danger">Archivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+                <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(e)}>Upraviť</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onArchive(e)}>
+                    {e.archived ? "Aktivovať" : "Archivovať"}
+                  </button>
+                  {isAdminUser(user) && (
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(e.id)}>
+                      Zmazať
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
+  const [name, setName] = useState(existing?.name || "");
+  const [role, setRole] = useState(existing?.role || assignableRoles[0]?.id || "");
+  const [depo, setDepo] = useState(existing?.depo || "");
+  const [phone, setPhone] = useState(existing?.phone || "");
+  const [email, setEmail] = useState(existing?.email || "");
+  const [skratka, setSkratka] = useState(existing?.skratka || "");
+  const [spz, setSpz] = useState(existing?.spz || "");
+
+  const canSave = name.trim() && role && depo.trim();
+
+  return (
+    <Modal title={existing ? "Upraviť zamestnanca" : "Pridať zamestnanca"} onClose={onClose}>
+      <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
+      <Field label="Rola *">
+        <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%" }}>
+          {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+      </Field>
+      <Field label="Depo *">
+        <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
+          <option value="">— vybrať depo —</option>
+          {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </Field>
+      {role === "technik" && (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Skratka"><input value={skratka} onChange={(e) => setSkratka(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="ŠPZ"><input value={spz} onChange={(e) => setSpz(e.target.value)} style={{ width: "100%" }} /></Field>
+        </div>
+      )}
+      <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
+      <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
+      <button
+        className="btn btn-accent"
+        disabled={!canSave}
+        onClick={() =>
+          onSave({
+            name: name.trim(),
+            role,
+            depo: depo.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            skratka: skratka.trim(),
+            spz: spz.trim(),
+          })
+        }
+      >
+        {existing ? "Uložiť zmeny" : "Uložiť"}
+      </button>
+    </Modal>
+  );
+}
+
+function LinkAccountModal({ employee, profiles, employees, onClose, onLink }) {
+  const linkedIds = new Set(employees.filter((e) => e.linkedUserId && e.id !== employee.id).map((e) => e.linkedUserId));
+  const available = profiles.filter((p) => !linkedIds.has(p.id));
+  const [selected, setSelected] = useState(employee.linkedUserId || "");
+
+  return (
+    <Modal title={`Prepojiť s účtom · ${employee.name}`} onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+        Po prepojení sa tento zamestnanec bude vedieť po prihlásení prednastavene pozerať
+        na svoje vlastné zákazky/servisy/prepravy.
+      </div>
+      <Field label="Používateľský účet">
+        <select value={selected} onChange={(e) => setSelected(e.target.value)} style={{ width: "100%" }}>
+          <option value="">— nepriradené —</option>
+          {available.map((p) => <option key={p.id} value={p.id}>{p.name}{p.email ? ` (${p.email})` : ""}</option>)}
+        </select>
+      </Field>
+      <button className="btn btn-accent" onClick={() => { onLink(selected || null); onClose(); }}>
+        Uložiť
+      </button>
+    </Modal>
+  );
+}
+
 function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
   const [showArchived, setShowArchived] = useState(false);
   const visible = drivers.filter((d) => (showArchived ? true : !d.archived));
@@ -4967,11 +5294,11 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
    Nezáväzná rezervácia stroja — pre obchodníkov (aj dispečera/vedúceho
    požičovne, ktorí si ju vedia rovno aj sami schváliť).
 --------------------------------------------------------- */
-function AddReservationModal({ machines, jobs, reservations, prefillMachineId, existing, currentUser, onClose, onSave }) {
+function AddReservationModal({ machines, jobs, reservations, salespeople, prefillMachineId, existing, currentUser, onClose, onSave }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
-  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || (SALESPEOPLE.some((s) => s.name === currentUser?.name) ? currentUser.name : ""));
+  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || (salespeople.some((s) => s.name === currentUser?.name) ? currentUser.name : ""));
   const [expectedStart, setExpectedStart] = useState(existing?.expectedStart || todayISO());
   const [expectedEnd, setExpectedEnd] = useState(existing?.expectedEnd || "");
   const [notes, setNotes] = useState(existing?.notes || "");
@@ -5020,7 +5347,7 @@ function AddReservationModal({ machines, jobs, reservations, prefillMachineId, e
         <Field label="Obchodník *">
           <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať obchodníka —</option>
-            {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+            {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
         </Field>
         <Field label="Predpokladaný začiatok *">
@@ -5133,7 +5460,7 @@ function ReservationCardModal({ reservation, machine, user, onClose, onDelete, o
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
+function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
   const machine = machines.find((m) => m.id === machineId);
@@ -5219,7 +5546,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
             )}
             <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
               <option value="">— vybrať obchodníka —</option>
-              {SALESPEOPLE.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
             </select>
           </div>
         </Field>
