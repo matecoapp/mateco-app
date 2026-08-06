@@ -776,7 +776,7 @@ function DispatcherApp() {
     setView("dokumenty");
     setDocumentsSubView(subTab.id);
   }
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
   }
@@ -2136,7 +2136,7 @@ function DispatcherApp() {
         }
         damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
         darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode((v) => !v)}
+        onToggleDarkMode={() => setDarkMode((v) => { localStorage.setItem("mateco_dark_mode", !v ? "1" : "0"); return !v; })}
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
         currentUser={currentUser}
