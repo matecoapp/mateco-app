@@ -929,9 +929,8 @@ function DispatcherApp() {
     if (!session) return;
     const KEY_SETTERS = {
       machines: setMachines,
-      drivers: setDrivers,
+      employees: setEmployees,
       jobs: setJobs,
-      technicians: setTechnicians,
       assignments: setAssignments,
       damages: setDamages,
       weeklyDuty: setWeeklyDuty,
@@ -941,6 +940,8 @@ function DispatcherApp() {
       depoCheckers: setDepoCheckers,
       framoveZmluvy: setFramoveZmluvy,
       blacklist: setBlacklist,
+      checkerSubstitutions: setCheckerSubstitutions,
+      reservations: setReservations,
     };
     const channel = supabase
       .channel("app_data_live")
