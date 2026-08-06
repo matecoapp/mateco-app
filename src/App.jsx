@@ -259,7 +259,11 @@ const SALESPEOPLE = [
   { name: "Lukáš Bretz", color: "#38BDF8" },
 ];
 const NO_SALESPERSON_COLOR = "#7C4A1E"; // zákazka bez obchodníka — hnedá
-const salespersonColor = (name) => SALESPEOPLE.find((s) => s.name === name)?.color || null;
+function salespersonColor(name, salespeople) {
+  const emp = salespeople?.find((s) => s.name === name && s.color);
+  if (emp) return emp.color;
+  return SALESPEOPLE.find((s) => s.name === name)?.color || null;
+}
 const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const todayISO = () => toLocalISO(new Date());
 
@@ -2279,6 +2283,7 @@ function DispatcherApp() {
             machines={enrichedMachines}
             jobs={jobs}
             reservations={reservations}
+            salespeople={salespeople}
             today={today}
             driverById={driverById}
             user={effectiveUser}
@@ -2632,6 +2637,7 @@ function DispatcherApp() {
         <ReservationCardModal
           reservation={reservationCardTarget}
           machine={machineById[reservationCardTarget.machineId]}
+          salespeople={salespeople}
           user={effectiveUser}
           onClose={() => setReservationCardTarget(null)}
           onDelete={() => {
@@ -2958,6 +2964,7 @@ function DispatcherApp() {
           technicianById={technicianByIdTop}
           depoCheckers={depoCheckers}
           checkerSubstitutions={checkerSubstitutions}
+          salespeople={salespeople}
           user={effectiveUser}
           onClose={() => setJobDetail(null)}
           onEdit={() => {
@@ -4985,8 +4992,10 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
   const [skratka, setSkratka] = useState(existing?.skratka || "");
   const [spz, setSpz] = useState(existing?.spz || "");
   const [alsoObchodnik, setAlsoObchodnik] = useState(existing?.alsoObchodnik || false);
+  const [color, setColor] = useState(existing?.color || "#2563EB");
 
   const canSave = name.trim() && role && depo.trim();
+  const isSalesperson = role === "obchodnik" || alsoObchodnik;
 
   return (
     <Modal title={existing ? "Upraviť zamestnanca" : "Pridať zamestnanca"} onClose={onClose}>
@@ -5014,6 +5023,14 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
           Počítať aj ako obchodníka (objaví sa v zozname obchodníkov pri zákazkách/rezerváciách)
         </label>
       )}
+      {isSalesperson && (
+        <Field label="Farba v kalendári (voliteľné)">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: 44, height: 30, padding: 2, border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }} />
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Použije sa pri jeho zákazkách/rezerváciách v Kalendári</span>
+          </div>
+        </Field>
+      )}
       <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
       <button
@@ -5029,6 +5046,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
             skratka: skratka.trim(),
             spz: spz.trim(),
             alsoObchodnik: role === "obchodnik" ? false : alsoObchodnik,
+            color: isSalesperson ? color : (existing?.color || undefined),
           })
         }
       >
@@ -5074,7 +5092,6 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
-        {can(user, "driver_add") && <button className="btn btn-accent" onClick={onAdd}>+ Pridať šoféra</button>}
       </div>
       <div className="panel">
         <table>
@@ -5262,7 +5279,7 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
 /* ---------------------------------------------------------
    Job detail modal (clicked from Kalendár)
 --------------------------------------------------------- */
-function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage }) {
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
   const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
@@ -5281,7 +5298,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <CardField label="Šofér (zvoz)" value={job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
         <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
         <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
-        <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik)} />
+        <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik, salespeople)} />
         <CardField label="Číslo zmluvy" value={job.cisloZmluvy} />
       </div>
       {job.notes && (
@@ -5424,7 +5441,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, prefil
    Karta nezáväznej rezervácie — obchodník si len pozrie,
    dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
 --------------------------------------------------------- */
-function ReservationCardModal({ reservation, machine, user, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete }) {
+function ReservationCardModal({ reservation, machine, salespeople, user, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete }) {
   const r = reservation;
   const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
   const isPending = r.status === "pending";
@@ -5438,7 +5455,7 @@ function ReservationCardModal({ reservation, machine, user, onClose, onDelete, o
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={r.customer} />
         <CardField label="Kam" value={r.toLocation} />
-        <CardField label="Obchodník" value={r.obchodnik} dotColor={salespersonColor(r.obchodnik)} />
+        <CardField label="Obchodník" value={r.obchodnik} dotColor={salespersonColor(r.obchodnik, salespeople)} />
         <CardField label="Vytvoril" value={r.createdBy} />
         <CardField label="Predpokladaný začiatok" value={fmtDate(r.expectedStart)} />
         <CardField label="Predpokladaný koniec" value={r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"} />
@@ -5567,7 +5584,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
         <Field label="Obchodník">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {obchodnik && (
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik), flexShrink: 0 }} />
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
             )}
             <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
               <option value="">— vybrať obchodníka —</option>
@@ -5999,7 +6016,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
 /* ---------------------------------------------------------
    Calendar / Gantt view
 --------------------------------------------------------- */
-function CalendarView({ machines, jobs, reservations, today, driverById, user, onOpenCard, onOpenJob, onAddReservation, onOpenReservation }) {
+function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, onOpenCard, onOpenJob, onAddReservation, onOpenReservation }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -6166,7 +6183,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                       const noEnd = !j.endDate;
                       const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
                       const st = effectiveStatus(j, today);
-                      const bg = salespersonColor(j.obchodnik) || NO_SALESPERSON_COLOR;
+                      const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
                       // Textový štítok sa nikdy nesmie roztiahnuť viac než samotný farebný blok
                       // (inak by pri krátkej zákazke prerastal do susedného bloku). Odhad šírky
@@ -6220,7 +6237,7 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
                       const startCol = r.expectedStart < monthStartISO ? 1 : dayIndex(r.expectedStart);
                       const noEnd = !r.expectedEnd;
                       const endCol = noEnd || r.expectedEnd > monthEndISO ? daysInMonth : dayIndex(r.expectedEnd);
-                      const bg = salespersonColor(r.obchodnik) || NO_SALESPERSON_COLOR;
+                      const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const dayCount = endCol - startCol + 1;
                       const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
                       return (
@@ -6277,8 +6294,8 @@ function CalendarView({ machines, jobs, reservations, today, driverById, user, o
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
       </div>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap" }}>
-        {SALESPEOPLE.map((s) => (
-          <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: s.color, marginRight: 5 }} />{s.name}</span>
+        {salespeople.map((s) => (
+          <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
         ))}
       </div>
     </div>
@@ -7938,9 +7955,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
     return (
       <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
         Zatiaľ nie sú pridaní žiadni technici.
-        <div style={{ marginTop: 12 }}>
-          {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
-        </div>
+        <div style={{ marginTop: 12, fontSize: 12 }}>Pridáte ich v module Administratíva.</div>
       </div>
     );
   }
@@ -7961,7 +7976,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           </label>
         )}
         <div style={{ flex: 1 }} />
-        {can(user, "technician_add") && <button className="btn btn-accent" onClick={onAddTechnician}>+ Pridať technika</button>}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
