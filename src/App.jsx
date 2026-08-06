@@ -3630,6 +3630,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ maxWidth: 1400, margin: "0 auto", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6 }}>
           <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
+          <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v2026-07-23</span>
           <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
           <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
             Interná platforma
