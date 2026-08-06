@@ -736,7 +736,7 @@ function DispatcherApp() {
   const [employees, setEmployees] = useState([]); // zjednotený zoznam osôb (technici, šoféri, obchodníci, dispečeri...)
   const technicians = useMemo(() => employees.filter((e) => e.role === "technik"), [employees]);
   const drivers = useMemo(() => employees.filter((e) => e.role === "sofer"), [employees]);
-  const salespeople = useMemo(() => employees.filter((e) => e.role === "obchodnik" && !e.archived), [employees]);
+  const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
   const [module, setModuleRaw] = useState("poziciovna");
   const [view, setView] = useState("dashboard");
@@ -1107,7 +1107,14 @@ function DispatcherApp() {
     persistEmployees([...employees, { id: uid(), archived: false, linkedUserId: null, ...data }]);
   }
   function updateEmployee(id, patch) {
-    persistEmployees(employees.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    const next = employees.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    persistEmployees(next);
+    // Ak má zamestnanec prepojený účet, zmena role v Administratíve rovno
+    // aktualizuje aj jeho SKUTOČNÉ prihlasovacie práva — nie je to len popisok.
+    if (patch.role) {
+      const emp = next.find((e) => e.id === id);
+      if (emp?.linkedUserId) updateProfileInfo(emp.linkedUserId, { role: patch.role });
+    }
   }
   function setEmployeeArchived(id, archived, reason, note) {
     persistEmployees(
@@ -1125,6 +1132,12 @@ function DispatcherApp() {
   }
   function linkEmployeeToUser(employeeId, userId) {
     persistEmployees(employees.map((e) => (e.id === employeeId ? { ...e, linkedUserId: userId || null } : e)));
+    // Pri prepojení appka rovno zosúladí rolu účtu s rolou zamestnanca,
+    // nech sa hneď od začiatku nedostanú do nesúladu.
+    if (userId) {
+      const emp = employees.find((e) => e.id === employeeId);
+      if (emp) updateProfileInfo(userId, { role: emp.role });
+    }
   }
   // Spätne kompatibilné "persist" funkcie pre šoférov/technikov — teraz zapisujú
   // do jednotného zoznamu osôb (employees), zvyšok appky sa nemusí meniť.
@@ -4928,7 +4941,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
             return (
               <tr key={e.id}>
                 <td style={{ fontWeight: 600 }}>{e.name}</td>
-                <td>{roleLabel(e.role)}</td>
+                <td>{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}</td>
                 <td>{e.depo || "—"}</td>
                 <td>{e.phone || "—"}</td>
                 <td>{e.email || "—"}</td>
@@ -4971,6 +4984,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
   const [email, setEmail] = useState(existing?.email || "");
   const [skratka, setSkratka] = useState(existing?.skratka || "");
   const [spz, setSpz] = useState(existing?.spz || "");
+  const [alsoObchodnik, setAlsoObchodnik] = useState(existing?.alsoObchodnik || false);
 
   const canSave = name.trim() && role && depo.trim();
 
@@ -4994,6 +5008,12 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
           <Field label="ŠPZ"><input value={spz} onChange={(e) => setSpz(e.target.value)} style={{ width: "100%" }} /></Field>
         </div>
       )}
+      {role !== "obchodnik" && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
+          <input type="checkbox" checked={alsoObchodnik} onChange={(e) => setAlsoObchodnik(e.target.checked)} />
+          Počítať aj ako obchodníka (objaví sa v zozname obchodníkov pri zákazkách/rezerváciách)
+        </label>
+      )}
       <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
       <button
@@ -5008,6 +5028,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
             email: email.trim(),
             skratka: skratka.trim(),
             spz: spz.trim(),
+            alsoObchodnik: role === "obchodnik" ? false : alsoObchodnik,
           })
         }
       >
@@ -5026,7 +5047,9 @@ function LinkAccountModal({ employee, profiles, employees, onClose, onLink }) {
     <Modal title={`Prepojiť s účtom · ${employee.name}`} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Po prepojení sa tento zamestnanec bude vedieť po prihlásení prednastavene pozerať
-        na svoje vlastné zákazky/servisy/prepravy.
+        na svoje vlastné zákazky/servisy/prepravy. Zároveň sa účtu nastaví rovnaká rola
+        ako má tu (a pri každej ďalšej zmene role tu sa aktualizuje aj tam) — takže toto
+        prepojenie reálne rozhoduje aj o tom, čo daný človek v appke uvidí a bude môcť robiť.
       </div>
       <Field label="Používateľský účet">
         <select value={selected} onChange={(e) => setSelected(e.target.value)} style={{ width: "100%" }}>
