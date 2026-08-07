@@ -798,7 +798,6 @@ function DispatcherApp() {
   const [depoCheckers, setDepoCheckers] = useState({}); // { "Bratislava": technicianId, ... }
   const [checkerSubstitutions, setCheckerSubstitutions] = useState([]); // [{id, depo, originalTechnicianId, substituteTechnicianId, startDate, endDate}]
   const [reservations, setReservations] = useState([]); // nezáväzné rezervácie strojov
-  const [showDepoCheckerSettings, setShowDepoCheckerSettings] = useState(false);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
@@ -822,7 +821,7 @@ function DispatcherApp() {
 
   function setModule(m) {
     setModuleRaw(m);
-    setView(m === "servis" ? "prehlad" : "dashboard");
+    setView(m === "servis" ? "prehlad" : m === "administrativa" ? "zamestnanci" : "dashboard");
   }
 
   const today = todayISO();
@@ -2145,7 +2144,6 @@ function DispatcherApp() {
         onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
-        onOpenDepoCheckerSettings={() => setShowDepoCheckerSettings(true)}
         onPickDocumentsSubView={pickDocumentsSubView}
         myNotifications={myNotifications}
         unreadNotificationCount={unreadNotificationCount}
@@ -2168,16 +2166,6 @@ function DispatcherApp() {
               onConfirm: () => resetUserPassword(email),
             })
           }
-        />
-      )}
-      {showDepoCheckerSettings && (
-        <DepoCheckerSettingsModal
-          depoCheckers={depoCheckers}
-          technicians={technicians}
-          checkerSubstitutions={checkerSubstitutions}
-          onDeleteSubstitution={deleteCheckerSubstitution}
-          onSave={persistDepoCheckers}
-          onClose={() => setShowDepoCheckerSettings(false)}
         />
       )}
 
@@ -2506,7 +2494,7 @@ function DispatcherApp() {
           <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
         )}
 
-        {module === "administrativa" && (
+        {module === "administrativa" && view === "zamestnanci" && (
           <AdministrativaView
             employees={employees}
             profiles={profiles}
@@ -2527,6 +2515,15 @@ function DispatcherApp() {
               askDelete(`zamestnanca ${e?.name || ""}`, () => deleteEmployee(id));
             }}
             onLinkAccount={(e) => setLinkAccountTarget(e)}
+          />
+        )}
+        {module === "administrativa" && view === "checkeri" && (
+          <DepoCheckerSettingsView
+            depoCheckers={depoCheckers}
+            technicians={technicians}
+            checkerSubstitutions={checkerSubstitutions}
+            onDeleteSubstitution={deleteCheckerSubstitution}
+            onSave={persistDepoCheckers}
           />
         )}
       </div>
@@ -3086,7 +3083,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onOpenDepoCheckerSettings, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
   const [open, setOpen] = useState(false);
   const isAdmin = isAdminUser(currentUser);
 
@@ -3169,9 +3166,6 @@ function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggle
                 <div style={sectionLabel}>Administrácia</div>
                 <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenUserAdmin(); setOpen(false); }}>
                   👤 Používatelia
-                </button>
-                <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenDepoCheckerSettings(); setOpen(false); }}>
-                  🔧 Checkeri podľa depa
                 </button>
                 {canExport && (
                   <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onExportBackup(); setOpen(false); }}>
@@ -3626,7 +3620,7 @@ function DocumentsView({
 }
 
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, onOpenDepoCheckerSettings, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView }) {
   const poziciovnaTabs = [
     { id: "dashboard", label: "Prehľad" },
     { id: "calendar", label: "Kalendár" },
@@ -3644,7 +3638,11 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "uradne_skusky", label: "Úradné skúšky" },
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
-  const tabs = module === "servis" ? servisTabs : module === "administrativa" ? [] : poziciovnaTabs;
+  const administrativaTabs = [
+    { id: "zamestnanci", label: "Zamestnanci" },
+    { id: "checkeri", label: "Checkeri podľa depa" },
+  ];
+  const tabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
 
   return (
     <div style={{ borderBottom: "1px solid var(--border)", background: "var(--panel)" }}>
@@ -3694,7 +3692,6 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
                 onOpenUserAdmin={onOpenUserAdmin}
-                onOpenDepoCheckerSettings={onOpenDepoCheckerSettings}
                 onExportBackup={onExportBackup}
                 onImportBackup={onImportBackup}
                 canExport={can(effectiveUser, "backup_export")}
@@ -8621,49 +8618,51 @@ function LoginScreen({ onLogin, onSignUp }) {
    (admin only) — dá sa kedykoľvek zmeniť, napr. pri dovolenke
    alebo zmene človeka na tejto úlohe.
 --------------------------------------------------------- */
-function DepoCheckerSettingsModal({ depoCheckers, technicians, checkerSubstitutions, onDeleteSubstitution, onSave, onClose }) {
+function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutions, onDeleteSubstitution, onSave }) {
   const [values, setValues] = useState(depoCheckers || {});
   const technicianName = (id) => technicians.find((t) => t.id === id)?.name || "—";
 
   return (
-    <Modal title="Checkeri podľa depa" onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 16 }}>
+    <div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
         Kto skontroluje/pripraví stroj na danom depe pri vývoze aj zvoze — appka to už nebude pýtať pri
-        každej zákazke zvlášť. Zmeňte tu kedykoľvek (dovolenka, zmena osoby na tejto úlohe a pod.).
+        každej zákazke zvlášť. Zmeňte tu kedykoľvek (dovolenka, zmena osoby na tejto úlohe a pod.) —
+        pri zadaní dovolenky checkerovi priamo v Pláne servisu appka navyše sama ponúkne dočasnú náhradu.
       </div>
-      {DEPO_OPTIONS.map((depo) => (
-        <Field key={depo} label={depo}>
-          <select
-            value={values[depo] || ""}
-            onChange={(e) => setValues((v) => ({ ...v, [depo]: e.target.value || undefined }))}
-            style={{ width: "100%" }}
-          >
-            <option value="">— nenastavené —</option>
-            {technicians.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </Field>
-      ))}
-      <button
-        className="btn btn-accent"
-        style={{ marginBottom: 20 }}
-        onClick={() => {
-          // vyčistí prázdne hodnoty, nech sa v databáze nehromadí "undefined"
-          const cleaned = {};
-          Object.entries(values).forEach(([k, v]) => {
-            if (v) cleaned[k] = v;
-          });
-          onSave(cleaned);
-          onClose();
-        }}
-      >
-        Uložiť
-      </button>
+      <div style={{ maxWidth: 420 }}>
+        {DEPO_OPTIONS.map((depo) => (
+          <Field key={depo} label={depo}>
+            <select
+              value={values[depo] || ""}
+              onChange={(e) => setValues((v) => ({ ...v, [depo]: e.target.value || undefined }))}
+              style={{ width: "100%" }}
+            >
+              <option value="">— nenastavené —</option>
+              {technicians.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </Field>
+        ))}
+        <button
+          className="btn btn-accent"
+          style={{ marginBottom: 20 }}
+          onClick={() => {
+            // vyčistí prázdne hodnoty, nech sa v databáze nehromadí "undefined"
+            const cleaned = {};
+            Object.entries(values).forEach(([k, v]) => {
+              if (v) cleaned[k] = v;
+            });
+            onSave(cleaned);
+          }}
+        >
+          Uložiť
+        </button>
+      </div>
       {checkerSubstitutions && checkerSubstitutions.length > 0 && (
         <>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Aktívne/naplánované náhrady (dovolenka)
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
             {checkerSubstitutions.map((s) => (
               <div key={s.id} className="panel" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
                 <span><strong>{s.depo}</strong>: {technicianName(s.originalTechnicianId)} → {technicianName(s.substituteTechnicianId)}</span>
@@ -8680,7 +8679,7 @@ function DepoCheckerSettingsModal({ depoCheckers, technicians, checkerSubstituti
           </div>
         </>
       )}
-    </Modal>
+    </div>
   );
 }
 
