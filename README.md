@@ -84,3 +84,25 @@ npm run dev
 - Adresa Power Automate (v zabudovanom servisnom protokole) **v kóde stále
   je** — ak plánujete verejný repozitár, dajte mi vedieť, prejdeme spolu
   krokmi, ako ju vytiahnuť von podobným spôsobom ako Supabase kľúče vyššie.
+
+## Prihlasovanie (Supabase Auth)
+
+Appka už nepoužíva vlastný systém hesiel — prihlasovanie rieši priamo
+Supabase (bezpečnejšie, žiadne heslá neprechádzajú appkou v čitateľnej
+podobe). Predtým, než appku spustíte, spustite v Supabase **SQL Editor**
+skript `step1-auth-setup.sql` (priložený vedľa tohto balíka) — vytvorí
+tabuľku profilov a nastaví, kto čo smie robiť.
+
+**Ako to funguje:**
+- Kolegovia sa **sami zaregistrujú** na prihlasovacej obrazovke (tlačidlo
+  "Nemám ešte účet — zaregistrovať sa").
+- **Prvý človek, čo sa kedy zaregistruje, sa automaticky stane
+  administrátorom.** Odporúčam, aby ste to boli vy — zaregistrujte sa hneď
+  po prvom spustení appky.
+- Ostatným kolegom potom v appke (tlačidlo "👤 Používatelia", viditeľné len
+  pre admina) pridelíte rolu — kým rolu nedostanú, appku vidia len na
+  čítanie.
+- Podľa nastavenia Supabase projektu (Authentication → Providers → Email)
+  môže byť po registrácii potrebné potvrdiť email kliknutím na odkaz. Ak
+  chcete tento krok pre interný nástroj preskočiť, v Supabase choďte na
+  **Authentication → Providers → Email** a vypnite "Confirm email".
