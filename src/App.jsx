@@ -22,7 +22,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.223";
+const APP_VERSION = "1.0.225";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1731,83 +1731,77 @@ function DispatcherApp() {
     reader.readAsText(file);
   }
 
+  // Kontrola revízií AJ úradných skúšok je zámerne v JEDNOM efekte, nie v dvoch
+  // samostatných — keby boli oddelené, obe by počítali "nový zoznam poškodení"
+  // z toho istého (rovnako starého) stavu v tom istom okamihu, a ktorákoľvek
+  // z nich by potom druhú potichu prepísala. V jednom efekte k tomu nemôže dôjsť.
   useEffect(() => {
     if (!loaded) return;
     const additions = [];
     machines.forEach((m) => {
-      if (!m.revizia) return;
-      if (m.trackRevisions === false) return;
-      if (m.objekt && m.objekt !== "Požičovňový stroj") return;
-      const days = daysBetween(today, m.revizia);
-      if (days > 30) return;
-      const alreadyOpen = damages.some(
-        (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && !d.resolved
-      );
-      if (alreadyOpen) return;
-      const overdue = days < 0;
-      additions.push({
-        id: uid(),
-        type: "revizia",
-        machineId: m.id,
-        code: m.code,
-        model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
-        serialNumber: m.code || "",
-        currentJobLabel: "",
-        customerContact: "",
-        location: m.depo || "",
-        customer: "",
-        revizia: m.revizia,
-        overdue,
-        dateReported: today,
-        popis: overdue
-          ? `Revízia po termíne (mala byť ${fmtDate(m.revizia)})`
-          : `Revízia o ${days} dní (${fmtDate(m.revizia)})`,
-        resolved: false,
-        technicianId: null,
-        assignedDate: null,
-        assignmentId: null,
-      });
-    });
-    if (additions.length) persistDamages([...damages, ...additions]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [machines, today, loaded]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    const additions = [];
-    machines.forEach((m) => {
-      if (!m.uradnaSkuska) return;
-      if (m.trackUradnaSkuska === false) return;
-      if (m.objekt && m.objekt !== "Požičovňový stroj") return;
-      const days = daysBetween(today, m.uradnaSkuska);
-      if (days > 30) return;
-      const alreadyOpen = damages.some(
-        (d) => d.type === "uradnaSkuska" && d.machineId === m.id && d.uradnaSkuskaDate === m.uradnaSkuska && !d.resolved
-      );
-      if (alreadyOpen) return;
-      const overdue = days < 0;
-      additions.push({
-        id: uid(),
-        type: "uradnaSkuska",
-        machineId: m.id,
-        code: m.code,
-        model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
-        serialNumber: m.code || "",
-        currentJobLabel: "",
-        customerContact: "",
-        location: m.depo || "",
-        customer: "",
-        uradnaSkuskaDate: m.uradnaSkuska,
-        overdue,
-        dateReported: today,
-        popis: overdue
-          ? `Úradná skúška po termíne (mala byť ${fmtDate(m.uradnaSkuska)})`
-          : `Úradná skúška o ${days} dní (${fmtDate(m.uradnaSkuska)})`,
-        resolved: false,
-        technicianId: null,
-        assignedDate: null,
-        assignmentId: null,
-      });
+      const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
+      if (isStroj && m.revizia && m.trackRevisions !== false) {
+        const days = daysBetween(today, m.revizia);
+        const alreadyOpen = damages.some(
+          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && !d.resolved
+        );
+        if (days <= 30 && !alreadyOpen) {
+          const overdue = days < 0;
+          additions.push({
+            id: uid(),
+            type: "revizia",
+            machineId: m.id,
+            code: m.code,
+            model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+            serialNumber: m.code || "",
+            currentJobLabel: "",
+            customerContact: "",
+            location: m.depo || "",
+            customer: "",
+            revizia: m.revizia,
+            overdue,
+            dateReported: today,
+            popis: overdue
+              ? `Revízia po termíne (mala byť ${fmtDate(m.revizia)})`
+              : `Revízia o ${days} dní (${fmtDate(m.revizia)})`,
+            resolved: false,
+            technicianId: null,
+            assignedDate: null,
+            assignmentId: null,
+          });
+        }
+      }
+      if (isStroj && m.uradnaSkuska && m.trackUradnaSkuska !== false) {
+        const days = daysBetween(today, m.uradnaSkuska);
+        const alreadyOpen = damages.some(
+          (d) => d.type === "uradnaSkuska" && d.machineId === m.id && d.uradnaSkuskaDate === m.uradnaSkuska && !d.resolved
+        );
+        if (days <= 30 && !alreadyOpen) {
+          const overdue = days < 0;
+          additions.push({
+            id: uid(),
+            type: "uradnaSkuska",
+            machineId: m.id,
+            code: m.code,
+            model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+            serialNumber: m.code || "",
+            currentJobLabel: "",
+            customerContact: "",
+            location: m.depo || "",
+            customer: "",
+            uradnaSkuskaDate: m.uradnaSkuska,
+            overdue,
+            dateReported: today,
+            popis: overdue
+              ? `Úradná skúška po termíne (mala byť ${fmtDate(m.uradnaSkuska)})`
+              : `Úradná skúška o ${days} dní (${fmtDate(m.uradnaSkuska)})`,
+            resolved: false,
+            technicianId: null,
+            assignedDate: null,
+            assignmentId: null,
+          });
+        }
+      }
     });
     if (additions.length) persistDamages([...damages, ...additions]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2497,7 +2491,6 @@ function DispatcherApp() {
   }
   function mailtoCustomer(job) {
     const machine = machineById[job.machineId];
-    if (!job.customerEmail) return null;
     const subject = `Potvrdenie zákazky — stroj ${machine?.code}`;
     const body =
       `Dobrý deň,\n\n` +
@@ -2505,7 +2498,7 @@ function DispatcherApp() {
       `Termín: ${fmtDate(job.startDate)} — ${job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}\n` +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nS pozdravom,\nDispečing`;
-    return { to: job.customerEmail, subject, body };
+    return { to: job.customerEmail || "", subject, body };
   }
 
   if (showSetNewPassword) {
@@ -6253,13 +6246,17 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <button className="btn btn-ghost" onClick={() => openPrintableHandoverProtocol(job, machine, existing)}>
             🖨 Tlačová verzia (PDF)
           </button>
-          {job?.customerEmail && can(user, "job_email") && (
+          {can(user, "job_email") && (
             <button
               className="btn btn-ghost"
-              title="Otvorí tlačovú verziu na uloženie ako PDF a zároveň pripraví email zákazníkovi — PDF treba do mailu ručne priložiť, prehliadač to nevie spraviť automaticky"
+              title={
+                job?.customerEmail
+                  ? "Otvorí tlačovú verziu na uloženie ako PDF a zároveň pripraví email zákazníkovi — PDF treba do mailu ručne priložiť, prehliadač to nevie spraviť automaticky"
+                  : "Zákazka nemá vyplnený email zákazníka — adresu doplníte priamo v otvorenom maile"
+              }
               onClick={() => {
                 composeMail({
-                  to: job.customerEmail,
+                  to: job?.customerEmail || "",
                   subject: `Protokol o odovzdaní a prevzatí stroja — ${machine?.code || ""}`,
                   body:
                     `Dobrý deň,\n\nv prílohe zasielame protokol o odovzdaní a prevzatí stroja ${machine?.code || ""} (protokol č. ${existing.protocolNumber || "—"}).\n\n` +
@@ -6723,7 +6720,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
     return null;
   }, [machineId, startDate, endDate, jobs, reservations, existing, prefillReservation]);
 
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && customerEmail.trim() && startDate && !conflict;
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && startDate && !conflict;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -6766,7 +6763,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
             }}
           />
         </Field>
-        <Field label="Email zákazníka *"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Obchodník">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {obchodnik && (
