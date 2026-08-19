@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Prívesná/špeciálna",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.229";
+const APP_VERSION = "1.0.230";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7342,7 +7342,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     relevantMachines = [...relevantMachines].sort((a, b) => {
       const ca = catIndex(a), cb = catIndex(b);
       if (ca !== cb) return ca - cb;
-      return liftHeight(a) - liftHeight(b); // nižšie hore
+      const ha = liftHeight(a), hb = liftHeight(b);
+      if (ha !== hb) return ha - hb; // nižšie hore
+      // Pri rovnakej (alebo chýbajúcej) výške zdvihu drží appka rovnaké
+      // modely pod sebou podľa názvu, nech sa nerozhádžu medzi sebou.
+      const ta = (a.type || "").trim(), tb = (b.type || "").trim();
+      if (ta !== tb) return ta.localeCompare(tb);
+      return (a.code || "").localeCompare(b.code || "");
     });
   } else {
     relevantMachines = [...relevantMachines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
