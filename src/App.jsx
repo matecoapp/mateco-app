@@ -20,9 +20,11 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Manipulátor",
   "VZV",
   "Materiálová",
+  "Stĺpová",
+  "Prívesná/špeciálna",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.225";
+const APP_VERSION = "1.0.228";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3185,6 +3187,7 @@ function DispatcherApp() {
       {machineCard && (
         <MachineCardModal
           machine={machineCard}
+          machineModels={machineModels}
           history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
           jobs={jobs}
           handoverProtocols={handoverProtocols}
@@ -7559,13 +7562,29 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol }) {
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom"
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const notTracked = m.trackRevisions === false;
   const reviziaOverdue = !notTracked && m.revizia && daysBetween(todayISO(), m.revizia) < 0;
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
+  const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
+  const matchedModel = isStroj
+    ? (machineModels || []).find((mm) => (mm.name || "").trim().toLowerCase() === (m.type || "").trim().toLowerCase())
+    : null;
+  const modelParams = matchedModel
+    ? [
+        ["Kategória", matchedModel.category || null],
+        ["Pracovná výška", matchedModel.liftHeight ? `${matchedModel.liftHeight} m` : null],
+        ["Stranový dosah", matchedModel.outreach ? `${matchedModel.outreach} m` : null],
+        ["Šírka", matchedModel.width ? `${matchedModel.width} m` : null],
+        ["Nosnosť", matchedModel.capacity ? `${matchedModel.capacity} kg` : null],
+        ["Podpery", matchedModel.outriggers === true ? "Áno" : matchedModel.outriggers === false ? "Nie" : null],
+        ["Hmotnosť", matchedModel.weight ? `${matchedModel.weight} kg` : null],
+      ].filter(([, v]) => v)
+    : [];
   return (
     <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
@@ -7585,16 +7604,26 @@ function MachineCardModal({ machine, history, jobs, handoverProtocols, protocolL
         <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
         <CardField label="Depo" value={m.depo} />
       </div>
+      {modelParams.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+            Parametre modelu
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: 13 }}>
+            {modelParams.map(([label, value]) => (
+              <div key={label}>
+                <span style={{ color: "var(--text-dim)" }}>{label}: </span>
+                <span style={{ fontWeight: 600 }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: history?.length ? 16 : 0 }}>
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
           Karta zatiaľ zobrazuje polia z lokálnych dát mockupu — po napojení na databázu strojov sa doplnia automaticky.
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {can(user, "machine_edit") && (
-            <button className="btn btn-ghost" onClick={onEditMachine}>
-              Upraviť údaje
-            </button>
-          )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "relative" }}>
           {can(user, "job_add") && (
             <button className="btn btn-ghost" onClick={onAddJob}>
               + Zákazka
@@ -7603,6 +7632,11 @@ function MachineCardModal({ machine, history, jobs, handoverProtocols, protocolL
           {can(user, "reservation_add") && (
             <button className="btn btn-ghost" onClick={onAddReservation}>
               Nezáväzná rezervácia
+            </button>
+          )}
+          {can(user, "machine_report_damage") && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)", flexShrink: 0 }} onClick={onReportDamage}>
+              Nahlásiť poškodenie
             </button>
           )}
           {m.currentJob && can(user, "job_edit") && (
@@ -7615,30 +7649,58 @@ function MachineCardModal({ machine, history, jobs, handoverProtocols, protocolL
               Ukončiť zákazku
             </button>
           )}
-          {can(user, "machine_report_damage") && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)", flexShrink: 0 }} onClick={onReportDamage}>
-              Nahlásiť poškodenie
+          {(can(user, "machine_edit") ||
+            can(user, "machine_track_toggle") ||
+            can(user, "machine_archive") ||
+            can(user, "machine_delete")) && (
+            <button className="btn btn-ghost" onClick={() => setShowActionsMenu((v) => !v)}>
+              Akcie ▾
             </button>
           )}
-          {can(user, "machine_track_toggle") && (
-            <button className="btn btn-ghost" onClick={onToggleTrackRevisions}>
-              {notTracked ? "Sledovať revízie" : "Nesledovať revízie"}
-            </button>
-          )}
-          {can(user, "machine_track_toggle") && (
-            <button className="btn btn-ghost" onClick={onToggleTrackUradnaSkuska}>
-              {skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky"}
-            </button>
-          )}
-          {can(user, "machine_archive") && (
-            <button className="btn btn-ghost" onClick={() => (m.archived ? onUnarchive() : onArchive())}>
-              {m.archived ? "Vrátiť z archívu" : "Archivovať"}
-            </button>
-          )}
-          {can(user, "machine_delete") && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(m.id)}>
-              Zmazať stroj
-            </button>
+          {showActionsMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                right: 0,
+                marginTop: 4,
+                background: "var(--panel)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                boxShadow: "0 4px 16px rgba(0,0,0,.15)",
+                display: "flex",
+                flexDirection: "column",
+                minWidth: 200,
+                zIndex: 20,
+                overflow: "hidden",
+              }}
+            >
+              {can(user, "machine_edit") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onEditMachine(); }}>
+                  Upraviť údaje
+                </button>
+              )}
+              {can(user, "machine_track_toggle") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackRevisions(); }}>
+                  {notTracked ? "Sledovať revízie" : "Nesledovať revízie"}
+                </button>
+              )}
+              {can(user, "machine_track_toggle") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackUradnaSkuska(); }}>
+                  {skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky"}
+                </button>
+              )}
+              {can(user, "machine_archive") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); m.archived ? onUnarchive() : onArchive(); }}>
+                  {m.archived ? "Vrátiť z archívu" : "Archivovať"}
+                </button>
+              )}
+              {can(user, "machine_delete") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0, color: "var(--danger)" }} onClick={() => { setShowActionsMenu(false); onDelete(m.id); }}>
+                  Zmazať stroj
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -10404,21 +10466,25 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
         onChange={(e) => setSearch(e.target.value)}
         style={{ width: "100%", marginBottom: 10 }}
       />
-      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="panel" style={{ padding: 0, overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
               <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Kategória</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Výška zdvihu</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Pracovná výška</th>
               <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stranový dosah</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Šírka</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Nosnosť</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Podpery</th>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Hmotnosť</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne modely nezodpovedajú hľadaniu.</td>
+                <td colSpan={9} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne modely nezodpovedajú hľadaniu.</td>
               </tr>
             ) : (
               sorted.map((mm) => (
@@ -10449,6 +10515,44 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       value={mm.outreach || ""}
                       onChange={(e) => onUpdate(mm.id, { outreach: e.target.value })}
                       placeholder="m"
+                      style={{ width: 70, fontSize: 12 }}
+                    />
+                  </td>
+                  <td style={{ padding: "6px 12px" }}>
+                    <input
+                      type="number"
+                      value={mm.width || ""}
+                      onChange={(e) => onUpdate(mm.id, { width: e.target.value })}
+                      placeholder="m"
+                      style={{ width: 70, fontSize: 12 }}
+                    />
+                  </td>
+                  <td style={{ padding: "6px 12px" }}>
+                    <input
+                      type="number"
+                      value={mm.capacity || ""}
+                      onChange={(e) => onUpdate(mm.id, { capacity: e.target.value })}
+                      placeholder="kg"
+                      style={{ width: 70, fontSize: 12 }}
+                    />
+                  </td>
+                  <td style={{ padding: "6px 12px" }}>
+                    <select
+                      value={mm.outriggers === true ? "ano" : mm.outriggers === false ? "nie" : ""}
+                      onChange={(e) => onUpdate(mm.id, { outriggers: e.target.value === "ano" ? true : e.target.value === "nie" ? false : null })}
+                      style={{ fontSize: 12 }}
+                    >
+                      <option value="">—</option>
+                      <option value="ano">Áno</option>
+                      <option value="nie">Nie</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: "6px 12px" }}>
+                    <input
+                      type="number"
+                      value={mm.weight || ""}
+                      onChange={(e) => onUpdate(mm.id, { weight: e.target.value })}
+                      placeholder="kg"
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
