@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Prívesná/špeciálna",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.228";
+const APP_VERSION = "1.0.229";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2997,7 +2997,16 @@ function DispatcherApp() {
       )}
 
       {showAddMachine && (
-        <AddMachineModal existing={showAddMachine.existing} machineModels={machineModels} onClose={() => setShowAddMachine(null)} onSave={saveMachineModal} />
+        <AddMachineModal
+          existing={showAddMachine.existing}
+          machineModels={machineModels}
+          onClose={() => setShowAddMachine(null)}
+          onSave={saveMachineModal}
+          onCreateModel={(data) => {
+            if (findMachineModelLoose(data.name)) return;
+            persistMachineModels([...machineModels, { id: uid(), ...data }]);
+          }}
+        />
       )}
       {showAddDriver && (
         <AddDriverModal existing={showAddDriver.existing} onClose={() => setShowAddDriver(null)} onSave={saveDriverModal} />
@@ -5812,7 +5821,8 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
 /* ---------------------------------------------------------
    Add Machine Modal
 --------------------------------------------------------- */
-function AddMachineModal({ existing, machineModels, onClose, onSave }) {
+function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateModel }) {
+  const NEW_MODEL_VALUE = "__new__";
   const [code, setCode] = useState(existing?.code || "");
   const [objekt, setObjekt] = useState(existing?.objekt || "Požičovňový stroj");
   const [type, setType] = useState(existing?.type || "");
@@ -5821,6 +5831,14 @@ function AddMachineModal({ existing, machineModels, onClose, onSave }) {
   const [uradnaSkuska, setUradnaSkuska] = useState(existing?.uradnaSkuska || "");
   const [trackRevisions, setTrackRevisions] = useState(existing ? existing.trackRevisions !== false : true);
   const [trackUradnaSkuska, setTrackUradnaSkuska] = useState(existing ? existing.trackUradnaSkuska !== false : true);
+  const [creatingNewModel, setCreatingNewModel] = useState(false);
+  const [newModelCategory, setNewModelCategory] = useState("");
+  const [newModelLiftHeight, setNewModelLiftHeight] = useState("");
+  const [newModelOutreach, setNewModelOutreach] = useState("");
+  const [newModelWidth, setNewModelWidth] = useState("");
+  const [newModelCapacity, setNewModelCapacity] = useState("");
+  const [newModelOutriggers, setNewModelOutriggers] = useState("");
+  const [newModelWeight, setNewModelWeight] = useState("");
 
   const isStroj = objekt === "Požičovňový stroj";
   const isExterny = objekt === "Externý stroj";
@@ -5838,6 +5856,18 @@ function AddMachineModal({ existing, machineModels, onClose, onSave }) {
       patch.uradnaSkuska = uradnaSkuska;
       patch.trackRevisions = trackRevisions;
       patch.trackUradnaSkuska = trackUradnaSkuska;
+      if (creatingNewModel && type.trim()) {
+        onCreateModel({
+          name: type.trim(),
+          category: newModelCategory,
+          liftHeight: newModelLiftHeight,
+          outreach: newModelOutreach,
+          width: newModelWidth,
+          capacity: newModelCapacity,
+          outriggers: newModelOutriggers === "ano" ? true : newModelOutriggers === "nie" ? false : null,
+          weight: newModelWeight,
+        });
+      }
     } else {
       // Externý stroj a Príslušenstvo nemajú revízie/skúšky — vyprázdni pole,
       // nech pri prepnutí Objektu na existujúcom zázname nezostane nič zabudnuté.
@@ -5860,16 +5890,52 @@ function AddMachineModal({ existing, machineModels, onClose, onSave }) {
 
       {isStroj && (
         <Field label="Model stroja *">
-          <input
-            list="machine-model-datalist"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            placeholder="Vyberte existujúci alebo napíšte nový model"
+          <select
+            value={creatingNewModel ? NEW_MODEL_VALUE : type}
+            onChange={(e) => {
+              if (e.target.value === NEW_MODEL_VALUE) {
+                setCreatingNewModel(true);
+                setType("");
+              } else {
+                setCreatingNewModel(false);
+                setType(e.target.value);
+              }
+            }}
             style={{ width: "100%" }}
-          />
-          <datalist id="machine-model-datalist">
-            {machineModels.map((mm) => <option key={mm.id} value={mm.name} />)}
-          </datalist>
+          >
+            <option value="">— vybrať model —</option>
+            {[...machineModels].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((mm) => (
+              <option key={mm.id} value={mm.name}>{mm.name}</option>
+            ))}
+            <option value={NEW_MODEL_VALUE}>+ Vytvoriť nový model...</option>
+          </select>
+          {creatingNewModel && (
+            <div style={{ marginTop: 10, padding: 12, background: "var(--panel-2)", borderRadius: 8 }}>
+              <Field label="Názov nového modelu *">
+                <input value={type} onChange={(e) => setType(e.target.value)} placeholder="napr. GS-3246" style={{ width: "100%" }} />
+              </Field>
+              <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <Field label="Kategória">
+                  <select value={newModelCategory} onChange={(e) => setNewModelCategory(e.target.value)} style={{ width: "100%" }}>
+                    <option value="">— vybrať —</option>
+                    {MACHINE_CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Pracovná výška (m)"><input type="number" value={newModelLiftHeight} onChange={(e) => setNewModelLiftHeight(e.target.value)} style={{ width: "100%" }} /></Field>
+                <Field label="Stranový dosah (m)"><input type="number" value={newModelOutreach} onChange={(e) => setNewModelOutreach(e.target.value)} style={{ width: "100%" }} /></Field>
+                <Field label="Šírka (m)"><input type="number" value={newModelWidth} onChange={(e) => setNewModelWidth(e.target.value)} style={{ width: "100%" }} /></Field>
+                <Field label="Nosnosť (kg)"><input type="number" value={newModelCapacity} onChange={(e) => setNewModelCapacity(e.target.value)} style={{ width: "100%" }} /></Field>
+                <Field label="Podpery">
+                  <select value={newModelOutriggers} onChange={(e) => setNewModelOutriggers(e.target.value)} style={{ width: "100%" }}>
+                    <option value="">—</option>
+                    <option value="ano">Áno</option>
+                    <option value="nie">Nie</option>
+                  </select>
+                </Field>
+                <Field label="Hmotnosť (kg)"><input type="number" value={newModelWeight} onChange={(e) => setNewModelWeight(e.target.value)} style={{ width: "100%" }} /></Field>
+              </div>
+            </div>
+          )}
         </Field>
       )}
       {objekt === "Príslušenstvo" && (
@@ -7219,7 +7285,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
-  const [sortMode, setSortMode] = useState("code"); // code | category
+  const [sortMode, setSortMode] = useState("category"); // code | category
   const depoOptions = DEPO_OPTIONS;
 
   const base = new Date(today + "T00:00:00");
@@ -7276,7 +7342,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     relevantMachines = [...relevantMachines].sort((a, b) => {
       const ca = catIndex(a), cb = catIndex(b);
       if (ca !== cb) return ca - cb;
-      return liftHeight(b) - liftHeight(a); // vyššie hore
+      return liftHeight(a) - liftHeight(b); // nižšie hore
     });
   } else {
     relevantMachines = [...relevantMachines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
@@ -7307,7 +7373,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             <option value="code">Zoradiť: sériové číslo</option>
             <option value="category">Zoradiť: kategória a výška zdvihu</option>
           </select>
-          <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         </div>
       </div>
       <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -7327,6 +7392,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             {d}
           </button>
         ))}
+        <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
       </div>
 
       <div className="panel" style={{ padding: 16 }}>
