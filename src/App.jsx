@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.232";
+const APP_VERSION = "1.0.234";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7470,14 +7470,15 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                     {showDivider && (
                       <div
                         style={{
-                          padding: "4px 8px",
-                          margin: "6px 0 3px",
-                          fontSize: 10,
+                          padding: "6px 10px",
+                          margin: "14px 0 6px",
+                          fontSize: 11,
                           fontWeight: 700,
                           textTransform: "uppercase",
-                          letterSpacing: ".05em",
-                          color: "var(--text-dim)",
-                          background: "var(--panel-2)",
+                          letterSpacing: ".06em",
+                          color: "var(--accent)",
+                          background: "var(--accent-soft, rgba(227,6,19,.10))",
+                          borderLeft: "3px solid var(--accent)",
                           borderRadius: 4,
                           position: "sticky",
                           left: 0,
@@ -7502,26 +7503,24 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                     }}
                   >
                     <div style={{ lineHeight: 1.3, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
-                        <span className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
-                          {m.code}
-                        </span>
-                        {m.note && (
-                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {m.note}
-                          </span>
-                        )}
+                      <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
+                        {m.code}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
                         <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {m.type || "—"}
                         </span>
                         {m.depo && (
-                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
                             {m.depo}
                           </span>
                         )}
                       </div>
+                      {m.note && (
+                        <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {m.note}
+                        </div>
+                      )}
                     </div>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
                       const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
