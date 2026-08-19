@@ -13,18 +13,18 @@ const MACHINE_OBJEKT_OPTIONS = ["Požičovňový stroj", "Externý stroj", "Prí
 const MACHINE_CATEGORY_OPTIONS = [
   "Nožnicová elektrická",
   "Nožnicová dieselová",
+  "Stĺpová",
   "Kĺbová elektrická",
   "Kĺbová dieselová",
   "Teleskopická elektrická",
   "Teleskopická dieselová",
+  "Prívesná/špeciálna",
   "Manipulátor",
   "VZV",
   "Materiálová",
-  "Stĺpová",
-  "Prívesná/špeciálna",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.230";
+const APP_VERSION = "1.0.232";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5824,6 +5824,7 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
 function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateModel }) {
   const NEW_MODEL_VALUE = "__new__";
   const [code, setCode] = useState(existing?.code || "");
+  const [note, setNote] = useState(existing?.note || "");
   const [objekt, setObjekt] = useState(existing?.objekt || "Požičovňový stroj");
   const [type, setType] = useState(existing?.type || "");
   const [depo, setDepo] = useState(existing?.depo || "");
@@ -5847,6 +5848,7 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
   function handleSave() {
     const patch = {
       code: code.trim(),
+      note: note.trim(),
       objekt,
       type: isExterny ? "Externý stroj" : type.trim(),
       depo: depo.trim(),
@@ -5882,6 +5884,7 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
   return (
     <Modal title={existing ? "Upraviť údaje stroja" : "Pridať stroj"} onClose={onClose}>
       <Field label="Sériové číslo *"><input value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} /></Field>
+      <Field label="Poznámka (voliteľné, napr. VOLVO nie)"><input value={note} onChange={(e) => setNote(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Objekt *">
         <select value={objekt} onChange={(e) => setObjekt(e.target.value)} style={{ width: "100%" }}>
           {MACHINE_OBJEKT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -7327,13 +7330,17 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     );
   }
 
+  let categoryLabelOf = null;
   if (sortMode === "category") {
     const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
+    const CATEGORY_LABELS = [...MACHINE_CATEGORY_OPTIONS, "Príslušenstvo", "Nepriradená kategória"];
     const catIndex = (m) => {
+      if (m.objekt === "Príslušenstvo") return MACHINE_CATEGORY_OPTIONS.length; // vlastná skupina, pred nepriradenými
       const mm = modelByName.get((m.type || "").trim().toLowerCase());
       const idx = mm ? MACHINE_CATEGORY_OPTIONS.indexOf(mm.category) : -1;
-      return idx === -1 ? MACHINE_CATEGORY_OPTIONS.length : idx; // bez kategórie → na koniec
+      return idx === -1 ? MACHINE_CATEGORY_OPTIONS.length + 1 : idx; // bez kategórie (aj Externé stroje) → úplne na koniec
     };
+    categoryLabelOf = (m) => CATEGORY_LABELS[catIndex(m)];
     const liftHeight = (m) => {
       const mm = modelByName.get((m.type || "").trim().toLowerCase());
       const h = mm ? parseFloat(mm.liftHeight) : NaN;
@@ -7455,29 +7462,65 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                 const mJobs = jobsByMachine[m.id] || [];
                 const mReservations = reservationsByMachine[m.id] || [];
                 const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
+                const label = categoryLabelOf ? categoryLabelOf(m) : null;
+                const prevLabel = categoryLabelOf && idx > 0 ? categoryLabelOf(relevantMachines[idx - 1]) : null;
+                const showDivider = categoryLabelOf && label !== prevLabel;
                 return (
-                  <div
-                    key={m.id}
-                    onClick={() => onOpenCard(m)}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-day-col), 1fr))`,
-                      gap: 2,
-                      alignItems: "center",
-                      marginBottom: 3,
-                      minHeight: 34,
-                      cursor: "pointer",
-                      background: rowBg,
-                      borderRadius: 4,
-                      borderBottom: "1px solid var(--border)",
+                  <React.Fragment key={m.id}>
+                    {showDivider && (
+                      <div
+                        style={{
+                          padding: "4px 8px",
+                          margin: "6px 0 3px",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: ".05em",
+                          color: "var(--text-dim)",
+                          background: "var(--panel-2)",
+                          borderRadius: 4,
+                          position: "sticky",
+                          left: 0,
+                        }}
+                      >
+                        {label}
+                      </div>
+                    )}
+                    <div
+                      onClick={() => onOpenCard(m)}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-day-col), 1fr))`,
+                        gap: 2,
+                        alignItems: "center",
+                        marginBottom: 3,
+                        minHeight: 34,
+                        cursor: "pointer",
+                        background: rowBg,
+                        borderRadius: 4,
+                        borderBottom: "1px solid var(--border)",
                     }}
                   >
                     <div style={{ lineHeight: 1.3, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4 }}>
-                      <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
-                        {m.code}
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
+                          {m.code}
+                        </span>
+                        {m.note && (
+                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {m.note}
+                          </span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {[m.type, m.depo].filter(Boolean).join(" · ") || "—"}
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {m.type || "—"}
+                        </span>
+                        {m.depo && (
+                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {m.depo}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
@@ -7610,7 +7653,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  </React.Fragment>
                 );
               })}
             </div>
