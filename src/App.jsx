@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.239";
+const APP_VERSION = "1.0.240";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2931,15 +2931,6 @@ function DispatcherApp() {
                     items.length === 1
                       ? `${myEmployee?.name || "Technik"} žiada ${items[0].pocetKusov}× ${items[0].cisloDielu} — ${items[0].popisDielu} (${depo})`
                       : `${myEmployee?.name || "Technik"} žiada ${items.length} položiek (${depo})`,
-                  link: { module: "servis", view: "diely", depo },
-                });
-                pushNotification({
-                  userName: myEmployee?.name || "",
-                  title: "Požiadavka odoslaná na schválenie",
-                  message:
-                    items.length === 1
-                      ? `${items[0].pocetKusov}× ${items[0].cisloDielu} — ${items[0].popisDielu}`
-                      : `${items.length} položiek (${depo})`,
                   link: { module: "servis", view: "diely", depo },
                 });
               }
@@ -11063,6 +11054,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
   const [customEnd, setCustomEnd] = useState(today);
   const [showAdd, setShowAdd] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState(null); // krátky zatvárateľný pás po odoslaní požiadavky
 
   // Prišli sme sem kliknutím na notifikáciu o konkrétnom diele — prepneme
   // rovno na jeho depo, nech ho vedúci/dispečer nemusí ručne hľadať.
@@ -11240,6 +11232,18 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
         <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Nová požiadavka</button>
       </div>
 
+      {confirmMessage && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            background: "var(--ok)", color: "#fff", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13,
+          }}
+        >
+          <span>✓ {confirmMessage}</span>
+          <button className="btn btn-ghost" style={{ color: "#fff", padding: "2px 8px" }} onClick={() => setConfirmMessage(null)}>✕</button>
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {[["month", "Objednané: tento mesiac"], ["all", "Objednané: všetko"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
           <button
@@ -11340,7 +11344,17 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
           canManage={canManage}
           defaultDepo={depo}
           onClose={() => setShowAdd(false)}
-          onSave={(data) => { onAdd(data); setShowAdd(false); }}
+          onSave={(data) => {
+            onAdd(data);
+            setShowAdd(false);
+            if (!canManage) {
+              setConfirmMessage(
+                data.length === 1
+                  ? `Požiadavka odoslaná na schválenie: ${data[0].pocetKusov}× ${data[0].cisloDielu} — ${data[0].popisDielu}`
+                  : `Požiadavka odoslaná na schválenie: ${data.length} položiek`
+              );
+            }
+          }}
         />
       )}
       {rejectingId && (
