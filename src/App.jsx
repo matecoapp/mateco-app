@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.244";
+const APP_VERSION = "1.0.245";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1710,8 +1710,29 @@ function DispatcherApp() {
     const backup = {
       __mateco_backup__: true,
       exportedAt: new Date().toISOString(),
-      version: 1,
-      data: { machines, drivers, jobs, technicians, assignments, damages, weeklyDuty },
+      version: 2,
+      data: {
+        machines,
+        drivers,
+        jobs,
+        technicians,
+        assignments,
+        damages,
+        weeklyDuty,
+        notifications,
+        transportSendLog,
+        customers,
+        depoCheckers,
+        framoveZmluvy,
+        blacklist,
+        checkerSubstitutions,
+        reservations,
+        employees,
+        protocolLogs,
+        handoverProtocols,
+        machineModels,
+        spareParts,
+      },
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1737,6 +1758,19 @@ function DispatcherApp() {
         if (Array.isArray(data.assignments)) persistAssignments(data.assignments);
         if (Array.isArray(data.damages)) persistDamages(data.damages);
         if (Array.isArray(data.weeklyDuty)) persistWeeklyDuty(data.weeklyDuty);
+        if (Array.isArray(data.notifications)) persistNotifications(data.notifications);
+        if (Array.isArray(data.transportSendLog)) persistTransportSendLog(data.transportSendLog);
+        if (Array.isArray(data.customers)) persistCustomers(data.customers);
+        if (data.depoCheckers && typeof data.depoCheckers === "object") persistDepoCheckers(data.depoCheckers);
+        if (Array.isArray(data.framoveZmluvy)) persistFramoveZmluvy(data.framoveZmluvy);
+        if (Array.isArray(data.blacklist)) persistBlacklist(data.blacklist);
+        if (Array.isArray(data.checkerSubstitutions)) persistCheckerSubstitutions(data.checkerSubstitutions);
+        if (Array.isArray(data.reservations)) persistReservations(data.reservations);
+        if (Array.isArray(data.employees)) persistEmployees(data.employees);
+        if (Array.isArray(data.protocolLogs)) persistProtocolLogs(data.protocolLogs);
+        if (Array.isArray(data.handoverProtocols)) persistHandoverProtocols(data.handoverProtocols);
+        if (Array.isArray(data.machineModels)) persistMachineModels(data.machineModels);
+        if (Array.isArray(data.spareParts)) persistSpareParts(data.spareParts);
         alert("Záloha bola úspešne načítaná.");
       } catch (e) {
         console.error("Import failed", e);
