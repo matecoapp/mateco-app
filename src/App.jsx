@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.241";
+const APP_VERSION = "1.0.242";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2901,6 +2901,7 @@ function DispatcherApp() {
         {module === "servis" && view === "diely" && (
           <SparePartsView
             spareParts={spareParts}
+            machines={machines}
             myEmployee={myEmployee}
             user={effectiveUser}
             today={today}
@@ -10742,12 +10743,16 @@ const SPAREPART_STAV = {
 };
 
 function blankSparePartRow() {
-  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "" };
+  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "" };
 }
 
-function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
+function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }) {
   const [depo, setDepo] = useState(defaultDepo || "");
   const [rows, setRows] = useState([blankSparePartRow(), blankSparePartRow(), blankSparePartRow()]);
+
+  // Určenie sa vyberá naprieč VŠETKÝMI depami, nie len z aktuálneho — dispečeri
+  // niekedy stroj neskôr prehodia na iné depo.
+  const machineOptions = [...machines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
 
   function updateRow(key, field, value) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
@@ -10759,23 +10764,39 @@ function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
     setRows((prev) => prev.filter((r) => r.key !== key));
   }
 
-  // Riadok sa počíta ako vyplnený, keď má aspoň Počet kusov, Číslo dielu a Popis
-  // dielu — prázdne riadky (bežné, keď si niekto pripraví napr. 5 riadkov
-  // dopredu a vyplní len 2) sa pri odoslaní jednoducho ignorujú.
-  const filledRows = rows.filter((r) => r.pocetKusov.trim() && r.cisloDielu.trim() && r.popisDielu.trim());
+  // Riadok sa počíta ako vyplnený, keď má Počet kusov, Číslo dielu, Popis dielu
+  // A ZÁROVEŇ vyplnené Určenie (pri "Konkrétny stroj" aj vybraný stroj) —
+  // prázdne riadky (bežné, keď si niekto pripraví napr. 5 riadkov dopredu a
+  // vyplní len 2) sa pri odoslaní jednoducho ignorujú.
+  const filledRows = rows.filter(
+    (r) =>
+      r.pocetKusov.trim() &&
+      r.cisloDielu.trim() &&
+      r.popisDielu.trim() &&
+      r.urcenieTyp &&
+      (r.urcenieTyp !== "stroj" || r.urcenieStrojId)
+  );
   const canSave = depo.trim() && filledRows.length > 0;
 
   function handleSave() {
     onSave(
-      filledRows.map((r) => ({
-        depo: depo.trim(),
-        dodavatel: r.dodavatel.trim(),
-        cisloPolozky: r.cisloPolozky.trim(),
-        pocetKusov: r.pocetKusov.trim(),
-        cisloDielu: r.cisloDielu.trim(),
-        popisDielu: r.popisDielu.trim(),
-        poznamka: r.poznamka.trim(),
-      }))
+      filledRows.map((r) => {
+        const stroj = r.urcenieTyp === "stroj" ? machineOptions.find((m) => m.id === r.urcenieStrojId) : null;
+        return {
+          depo: depo.trim(),
+          dodavatel: r.dodavatel.trim(),
+          cisloPolozky: r.cisloPolozky.trim(),
+          pocetKusov: r.pocetKusov.trim(),
+          cisloDielu: r.cisloDielu.trim(),
+          popisDielu: r.popisDielu.trim(),
+          poznamka: r.poznamka.trim(),
+          urcenie: {
+            typ: r.urcenieTyp,
+            strojId: r.urcenieTyp === "stroj" ? r.urcenieStrojId : "",
+            strojKod: stroj ? `${stroj.code}${stroj.type ? " · " + stroj.type : ""}` : "",
+          },
+        };
+      })
     );
   }
 
@@ -10793,7 +10814,7 @@ function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
       )}
 
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-        Vypíš toľko riadkov, koľko dielov potrebuješ — Počet kusov, Číslo dielu a Popis dielu sú povinné, zvyšok voliteľný. Prázdne riadky sa preskočia.
+        Vypíš toľko riadkov, koľko dielov potrebuješ — Počet kusov, Číslo dielu, Popis dielu a Určenie sú povinné, zvyšok voliteľný. Prázdne riadky sa preskočia.
       </div>
 
       <div style={{ overflowX: "auto", marginBottom: 10 }}>
@@ -10803,6 +10824,7 @@ function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Počet ks *</th>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo dielu *</th>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Popis dielu *</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Určenie *</th>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Dodávateľ</th>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo položky</th>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Poznámka</th>
@@ -10815,6 +10837,32 @@ function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
                 <td style={{ padding: "3px 6px" }}><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: 65, fontSize: 12 }} /></td>
                 <td style={{ padding: "3px 6px" }}><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
                 <td style={{ padding: "3px 6px" }}><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: 160, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <select
+                      value={r.urcenieTyp}
+                      onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); }}
+                      style={{ fontSize: 12, width: 140 }}
+                    >
+                      <option value="">— vybrať —</option>
+                      <option value="stroj">Konkrétny stroj</option>
+                      <option value="sklad">Na sklad</option>
+                      <option value="externa">Externá zákazka</option>
+                    </select>
+                    {r.urcenieTyp === "stroj" && (
+                      <select
+                        value={r.urcenieStrojId}
+                        onChange={(e) => updateRow(r.key, "urcenieStrojId", e.target.value)}
+                        style={{ fontSize: 12, width: 140 }}
+                      >
+                        <option value="">— vybrať stroj —</option>
+                        {machineOptions.map((m) => (
+                          <option key={m.id} value={m.id}>{m.code}{m.depo ? ` (${m.depo})` : ""}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </td>
                 <td style={{ padding: "3px 6px" }}><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
                 <td style={{ padding: "3px 6px" }}><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
                 <td style={{ padding: "3px 6px" }}><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: 130, fontSize: 12 }} /></td>
@@ -11035,6 +11083,14 @@ function ColumnFilterButton({ label, options, selected, onChange }) {
   );
 }
 
+function urcenieLabel(u) {
+  if (!u || !u.typ) return "—";
+  if (u.typ === "sklad") return "Na sklad";
+  if (u.typ === "externa") return "Externá zákazka";
+  if (u.typ === "stroj") return u.strojKod || "Stroj";
+  return "—";
+}
+
 function copyColumn(rows, key, label) {
   const text = rows.map((r) => r[key] || "").join("\n");
   navigator.clipboard.writeText(text).then(
@@ -11046,6 +11102,7 @@ function copyColumn(rows, key, label) {
 function exportSparePartsCSV(rows, filename) {
   const data = rows.map((p) => ({
     Depo: p.depo || "",
+    Určenie: p.urcenie !== undefined ? urcenieLabel(p.urcenie) : "",
     Dodávateľ: p.dodavatel || "",
     "Číslo položky": p.cisloPolozky || "",
     "Počet kusov": p.pocetKusov || "",
@@ -11067,7 +11124,7 @@ function exportSparePartsCSV(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
+function SparePartsView({ spareParts, machines, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
   const depoOptions = DEPO_OPTIONS.filter((d) => d !== "Externé");
@@ -11168,6 +11225,10 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
                     <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
                   </th>
                 ))}
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+                  Určenie {" "}
+                  <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title="Kopírovať stĺpec Určenie" onClick={() => copyColumn(groupRows.map((p) => ({ urcenieText: urcenieLabel(p.urcenie) })), "urcenieText", "Určenie")}>⧉</button>
+                </th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav objednania</th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
@@ -11179,7 +11240,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
             </thead>
             <tbody>
               {groupRows.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
+                <tr><td colSpan={11} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
               ) : (
                 groupRows.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
@@ -11197,6 +11258,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
                         <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>
                       )
                     )}
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
                     <td style={{ padding: "6px 12px" }}>
                       {canManage ? (
                         <select
@@ -11318,6 +11380,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
               <thead>
                 <tr>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav</th>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Nákupná objednávka</th>
@@ -11329,11 +11392,12 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
               </thead>
               <tbody>
                 {searchResults.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
+                  <tr><td colSpan={9} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
                 ) : (
                   searchResults.map((p) => (
                     <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.depo}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
                       <td style={{ padding: "6px 12px" }}>
                         <span
                           style={{
@@ -11394,6 +11458,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
               <thead>
                 <tr>
                   {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
                   <th></th>
                 </tr>
               </thead>
@@ -11401,6 +11466,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
                 {pending.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
                     <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
                       <button className="btn btn-accent" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onApprove(p.id)}>Schváliť</button>
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)" }} onClick={() => setRejectingId(p.id)}>Zamietnuť</button>
@@ -11425,6 +11491,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
               <thead>
                 <tr>
                   {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dôvod</th>
                   {canManage && <th></th>}
                 </tr>
@@ -11433,6 +11500,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
                 {zamietnute.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
                     <td style={{ padding: "6px 12px", fontSize: 13, color: "var(--danger)" }}>{p.rejectionReason}</td>
                     {canManage && (
                       <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
@@ -11460,6 +11528,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
         <AddSparePartModal
           canManage={canManage}
           defaultDepo={depo}
+          machines={machines}
           onClose={() => setShowAdd(false)}
           onSave={(data) => {
             onAdd(data);
