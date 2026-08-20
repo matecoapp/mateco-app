@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.242";
+const APP_VERSION = "1.0.244";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2454,7 +2454,9 @@ function DispatcherApp() {
           message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola premenená na skutočnú zákazku.`,
           link: { module: "poziciovna", view: "jobs", jobId: newJob.id },
         });
-        deleteReservation(r.id);
+        // Rezervácia sa NEmaže — len sa označí ako premenená, nech sa dá
+        // sledovať úspešnosť rezervácií podľa obchodníka v štatistikách.
+        updateReservation(r.id, { status: "converted", convertedJobId: newJob.id, convertedAt: new Date().toISOString() });
       }
     }
   }
@@ -10514,18 +10516,23 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
 
   const periodReservations = reservations.filter((r) => r.createdAt && r.createdAt.slice(0, 10) >= start && r.createdAt.slice(0, 10) <= end);
   const byObchodnik = {};
+  const convertedByObchodnik = {};
   periodReservations.forEach((r) => {
     const key = r.obchodnik || "— neuvedené —";
     byObchodnik[key] = (byObchodnik[key] || 0) + 1;
+    if (r.status === "converted") convertedByObchodnik[key] = (convertedByObchodnik[key] || 0) + 1;
   });
   const obchodnikRows = Object.entries(byObchodnik).sort((a, b) => b[1] - a[1]);
+  const totalConverted = periodReservations.filter((r) => r.status === "converted").length;
+  const successRatePct = periodReservations.length ? Math.round((totalConverted / periodReservations.length) * 100) : 0;
 
   return (
     <div>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
         <StatCard label="Sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
         <StatCard label="Rezervácií za obdobie" value={periodReservations.length} />
+        <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} />
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -10540,15 +10547,23 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
               <tr>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Obchodník</th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet rezervácií</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Premenené na zákazku</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Úspešnosť</th>
               </tr>
             </thead>
             <tbody>
-              {obchodnikRows.map(([name, count]) => (
-                <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{name}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{count}</td>
-                </tr>
-              ))}
+              {obchodnikRows.map(([name, count]) => {
+                const converted = convertedByObchodnik[name] || 0;
+                const pct = count ? Math.round((converted / count) * 100) : 0;
+                return (
+                  <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{name}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13 }}>{count}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13 }}>{converted}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct >= 50 ? "var(--ok)" : "var(--text-dim)" }}>{pct}%</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -10743,7 +10758,7 @@ const SPAREPART_STAV = {
 };
 
 function blankSparePartRow() {
-  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "" };
+  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "", urcenieStrojText: "" };
 }
 
 function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }) {
@@ -10841,7 +10856,7 @@ function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <select
                       value={r.urcenieTyp}
-                      onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); }}
+                      onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); updateRow(r.key, "urcenieStrojText", ""); }}
                       style={{ fontSize: 12, width: 140 }}
                     >
                       <option value="">— vybrať —</option>
@@ -10850,16 +10865,28 @@ function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }
                       <option value="externa">Externá zákazka</option>
                     </select>
                     {r.urcenieTyp === "stroj" && (
-                      <select
-                        value={r.urcenieStrojId}
-                        onChange={(e) => updateRow(r.key, "urcenieStrojId", e.target.value)}
-                        style={{ fontSize: 12, width: 140 }}
-                      >
-                        <option value="">— vybrať stroj —</option>
-                        {machineOptions.map((m) => (
-                          <option key={m.id} value={m.id}>{m.code}{m.depo ? ` (${m.depo})` : ""}</option>
-                        ))}
-                      </select>
+                      <>
+                        <input
+                          list={`machine-datalist-${r.key}`}
+                          value={r.urcenieStrojText}
+                          placeholder="Píš sériové číslo alebo model..."
+                          onChange={(e) => {
+                            const text = e.target.value;
+                            const match = machineOptions.find((m) => (m.code || "").trim().toLowerCase() === text.trim().toLowerCase());
+                            updateRow(r.key, "urcenieStrojText", text);
+                            updateRow(r.key, "urcenieStrojId", match ? match.id : "");
+                          }}
+                          style={{ fontSize: 12, width: 140, borderColor: r.urcenieStrojText && !r.urcenieStrojId ? "var(--danger)" : undefined }}
+                        />
+                        <datalist id={`machine-datalist-${r.key}`}>
+                          {machineOptions.map((m) => (
+                            <option key={m.id} value={m.code}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</option>
+                          ))}
+                        </datalist>
+                        {r.urcenieStrojText && !r.urcenieStrojId && (
+                          <span style={{ fontSize: 10, color: "var(--danger)" }}>Vyber stroj zo zoznamu</span>
+                        )}
+                      </>
                     )}
                   </div>
                 </td>
