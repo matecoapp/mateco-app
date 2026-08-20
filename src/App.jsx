@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.238";
+const APP_VERSION = "1.0.239";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2969,6 +2969,7 @@ function DispatcherApp() {
               }
             }}
             onRestore={(id) => persistSpareParts(spareParts.map((p) => (p.id === id ? { ...p, stav: SPAREPART_STAV.CAKA_NA_OBJEDNANIE, rejectionReason: "" } : p)))}
+            onDelete={(id) => askDelete("túto položku", () => persistSpareParts(spareParts.filter((p) => p.id !== id)))}
             onUpdate={(id, patch) => {
               const p = spareParts.find((x) => x.id === id);
               persistSpareParts(spareParts.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -11051,7 +11052,7 @@ function copyColumn(rows, key, label) {
   );
 }
 
-function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onImport }) {
+function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
   const depoOptions = DEPO_OPTIONS.filter((d) => d !== "Externé");
@@ -11086,12 +11087,19 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
 
   const dodavatelOptions = [...new Set(periodFiltered.map((p) => p.dodavatel || ""))].sort();
   const selectedDodavatelia = dodavatelFilter || new Set(dodavatelOptions);
-  const rows = periodFiltered
-    .filter((p) => selectedDodavatelia.has(p.dodavatel || ""))
-    .sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""));
+  const rows = periodFiltered.filter((p) => selectedDodavatelia.has(p.dodavatel || ""));
 
   const pending = rows.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
-  const rest = rows.filter((p) => p.stav !== SPAREPART_STAV.CAKA_NA_SCHVALENIE);
+  const zamietnute = rows.filter((p) => p.stav === SPAREPART_STAV.ZAMIETNUTE);
+  // Objednané hore, zoradené podľa čísla nákupnej objednávky (od najmenšieho).
+  const objednane = rows
+    .filter((p) => p.stav === SPAREPART_STAV.OBJEDNANE)
+    .sort((a, b) => (a.nakupnaObjednavka || "").localeCompare(b.nakupnaObjednavka || "", undefined, { numeric: true }));
+  // Čaká na objednanie pod tým, zoradené podľa dodávateľa — nech sa dá kopírovať
+  // dodávateľ po dodávateľovi bez miešania s už objednanými vecami.
+  const cakaNaObjednanie = rows
+    .filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_OBJEDNANIE)
+    .sort((a, b) => (a.dodavatel || "").localeCompare(b.dodavatel || ""));
 
   const columns = [
     { key: "dodavatel", label: "Dodávateľ" },
@@ -11101,6 +11109,109 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
     { key: "popisDielu", label: "Popis dielu" },
     { key: "poznamka", label: "Poznámka" },
   ];
+
+  function renderGroupTable(groupRows, groupLabel, groupColor, showDodavatelFilter) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: groupColor, marginBottom: 8 }}>
+          {groupLabel} ({groupRows.length})
+        </div>
+        <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                    {c.label}
+                    {c.key === "dodavatel" && showDodavatelFilter && (
+                      <ColumnFilterButton label="Dodávateľ" options={dodavatelOptions} selected={selectedDodavatelia} onChange={setDodavatelFilter} />
+                    )}
+                    {" "}
+                    <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
+                  </th>
+                ))}
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav objednania</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+                  Nákupná objednávka {" "}
+                  <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(groupRows, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
+                </th>
+                {canManage && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {groupRows.length === 0 ? (
+                <tr><td colSpan={10} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
+              ) : (
+                groupRows.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    {columns.map((c) =>
+                      canManage ? (
+                        <td key={c.key} style={{ padding: "4px 12px" }}>
+                          <input
+                            type={c.key === "pocetKusov" ? "number" : "text"}
+                            value={p[c.key] || ""}
+                            onChange={(e) => onUpdate(p.id, { [c.key]: e.target.value })}
+                            style={{ fontSize: 13, width: c.key === "popisDielu" ? 160 : c.key === "pocetKusov" ? 60 : 100 }}
+                          />
+                        </td>
+                      ) : (
+                        <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>
+                      )
+                    )}
+                    <td style={{ padding: "6px 12px" }}>
+                      {canManage ? (
+                        <select
+                          value={p.stav}
+                          onChange={(e) => onUpdate(p.id, { stav: e.target.value })}
+                          style={{
+                            fontSize: 12, fontWeight: 600, border: "none", borderRadius: 5, padding: "3px 8px",
+                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : "var(--warn)",
+                            color: "#fff",
+                          }}
+                        >
+                          <option value={SPAREPART_STAV.CAKA_NA_OBJEDNANIE}>Čaká na objednanie</option>
+                          <option value={SPAREPART_STAV.OBJEDNANE}>Objednané</option>
+                        </select>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 12, fontWeight: 600, borderRadius: 5, padding: "3px 8px", color: "#fff",
+                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : "var(--warn)",
+                          }}
+                        >
+                          {p.stav}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: "6px 12px" }}>
+                      {canManage ? (
+                        <input type="date" value={p.datumObjednania || ""} onChange={(e) => onUpdate(p.id, { datumObjednania: e.target.value })} style={{ fontSize: 12 }} />
+                      ) : (
+                        <span style={{ fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "6px 12px" }}>
+                      {canManage ? (
+                        <input value={p.nakupnaObjednavka || ""} onChange={(e) => onUpdate(p.id, { nakupnaObjednavka: e.target.value })} style={{ fontSize: 12, width: 110 }} />
+                      ) : (
+                        <span style={{ fontSize: 13 }}>{p.nakupnaObjednavka || "—"}</span>
+                      )}
+                    </td>
+                    {canManage && (
+                      <td style={{ padding: "6px 12px" }}>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -11183,86 +11294,40 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
         </div>
       )}
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Na objednanie / objednané
-      </div>
-      <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {columns.map((c) => (
-                <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                  {c.label}
-                  {c.key === "dodavatel" && (
-                    <ColumnFilterButton label="Dodávateľ" options={dodavatelOptions} selected={selectedDodavatelia} onChange={setDodavatelFilter} />
-                  )}
-                  {" "}
-                  <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(rest, c.key, c.label)}>⧉</button>
-                </th>
-              ))}
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav objednania</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
-                Nákupná objednávka {" "}
-                <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(rest, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rest.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
-            ) : (
-              rest.map((p) => (
-                <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  {columns.map((c) =>
-                    canManage ? (
-                      <td key={c.key} style={{ padding: "4px 12px" }}>
-                        <input
-                          type={c.key === "pocetKusov" ? "number" : "text"}
-                          value={p[c.key] || ""}
-                          onChange={(e) => onUpdate(p.id, { [c.key]: e.target.value })}
-                          style={{ fontSize: 13, width: c.key === "popisDielu" ? 160 : c.key === "pocetKusov" ? 60 : 100 }}
-                        />
-                      </td>
-                    ) : (
-                      <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>
-                    )
-                  )}
-                  <td style={{ padding: "6px 12px" }}>
-                    {p.stav === SPAREPART_STAV.ZAMIETNUTE ? (
-                      <span style={{ color: "var(--danger)", fontSize: 12 }} title={p.rejectionReason}>Zamietnuté{canManage ? "" : ` — ${p.rejectionReason || ""}`}</span>
-                    ) : canManage ? (
-                      <select value={p.stav} onChange={(e) => onUpdate(p.id, { stav: e.target.value })} style={{ fontSize: 12 }}>
-                        <option value={SPAREPART_STAV.CAKA_NA_OBJEDNANIE}>Čaká na objednanie</option>
-                        <option value={SPAREPART_STAV.OBJEDNANE}>Objednané</option>
-                      </select>
-                    ) : (
-                      <span style={{ fontSize: 12 }}>{p.stav}</span>
-                    )}
-                    {p.stav === SPAREPART_STAV.ZAMIETNUTE && canManage && (
-                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: "1px 6px", marginLeft: 6 }} onClick={() => onRestore(p.id)}>Obnoviť</button>
-                    )}
-                  </td>
-                  <td style={{ padding: "6px 12px" }}>
-                    {canManage && p.stav === SPAREPART_STAV.OBJEDNANE ? (
-                      <input type="date" value={p.datumObjednania || ""} onChange={(e) => onUpdate(p.id, { datumObjednania: e.target.value })} style={{ fontSize: 12 }} />
-                    ) : (
-                      <span style={{ fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: "6px 12px" }}>
-                    {canManage && p.stav === SPAREPART_STAV.OBJEDNANE ? (
-                      <input value={p.nakupnaObjednavka || ""} onChange={(e) => onUpdate(p.id, { nakupnaObjednavka: e.target.value })} style={{ fontSize: 12, width: 110 }} />
-                    ) : (
-                      <span style={{ fontSize: 13 }}>{p.nakupnaObjednavka || "—"}</span>
-                    )}
-                  </td>
+      {renderGroupTable(objednane, "Objednané", "var(--ok)", false)}
+      {renderGroupTable(cakaNaObjednanie, "Čaká na objednanie", "var(--warn)", true)}
+      {zamietnute.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--danger)", marginBottom: 8 }}>
+            Zamietnuté ({zamietnute.length})
+          </div>
+          <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dôvod</th>
+                  {canManage && <th></th>}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {zamietnute.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
+                    <td style={{ padding: "6px 12px", fontSize: 13, color: "var(--danger)" }}>{p.rejectionReason}</td>
+                    {canManage && (
+                      <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => onRestore(p.id)}>Obnoviť</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {canManage && (
         <div style={{ marginTop: 14 }}>
