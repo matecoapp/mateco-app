@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.236";
+const APP_VERSION = "1.0.238";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1101,6 +1101,7 @@ function DispatcherApp() {
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
   const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
+  const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo appka prepne
   const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
@@ -1673,6 +1674,9 @@ function DispatcherApp() {
     if (link.jobId) {
       const j = jobs.find((x) => x.id === link.jobId);
       if (j) setJobDetail(j);
+    }
+    if (link.depo) {
+      setSparePartsTargetDepo(link.depo);
     }
   }
   function dismissHighlight() {
@@ -2900,29 +2904,43 @@ function DispatcherApp() {
             myEmployee={myEmployee}
             user={effectiveUser}
             today={today}
-            onAdd={(data) => {
+            targetDepo={sparePartsTargetDepo}
+            onTargetDepoConsumed={() => setSparePartsTargetDepo(null)}
+            onAdd={(items) => {
               const canManage = can(effectiveUser, "sparepart_manage");
-              const depo = canManage ? data.depo : myEmployee?.depo || "";
+              const depo = items[0]?.depo || "";
+              const nowIso = new Date().toISOString();
               persistSpareParts([
                 ...spareParts,
-                {
+                ...items.map((data) => ({
                   id: uid(),
                   ...data,
-                  depo,
                   stav: canManage ? SPAREPART_STAV.CAKA_NA_OBJEDNANIE : SPAREPART_STAV.CAKA_NA_SCHVALENIE,
                   datumObjednania: "",
                   nakupnaObjednavka: "",
                   rejectionReason: "",
                   requestedBy: myEmployee?.name || "",
-                  requestedAt: new Date().toISOString(),
-                },
+                  requestedAt: nowIso,
+                })),
               ]);
               if (!canManage) {
                 pushNotification({
                   roles: ["veduci_servisu", "dispecer_servisu"],
-                  title: "Nová požiadavka na náhradný diel",
-                  message: `${myEmployee?.name || "Technik"} žiada ${data.pocetKusov}× ${data.cisloDielu} — ${data.popisDielu} (${depo})`,
-                  link: { module: "servis", view: "diely" },
+                  title: "Nová požiadavka na náhradné diely",
+                  message:
+                    items.length === 1
+                      ? `${myEmployee?.name || "Technik"} žiada ${items[0].pocetKusov}× ${items[0].cisloDielu} — ${items[0].popisDielu} (${depo})`
+                      : `${myEmployee?.name || "Technik"} žiada ${items.length} položiek (${depo})`,
+                  link: { module: "servis", view: "diely", depo },
+                });
+                pushNotification({
+                  userName: myEmployee?.name || "",
+                  title: "Požiadavka odoslaná na schválenie",
+                  message:
+                    items.length === 1
+                      ? `${items[0].pocetKusov}× ${items[0].cisloDielu} — ${items[0].popisDielu}`
+                      : `${items.length} položiek (${depo})`,
+                  link: { module: "servis", view: "diely", depo },
                 });
               }
             }}
@@ -2934,7 +2952,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Požiadavka na diel schválená",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo schválené, čaká na objednanie.`,
-                  link: { module: "servis", view: "diely" },
+                  link: { module: "servis", view: "diely", depo: p.depo },
                 });
               }
             }}
@@ -2946,7 +2964,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Požiadavka na diel zamietnutá",
                   message: `${p.cisloDielu} — ${p.popisDielu}: ${reason}`,
-                  link: { module: "servis", view: "diely" },
+                  link: { module: "servis", view: "diely", depo: p.depo },
                 });
               }
             }}
@@ -2959,7 +2977,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Náhradný diel objednaný",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo objednané.`,
-                  link: { module: "servis", view: "diely" },
+                  link: { module: "servis", view: "diely", depo: p.depo },
                 });
               }
             }}
@@ -10731,59 +10749,104 @@ const SPAREPART_STAV = {
   OBJEDNANE: "Objednané",
 };
 
-function AddSparePartModal({ canManage, defaultDepo, existing, onClose, onSave }) {
-  const [depo, setDepo] = useState(existing?.depo || defaultDepo || "");
-  const [dodavatel, setDodavatel] = useState(existing?.dodavatel || "");
-  const [cisloPolozky, setCisloPolozky] = useState(existing?.cisloPolozky || "");
-  const [pocetKusov, setPocetKusov] = useState(existing?.pocetKusov || "");
-  const [cisloDielu, setCisloDielu] = useState(existing?.cisloDielu || "");
-  const [popisDielu, setPopisDielu] = useState(existing?.popisDielu || "");
-  const [poznamka, setPoznamka] = useState(existing?.poznamka || "");
+function blankSparePartRow() {
+  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "" };
+}
 
-  const canSave = depo.trim() && pocetKusov && cisloDielu.trim() && popisDielu.trim();
+function AddSparePartModal({ canManage, defaultDepo, onClose, onSave }) {
+  const [depo, setDepo] = useState(defaultDepo || "");
+  const [rows, setRows] = useState([blankSparePartRow(), blankSparePartRow(), blankSparePartRow()]);
+
+  function updateRow(key, field, value) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
+  }
+  function addRow() {
+    setRows((prev) => [...prev, blankSparePartRow()]);
+  }
+  function removeRow(key) {
+    setRows((prev) => prev.filter((r) => r.key !== key));
+  }
+
+  // Riadok sa počíta ako vyplnený, keď má aspoň Počet kusov, Číslo dielu a Popis
+  // dielu — prázdne riadky (bežné, keď si niekto pripraví napr. 5 riadkov
+  // dopredu a vyplní len 2) sa pri odoslaní jednoducho ignorujú.
+  const filledRows = rows.filter((r) => r.pocetKusov.trim() && r.cisloDielu.trim() && r.popisDielu.trim());
+  const canSave = depo.trim() && filledRows.length > 0;
 
   function handleSave() {
-    onSave({
-      depo: depo.trim(),
-      dodavatel: dodavatel.trim(),
-      cisloPolozky: cisloPolozky.trim(),
-      pocetKusov: pocetKusov.trim(),
-      cisloDielu: cisloDielu.trim(),
-      popisDielu: popisDielu.trim(),
-      poznamka: poznamka.trim(),
-    });
+    onSave(
+      filledRows.map((r) => ({
+        depo: depo.trim(),
+        dodavatel: r.dodavatel.trim(),
+        cisloPolozky: r.cisloPolozky.trim(),
+        pocetKusov: r.pocetKusov.trim(),
+        cisloDielu: r.cisloDielu.trim(),
+        popisDielu: r.popisDielu.trim(),
+        poznamka: r.poznamka.trim(),
+      }))
+    );
   }
 
   return (
-    <Modal title={existing ? "Upraviť požiadavku" : "Nová požiadavka na náhradný diel"} onClose={onClose}>
+    <Modal title="Nová požiadavka na náhradné diely" onClose={onClose} wide>
       {canManage ? (
         <Field label="Depo *">
-          <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
+          <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: 240 }}>
             <option value="">— vybrať depo —</option>
             {DEPO_OPTIONS.filter((d) => d !== "Externé").map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </Field>
       ) : (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>Depo: <strong>{depo || "— podľa vášho profilu —"}</strong></div>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Depo: <strong>{depo || "— podľa vášho profilu —"}</strong></div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Počet kusov *"><input type="number" value={pocetKusov} onChange={(e) => setPocetKusov(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Číslo dielu *"><input value={cisloDielu} onChange={(e) => setCisloDielu(e.target.value)} style={{ width: "100%" }} /></Field>
+
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+        Vypíš toľko riadkov, koľko dielov potrebuješ — Počet kusov, Číslo dielu a Popis dielu sú povinné, zvyšok voliteľný. Prázdne riadky sa preskočia.
       </div>
-      <Field label="Popis dielu *"><input value={popisDielu} onChange={(e) => setPopisDielu(e.target.value)} style={{ width: "100%" }} /></Field>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Dodávateľ (voliteľné)"><input value={dodavatel} onChange={(e) => setDodavatel(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Číslo položky (voliteľné)"><input value={cisloPolozky} onChange={(e) => setCisloPolozky(e.target.value)} style={{ width: "100%" }} /></Field>
+
+      <div style={{ overflowX: "auto", marginBottom: 10 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Počet ks *</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo dielu *</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Popis dielu *</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Dodávateľ</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo položky</th>
+              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Poznámka</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td style={{ padding: "3px 6px" }}><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: 65, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: 160, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: 130, fontSize: 12 }} /></td>
+                <td style={{ padding: "3px 6px" }}>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} onClick={() => removeRow(r.key)}>✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <Field label="Poznámka (voliteľné)"><input value={poznamka} onChange={(e) => setPoznamka(e.target.value)} style={{ width: "100%" }} /></Field>
+
+      <button className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 14 }} onClick={addRow}>+ Pridať riadok</button>
+
       {!canManage && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
           Požiadavka pôjde na schválenie vedúcemu/dispečerovi servisu.
         </div>
       )}
-      <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
-        {existing ? "Uložiť zmeny" : "Odoslať"}
-      </button>
+      <div>
+        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
+          Odoslať {filledRows.length > 0 ? `(${filledRows.length} ${filledRows.length === 1 ? "položku" : filledRows.length < 5 ? "položky" : "položiek"})` : ""}
+        </button>
+      </div>
     </Modal>
   );
 }
@@ -10988,7 +11051,7 @@ function copyColumn(rows, key, label) {
   );
 }
 
-function SparePartsView({ spareParts, myEmployee, user, today, onAdd, onApprove, onReject, onRestore, onUpdate, onImport }) {
+function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
   const depoOptions = DEPO_OPTIONS.filter((d) => d !== "Externé");
@@ -11000,6 +11063,17 @@ function SparePartsView({ spareParts, myEmployee, user, today, onAdd, onApprove,
   const [showAdd, setShowAdd] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
 
+  // Prišli sme sem kliknutím na notifikáciu o konkrétnom diele — prepneme
+  // rovno na jeho depo, nech ho vedúci/dispečer nemusí ručne hľadať.
+  useEffect(() => {
+    if (targetDepo && canManage) {
+      setActiveDepo(targetDepo);
+      setDodavatelFilter(null);
+      onTargetDepoConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetDepo]);
+
   const depo = canManage ? activeDepo : myDepo;
   const { start, end } = periodBounds(periodMode, today, customStart, customEnd);
 
@@ -11008,7 +11082,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, onAdd, onApprove,
   // vidieť vždy, nech sa nestratia z dohľadu len preto, že prešiel mesiac.
   const periodFiltered = periodMode === "all"
     ? depoRows
-    : depoRows.filter((p) => p.stav !== SPAREPART_STAV.OBJEDNANE || (p.datumObjednania >= start && p.datumObjednania <= end));
+    : depoRows.filter((p) => p.stav !== SPAREPART_STAV.OBJEDNANE || !p.datumObjednania || (p.datumObjednania >= start && p.datumObjednania <= end));
 
   const dodavatelOptions = [...new Set(periodFiltered.map((p) => p.dodavatel || ""))].sort();
   const selectedDodavatelia = dodavatelFilter || new Set(dodavatelOptions);
@@ -11140,7 +11214,20 @@ function SparePartsView({ spareParts, myEmployee, user, today, onAdd, onApprove,
             ) : (
               rest.map((p) => (
                 <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
+                  {columns.map((c) =>
+                    canManage ? (
+                      <td key={c.key} style={{ padding: "4px 12px" }}>
+                        <input
+                          type={c.key === "pocetKusov" ? "number" : "text"}
+                          value={p[c.key] || ""}
+                          onChange={(e) => onUpdate(p.id, { [c.key]: e.target.value })}
+                          style={{ fontSize: 13, width: c.key === "popisDielu" ? 160 : c.key === "pocetKusov" ? 60 : 100 }}
+                        />
+                      </td>
+                    ) : (
+                      <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>
+                    )
+                  )}
                   <td style={{ padding: "6px 12px" }}>
                     {p.stav === SPAREPART_STAV.ZAMIETNUTE ? (
                       <span style={{ color: "var(--danger)", fontSize: 12 }} title={p.rejectionReason}>Zamietnuté{canManage ? "" : ` — ${p.rejectionReason || ""}`}</span>
