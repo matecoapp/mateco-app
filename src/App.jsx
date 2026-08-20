@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.240";
+const APP_VERSION = "1.0.241";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11043,6 +11043,30 @@ function copyColumn(rows, key, label) {
   );
 }
 
+function exportSparePartsCSV(rows, filename) {
+  const data = rows.map((p) => ({
+    Depo: p.depo || "",
+    Dodávateľ: p.dodavatel || "",
+    "Číslo položky": p.cisloPolozky || "",
+    "Počet kusov": p.pocetKusov || "",
+    "Číslo dielu": p.cisloDielu || "",
+    "Popis dielu": p.popisDielu || "",
+    "Stav objednania": p.stav || "",
+    "Dátum objednania": p.datumObjednania ? fmtDate(p.datumObjednania) : "",
+    "Nákupná objednávka": p.nakupnaObjednavka || "",
+    Poznámka: p.poznamka || "",
+    "Zadal(a)": p.requestedBy || "",
+  }));
+  const csv = Papa.unparse(data);
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }); // BOM, nech Excel nezobrazí diakritiku zle
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
@@ -11055,6 +11079,7 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
   const [showAdd, setShowAdd] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [confirmMessage, setConfirmMessage] = useState(null); // krátky zatvárateľný pás po odoslaní požiadavky
+  const [searchQuery, setSearchQuery] = useState(""); // vyhľadávanie histórie naprieč všetkými depami a celým časom
 
   // Prišli sme sem kliknutím na notifikáciu o konkrétnom diele — prepneme
   // rovno na jeho depo, nech ho vedúci/dispečer nemusí ručne hľadať.
@@ -11102,11 +11127,32 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
     { key: "poznamka", label: "Poznámka" },
   ];
 
+  // Vyhľadávanie histórie — naprieč VŠETKÝMI depami (u technika len jeho
+  // vlastné) a CELÝM časom, nezávisle od filtra obdobia a aktívnej záložky.
+  const searchScope = canManage ? spareParts : spareParts.filter((p) => p.depo === myDepo);
+  const q = searchQuery.trim().toLowerCase();
+  const searchResults = q
+    ? searchScope
+        .filter((p) => (p.cisloDielu || "").toLowerCase().includes(q) || (p.popisDielu || "").toLowerCase().includes(q))
+        .sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""))
+    : [];
+
   function renderGroupTable(groupRows, groupLabel, groupColor, showDodavatelFilter) {
     return (
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: groupColor, marginBottom: 8 }}>
-          {groupLabel} ({groupRows.length})
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: groupColor }}>
+            {groupLabel} ({groupRows.length})
+          </div>
+          {groupRows.length > 0 && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 10, padding: "2px 8px" }}
+              onClick={() => exportSparePartsCSV(groupRows, `nahradne-diely-${depo}-${groupLabel.toLowerCase().replace(/\s+/g, "-")}.csv`)}
+            >
+              ⬇ Export do Excelu
+            </button>
+          )}
         </div>
         <div className="panel" style={{ padding: 0, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -11244,6 +11290,75 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
         </div>
       )}
 
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <input
+          type="text"
+          placeholder="Hľadať v histórii podľa čísla alebo popisu dielu (naprieč všetkými depami a celým časom)..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ flex: 1, maxWidth: 480 }}
+        />
+        {q && <button className="btn btn-ghost" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
+      </div>
+
+      {q ? (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)" }}>
+              Výsledky hľadania ({searchResults.length})
+            </div>
+            {searchResults.length > 0 && (
+              <button className="btn btn-ghost" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => exportSparePartsCSV(searchResults, `nahradne-diely-hladanie-${q}.csv`)}>
+                ⬇ Export do Excelu
+              </button>
+            )}
+          </div>
+          <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Nákupná objednávka</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dodávateľ</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet kusov</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Číslo dielu</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Popis dielu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchResults.length === 0 ? (
+                  <tr><td colSpan={8} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
+                ) : (
+                  searchResults.map((p) => (
+                    <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.depo}</td>
+                      <td style={{ padding: "6px 12px" }}>
+                        <span
+                          style={{
+                            fontSize: 12, fontWeight: 600, borderRadius: 5, padding: "3px 8px", color: "#fff",
+                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : p.stav === SPAREPART_STAV.ZAMIETNUTE ? "var(--danger)" : "var(--warn)",
+                          }}
+                        >
+                          {p.stav}
+                        </span>
+                      </td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.nakupnaObjednavka || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.dodavatel || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.pocetKusov || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.cisloDielu}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.popisDielu}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+      <>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {[["month", "Objednané: tento mesiac"], ["all", "Objednané: všetko"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
           <button
@@ -11337,6 +11452,8 @@ function SparePartsView({ spareParts, myEmployee, user, today, targetDepo, onTar
         <div style={{ marginTop: 14 }}>
           <SparePartsImportButton depo={depo} onImport={onImport} />
         </div>
+      )}
+      </>
       )}
 
       {showAdd && (
