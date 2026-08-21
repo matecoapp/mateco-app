@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.251";
+const APP_VERSION = "1.0.252";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1145,15 +1145,6 @@ function DispatcherApp() {
     localStorage.setItem("mateco_last_view", view);
   }, [view]);
 
-  // Poistka pre externého šoféra — nesmie skončiť nikde inde než na Prepravách,
-  // ani cez zapamätanú polohu z minula (napr. keď mu niekto rolu zmenil neskôr).
-  useEffect(() => {
-    if (currentUser?.role === "externy_sofer" && (module !== "poziciovna" || view !== "prepravy")) {
-      setModuleRaw("poziciovna");
-      setView("prepravy");
-    }
-  }, [currentUser, module, view]);
-
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
   const dayAfterTomorrow = addDaysISO(today, 2);
@@ -1397,6 +1388,15 @@ function DispatcherApp() {
     }
     return currentUser;
   }, [currentUser, viewAsRole]);
+
+  // Poistka pre externého šoféra — nesmie skončiť nikde inde než na Prepravách,
+  // ani cez zapamätanú polohu z minula (napr. keď mu niekto rolu zmenil neskôr).
+  useEffect(() => {
+    if (currentUser?.role === "externy_sofer" && (module !== "poziciovna" || view !== "prepravy")) {
+      setModuleRaw("poziciovna");
+      setView("prepravy");
+    }
+  }, [currentUser, module, view]);
 
   // Vlastný záznam zamestnanca prihláseného človeka (podľa REÁLNEJ identity, nie podľa
   // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
