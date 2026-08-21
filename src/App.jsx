@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.246";
+const APP_VERSION = "1.0.248";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11349,7 +11349,10 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                       {canManage ? (
                         <select
                           value={p.stav}
-                          onChange={(e) => onUpdate(p.id, { stav: e.target.value })}
+                          onChange={(e) => {
+                            const newStav = e.target.value;
+                            onUpdate(p.id, newStav === SPAREPART_STAV.OBJEDNANE ? { stav: newStav, datumObjednania: today } : { stav: newStav });
+                          }}
                           style={{
                             fontSize: 12, fontWeight: 600, border: "none", borderRadius: 5, padding: "3px 8px",
                             background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : "var(--warn)",
@@ -12020,7 +12023,7 @@ function GlobalStyle() {
           border-color: var(--accent);
         }
         .mobile-tech-action-icon { font-size: 18px; line-height: 1; }
-        .has-mobile-tech-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+        .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
 
         :root {
           --gantt-name-col: 92px;
