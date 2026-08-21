@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.248";
+const APP_VERSION = "1.0.251";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -73,6 +73,7 @@ const ROLES = [
   { id: "obchodnik", label: "Obchodník", desc: "" },
   { id: "dispecer_pozicovne", label: "Dispečer požičovne", desc: "" },
   { id: "sofer", label: "Šofér", desc: "" },
+  { id: "externy_sofer", label: "Externý šofér", desc: "Vidí len svoje pridelené prepravy a vypĺňa odovzdávacie protokoly — nič iné." },
   { id: "dispecer_servisu", label: "Dispečer servisu", desc: "" },
   { id: "technik", label: "Technik", desc: "" },
   { id: "nezaradeny", label: "Nezaradený (čaká na rolu)", desc: "Nevidí žiadne dáta platformy, kým nedostane pridelenú rolu." },
@@ -84,6 +85,7 @@ const ROLE_DEFAULT_MODULE = {
   dispecer_pozicovne: "poziciovna",
   obchodnik: "poziciovna",
   sofer: "poziciovna",
+  externy_sofer: "poziciovna",
   veduci_servisu: "servis",
   dispecer_servisu: "servis",
   technik: "servis",
@@ -99,7 +101,7 @@ function isAdminUser(user) {
 // to je len technický stav pred pridelením role).
 function assignableRolesFor(user) {
   if (isAdminUser(user)) return ROLES.filter((r) => r.id !== "nezaradeny");
-  if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "dispecer_pozicovne"].includes(r.id));
+  if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "externy_sofer", "dispecer_pozicovne"].includes(r.id));
   if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu"].includes(r.id));
   return [];
 }
@@ -183,7 +185,7 @@ const PERM = {
   statistics_view: ["veduci_pozicovne", "veduci_servisu"],
   statistics_edit_poziciovna: ["veduci_pozicovne"],
   statistics_edit_servis: ["veduci_servisu"],
-  handover_protocol_write: ["sofer"],
+  handover_protocol_write: ["sofer", "externy_sofer"],
   // Oprava UŽ ODOSLANEJ (podpísanej) fázy protokolu — zámerne len dispečer/vedúci,
   // šofér po odoslaní vidí len náhľad a vie vyplniť najviac ďalšiu fázu.
   handover_protocol_edit_locked: ["dispecer_pozicovne", "veduci_pozicovne"],
@@ -582,8 +584,26 @@ function assignmentLocation(a, machineById) {
 // šofér PRIDELENÝ na daný vývoz/zvoz, a len V DEŇ, kedy sa vývoz/zvoz reálne deje.
 // Ak zákazka nemá určený dátum konca (bez konca), platforma pri vrátení nevie kontrolovať
 // deň dopredu — kontroluje sa vtedy už len to, že ide o prideleného šoféra.
+// Vlastní šoféri prví, externí (subdodávateľské firmy) oddelene pod vlastnou
+// skupinou — nech sa v zozname na priradenie nemiešajú medzi seba.
+function driverOptionsGrouped(drivers) {
+  const active = drivers.filter((d) => !d.archived);
+  const internal = active.filter((d) => d.role !== "externy_sofer");
+  const external = active.filter((d) => d.role === "externy_sofer");
+  return (
+    <>
+      {internal.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+      {external.length > 0 && (
+        <optgroup label="Externé prepravy">
+          {external.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </optgroup>
+      )}
+    </>
+  );
+}
+
 function canFillHandoverPhase(job, myEmployee, phase) {
-  if (!job || !myEmployee || myEmployee.role !== "sofer") return false;
+  if (!job || !myEmployee || (myEmployee.role !== "sofer" && myEmployee.role !== "externy_sofer")) return false;
   const today = todayISO();
   if (phase === "prevzatie") {
     return job.driverId === myEmployee.id && job.startDate === today;
@@ -1024,7 +1044,7 @@ function DispatcherApp() {
   const [machines, setMachines] = useState([]);
   const [employees, setEmployees] = useState([]); // zjednotený zoznam osôb (technici, šoféri, obchodníci, dispečeri...)
   const technicians = useMemo(() => employees.filter((e) => e.role === "technik"), [employees]);
-  const drivers = useMemo(() => employees.filter((e) => e.role === "sofer"), [employees]);
+  const drivers = useMemo(() => employees.filter((e) => e.role === "sofer" || e.role === "externy_sofer"), [employees]);
   const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
   const [module, setModuleRaw] = useState(() => localStorage.getItem("mateco_last_module") || "poziciovna");
@@ -1097,6 +1117,7 @@ function DispatcherApp() {
   const [pendingMail, setPendingMail] = useState(null); // { to, cc, subject, body } — čaká na výber Web/Desktop
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť platformu ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
+  const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
@@ -1123,6 +1144,15 @@ function DispatcherApp() {
   useEffect(() => {
     localStorage.setItem("mateco_last_view", view);
   }, [view]);
+
+  // Poistka pre externého šoféra — nesmie skončiť nikde inde než na Prepravách,
+  // ani cez zapamätanú polohu z minula (napr. keď mu niekto rolu zmenil neskôr).
+  useEffect(() => {
+    if (currentUser?.role === "externy_sofer" && (module !== "poziciovna" || view !== "prepravy")) {
+      setModuleRaw("poziciovna");
+      setView("prepravy");
+    }
+  }, [currentUser, module, view]);
 
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
@@ -1384,7 +1414,7 @@ function DispatcherApp() {
         const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "poziciovna";
         setModule(landingModule);
         // Šofér potrebuje hneď vidieť svoje dnešné rozvozy/zvozy, nie prehľad strojov.
-        if (currentUser.role === "sofer") setView("prepravy");
+        if (currentUser.role === "sofer" || currentUser.role === "externy_sofer") setView("prepravy");
       }
     }
   }, [currentUser]);
@@ -2664,6 +2694,7 @@ function DispatcherApp() {
         onMarkNotificationRead={markNotificationRead}
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
+        onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
       />
 
       {showUserAdmin && (
@@ -3460,6 +3491,17 @@ function DispatcherApp() {
       )}
       {showDamageReport && (
         <DamageReportModal machine={showDamageReport} today={today} onClose={() => setShowDamageReport(null)} onSave={(popis) => reportDamage(showDamageReport, popis)} />
+      )}
+      {showQuickDamagePicker && (
+        <QuickDamagePickerModal
+          machines={machines}
+          onClose={() => setShowQuickDamagePicker(false)}
+          onPick={(machineId) => {
+            setShowQuickDamagePicker(false);
+            const m = enrichedMachineById[machineId];
+            if (m) setShowDamageReport(m);
+          }}
+        />
       )}
       {showExternalReport && (
         <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
@@ -4326,7 +4368,7 @@ function DocumentsView({
 }
 
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -4351,7 +4393,10 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "zamestnanci", label: "Zamestnanci" },
     { id: "checkeri", label: "Checkeri podľa depa" },
   ];
-  const tabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
+  const rawTabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
+  // Externý šofér nemá vidieť nič okrem svojich preprav — ani ostatné záložky v
+  // rámci Požičovne (Kalendár, Zákazky, Stroje, Šoféri, Dokumenty).
+  const tabs = effectiveUser?.role === "externy_sofer" ? rawTabs.filter((t) => t.id === "prepravy") : rawTabs;
 
   return (
     <div style={{ background: "var(--panel)" }}>
@@ -4428,7 +4473,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
         <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", borderRadius: 8, padding: 3 }}>
           {[
             { id: "poziciovna", label: "Požičovňa" },
-            { id: "servis", label: "Servis" },
+            ...(effectiveUser?.role !== "externy_sofer" ? [{ id: "servis", label: "Servis" }] : []),
             ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva" }] : []),
           ].map((m) => (
             <button
@@ -4535,6 +4580,10 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           <button onClick={() => openProtocol({})} className="mobile-tech-action-btn mobile-tech-action-accent">
             <span className="mobile-tech-action-icon">📋</span>
             Protokol
+          </button>
+          <button onClick={onOpenQuickDamageReport} className="mobile-tech-action-btn">
+            <span className="mobile-tech-action-icon">⚠️</span>
+            Porucha
           </button>
           <a
             href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
@@ -5259,7 +5308,13 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const isMyselfSofer = user?.role === "sofer" && myEmployee?.role === "sofer";
-  const [driverFilter, setDriverFilter] = useState(() => (isMyselfSofer ? myEmployee.id : ""));
+  // Externý šofér má toto NAVYŠE natvrdo uzamknuté — na rozdiel od bežného šoféra
+  // (ten len má tento filter predvolený, ale vie si ho zmeniť), externý smie
+  // vidieť VÝLUČNE svoje vlastné prepravy, nemá ako to obísť.
+  const isLockedExternalSofer = user?.role === "externy_sofer" && myEmployee?.role === "externy_sofer";
+  const [driverFilter, setDriverFilterRaw] = useState(() => (isMyselfSofer || isLockedExternalSofer ? myEmployee.id : ""));
+  const setDriverFilter = isLockedExternalSofer ? () => {} : setDriverFilterRaw;
+  const effectiveDriverFilter = isLockedExternalSofer ? myEmployee.id : driverFilter;
   const [quickFilter, setQuickFilter] = useState(null); // { key, dateVal, type, label, driverName } — recomputed live, never frozen
   const depoOptions = DEPO_OPTIONS;
 
@@ -5345,10 +5400,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   const summaryDriverIds = [
     ...drivers.filter((d) => !d.archived && summary[d.id]).map((d) => d.id),
     ...(summary.unassigned ? ["unassigned"] : []),
-  ].filter((key) => !driverFilter || key === driverFilter);
+  ].filter((key) => !effectiveDriverFilter || key === effectiveDriverFilter);
 
   let filtered = transports;
-  if (driverFilter) filtered = filtered.filter((t) => (driverFilter === "unassigned" ? !t.driverId : t.driverId === driverFilter));
+  if (effectiveDriverFilter) filtered = filtered.filter((t) => (effectiveDriverFilter === "unassigned" ? !t.driverId : t.driverId === effectiveDriverFilter));
   if (depoFilter) {
     filtered = filtered.filter(
       (t) => t.from.toLowerCase() === depoFilter.toLowerCase() || t.to.toLowerCase() === depoFilter.toLowerCase()
@@ -5430,7 +5485,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                 style={{ fontSize: 11, padding: "4px 6px" }}
               >
                 <option value="">— neurčený —</option>
-                {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {driverOptionsGrouped(drivers)}
               </select>
             ) : (
               <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
@@ -5498,17 +5553,21 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
-          <option value="">— všetci šoféri —</option>
-          <option value="unassigned">Nepridelené</option>
-          {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        {isLockedExternalSofer ? (
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>Vaše prepravy: {myEmployee.name}</div>
+        ) : (
+          <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
+            <option value="">— všetci šoféri —</option>
+            <option value="unassigned">Nepridelené</option>
+            {driverOptionsGrouped(drivers)}
+          </select>
+        )}
       </div>
 
       {summaryDriverIds.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Rýchly prehľad — dnes / zajtra / pozajtra{driverFilter ? " (len vybraný šofér)" : ""}
+            Rýchly prehľad — dnes / zajtra / pozajtra{effectiveDriverFilter ? " (len vybraný šofér)" : ""}
           </div>
           <table>
             <thead>
@@ -6193,7 +6252,7 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
       <Field label="Šofér (zvoz)">
         <select value={returnDriverId} onChange={(e) => setReturnDriverId(e.target.value)} style={{ width: "100%" }}>
           <option value="">— zatiaľ neurčený —</option>
-          {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {driverOptionsGrouped(drivers)}
         </select>
       </Field>
       <button
@@ -6373,7 +6432,7 @@ function HandoverProtocolViewPanel({ existing, job, myEmployee, user, onGoEditNe
         </div>
       ) : (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {!existing.returnDone && user?.role === "sofer" && (
+          {!existing.returnDone && (user?.role === "sofer" || user?.role === "externy_sofer") && (
             canFillHandoverPhase(job, myEmployee, "vratenie") ? (
               <button className="btn btn-accent" onClick={() => onGoEditNextPhase()}>
                 Vykonať vrátenie
@@ -6981,7 +7040,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
         <Field label="Šofér (vývoz)">
           <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
             <option value="">— zatiaľ neurčený —</option>
-            {drivers.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {driverOptionsGrouped(drivers)}
           </select>
         </Field>
         <Field label="Odkiaľ (depo) *">
@@ -8124,6 +8183,39 @@ function CardField({ label, value, danger, dotColor }) {
 /* ---------------------------------------------------------
    Damage report modal (dispatcher reports damage from karta stroja)
 --------------------------------------------------------- */
+// Rýchle nahlásenie poškodenia z mobilnej lišty technika — na rozdiel od
+// bežného nahlásenia (z karty stroja) tu nie je čo predvyplniť, technik si
+// najprv sám vyhľadá a vyberie stroj.
+function QuickDamagePickerModal({ machines, onClose, onPick }) {
+  const [text, setText] = useState("");
+  const options = [...machines].filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const match = options.find((m) => (m.code || "").trim().toLowerCase() === text.trim().toLowerCase());
+
+  return (
+    <Modal title="Nahlásiť poškodenie stroja" onClose={onClose}>
+      <Field label="Sériové číslo alebo model stroja *">
+        <input
+          list="quick-damage-machine-datalist"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Píš sériové číslo alebo model..."
+          style={{ width: "100%", borderColor: text && !match ? "var(--danger)" : undefined }}
+          autoFocus
+        />
+        <datalist id="quick-damage-machine-datalist">
+          {options.map((m) => (
+            <option key={m.id} value={m.code}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</option>
+          ))}
+        </datalist>
+      </Field>
+      {text && !match && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 14 }}>Vyber stroj zo zoznamu.</div>}
+      <button className="btn btn-accent" disabled={!match} onClick={() => onPick(match.id)}>
+        Pokračovať
+      </button>
+    </Modal>
+  );
+}
+
 function DamageReportModal({ machine, today, onClose, onSave }) {
   const [popis, setPopis] = useState("");
   const model = [machine.manufacturer, machine.type].filter(Boolean).join(" ") || machine.type || "—";
