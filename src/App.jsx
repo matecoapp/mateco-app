@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.252";
+const APP_VERSION = "1.0.253";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8188,28 +8188,62 @@ function CardField({ label, value, danger, dotColor }) {
 // najprv sám vyhľadá a vyberie stroj.
 function QuickDamagePickerModal({ machines, onClose, onPick }) {
   const [text, setText] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [showList, setShowList] = useState(false);
   const options = [...machines].filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
-  const match = options.find((m) => (m.code || "").trim().toLowerCase() === text.trim().toLowerCase());
+  const q = text.trim().toLowerCase();
+  const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
+  const selected = options.find((m) => m.id === selectedId);
 
   return (
     <Modal title="Nahlásiť poškodenie stroja" onClose={onClose}>
       <Field label="Sériové číslo alebo model stroja *">
-        <input
-          list="quick-damage-machine-datalist"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Píš sériové číslo alebo model..."
-          style={{ width: "100%", borderColor: text && !match ? "var(--danger)" : undefined }}
-          autoFocus
-        />
-        <datalist id="quick-damage-machine-datalist">
-          {options.map((m) => (
-            <option key={m.id} value={m.code}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</option>
-          ))}
-        </datalist>
+        <div style={{ position: "relative" }}>
+          <input
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setSelectedId("");
+              setShowList(true);
+            }}
+            onFocus={() => setShowList(true)}
+            placeholder="Píš sériové číslo alebo model..."
+            style={{ width: "100%" }}
+            autoFocus
+          />
+          {showList && (
+            <div
+              className="panel"
+              style={{
+                position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50,
+                maxHeight: 220, overflowY: "auto", padding: 4,
+              }}
+            >
+              {filtered.length === 0 ? (
+                <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
+              ) : (
+                filtered.slice(0, 50).map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => {
+                      setSelectedId(m.id);
+                      setText(m.code || "");
+                      setShowList(false);
+                    }}
+                    style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
+                    onMouseDown={(e) => e.preventDefault()} // nech onClick prebehne pred stratou focusu z inputu
+                  >
+                    <strong>{m.code}</strong>
+                    <span style={{ color: "var(--text-dim)" }}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </Field>
-      {text && !match && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 14 }}>Vyber stroj zo zoznamu.</div>}
-      <button className="btn btn-accent" disabled={!match} onClick={() => onPick(match.id)}>
+      {text && !selected && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 14 }}>Vyber stroj zo zoznamu.</div>}
+      <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
         Pokračovať
       </button>
     </Modal>
