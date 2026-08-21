@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.245";
+const APP_VERSION = "1.0.246";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1027,8 +1027,8 @@ function DispatcherApp() {
   const drivers = useMemo(() => employees.filter((e) => e.role === "sofer"), [employees]);
   const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
-  const [module, setModuleRaw] = useState("poziciovna");
-  const [view, setView] = useState("calendar");
+  const [module, setModuleRaw] = useState(() => localStorage.getItem("mateco_last_module") || "poziciovna");
+  const [view, setView] = useState(() => localStorage.getItem("mateco_last_view") || "calendar");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dashboardDepoFilter, setDashboardDepoFilter] = useState(null);
@@ -1114,6 +1114,15 @@ function DispatcherApp() {
     setModuleRaw(m);
     setView(m === "servis" ? "prehlad" : m === "administrativa" ? "zamestnanci" : "calendar");
   }
+
+  // Zapamätá si aktuálnu obrazovku, nech pri obnovení stránky (F5) ostane
+  // appka na tom istom mieste, namiesto skoku na prednastavenú stránku.
+  useEffect(() => {
+    localStorage.setItem("mateco_last_module", module);
+  }, [module]);
+  useEffect(() => {
+    localStorage.setItem("mateco_last_view", view);
+  }, [view]);
 
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
@@ -1364,15 +1373,19 @@ function DispatcherApp() {
   const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
 
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
-  // (napr. vedúci servisu rovno v Servise) — len raz, nezasahuje do ďalšej navigácie.
+  // (napr. vedúci servisu rovno v Servise) — len pri prvom prihlásení v novej
+  // relácii (nič si ešte nezapamätal), nie pri obnovení stránky (F5), kde má
+  // appka ostať tam, kde bol človek predtým.
   const didSetLandingModule = useRef(false);
   useEffect(() => {
     if (currentUser && !didSetLandingModule.current) {
       didSetLandingModule.current = true;
-      const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "poziciovna";
-      setModule(landingModule);
-      // Šofér potrebuje hneď vidieť svoje dnešné rozvozy/zvozy, nie prehľad strojov.
-      if (currentUser.role === "sofer") setView("prepravy");
+      if (!localStorage.getItem("mateco_last_module")) {
+        const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "poziciovna";
+        setModule(landingModule);
+        // Šofér potrebuje hneď vidieť svoje dnešné rozvozy/zvozy, nie prehľad strojov.
+        if (currentUser.role === "sofer") setView("prepravy");
+      }
     }
   }, [currentUser]);
 
@@ -1405,6 +1418,8 @@ function DispatcherApp() {
   function signOut() {
     supabase.auth.signOut();
     setSession(null);
+    localStorage.removeItem("mateco_last_module");
+    localStorage.removeItem("mateco_last_view");
   }
   function updateProfileInfo(id, patch) {
     supabase
@@ -1987,16 +2002,22 @@ function DispatcherApp() {
   }
   // Vytvorí alebo upraví protokol o odovzdaní/prevzatí stroja pre danú zákazku —
   // jeden záznam pokrýva obe fázy (Prevzatie aj Vrátenie), presne ako papierový vzor.
-  function saveHandoverProtocol(jobId, machineId, data) {
+  function saveHandoverProtocol(jobId, machineId, data, baseRev) {
     const job = jobs.find((j) => j.id === jobId);
     const machine = machineById[machineId];
     const existing = handoverProtocols.find((h) => h.jobId === jobId);
+    // Poistka proti tichému prepísaniu — ak niekto iný záznam zmenil medzičasom
+    // (kým sme toto vypĺňali), neprepíšeme to potichu, len na to upozorníme.
+    if (existing && baseRev !== undefined && (existing._rev || 0) !== baseRev) {
+      alert("Tento protokol medzičasom zmenil niekto iný. Obnov stránku (F5) a skús to znova, nech sa nič neprepíše.");
+      return null;
+    }
     let recordId;
     if (existing) {
-      persistHandoverProtocols(handoverProtocols.map((h) => (h.id === existing.id ? { ...h, ...data } : h)));
+      persistHandoverProtocols(handoverProtocols.map((h) => (h.id === existing.id ? { ...h, ...data, _rev: (h._rev || 0) + 1 } : h)));
       recordId = existing.id;
     } else {
-      const record = { id: uid(), jobId, machineId, createdAt: new Date().toISOString(), createdBy: currentUser?.name || "", ...data };
+      const record = { id: uid(), jobId, machineId, createdAt: new Date().toISOString(), createdBy: currentUser?.name || "", _rev: 1, ...data };
       persistHandoverProtocols([...handoverProtocols, record]);
       recordId = record.id;
     }
@@ -3648,9 +3669,9 @@ function DispatcherApp() {
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
           onClose={() => setShowHandoverProtocol(null)}
-          onSave={(patch) => {
-            saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch);
-            setShowHandoverProtocol(null);
+          onSave={(patch, baseRev) => {
+            const savedId = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
+            if (savedId) setShowHandoverProtocol(null);
           }}
           onDelete={(id) => {
             askDelete("tento protokol o odovzdaní", () => {
@@ -6375,6 +6396,10 @@ function HandoverProtocolViewPanel({ existing, job, myEmployee, user, onGoEditNe
 }
 
 function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete }) {
+  // Zachytené len raz, pri otvorení — nech vieme neskôr rozoznať, či niekto iný
+  // medzičasom (kým sme toto vypĺňali) záznam nezmenil, a nedôjde tak k jeho
+  // tichému prepísaniu.
+  const [baseRev] = useState(existing?._rev || 0);
   const [screen, setScreen] = useState(existing ? "view" : "edit");
   const startPhase = existing && !existing.returnDone ? "vratenie" : "prevzatie";
   const [phase, setPhase] = useState(startPhase);
@@ -6437,7 +6462,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.editedBy = user?.name || "";
       patch.editedAt = new Date().toISOString();
     }
-    onSave(patch);
+    onSave(patch, baseRev);
   }
 
   if (screen === "view" && existing) {
