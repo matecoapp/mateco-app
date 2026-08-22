@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.253";
+const APP_VERSION = "1.0.255";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4553,6 +4553,9 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           <div className="header-tech-actions" style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
               Vypísať protokol
+            </button>
+            <button onClick={onOpenQuickDamageReport} className="btn btn-ghost" style={{ fontSize: 12, color: "var(--danger)" }}>
+              ⚠️ Nahlásiť poškodenie
             </button>
             <a
               href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
