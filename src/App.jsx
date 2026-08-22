@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.256";
+const APP_VERSION = "1.0.257";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1198,13 +1198,13 @@ function DispatcherApp() {
   }, [loaded, reservations, today]);
 
   // Súhrnná denná správa pre vedúcich — jedna kompaktná notifikácia namiesto
-  // rozsypaných jednotlivých. Posiela sa najviac raz za deň (kontrola cez
-  // existujúce notifikácie s rovnakým titulkom z dnešného dňa).
+  // rozsypaných jednotlivých. Posiela sa najviac raz za deň, a len vtedy, keď je
+  // prihlásený práve ten vedúci, komu je súhrn určený (nie hocikto iný).
   useEffect(() => {
     if (!loaded) return;
     const alreadySentToday = (role) => notifications.some((n) => n.title === "Denný súhrn" && n.roles?.includes(role) && n.createdAt?.slice(0, 10) === today);
 
-    if (!alreadySentToday("veduci_pozicovne")) {
+    if (currentUser?.role === "veduci_pozicovne" && !alreadySentToday("veduci_pozicovne")) {
       const expiringReservations = reservations.filter(
         (r) => (r.status === "pending" || r.status === "approved") && r.expectedStart && r.expectedStart >= today && r.expectedStart <= addDaysISO(today, 3)
       );
@@ -1218,7 +1218,7 @@ function DispatcherApp() {
       }
     }
 
-    if (!alreadySentToday("veduci_servisu")) {
+    if (currentUser?.role === "veduci_servisu" && !alreadySentToday("veduci_servisu")) {
       const newDamagesCount = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId).length;
       const pendingPartsCount = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length;
       if (newDamagesCount > 0 || pendingPartsCount > 0) {
