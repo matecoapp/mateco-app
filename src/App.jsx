@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.255";
+const APP_VERSION = "1.0.256";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -508,6 +508,25 @@ const addDaysISO = (iso, days) => {
   const shifted = new Date(d.getTime() + days * 86400000);
   return toLocalISO(shifted);
 };
+// Pre porovnanie období v štatistikách — vráti rovnako dlhé obdobie hneď pred
+// zvoleným (napr. 1.–15. jún → predchádzajúce je 17.–31. máj).
+function previousPeriod(start, end) {
+  const days = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
+  const prevEnd = addDaysISO(start, -1);
+  const prevStart = addDaysISO(prevEnd, -(days - 1));
+  return { start: prevStart, end: prevEnd };
+}
+// Zostaví údaj pre StatCard — porovná aktuálnu hodnotu s predchádzajúcim
+// obdobím a vráti smer (hore/dole/rovnako) aj čitateľný text.
+function statDelta(current, previous, { percent } = {}) {
+  if (previous === 0 && current === 0) return { direction: "flat", text: "bez zmeny" };
+  if (previous === 0) return { direction: "up", text: percent ? `+${current} b. p. oproti 0` : `+${current} oproti 0` };
+  const diff = current - previous;
+  const pct = Math.round((diff / previous) * 100);
+  const direction = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+  const sign = diff > 0 ? "+" : "";
+  return { direction, text: percent ? `${sign}${diff} b. p. oproti minulému obdobiu` : `${sign}${pct}% oproti minulému obdobiu` };
+}
 // Posunie dátum o celé roky, zachová mesiac/deň — presne to, čo potrebuje
 // úradná skúška (platí vždy 10 rokov od dňa, keď sa vykonala).
 const addYearsISO = (iso, years) => {
@@ -1148,6 +1167,73 @@ function DispatcherApp() {
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
   const dayAfterTomorrow = addDaysISO(today, 2);
+
+  // Pripomienka pre obchodníka — ak rezervácia visí bez premeny na zákazku
+  // (alebo zamietnutia) príliš dlho, appka appka... upozorní na to obchodníka, nie len dispečera.
+  // Posiela sa len raz za rezerváciu (reminderSentAt), nie pri každom obnovení stránky.
+  const RESERVATION_STALE_DAYS = 7;
+  useEffect(() => {
+    if (!loaded) return;
+    const stale = reservations.filter((r) => {
+      if (r.status !== "pending" && r.status !== "approved") return false;
+      if (r.reminderSentAt) return false;
+      if (!r.createdAt) return false;
+      const ageDays = (new Date(today + "T00:00:00") - new Date(r.createdAt.slice(0, 10) + "T00:00:00")) / 86400000;
+      return ageDays >= RESERVATION_STALE_DAYS;
+    });
+    if (stale.length === 0) return;
+    stale.forEach((r) => {
+      const machine = machineById[r.machineId];
+      if (r.obchodnik) {
+        pushNotification({
+          roles: [],
+          userName: r.obchodnik,
+          title: "Nezáväzná rezervácia dlho nevybavená",
+          message: `Rezervácia stroja ${machine?.code || "—"} pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Over, či je ešte aktuálna.`,
+          link: { module: "poziciovna", view: "jobs" },
+        });
+      }
+    });
+    persistReservations(reservations.map((r) => (stale.some((s) => s.id === r.id) ? { ...r, reminderSentAt: new Date().toISOString() } : r)));
+  }, [loaded, reservations, today]);
+
+  // Súhrnná denná správa pre vedúcich — jedna kompaktná notifikácia namiesto
+  // rozsypaných jednotlivých. Posiela sa najviac raz za deň (kontrola cez
+  // existujúce notifikácie s rovnakým titulkom z dnešného dňa).
+  useEffect(() => {
+    if (!loaded) return;
+    const alreadySentToday = (role) => notifications.some((n) => n.title === "Denný súhrn" && n.roles?.includes(role) && n.createdAt?.slice(0, 10) === today);
+
+    if (!alreadySentToday("veduci_pozicovne")) {
+      const expiringReservations = reservations.filter(
+        (r) => (r.status === "pending" || r.status === "approved") && r.expectedStart && r.expectedStart >= today && r.expectedStart <= addDaysISO(today, 3)
+      );
+      if (expiringReservations.length > 0) {
+        pushNotification({
+          roles: ["veduci_pozicovne"],
+          title: "Denný súhrn",
+          message: `Dnešný prehľad požičovne: ${expiringReservations.length} nezáväzných rezervácií so začiatkom v najbližších 3 dňoch, ešte nepremenených na zákazku.`,
+          link: { module: "poziciovna", view: "jobs" },
+        });
+      }
+    }
+
+    if (!alreadySentToday("veduci_servisu")) {
+      const newDamagesCount = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId).length;
+      const pendingPartsCount = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length;
+      if (newDamagesCount > 0 || pendingPartsCount > 0) {
+        const parts = [];
+        if (newDamagesCount > 0) parts.push(`${newDamagesCount} nových nepridelených poškodení`);
+        if (pendingPartsCount > 0) parts.push(`${pendingPartsCount} požiadaviek na diely čaká na schválenie`);
+        pushNotification({
+          roles: ["veduci_servisu"],
+          title: "Denný súhrn",
+          message: `Dnešný prehľad servisu: ${parts.join(", ")}.`,
+          link: { module: "servis", view: "poskodenia" },
+        });
+      }
+    }
+  }, [loaded, today]);
 
   useEffect(() => {
     setSaveStatusListener((status, key) => {
@@ -4919,11 +5005,16 @@ function Dashboard({
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, delta }) {
   return (
     <div className="panel" style={{ padding: "14px 16px" }}>
       <div className="label-font" style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
       <div className="mono" style={{ fontSize: 28, fontWeight: 600, color }}>{value}</div>
+      {delta && (
+        <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color: delta.direction === "up" ? "var(--ok)" : delta.direction === "down" ? "var(--danger)" : "var(--text-dim)" }}>
+          {delta.direction === "up" ? "▲" : delta.direction === "down" ? "▼" : "–"} {delta.text}
+        </div>
+      )}
     </div>
   );
 }
@@ -10714,13 +10805,21 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
   const totalConverted = periodReservations.filter((r) => r.status === "converted").length;
   const successRatePct = periodReservations.length ? Math.round((totalConverted / periodReservations.length) * 100) : 0;
 
+  // Porovnanie s rovnako dlhým predchádzajúcim obdobím — rýchly pohľad na trend.
+  const prev = previousPeriod(start, end);
+  const prevReservations = reservations.filter((r) => r.createdAt && r.createdAt.slice(0, 10) >= prev.start && r.createdAt.slice(0, 10) <= prev.end);
+  const prevConverted = prevReservations.filter((r) => r.status === "converted").length;
+  const prevSuccessRatePct = prevReservations.length ? Math.round((prevConverted / prevReservations.length) * 100) : 0;
+  const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
+  const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
+
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
         <StatCard label="Sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
-        <StatCard label="Rezervácií za obdobie" value={periodReservations.length} />
-        <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} />
+        <StatCard label="Rezervácií za obdobie" value={periodReservations.length} delta={reservationsDelta} />
+        <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} delta={successRateDelta} />
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -10799,18 +10898,30 @@ function ServisStatistiky({ technicians, protocolLogs, start, end, canEdit, show
   });
   const statusRows = Object.entries(byStatus).sort((a, b) => b[1] - a[1]);
 
+  // Porovnanie s rovnako dlhým predchádzajúcim obdobím.
+  const prev = previousPeriod(start, end);
+  const prevPeriodProtocols = (protocolLogs || []).filter((p) => p.createdAt && p.createdAt.slice(0, 10) >= prev.start && p.createdAt.slice(0, 10) <= prev.end);
+  const prevTrackedProtocols = prevPeriodProtocols.filter((p) => trackedNames.has(p.technicianName));
+  const prevTotalHours = prevTrackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0);
+  const prevTotalTravelHours = prevTrackedProtocols.reduce((sum, p) => sum + (p.travelHours || 0), 0);
+  const prevTotalTravelKm = prevTrackedProtocols.reduce((sum, p) => sum + (p.travelKm || 0), 0);
+  const protocolsDelta = statDelta(periodProtocols.length, prevPeriodProtocols.length);
+  const hoursDelta = statDelta(Math.round(totalHours), Math.round(prevTotalHours));
+  const travelHoursDelta = statDelta(Math.round(totalTravelHours), Math.round(prevTotalTravelHours));
+  const travelKmDelta = statDelta(Math.round(totalTravelKm), Math.round(prevTotalTravelKm));
+
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
-        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} />
+        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
         <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
       </div>
 
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} />
-        <StatCard label="Čas na ceste (hod.)" value={totalTravelHours.toFixed(1)} />
-        <StatCard label="Prejazdené km" value={totalTravelKm.toFixed(0)} />
+        <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
+        <StatCard label="Čas na ceste (hod.)" value={totalTravelHours.toFixed(1)} delta={travelHoursDelta} />
+        <StatCard label="Prejazdené km" value={totalTravelKm.toFixed(0)} delta={travelKmDelta} />
       </div>
 
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
