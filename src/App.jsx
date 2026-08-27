@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.260";
+const APP_VERSION = "1.0.261";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11010,27 +11010,41 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
   const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
   const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
 
-  // Rentabilita stroja — koľko % dní v zvolenom období bol stroj reálne na
-  // zákazke (nie len k dnešku ako Utilizácia vyššie, ale za celé obdobie).
+  // Rentabilita podľa modelu — koľko % dní v zvolenom období boli stroje
+  // daného modelu reálne na zákazke (nie len k dnešku ako Utilizácia vyššie,
+  // ale za celé obdobie). Zoskupené podľa kategórie, ako v kalendári.
   const totalDaysInPeriod = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
-  const rentabilityRows = tracked
-    .map((m) => {
-      const machineJobs = jobs.filter((j) => j.machineId === m.id);
-      let busyDays = 0;
-      machineJobs.forEach((j) => {
-        const jStart = j.startDate;
-        const jEnd = j.endDate || today;
-        if (!jStart) return;
-        const s = jStart > start ? jStart : start;
-        const e = jEnd < end ? jEnd : end;
-        if (s > e) return;
-        busyDays += Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
-      });
-      busyDays = Math.min(busyDays, totalDaysInPeriod);
-      const pct = totalDaysInPeriod ? Math.round((busyDays / totalDaysInPeriod) * 100) : 0;
-      return { machine: m, busyDays, pct };
-    })
-    .sort((a, b) => a.pct - b.pct);
+  const rentabilityByModel = {};
+  tracked.forEach((m) => {
+    const machineJobs = jobs.filter((j) => j.machineId === m.id);
+    let busyDays = 0;
+    machineJobs.forEach((j) => {
+      const jStart = j.startDate;
+      const jEnd = j.endDate || today;
+      if (!jStart) return;
+      const s = jStart > start ? jStart : start;
+      const e = jEnd < end ? jEnd : end;
+      if (s > e) return;
+      busyDays += Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
+    });
+    busyDays = Math.min(busyDays, totalDaysInPeriod);
+    const category = m.category || "Nezaradené";
+    const model = m.type || "— bez modelu —";
+    const key = `${category}||${model}`;
+    if (!rentabilityByModel[key]) rentabilityByModel[key] = { category, model, count: 0, busyDays: 0, totalDays: 0 };
+    rentabilityByModel[key].count += 1;
+    rentabilityByModel[key].busyDays += busyDays;
+    rentabilityByModel[key].totalDays += totalDaysInPeriod;
+  });
+  const categoryOrder = MACHINE_CATEGORY_OPTIONS;
+  const rentabilityRows = Object.values(rentabilityByModel)
+    .map((r) => ({ ...r, pct: r.totalDays ? Math.round((r.busyDays / r.totalDays) * 100) : 0 }))
+    .sort((a, b) => {
+      const ca = categoryOrder.indexOf(a.category);
+      const cb = categoryOrder.indexOf(b.category);
+      if (ca !== cb) return (ca === -1 ? 999 : ca) - (cb === -1 ? 999 : cb);
+      return a.pct - b.pct;
+    });
 
   return (
     <div>
@@ -11076,7 +11090,7 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Rentabilita stroja — % dní v období na zákazke
+        Rentabilita podľa modelu — % dní v období na zákazke
       </div>
       <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
         {rentabilityRows.length === 0 ? (
@@ -11085,21 +11099,33 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stroj</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet strojov</th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dní na zákazke</th>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Vyťaženosť</th>
               </tr>
             </thead>
             <tbody>
-              {rentabilityRows.map(({ machine, busyDays, pct }) => (
-                <tr key={machine.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{machine.code} · {machine.type}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{machine.depo || "—"}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{busyDays} / {totalDaysInPeriod}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct < 30 ? "var(--danger)" : pct < 60 ? "#b58a00" : "var(--ok)" }}>{pct}%</td>
-                </tr>
-              ))}
+              {rentabilityRows.map((row, i) => {
+                const showCategoryHeader = i === 0 || rentabilityRows[i - 1].category !== row.category;
+                return (
+                  <React.Fragment key={`${row.category}||${row.model}`}>
+                    {showCategoryHeader && (
+                      <tr>
+                        <td colSpan={4} style={{ padding: "8px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", background: "var(--bg)", color: "var(--accent)", borderTop: "1px solid var(--border)" }}>
+                          {row.category}
+                        </td>
+                      </tr>
+                    )}
+                    <tr style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{row.model}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13 }}>{row.count}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13 }}>{row.busyDays} / {row.totalDays}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: row.pct < 30 ? "var(--danger)" : row.pct < 60 ? "#b58a00" : "var(--ok)" }}>{row.pct}%</td>
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
