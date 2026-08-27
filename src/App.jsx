@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.264";
+const APP_VERSION = "1.0.265";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8669,7 +8669,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <>
             <CardField label="Model" value={d.model} />
             <CardField label="Aktuálne depo" value={liveLocation || d.location} />
-            <CardField label={`Platnosť revízie${d.revizeType ? " " + d.revizeType : ""}`} value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
+            <CardField label={`Platnosť revízie ${d.revizeType || "ZZ"}`} value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
           </>
         ) : isUradnaSkuska ? (
           <>
@@ -8770,13 +8770,13 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               {d.code}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
-            {variant === "revizia" && d.revizeType && (
+            {variant === "revizia" && (
               <span
                 className="badge"
                 style={{ background: d.revizeType === "EZ" ? "var(--info-bg)" : "var(--warn-bg)", color: d.revizeType === "EZ" ? "var(--info)" : "var(--warn)", fontSize: 10 }}
                 title={d.revizeType === "EZ" ? "Revízia elektrického zariadenia" : "Revízia zdvíhacieho zariadenia"}
               >
-                {d.revizeType}
+                {d.revizeType || "ZZ"}
               </span>
             )}
             {isSimple ? (
@@ -10174,7 +10174,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   // ↔ naďalej fungujú ako rýchly skok o celý mesiac (posunú stred okna).
   const allDays = useMemo(() => {
     const days = [];
-    for (let mOff = -1; mOff <= 1; mOff++) {
+    for (let mOff = -4; mOff <= 4; mOff++) {
       const d = new Date(year, month + mOff, 1);
       const y = d.getFullYear();
       const mo = d.getMonth();
