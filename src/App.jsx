@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.261";
+const APP_VERSION = "1.0.263";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1923,13 +1923,14 @@ function DispatcherApp() {
       if (isStroj && m.revizia && m.trackRevisions !== false) {
         const days = daysBetween(today, m.revizia);
         const alreadyOpen = damages.some(
-          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && !d.resolved
+          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && d.revizeType !== "EZ" && !d.resolved
         );
         if (days <= 30 && !alreadyOpen) {
           const overdue = days < 0;
           additions.push({
             id: uid(),
             type: "revizia",
+            revizeType: "ZZ",
             machineId: m.id,
             code: m.code,
             model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
@@ -1942,8 +1943,40 @@ function DispatcherApp() {
             overdue,
             dateReported: today,
             popis: overdue
-              ? `Revízia po termíne (mala byť ${fmtDate(m.revizia)})`
-              : `Revízia o ${days} dní (${fmtDate(m.revizia)})`,
+              ? `Revízia ZZ po termíne (mala byť ${fmtDate(m.revizia)})`
+              : `Revízia ZZ o ${days} dní (${fmtDate(m.revizia)})`,
+            resolved: false,
+            technicianId: null,
+            assignedDate: null,
+            assignmentId: null,
+          });
+        }
+      }
+      if (isStroj && m.reviziaEZ && m.trackRevisionsEZ !== false) {
+        const days = daysBetween(today, m.reviziaEZ);
+        const alreadyOpen = damages.some(
+          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.reviziaEZ && d.revizeType === "EZ" && !d.resolved
+        );
+        if (days <= 30 && !alreadyOpen) {
+          const overdue = days < 0;
+          additions.push({
+            id: uid(),
+            type: "revizia",
+            revizeType: "EZ",
+            machineId: m.id,
+            code: m.code,
+            model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+            serialNumber: m.code || "",
+            currentJobLabel: "",
+            customerContact: "",
+            location: m.depo || "",
+            customer: "",
+            revizia: m.reviziaEZ,
+            overdue,
+            dateReported: today,
+            popis: overdue
+              ? `Revízia EZ po termíne (mala byť ${fmtDate(m.reviziaEZ)})`
+              : `Revízia EZ o ${days} dní (${fmtDate(m.reviziaEZ)})`,
             resolved: false,
             technicianId: null,
             assignedDate: null,
@@ -2610,7 +2643,13 @@ function DispatcherApp() {
     persistMachines(machines.map((m) => (m.id === id ? { ...m, trackRevisions: track } : m)));
     if (!track) {
       // remove any open revision-tracking events for this machine — we're no longer watching it
-      persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "revizia" && !d.resolved)));
+      persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType !== "EZ" && !d.resolved)));
+    }
+  }
+  function setMachineTrackRevisionsEZ(id, track) {
+    persistMachines(machines.map((m) => (m.id === id ? { ...m, trackRevisionsEZ: track } : m)));
+    if (!track) {
+      persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType === "EZ" && !d.resolved)));
     }
   }
   function setMachineTrackUradnaSkuska(id, track) {
@@ -3266,6 +3305,7 @@ function DispatcherApp() {
           <StatistikyView
             user={effectiveUser}
             machines={machines}
+            machineModels={machineModels}
             technicians={technicians}
             jobs={jobs}
             reservations={reservations}
@@ -3603,6 +3643,21 @@ function DispatcherApp() {
               });
             }
           }}
+          onToggleTrackRevisionsEZ={() => {
+            if (machineCard.trackRevisionsEZ === false) {
+              setMachineTrackRevisionsEZ(machineCard.id, true);
+              setMachineCard((prev) => (prev ? { ...prev, trackRevisionsEZ: true } : prev));
+            } else {
+              setConfirmAction({
+                message: "Skutočne chcete zastaviť sledovanie revízie EZ pre daný stroj? Systém nebude upozorňovať na platnosť revízie EZ.",
+                confirmLabel: "Áno, zastaviť sledovanie",
+                onConfirm: () => {
+                  setMachineTrackRevisionsEZ(machineCard.id, false);
+                  setMachineCard((prev) => (prev ? { ...prev, trackRevisionsEZ: false } : prev));
+                },
+              });
+            }
+          }}
           onToggleTrackUradnaSkuska={() => {
             if (machineCard.trackUradnaSkuska === false) {
               setMachineTrackUradnaSkuska(machineCard.id, true);
@@ -3686,6 +3741,7 @@ function DispatcherApp() {
         <DamageAssignModal
           damage={damageAssignTarget}
           technicians={technicians}
+          assignments={assignments}
           today={today}
           onClose={() => { setDamageAssignTarget(null); setReturnToMachine(null); }}
           onSave={(technicianIds, date) => assignDamage(damageAssignTarget.id, technicianIds, date)}
@@ -3756,6 +3812,7 @@ function DispatcherApp() {
           technicians={technicians}
           user={effectiveUser}
           onClose={() => setAssignmentDetail(null)}
+          onReschedule={(dmg) => { setAssignmentDetail(null); setDamageAssignTarget(dmg); }}
         />
       )}
       {protocolModalData && (
@@ -3926,6 +3983,7 @@ function DispatcherApp() {
           onClose={() => setAssignSlot(null)}
           onSave={saveAssignment}
           onDelete={deleteAssignment}
+          onReschedule={(damage) => { setAssignSlot(null); setDamageAssignTarget(damage); }}
         />
       )}
       <div style={{ textAlign: "center", padding: "16px 12px", fontSize: 11, color: "var(--text-dim)" }}>
@@ -4918,7 +4976,7 @@ function ExpandListModal({ title, items, renderItem, onClose }) {
 /* ---------------------------------------------------------
    Assignment detail modal ("karta zákazky" from Servis Prehľad)
 --------------------------------------------------------- */
-function AssignmentDetailModal({ assignment, machine, damage, technicians, user, onClose }) {
+function AssignmentDetailModal({ assignment, machine, damage, technicians, user, onClose, onReschedule }) {
   const a = assignment;
   const technician = technicians.find((t) => t.id === a.technicianId);
   const protocolParams = damage
@@ -4950,6 +5008,11 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
           Stav: {damageLabel(damage)}
         </div>
+      )}
+      {damage && onReschedule && can(user, "plan_assign") && (
+        <button className="btn btn-ghost" style={{ color: "var(--accent)", marginBottom: 14 }} onClick={() => onReschedule(damage)}>
+          Preplánovať (zmeniť dátum alebo technika)
+        </button>
       )}
       {can(user, "protocol_write") && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -5101,7 +5164,8 @@ function Dashboard({
             <tr>
               <th>Sériové číslo</th>
               <th>Model</th>
-              <th>Platnosť revízie</th>
+              <th>Revízia ZZ</th>
+              <th>Revízia EZ</th>
               <th>Depo</th>
               <th>Stav</th>
               <th>Zákazka</th>
@@ -5112,7 +5176,7 @@ function Dashboard({
           <tbody>
             {visibleMachines.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
+                <td colSpan={9} style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
                   Žiadne stroje. Pridajte ich ručne alebo cez CSV import.
                 </td>
               </tr>
@@ -5121,6 +5185,8 @@ function Dashboard({
               const overdueDays = m.currentJob && m.status === "overdue" ? daysBetween(m.currentJob.endDate, today) : 0;
               const reviziaDays = m.revizia ? daysBetween(today, m.revizia) : null;
               const reviziaColor = m.trackRevisions === false ? "var(--text-dim)" : reviziaDays === null ? "var(--text-dim)" : reviziaDays < 0 ? "var(--danger)" : reviziaDays <= 30 ? "var(--warn)" : "var(--text)";
+              const reviziaEZDays = m.reviziaEZ ? daysBetween(today, m.reviziaEZ) : null;
+              const reviziaEZColor = m.trackRevisionsEZ === false ? "var(--text-dim)" : reviziaEZDays === null ? "var(--text-dim)" : reviziaEZDays < 0 ? "var(--danger)" : reviziaEZDays <= 30 ? "var(--warn)" : "var(--text)";
               const barColor = m.hasOpenDamage
                 ? "var(--danger)"
                 : m.status === "overdue" ? "var(--danger)" : m.status === "active" ? "var(--info)" : "var(--ok)";
@@ -5138,6 +5204,7 @@ function Dashboard({
                   <td className="mono" style={{ fontWeight: 600 }}>{m.code}{m.archived ? " (archivovaný)" : ""}</td>
                   <td style={{ color: "var(--text-dim)" }}>{m.type || "—"}</td>
                   <td className="mono" style={{ color: reviziaColor }}>{m.trackRevisions === false ? "Nesledované" : (m.revizia ? fmtDate(m.revizia) : "—")}</td>
+                  <td className="mono" style={{ color: reviziaEZColor }}>{m.trackRevisionsEZ === false ? "Nesledované" : (m.reviziaEZ ? fmtDate(m.reviziaEZ) : "—")}</td>
                   <td>{m.depo || "—"}</td>
                   <td>
                     <StatusBadge status={m.status} />
@@ -6301,8 +6368,10 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
   const [type, setType] = useState(existing?.type || "");
   const [depo, setDepo] = useState(existing?.depo || "");
   const [revizia, setRevizia] = useState(existing?.revizia || "");
+  const [reviziaEZ, setReviziaEZ] = useState(existing?.reviziaEZ || "");
   const [uradnaSkuska, setUradnaSkuska] = useState(existing?.uradnaSkuska || "");
   const [trackRevisions, setTrackRevisions] = useState(existing ? existing.trackRevisions !== false : true);
+  const [trackRevisionsEZ, setTrackRevisionsEZ] = useState(existing ? existing.trackRevisionsEZ !== false : true);
   const [trackUradnaSkuska, setTrackUradnaSkuska] = useState(existing ? existing.trackUradnaSkuska !== false : true);
   const [creatingNewModel, setCreatingNewModel] = useState(false);
   const [newModelCategory, setNewModelCategory] = useState("");
@@ -6327,8 +6396,10 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
     };
     if (isStroj) {
       patch.revizia = revizia;
+      patch.reviziaEZ = reviziaEZ;
       patch.uradnaSkuska = uradnaSkuska;
       patch.trackRevisions = trackRevisions;
+      patch.trackRevisionsEZ = trackRevisionsEZ;
       patch.trackUradnaSkuska = trackUradnaSkuska;
       if (creatingNewModel && type.trim()) {
         onCreateModel({
@@ -6346,8 +6417,10 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
       // Externý stroj a Príslušenstvo nemajú revízie/skúšky — vyprázdni pole,
       // nech pri prepnutí Objektu na existujúcom zázname nezostane nič zabudnuté.
       patch.revizia = "";
+      patch.reviziaEZ = "";
       patch.uradnaSkuska = "";
       patch.trackRevisions = false;
+      patch.trackRevisionsEZ = false;
       patch.trackUradnaSkuska = false;
     }
     onSave(patch);
@@ -6431,10 +6504,15 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
 
       {isStroj && (
         <>
-          <Field label="Dátum najbližšej revízie"><input type="date" value={revizia} onChange={(e) => setRevizia(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Dátum najbližšej revízie ZZ"><input type="date" value={revizia} onChange={(e) => setRevizia(e.target.value)} style={{ width: "100%" }} /></Field>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
             <input type="checkbox" checked={trackRevisions} onChange={(e) => setTrackRevisions(e.target.checked)} />
-            Sledovať revíziu (niektoré stroje ju proste nemajú)
+            Sledovať revíziu ZZ (niektoré stroje ju proste nemajú)
+          </label>
+          <Field label="Dátum najbližšej revízie EZ"><input type="date" value={reviziaEZ} onChange={(e) => setReviziaEZ(e.target.value)} style={{ width: "100%" }} /></Field>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
+            <input type="checkbox" checked={trackRevisionsEZ} onChange={(e) => setTrackRevisionsEZ(e.target.checked)} />
+            Sledovať revíziu EZ (niektoré stroje ju proste nemajú)
           </label>
           <Field label="Dátum najbližšej úradnej skúšky"><input type="date" value={uradnaSkuska} onChange={(e) => setUradnaSkuska(e.target.value)} style={{ width: "100%" }} /></Field>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
@@ -8153,12 +8231,14 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol }) {
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom"
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const notTracked = m.trackRevisions === false;
   const reviziaOverdue = !notTracked && m.revizia && daysBetween(todayISO(), m.revizia) < 0;
+  const notTrackedEZ = m.trackRevisionsEZ === false;
+  const reviziaEZOverdue = !notTrackedEZ && m.reviziaEZ && daysBetween(todayISO(), m.reviziaEZ) < 0;
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
@@ -8182,9 +8262,14 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
         <CardField
-          label="Platnosť revízie"
+          label="Platnosť revízie ZZ"
           value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null)}
           danger={reviziaOverdue}
+        />
+        <CardField
+          label="Platnosť revízie EZ"
+          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null)}
+          danger={reviziaEZOverdue}
         />
         <CardField
           label="Dátum najbližšej úradnej skúšky"
@@ -8273,7 +8358,12 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               )}
               {can(user, "machine_track_toggle") && (
                 <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackRevisions(); }}>
-                  {notTracked ? "Sledovať revízie" : "Nesledovať revízie"}
+                  {notTracked ? "Sledovať revíziu ZZ" : "Nesledovať revíziu ZZ"}
+                </button>
+              )}
+              {can(user, "machine_track_toggle") && (
+                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackRevisionsEZ(); }}>
+                  {notTrackedEZ ? "Sledovať revíziu EZ" : "Nesledovať revíziu EZ"}
                 </button>
               )}
               {can(user, "machine_track_toggle") && (
@@ -8571,7 +8661,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <>
             <CardField label="Model" value={d.model} />
             <CardField label="Aktuálne depo" value={liveLocation || d.location} />
-            <CardField label="Platnosť revízie" value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
+            <CardField label={`Platnosť revízie${d.revizeType ? " " + d.revizeType : ""}`} value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
           </>
         ) : isUradnaSkuska ? (
           <>
@@ -8672,6 +8762,15 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               {d.code}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
+            {variant === "revizia" && d.revizeType && (
+              <span
+                className="badge"
+                style={{ background: d.revizeType === "EZ" ? "var(--info-bg)" : "var(--warn-bg)", color: d.revizeType === "EZ" ? "var(--info)" : "var(--warn)", fontSize: 10 }}
+                title={d.revizeType === "EZ" ? "Revízia elektrického zariadenia" : "Revízia zdvíhacieho zariadenia"}
+              >
+                {d.revizeType}
+              </span>
+            )}
             {isSimple ? (
               d.resolved ? (
                 <span className="badge badge-ok">Vykonaná</span>
@@ -9384,7 +9483,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 /* ---------------------------------------------------------
    Damage assign modal (assign a damage report to a technician/day)
 --------------------------------------------------------- */
-function DamageAssignModal({ damage, technicians, today, onClose, onSave, onBack }) {
+function DamageAssignModal({ damage, technicians, assignments, today, onClose, onSave, onBack }) {
   const [technicianIds, setTechnicianIds] = useState(damage.technicianIds || (damage.technicianId ? [damage.technicianId] : []));
   const [date, setDate] = useState(damage.assignedDate || today);
   const canSave = technicianIds.length > 0 && date;
@@ -9392,6 +9491,14 @@ function DamageAssignModal({ damage, technicians, today, onClose, onSave, onBack
 
   function toggle(id) {
     setTechnicianIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  // Vyťaženosť — koľko má technik na zvolený deň už priradených iných vecí.
+  // Len informatívne, nič to neblokuje (technik môže mať aj viac servisov v deň).
+  function workloadOn(technicianId) {
+    return (assignments || []).filter(
+      (a) => a.technicianId === technicianId && a.date === date && a.damageId !== damage.id
+    ).length;
   }
 
   return (
@@ -9403,12 +9510,20 @@ function DamageAssignModal({ damage, technicians, today, onClose, onSave, onBack
       )}
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
-          {technicians.filter((t) => !t.archived).map((t) => (
-            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} />
-              {t.skratka ? `${t.skratka} — ${t.name}` : t.name}
-            </label>
-          ))}
+          {technicians.filter((t) => !t.archived).map((t) => {
+            const workload = workloadOn(t.id);
+            return (
+              <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} />
+                {t.skratka ? `${t.skratka} — ${t.name}` : t.name}
+                {workload > 0 && (
+                  <span style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600 }}>
+                    — už má na {fmtDate(date)} {workload} {workload === 1 ? "úlohu" : workload < 5 ? "úlohy" : "úloh"}
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
       </Field>
       <Field label="Deň *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
@@ -10046,6 +10161,23 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
 
+  // Plynulé vodorovné rolovanie cez hranicu mesiaca — vykreslí sa predchádzajúci,
+  // aktuálny aj nasledujúci mesiac naraz ako jeden nepretržitý pás dní. Šípky
+  // ↔ naďalej fungujú ako rýchly skok o celý mesiac (posunú stred okna).
+  const allDays = useMemo(() => {
+    const days = [];
+    for (let mOff = -1; mOff <= 1; mOff++) {
+      const d = new Date(year, month + mOff, 1);
+      const y = d.getFullYear();
+      const mo = d.getMonth();
+      const count = new Date(y, mo + 1, 0).getDate();
+      for (let day = 1; day <= count; day++) {
+        days.push(`${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+      }
+    }
+    return days;
+  }, [year, month]);
+
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const damageById = useMemo(() => Object.fromEntries((damages || []).map((d) => [d.id, d])), [damages]);
   const byTechDate = useMemo(() => {
@@ -10198,7 +10330,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-plan-day-col), 1fr))`,
+                gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-plan-day-col), 1fr))`,
                 gap: 2,
                 position: "sticky",
                 top: 0,
@@ -10207,14 +10339,14 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
               }}
             >
               <div style={{ position: "sticky", left: 0, zIndex: 5, background: "var(--panel)" }}></div>
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-                const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+              {allDays.map((iso) => {
+                const d = Number(iso.slice(8, 10));
                 const isToday = iso === today;
-                const dow = new Date(year, month, d).getDay();
+                const dow = new Date(iso + "T00:00:00").getDay();
                 const isWeekend = dow === 0 || dow === 6;
                 return (
                   <div
-                    key={d}
+                    key={iso}
                     ref={isToday ? todayCellRef : null}
                     className="mono gantt-header-cell"
                     title={iso}
@@ -10241,7 +10373,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 key={t.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-plan-day-col), 1fr))`,
+                  gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-plan-day-col), 1fr))`,
                   gap: 2,
                   marginBottom: 3,
                   paddingBottom: 3,
@@ -10274,9 +10406,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     </div>
                   )}
                 </div>
-                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-                  const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                  const dow = new Date(year, month, d).getDay();
+                {allDays.map((iso) => {
+                  const dow = new Date(iso + "T00:00:00").getDay();
                   const isWeekend = dow === 0 || dow === 6;
                   const dayAssignments = byTechDate[`${t.id}_${iso}`] || [];
                   const dutyRecord = (weeklyDuty || []).find((w) => w.technicianId === t.id && iso >= w.weekStart && iso <= w.weekEnd);
@@ -10311,7 +10442,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                       ? "Kliknite pre pridelenie"
                       : "Kliknite pre zobrazenie";
                   return (
-                    <div key={d} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div key={iso} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {dayAssignments.length === 0 ? (
                         <div
                           onClick={handleClick}
@@ -10471,10 +10602,12 @@ function QuickEventNoteModal({ onClose, onSave }) {
   );
 }
 
-function AssignSlotModal({ slot, assignments, machines, damages, machineById, technicians, protocolLogs, user, onClose, onSave, onDelete }) {
+function AssignSlotModal({ slot, assignments, machines, damages, machineById, technicians, protocolLogs, user, onClose, onSave, onDelete, onReschedule }) {
   const technician = technicians.find((t) => t.id === slot.technicianId);
   const dayAssignments = assignments.filter((a) => a.technicianId === slot.technicianId && a.date === slot.date);
   const [editingId, setEditingId] = useState(dayAssignments.length ? null : "new");
+  const [reschedulingId, setReschedulingId] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
 
   function protocolParamsFor(a, machine) {
     const linkedDamage = a.damageId ? (damages || []).find((d) => d.id === a.damageId) : null;
@@ -10508,6 +10641,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
           {dayAssignments.map((a) => {
             const machine = a.machineId ? machineById[a.machineId] : null;
+            const linkedDamage = a.damageId ? (damages || []).find((d) => d.id === a.damageId) : null;
             if (editingId === a.id) return null;
             return (
               <div key={a.id} className="panel" style={{ padding: 12, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
@@ -10525,7 +10659,37 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
+                  {!a.kind && linkedDamage && can(user, "plan_assign") && (
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--accent)" }} onClick={() => onReschedule(linkedDamage)}>
+                      Preplánovať
+                    </button>
+                  )}
                   {!a.kind && can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
+                  {a.kind && can(user, "plan_quick_events") && reschedulingId !== a.id && (
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => { setReschedulingId(a.id); setRescheduleDate(a.date); }}>
+                      Preplánovať
+                    </button>
+                  )}
+                  {a.kind && reschedulingId === a.id && (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input
+                        type="date"
+                        value={rescheduleDate}
+                        onChange={(e) => setRescheduleDate(e.target.value)}
+                        style={{ fontSize: 12, padding: "3px 6px" }}
+                      />
+                      <button
+                        className="btn btn-accent"
+                        style={{ fontSize: 11, padding: "4px 8px" }}
+                        onClick={() => { onSave({ date: rescheduleDate }, a.id); setReschedulingId(null); if (rescheduleDate !== slot.date) onClose(); }}
+                      >
+                        Presunúť
+                      </button>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setReschedulingId(null)}>
+                        Zrušiť
+                      </button>
+                    </div>
+                  )}
                   {!a.kind && can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
                   {!a.kind && can(user, "protocol_write") && (
                     <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
@@ -10821,7 +10985,7 @@ function periodBounds(period, today, customStart, customEnd) {
   return { start: customStart || today, end: customEnd || today };
 }
 
-function StatistikyView({ user, machines, technicians, jobs, reservations, protocolLogs, spareParts, today, onUpdateMachine, onUpdateEmployee }) {
+function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, spareParts, today, onUpdateMachine, onUpdateEmployee }) {
   const defaultDomain = user?.role === "veduci_servisu" ? "servis" : "poziciovna";
   const [domain, setDomain] = useState(defaultDomain);
   const [period, setPeriod] = useState("month");
@@ -10894,6 +11058,7 @@ function StatistikyView({ user, machines, technicians, jobs, reservations, proto
       {domain === "poziciovna" ? (
         <PoziciovnaStatistiky
           machines={machines}
+          machineModels={machineModels}
           jobs={jobs}
           reservations={reservations}
           today={today}
@@ -10982,7 +11147,7 @@ function DielyStatistiky({ spareParts, start, end }) {
   );
 }
 
-function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end }) {
+function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, today, start, end }) {
   const active = machines.filter((m) => !m.archived);
   // Do štatistík sa automaticky počítajú len Požičovňové stroje — Externé
   // stroje a Príslušenstvo sa vylučujú samy, netreba na to žiadny ručný zoznam.
@@ -11015,6 +11180,7 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
   // ale za celé obdobie). Zoskupené podľa kategórie, ako v kalendári.
   const totalDaysInPeriod = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
   const rentabilityByModel = {};
+  const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
   tracked.forEach((m) => {
     const machineJobs = jobs.filter((j) => j.machineId === m.id);
     let busyDays = 0;
@@ -11028,7 +11194,8 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
       busyDays += Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
     });
     busyDays = Math.min(busyDays, totalDaysInPeriod);
-    const category = m.category || "Nezaradené";
+    const mm = modelByName.get((m.type || "").trim().toLowerCase());
+    const category = mm?.category || "Nezaradené";
     const model = m.type || "— bez modelu —";
     const key = `${category}||${model}`;
     if (!rentabilityByModel[key]) rentabilityByModel[key] = { category, model, count: 0, busyDays: 0, totalDays: 0 };
