@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.259";
+const APP_VERSION = "1.0.260";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2455,6 +2455,70 @@ function DispatcherApp() {
 
   const enrichedMachineById = useMemo(() => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])), [enrichedMachines]);
 
+  // Univerzálne vyhľadávanie — jeden index naprieč strojmi, zákazkami, zákazníkmi a poškodeniami.
+  const searchIndex = useMemo(() => {
+    const items = [];
+    enrichedMachines.forEach((m) => {
+      if (m.archived) return;
+      items.push({
+        type: "machine",
+        id: m.id,
+        kindLabel: "Stroj",
+        title: `${m.code} · ${m.type}`,
+        subtitle: m.depo || "",
+        searchText: `${m.code} ${m.type} ${m.depo || ""}`.toLowerCase(),
+      });
+    });
+    jobs.forEach((j) => {
+      const m = machineById[j.machineId];
+      items.push({
+        type: "job",
+        id: j.id,
+        kindLabel: "Zákazka",
+        title: j.customer || "— bez zákazníka —",
+        subtitle: m ? `${m.code} · ${m.type}` : "",
+        searchText: `${j.customer || ""} ${m?.code || ""} ${m?.type || ""}`.toLowerCase(),
+      });
+    });
+    customers.forEach((c) => {
+      items.push({
+        type: "customer",
+        id: c.id,
+        kindLabel: "Zákazník",
+        title: c.name,
+        subtitle: c.email || "",
+        searchText: `${c.name}`.toLowerCase(),
+      });
+    });
+    damages.forEach((d) => {
+      const m = d.machineId ? machineById[d.machineId] : null;
+      items.push({
+        type: "damage",
+        id: d.id,
+        kindLabel: "Poškodenie",
+        title: d.code || "Poškodenie",
+        subtitle: m ? `${m.code} · ${m.type}` : d.customer || "",
+        searchText: `${d.code || ""} ${d.popis || ""} ${m?.code || ""} ${d.customer || ""}`.toLowerCase(),
+      });
+    });
+    return items;
+  }, [enrichedMachines, jobs, damages, customers, machineById]);
+
+  function handleSearchNavigate(result) {
+    if (result.type === "machine") {
+      setModule("poziciovna");
+      setView("dashboard");
+      const m = enrichedMachineById[result.id];
+      if (m) setMachineCard(m);
+    } else if (result.type === "job" || result.type === "customer") {
+      setModule("poziciovna");
+      setView("jobs");
+    } else if (result.type === "damage") {
+      setModule("servis");
+      setView("poskodenia");
+    }
+  }
+
   const filteredMachines = useMemo(() => {
     let list = enrichedMachines;
     if (statusFilter !== "all") list = list.filter((m) => m.status === statusFilter);
@@ -2781,6 +2845,8 @@ function DispatcherApp() {
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
         onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
+        searchIndex={searchIndex}
+        onSearchNavigate={handleSearchNavigate}
       />
 
       {showUserAdmin && (
@@ -4454,7 +4520,95 @@ function DocumentsView({
 }
 
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport }) {
+function GlobalSearch({ searchIndex, onNavigate }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const results =
+    q.length < 2
+      ? []
+      : (searchIndex || [])
+          .filter((r) => r.searchText.includes(q))
+          .slice(0, 8);
+
+  return (
+    <div ref={boxRef} style={{ position: "relative", minWidth: 200 }}>
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie..."
+        style={{
+          width: "100%",
+          border: "1px solid rgba(255,255,255,.4)",
+          background: "rgba(255,255,255,.15)",
+          color: "#fff",
+          borderRadius: 6,
+          padding: "5px 10px",
+          fontSize: 13,
+          outline: "none",
+        }}
+      />
+      {open && q.length >= 2 && (
+        <div
+          className="panel"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            width: 340,
+            maxWidth: "80vw",
+            maxHeight: 380,
+            overflowY: "auto",
+            zIndex: 200,
+            padding: 6,
+          }}
+        >
+          {results.length === 0 ? (
+            <div style={{ padding: 10, fontSize: 13, color: "var(--text-dim)" }}>Žiadne výsledky.</div>
+          ) : (
+            results.map((r) => (
+              <div
+                key={r.type + r.id}
+                onClick={() => {
+                  onNavigate(r);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase" }}>{r.kindLabel}</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</div>
+                {r.subtitle && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.subtitle}</div>}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -4494,6 +4648,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             Interná platforma
           </span>
           <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
+          <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
             <button
               onClick={() =>
@@ -9904,6 +10059,18 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
+
+  // Prehľad vyťaženosti — koľko má každý technik aktuálne otvorených úloh
+  // (nevyriešené poškodenia, revízie, úradné skúšky), nezávisle od dňa v kalendári.
+  const workloadByTechnician = useMemo(() => {
+    const map = {};
+    visibleTechnicians.forEach((t) => { map[t.id] = 0; });
+    (damages || []).forEach((d) => {
+      if (d.resolved) return;
+      if (d.technicianId && map[d.technicianId] !== undefined) map[d.technicianId] += 1;
+    });
+    return map;
+  }, [damages, visibleTechnicians]);
   function scrollToToday() {
     try {
       const container = scrollContainerRef.current;
@@ -9951,6 +10118,36 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         )}
         <div style={{ flex: 1 }} />
       </div>
+      {workloadByTechnician && visibleTechnicians.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {visibleTechnicians.map((t) => {
+            const count = workloadByTechnician[t.id] || 0;
+            return (
+              <div
+                key={t.id}
+                className="panel"
+                style={{ padding: "6px 12px", display: "flex", alignItems: "center", gap: 8 }}
+                title="Počet aktuálne otvorených úloh (nevyriešené poškodenia, revízie, úradné skúšky)"
+              >
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{t.name}</span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: count === 0 ? "var(--ok)" : count <= 2 ? "var(--text-dim)" : "var(--danger)",
+                    background: "var(--bg)",
+                    borderRadius: 10,
+                    padding: "1px 8px",
+                  }}
+                >
+                  {count}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
           <button
@@ -10813,6 +11010,28 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
   const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
   const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
 
+  // Rentabilita stroja — koľko % dní v zvolenom období bol stroj reálne na
+  // zákazke (nie len k dnešku ako Utilizácia vyššie, ale za celé obdobie).
+  const totalDaysInPeriod = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
+  const rentabilityRows = tracked
+    .map((m) => {
+      const machineJobs = jobs.filter((j) => j.machineId === m.id);
+      let busyDays = 0;
+      machineJobs.forEach((j) => {
+        const jStart = j.startDate;
+        const jEnd = j.endDate || today;
+        if (!jStart) return;
+        const s = jStart > start ? jStart : start;
+        const e = jEnd < end ? jEnd : end;
+        if (s > e) return;
+        busyDays += Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
+      });
+      busyDays = Math.min(busyDays, totalDaysInPeriod);
+      const pct = totalDaysInPeriod ? Math.round((busyDays / totalDaysInPeriod) * 100) : 0;
+      return { machine: m, busyDays, pct };
+    })
+    .sort((a, b) => a.pct - b.pct);
+
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
@@ -10851,6 +11070,36 @@ function PoziciovnaStatistiky({ machines, jobs, reservations, today, start, end 
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+        Rentabilita stroja — % dní v období na zákazke
+      </div>
+      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+        {rentabilityRows.length === 0 ? (
+          <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stroj</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dní na zákazke</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Vyťaženosť</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rentabilityRows.map(({ machine, busyDays, pct }) => (
+                <tr key={machine.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{machine.code} · {machine.type}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{machine.depo || "—"}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{busyDays} / {totalDaysInPeriod}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct < 30 ? "var(--danger)" : pct < 60 ? "#b58a00" : "var(--ok)" }}>{pct}%</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
