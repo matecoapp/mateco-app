@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.263";
+const APP_VERSION = "1.0.264";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7594,6 +7594,7 @@ function ImportModal({ onClose, onImport }) {
   const [mapType, setMapType] = useState("");
   const [mapDepo, setMapDepo] = useState("");
   const [mapRevizia, setMapRevizia] = useState("");
+  const [mapReviziaEZ, setMapReviziaEZ] = useState("");
   const [mapUradnaSkuska, setMapUradnaSkuska] = useState("");
   const [fileName, setFileName] = useState("");
 
@@ -7624,6 +7625,7 @@ function ImportModal({ onClose, onImport }) {
           type: mapType ? (r[mapType] || "").toString().trim() : "",
           depo: mapDepo ? (r[mapDepo] || "").toString().trim() : "",
           revizia: objekt === "Požičovňový stroj" && mapRevizia ? (r[mapRevizia] || "").toString().trim() : "",
+          reviziaEZ: objekt === "Požičovňový stroj" && mapReviziaEZ ? (r[mapReviziaEZ] || "").toString().trim() : "",
           uradnaSkuska: objekt === "Požičovňový stroj" && mapUradnaSkuska ? (r[mapUradnaSkuska] || "").toString().trim() : "",
         };
       })
@@ -7666,8 +7668,14 @@ function ImportModal({ onClose, onImport }) {
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum najbližšej revízie">
+            <Field label="Stĺpec = Dátum najbližšej revízie ZZ">
               <select value={mapRevizia} onChange={(e) => setMapRevizia(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = Dátum najbližšej revízie EZ">
+              <select value={mapReviziaEZ} onChange={(e) => setMapReviziaEZ(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
@@ -8261,6 +8269,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
+        <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
         <CardField
           label="Platnosť revízie ZZ"
           value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null)}
@@ -8276,9 +8285,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null)}
           danger={skuskaOverdue}
         />
-        <CardField label="Aktuálna zákazka" value={m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"} />
-        <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
         <CardField label="Depo" value={m.depo} />
+        <CardField label="Aktuálna zákazka" value={m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"} />
       </div>
       {modelParams.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -10191,6 +10199,37 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
+
+  useEffect(() => {
+    setDisplayedMonthLabel(monthLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
+  // Nadpis hore ("August 2026") sa pri vodorovnom rolovaní priebežne
+  // aktualizuje podľa toho, ktorý deň je práve uprostred viditeľnej oblasti —
+  // nech vždy ukazuje mesiac, na ktorom si sa reálne pozeráš.
+  function handleCalendarScroll() {
+    const container = scrollContainerRef.current;
+    if (!container || allDays.length === 0) return;
+    const containerRect = container.getBoundingClientRect();
+    const centerX = containerRect.left + containerRect.width / 2;
+    const headerCells = container.querySelectorAll("[data-day-iso]");
+    let closestIso = null;
+    let closestDist = Infinity;
+    headerCells.forEach((cell) => {
+      const rect = cell.getBoundingClientRect();
+      const dist = Math.abs(rect.left + rect.width / 2 - centerX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestIso = cell.getAttribute("data-day-iso");
+      }
+    });
+    if (closestIso) {
+      const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+      setDisplayedMonthLabel(label);
+    }
+  }
 
   // Prehľad vyťaženosti — koľko má každý technik aktuálne otvorených úloh
   // (nevyriešené poškodenia, revízie, úradné skúšky), nezávisle od dňa v kalendári.
@@ -10237,7 +10276,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-        <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{monthLabel}</span>
+        <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
         <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
         {monthOffset !== 0 && (
           <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
@@ -10325,7 +10364,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         </div>
       )}
       <div className="panel" style={{ padding: 16 }}>
-        <div ref={scrollContainerRef} style={{ overflow: "auto", maxHeight: "65vh" }}>
+        <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
           <div style={{ width: "100%", minWidth: "max-content" }}>
             <div
               style={{
@@ -10348,6 +10387,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   <div
                     key={iso}
                     ref={isToday ? todayCellRef : null}
+                    data-day-iso={iso}
                     className="mono gantt-header-cell"
                     title={iso}
                     style={{
