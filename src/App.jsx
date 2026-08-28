@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.270";
+const APP_VERSION = "1.0.272";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1919,47 +1919,49 @@ function DispatcherApp() {
   useEffect(() => {
     if (!loaded) return;
     const additions = [];
+    const updates = {};
     machines.forEach((m) => {
       const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
-      if (isStroj && m.trackRevisions !== false) {
-        if (!m.revizia) {
-          const alreadyOpen = damages.some(
-            (d) => d.type === "revizia" && d.machineId === m.id && !d.revizia && d.revizeType !== "EZ" && !d.resolved
-          );
-          if (!alreadyOpen) {
-            additions.push({
-              id: uid(),
-              type: "revizia",
-              revizeType: "ZZ",
-              machineId: m.id,
-              code: m.code,
-              model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
-              serialNumber: m.code || "",
-              currentJobLabel: "",
-              customerContact: "",
-              location: m.depo || "",
-              customer: "",
-              revizia: null,
-              overdue: true,
-              dateReported: today,
-              popis: "Revízia ZZ nikdy nevykonaná — chýba dátum",
-              resolved: false,
-              technicianId: null,
-              assignedDate: null,
-              assignmentId: null,
-            });
-          }
-        } else {
-        const days = daysBetween(today, m.revizia);
-        const alreadyOpen = damages.some(
-          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && d.revizeType !== "EZ" && !d.resolved
-        );
-        if (days <= 30 && !alreadyOpen) {
-          const overdue = days < 0;
+      const zzOn = isStroj && m.trackRevisions !== false;
+      const ezOn = isStroj && m.trackRevisionsEZ !== false;
+      const zzMissing = zzOn && !m.revizia;
+      const zzDaysLeft = zzOn && m.revizia ? daysBetween(today, m.revizia) : null;
+      const zzActive = zzMissing || (zzDaysLeft !== null && zzDaysLeft <= 30);
+      const zzOverdue = zzMissing || (zzDaysLeft !== null && zzDaysLeft < 0);
+      const zzPart = !zzActive
+        ? null
+        : zzMissing
+        ? "ZZ nikdy nevykonaná — chýba dátum"
+        : zzOverdue
+        ? `ZZ po termíne (mala byť ${fmtDate(m.revizia)})`
+        : `ZZ o ${zzDaysLeft} dní (${fmtDate(m.revizia)})`;
+
+      const ezMissing = ezOn && !m.reviziaEZ;
+      const ezDaysLeft = ezOn && m.reviziaEZ ? daysBetween(today, m.reviziaEZ) : null;
+      const ezActive = ezMissing || (ezDaysLeft !== null && ezDaysLeft <= 30);
+      const ezOverdue = ezMissing || (ezDaysLeft !== null && ezDaysLeft < 0);
+      const ezPart = !ezActive
+        ? null
+        : ezMissing
+        ? "EZ nikdy nevykonaná — chýba dátum"
+        : ezOverdue
+        ? `EZ po termíne (mala byť ${fmtDate(m.reviziaEZ)})`
+        : `EZ o ${ezDaysLeft} dní (${fmtDate(m.reviziaEZ)})`;
+
+      if (zzActive || ezActive) {
+        // appka appka... platforma drží pre stroj len JEDEN otvorený tiket na revíziu naraz —
+        // ak treba aj ZZ aj EZ, spoja sa do jedného (robia sa spravidla naraz), s jedným
+        // pridelením technikovi. Existujúci tiket sa len rozširuje (nikdy automaticky nezmenšuje) —
+        // zmenšenie rieši výhradne dokončenie (čiastočné "Revízia vykonaná").
+        const desiredType = zzActive && ezActive ? "ZZ+EZ" : zzActive ? "ZZ" : "EZ";
+        const desiredPopis = [zzPart, ezPart].filter(Boolean).join(" · ");
+        const desiredOverdue = (zzActive && zzOverdue) || (ezActive && ezOverdue);
+        const existing = damages.find((d) => d.type === "revizia" && d.machineId === m.id && !d.resolved);
+        if (!existing) {
           additions.push({
             id: uid(),
             type: "revizia",
-            revizeType: "ZZ",
+            revizeType: desiredType,
             machineId: m.id,
             code: m.code,
             model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
@@ -1968,79 +1970,39 @@ function DispatcherApp() {
             customerContact: "",
             location: m.depo || "",
             customer: "",
-            revizia: m.revizia,
-            overdue,
+            revizia: zzActive ? m.revizia || null : null,
+            reviziaEZ: ezActive ? m.reviziaEZ || null : null,
+            overdue: desiredOverdue,
             dateReported: today,
-            popis: overdue
-              ? `Revízia ZZ po termíne (mala byť ${fmtDate(m.revizia)})`
-              : `Revízia ZZ o ${days} dní (${fmtDate(m.revizia)})`,
+            popis: `Revízia ${desiredPopis}`,
             resolved: false,
             technicianId: null,
             assignedDate: null,
             assignmentId: null,
           });
-        }
-        }
-      }
-      if (isStroj && m.trackRevisionsEZ !== false) {
-        if (!m.reviziaEZ) {
-          const alreadyOpen = damages.some(
-            (d) => d.type === "revizia" && d.machineId === m.id && !d.revizia && d.revizeType === "EZ" && !d.resolved
-          );
-          if (!alreadyOpen) {
-            additions.push({
-              id: uid(),
-              type: "revizia",
-              revizeType: "EZ",
-              machineId: m.id,
-              code: m.code,
-              model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
-              serialNumber: m.code || "",
-              currentJobLabel: "",
-              customerContact: "",
-              location: m.depo || "",
-              customer: "",
-              revizia: null,
-              overdue: true,
-              dateReported: today,
-              popis: "Revízia EZ nikdy nevykonaná — chýba dátum",
-              resolved: false,
-              technicianId: null,
-              assignedDate: null,
-              assignmentId: null,
-            });
-          }
         } else {
-        const days = daysBetween(today, m.reviziaEZ);
-        const alreadyOpen = damages.some(
-          (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.reviziaEZ && d.revizeType === "EZ" && !d.resolved
-        );
-        if (days <= 30 && !alreadyOpen) {
-          const overdue = days < 0;
-          additions.push({
-            id: uid(),
-            type: "revizia",
-            revizeType: "EZ",
-            machineId: m.id,
-            code: m.code,
-            model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
-            serialNumber: m.code || "",
-            currentJobLabel: "",
-            customerContact: "",
-            location: m.depo || "",
-            customer: "",
-            revizia: m.reviziaEZ,
-            overdue,
-            dateReported: today,
-            popis: overdue
-              ? `Revízia EZ po termíne (mala byť ${fmtDate(m.reviziaEZ)})`
-              : `Revízia EZ o ${days} dní (${fmtDate(m.reviziaEZ)})`,
-            resolved: false,
-            technicianId: null,
-            assignedDate: null,
-            assignmentId: null,
-          });
-        }
+          const existingType = existing.revizeType || "ZZ";
+          const hasZZ = existingType === "ZZ" || existingType === "ZZ+EZ";
+          const hasEZ = existingType === "EZ" || existingType === "ZZ+EZ";
+          const finalHasZZ = hasZZ || zzActive;
+          const finalHasEZ = hasEZ || ezActive;
+          const mergedType = finalHasZZ ? (finalHasEZ ? "ZZ+EZ" : "ZZ") : "EZ";
+          const mergedRevizia = zzActive ? m.revizia || null : hasZZ ? existing.revizia : null;
+          const mergedReviziaEZ = ezActive ? m.reviziaEZ || null : hasEZ ? existing.reviziaEZ : null;
+          const mergedPopis = `Revízia ${[finalHasZZ ? zzPart || "ZZ" : null, finalHasEZ ? ezPart || "EZ" : null].filter(Boolean).join(" · ")}`;
+          if (
+            mergedType !== existing.revizeType ||
+            mergedRevizia !== existing.revizia ||
+            mergedReviziaEZ !== existing.reviziaEZ
+          ) {
+            updates[existing.id] = {
+              revizeType: mergedType,
+              revizia: mergedRevizia,
+              reviziaEZ: mergedReviziaEZ,
+              overdue: desiredOverdue || existing.overdue,
+              popis: mergedPopis || existing.popis,
+            };
+          }
         }
       }
       if (isStroj && m.trackUradnaSkuska !== false) {
@@ -2103,7 +2065,10 @@ function DispatcherApp() {
         }
       }
     });
-    if (additions.length) persistDamages([...damages, ...additions]);
+    if (additions.length || Object.keys(updates).length) {
+      const patched = damages.map((d) => (updates[d.id] ? { ...d, ...updates[d.id] } : d));
+      persistDamages([...patched, ...additions]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machines, today, loaded]);
 
@@ -2409,12 +2374,42 @@ function DispatcherApp() {
     }
     setResolveDamageTarget(null);
   }
-  function completeRevision(damageId, performedDate) {
+  function completeRevision(damageId, performedDate, parts) {
     const d = damages.find((x) => x.id === damageId);
     if (!d) return;
-    persistDamages(damages.map((x) => (x.id === damageId ? { ...x, resolved: true, vykonanaDatum: performedDate } : x)));
+    const isMerged = d.revizeType === "ZZ+EZ";
+    const doneZZ = isMerged ? !!parts?.zz : d.revizeType === "ZZ";
+    const doneEZ = isMerged ? !!parts?.ez : d.revizeType === "EZ";
     const nextDue = addDaysISO(performedDate, 365);
-    persistMachines(machines.map((m) => (m.id === d.machineId ? { ...m, revizia: nextDue } : m)));
+    persistMachines(
+      machines.map((m) => {
+        if (m.id !== d.machineId) return m;
+        const patch = {};
+        if (doneZZ) patch.revizia = nextDue;
+        if (doneEZ) patch.reviziaEZ = nextDue;
+        return { ...m, ...patch };
+      })
+    );
+    if (isMerged && !(doneZZ && doneEZ)) {
+      // Splnená len časť — tiket ostáva otvorený, len sa zúži na to, čo ešte chýba.
+      const remainingType = doneZZ ? "EZ" : "ZZ";
+      persistDamages(
+        damages.map((x) =>
+          x.id === damageId
+            ? {
+                ...x,
+                revizeType: remainingType,
+                revizia: doneZZ ? null : x.revizia,
+                reviziaEZ: doneEZ ? null : x.reviziaEZ,
+                popis: `Revízia ${remainingType} nikdy nevykonaná — chýba dátum`,
+                overdue: true,
+              }
+            : x
+        )
+      );
+    } else {
+      persistDamages(damages.map((x) => (x.id === damageId ? { ...x, resolved: true, vykonanaDatum: performedDate } : x)));
+    }
     setCompleteRevisionTarget(null);
   }
   function completeUradnaSkuska(damageId, performedDate) {
@@ -2729,14 +2724,29 @@ function DispatcherApp() {
   function setMachineTrackRevisions(id, track) {
     persistMachines(machines.map((m) => (m.id === id ? { ...m, trackRevisions: track } : m)));
     if (!track) {
-      // remove any open revision-tracking events for this machine — we're no longer watching it
-      persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType !== "EZ" && !d.resolved)));
+      persistDamages(
+        damages
+          .filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType === "ZZ" && !d.resolved))
+          .map((d) =>
+            d.machineId === id && d.type === "revizia" && d.revizeType === "ZZ+EZ" && !d.resolved
+              ? { ...d, revizeType: "EZ", revizia: null, popis: `Revízia EZ nikdy nevykonaná — chýba dátum` }
+              : d
+          )
+      );
     }
   }
   function setMachineTrackRevisionsEZ(id, track) {
     persistMachines(machines.map((m) => (m.id === id ? { ...m, trackRevisionsEZ: track } : m)));
     if (!track) {
-      persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType === "EZ" && !d.resolved)));
+      persistDamages(
+        damages
+          .filter((d) => !(d.machineId === id && d.type === "revizia" && d.revizeType === "EZ" && !d.resolved))
+          .map((d) =>
+            d.machineId === id && d.type === "revizia" && d.revizeType === "ZZ+EZ" && !d.resolved
+              ? { ...d, revizeType: "ZZ", reviziaEZ: null, popis: `Revízia ZZ nikdy nevykonaná — chýba dátum` }
+              : d
+          )
+      );
     }
   }
   function setMachineTrackUradnaSkuska(id, track) {
@@ -3848,7 +3858,7 @@ function DispatcherApp() {
           damage={completeRevisionTarget}
           today={today}
           onClose={() => setCompleteRevisionTarget(null)}
-          onSave={(date) => completeRevision(completeRevisionTarget.id, date)}
+          onSave={(date, parts) => completeRevision(completeRevisionTarget.id, date, parts)}
         />
       )}
       {completeUradnaSkuskaTarget && (
@@ -8764,7 +8774,14 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <>
             <CardField label="Model" value={d.model} />
             <CardField label="Aktuálne depo" value={liveLocation || d.location} />
-            <CardField label={`Platnosť revízie ${d.revizeType || "ZZ"}`} value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
+            {d.revizeType === "ZZ+EZ" ? (
+              <>
+                <CardField label="Platnosť revízie ZZ" value={d.revizia ? fmtDate(d.revizia) : "chýba"} danger={d.overdue} />
+                <CardField label="Platnosť revízie EZ" value={d.reviziaEZ ? fmtDate(d.reviziaEZ) : "chýba"} danger={d.overdue} />
+              </>
+            ) : (
+              <CardField label={`Platnosť revízie ${d.revizeType || "ZZ"}`} value={d.revizia ? fmtDate(d.revizia) : null} danger={d.overdue} />
+            )}
           </>
         ) : isUradnaSkuska ? (
           <>
@@ -8868,8 +8885,18 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             {variant === "revizia" && (
               <span
                 className="badge"
-                style={{ background: d.revizeType === "EZ" ? "var(--info-bg)" : "var(--warn-bg)", color: d.revizeType === "EZ" ? "var(--info)" : "var(--warn)", fontSize: 10 }}
-                title={d.revizeType === "EZ" ? "Revízia elektrického zariadenia" : "Revízia zdvíhacieho zariadenia"}
+                style={{
+                  background: d.revizeType === "EZ" ? "var(--info-bg)" : d.revizeType === "ZZ+EZ" ? "var(--danger-bg)" : "var(--warn-bg)",
+                  color: d.revizeType === "EZ" ? "var(--info)" : d.revizeType === "ZZ+EZ" ? "var(--danger)" : "var(--warn)",
+                  fontSize: 10,
+                }}
+                title={
+                  d.revizeType === "EZ"
+                    ? "Revízia elektrického zariadenia"
+                    : d.revizeType === "ZZ+EZ"
+                    ? "Revízia zdvíhacieho aj elektrického zariadenia (spojené)"
+                    : "Revízia zdvíhacieho zariadenia"
+                }
               >
                 {d.revizeType || "ZZ"}
               </span>
@@ -9654,16 +9681,40 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
 --------------------------------------------------------- */
 function CompleteRevisionModal({ damage, today, onClose, onSave }) {
   const [date, setDate] = useState(today);
+  const isMerged = damage.revizeType === "ZZ+EZ";
+  const [doneZZ, setDoneZZ] = useState(true);
+  const [doneEZ, setDoneEZ] = useState(true);
+  const canSave = date && (!isMerged || doneZZ || doneEZ);
   return (
     <Modal title={`Revízia vykonaná · ${damage.code}`} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+      {isMerged && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, border: "1px solid var(--border)", borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Čo bolo reálne vykonané?</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={doneZZ} onChange={(e) => setDoneZZ(e.target.checked)} />
+            Revízia ZZ
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={doneEZ} onChange={(e) => setDoneEZ(e.target.checked)} />
+            Revízia EZ
+          </label>
+          {!doneZZ || !doneEZ ? (
+            <div style={{ fontSize: 11, color: "var(--warn)" }}>
+              {!doneZZ && !doneEZ
+                ? "Zaškrtni aspoň jednu, inak nie je čo uložiť."
+                : `Nezaškrtnutá časť (${!doneZZ ? "ZZ" : "EZ"}) ostane naďalej otvorená v Revíziách.`}
+            </div>
+          ) : null}
+        </div>
+      )}
       <Field label="Dátum vykonania revízie *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Ďalšia revízia sa na karte stroja automaticky nastaví na {fmtDate(addDaysISO(date, 365))} (rok od vykonania).
       </div>
-      <button className="btn btn-accent" disabled={!date} onClick={() => onSave(date)}>
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(date, { zz: doneZZ, ez: doneEZ })}>
         Uložiť
       </button>
     </Modal>
