@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.267";
+const APP_VERSION = "1.0.268";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10279,17 +10279,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
     }
   }
 
-  // Prehľad vyťaženosti — koľko má každý technik aktuálne otvorených úloh
-  // (nevyriešené poškodenia, revízie, úradné skúšky), nezávisle od dňa v kalendári.
-  const workloadByTechnician = useMemo(() => {
-    const map = {};
-    visibleTechnicians.forEach((t) => { map[t.id] = 0; });
-    (damages || []).forEach((d) => {
-      if (d.resolved) return;
-      if (d.technicianId && map[d.technicianId] !== undefined) map[d.technicianId] += 1;
-    });
-    return map;
-  }, [damages, visibleTechnicians]);
   function scrollToToday() {
     try {
       const container = scrollContainerRef.current;
@@ -10374,36 +10363,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         </div>
         <div />
       </div>
-      {workloadByTechnician && visibleTechnicians.length > 0 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-          {visibleTechnicians.map((t) => {
-            const count = workloadByTechnician[t.id] || 0;
-            return (
-              <div
-                key={t.id}
-                className="panel"
-                style={{ padding: "6px 12px", display: "flex", alignItems: "center", gap: 8 }}
-                title="Počet aktuálne otvorených úloh (nevyriešené poškodenia, revízie, úradné skúšky)"
-              >
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{t.name}</span>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: count === 0 ? "var(--ok)" : count <= 2 ? "var(--text-dim)" : "var(--danger)",
-                    background: "var(--bg)",
-                    borderRadius: 10,
-                    padding: "1px 8px",
-                  }}
-                >
-                  {count}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
           <button
