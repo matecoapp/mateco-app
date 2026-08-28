@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.266";
+const APP_VERSION = "1.0.267";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1091,6 +1091,7 @@ function DispatcherApp() {
   const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
   const [planDepoFilter, setPlanDepoFilter] = useState(null);
+  const [planShowArchived, setPlanShowArchived] = useState(false);
   const [documentsSubView, setDocumentsSubView] = useState(null);
   function pickDocumentsSubView(subTab) {
     if (subTab.url) {
@@ -3087,7 +3088,7 @@ function DispatcherApp() {
                 📋 Prehľad najbližších 5 dní
               </button>
             </div>
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
               <select
                 value={planTechnicianFilter}
                 onChange={(e) => setPlanTechnicianFilter(e.target.value)}
@@ -3098,6 +3099,12 @@ function DispatcherApp() {
                   <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
                 ))}
               </select>
+              {planMode === "gantt" && can(effectiveUser, "technician_archive") && (
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                  <input type="checkbox" checked={planShowArchived} onChange={(e) => setPlanShowArchived(e.target.checked)} />
+                  Zobraziť archivovaných
+                </label>
+              )}
             </div>
             {planMode === "gantt" ? (
               <TechnicianPlanner
@@ -3112,6 +3119,8 @@ function DispatcherApp() {
                 setTechnicianFilter={setPlanTechnicianFilter}
                 depoFilter={planDepoFilter}
                 setDepoFilter={setPlanDepoFilter}
+                showArchived={planShowArchived}
+                setShowArchived={setPlanShowArchived}
                 onCellClick={(technicianId, date) => setAssignSlot({ technicianId, date })}
                 onQuickAssign={addQuickAssignment}
                 onQuickEventNote={addQuickEventNote}
@@ -10138,9 +10147,8 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onAddTechnician, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onAddTechnician, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, showArchived, setShowArchived }) {
   const [monthOffset, setMonthOffset] = useState(0);
-  const [showArchived, setShowArchived] = useState(false);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
   const [pendingVacationCell, setPendingVacationCell] = useState(null); // { technician, date, depos } — technik-checker ide na dovolenku, treba náhradu
@@ -10329,20 +10337,42 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-        <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
-        <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
-        {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-          <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
-        )}
-        {can(user, "technician_archive") && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-            Zobraziť archivovaných
-          </label>
-        )}
-        <div style={{ flex: 1 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 14, gap: 10 }}>
+        {can(user, "plan_quick_events") ? (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
+            {QUICK_KINDS.map((k) => (
+              <button
+                key={k.id}
+                className="btn"
+                onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
+                style={{
+                  padding: "5px 10px",
+                  fontSize: 11,
+                  background: quickMode === k.id ? k.color : "transparent",
+                  color: quickMode === k.id ? "#fff" : k.color,
+                  border: "1px solid " + k.color,
+                }}
+              >
+                {k.label}
+              </button>
+            ))}
+            {quickMode && (
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
+              </span>
+            )}
+          </div>
+        ) : <div />}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
+          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
+          {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
+            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
+          )}
+        </div>
+        <div />
       </div>
       {workloadByTechnician && visibleTechnicians.length > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -10392,32 +10422,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           </button>
         ))}
       </div>
-      {can(user, "plan_quick_events") && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
-          {QUICK_KINDS.map((k) => (
-            <button
-              key={k.id}
-              className="btn"
-              onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
-              style={{
-                padding: "5px 10px",
-                fontSize: 11,
-                background: quickMode === k.id ? k.color : "transparent",
-                color: quickMode === k.id ? "#fff" : k.color,
-                border: "1px solid " + k.color,
-              }}
-            >
-              {k.label}
-            </button>
-          ))}
-          {quickMode && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
-            </span>
-          )}
-        </div>
-      )}
       <div className="panel" style={{ padding: 16 }}>
         <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
           <div style={{ width: "100%", minWidth: "max-content" }}>
