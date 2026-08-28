@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.269";
+const APP_VERSION = "1.0.270";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1921,7 +1921,35 @@ function DispatcherApp() {
     const additions = [];
     machines.forEach((m) => {
       const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
-      if (isStroj && m.revizia && m.trackRevisions !== false) {
+      if (isStroj && m.trackRevisions !== false) {
+        if (!m.revizia) {
+          const alreadyOpen = damages.some(
+            (d) => d.type === "revizia" && d.machineId === m.id && !d.revizia && d.revizeType !== "EZ" && !d.resolved
+          );
+          if (!alreadyOpen) {
+            additions.push({
+              id: uid(),
+              type: "revizia",
+              revizeType: "ZZ",
+              machineId: m.id,
+              code: m.code,
+              model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+              serialNumber: m.code || "",
+              currentJobLabel: "",
+              customerContact: "",
+              location: m.depo || "",
+              customer: "",
+              revizia: null,
+              overdue: true,
+              dateReported: today,
+              popis: "Revízia ZZ nikdy nevykonaná — chýba dátum",
+              resolved: false,
+              technicianId: null,
+              assignedDate: null,
+              assignmentId: null,
+            });
+          }
+        } else {
         const days = daysBetween(today, m.revizia);
         const alreadyOpen = damages.some(
           (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.revizia && d.revizeType !== "EZ" && !d.resolved
@@ -1952,8 +1980,37 @@ function DispatcherApp() {
             assignmentId: null,
           });
         }
+        }
       }
-      if (isStroj && m.reviziaEZ && m.trackRevisionsEZ !== false) {
+      if (isStroj && m.trackRevisionsEZ !== false) {
+        if (!m.reviziaEZ) {
+          const alreadyOpen = damages.some(
+            (d) => d.type === "revizia" && d.machineId === m.id && !d.revizia && d.revizeType === "EZ" && !d.resolved
+          );
+          if (!alreadyOpen) {
+            additions.push({
+              id: uid(),
+              type: "revizia",
+              revizeType: "EZ",
+              machineId: m.id,
+              code: m.code,
+              model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+              serialNumber: m.code || "",
+              currentJobLabel: "",
+              customerContact: "",
+              location: m.depo || "",
+              customer: "",
+              revizia: null,
+              overdue: true,
+              dateReported: today,
+              popis: "Revízia EZ nikdy nevykonaná — chýba dátum",
+              resolved: false,
+              technicianId: null,
+              assignedDate: null,
+              assignmentId: null,
+            });
+          }
+        } else {
         const days = daysBetween(today, m.reviziaEZ);
         const alreadyOpen = damages.some(
           (d) => d.type === "revizia" && d.machineId === m.id && d.revizia === m.reviziaEZ && d.revizeType === "EZ" && !d.resolved
@@ -1984,8 +2041,36 @@ function DispatcherApp() {
             assignmentId: null,
           });
         }
+        }
       }
-      if (isStroj && m.uradnaSkuska && m.trackUradnaSkuska !== false) {
+      if (isStroj && m.trackUradnaSkuska !== false) {
+        if (!m.uradnaSkuska) {
+          const alreadyOpen = damages.some(
+            (d) => d.type === "uradnaSkuska" && d.machineId === m.id && !d.uradnaSkuskaDate && !d.resolved
+          );
+          if (!alreadyOpen) {
+            additions.push({
+              id: uid(),
+              type: "uradnaSkuska",
+              machineId: m.id,
+              code: m.code,
+              model: [m.manufacturer, m.type].filter(Boolean).join(" ") || m.type || "—",
+              serialNumber: m.code || "",
+              currentJobLabel: "",
+              customerContact: "",
+              location: m.depo || "",
+              customer: "",
+              uradnaSkuskaDate: null,
+              overdue: true,
+              dateReported: today,
+              popis: "Úradná skúška nikdy nevykonaná — chýba dátum",
+              resolved: false,
+              technicianId: null,
+              assignedDate: null,
+              assignmentId: null,
+            });
+          }
+        } else {
         const days = daysBetween(today, m.uradnaSkuska);
         const alreadyOpen = damages.some(
           (d) => d.type === "uradnaSkuska" && d.machineId === m.id && d.uradnaSkuskaDate === m.uradnaSkuska && !d.resolved
@@ -2014,6 +2099,7 @@ function DispatcherApp() {
             assignedDate: null,
             assignmentId: null,
           });
+        }
         }
       }
     });
@@ -9237,8 +9323,8 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
       );
     });
   }
-  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => (a.revizia < b.revizia ? -1 : 1));
-  const soon = filtered.filter((d) => !d.overdue).sort((a, b) => (a.revizia < b.revizia ? -1 : 1));
+  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
+  const soon = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
@@ -9392,8 +9478,8 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
       );
     });
   }
-  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => (a.uradnaSkuskaDate < b.uradnaSkuskaDate ? -1 : 1));
-  const thisYear = filtered.filter((d) => !d.overdue).sort((a, b) => (a.uradnaSkuskaDate < b.uradnaSkuskaDate ? -1 : 1));
+  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
+  const thisYear = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
