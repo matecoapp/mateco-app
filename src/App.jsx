@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.272";
+const APP_VERSION = "1.0.273";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1142,7 +1142,7 @@ function DispatcherApp() {
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
   const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
-  const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo appka prepne
+  const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo sa prepne
   const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
@@ -1157,7 +1157,7 @@ function DispatcherApp() {
   }
 
   // Zapamätá si aktuálnu obrazovku, nech pri obnovení stránky (F5) ostane
-  // appka na tom istom mieste, namiesto skoku na prednastavenú stránku.
+  // zostať na tom istom mieste, namiesto skoku na prednastavenú stránku.
   useEffect(() => {
     localStorage.setItem("mateco_last_module", module);
   }, [module]);
@@ -1170,7 +1170,7 @@ function DispatcherApp() {
   const dayAfterTomorrow = addDaysISO(today, 2);
 
   // Pripomienka pre obchodníka — ak rezervácia visí bez premeny na zákazku
-  // (alebo zamietnutia) príliš dlho, appka appka... upozorní na to obchodníka, nie len dispečera.
+  // (alebo zamietnutia) príliš dlho, systém upozorní na to obchodníka, nie len dispečera.
   // Posiela sa len raz za rezerváciu (reminderSentAt), nie pri každom obnovení stránky.
   const RESERVATION_STALE_DAYS = 7;
   useEffect(() => {
@@ -1492,7 +1492,7 @@ function DispatcherApp() {
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
   // (napr. vedúci servisu rovno v Servise) — len pri prvom prihlásení v novej
   // relácii (nič si ešte nezapamätal), nie pri obnovení stránky (F5), kde má
-  // appka ostať tam, kde bol človek predtým.
+  // zostať tam, kde bol človek predtým.
   const didSetLandingModule = useRef(false);
   useEffect(() => {
     if (currentUser && !didSetLandingModule.current) {
@@ -1838,6 +1838,31 @@ function DispatcherApp() {
     [myNotifications, currentUser]
   );
 
+  function exportMachinesCsv() {
+    const rows = machines.map((m) => ({
+      "Sériové číslo": m.code || "",
+      "Objekt": m.objekt || "Požičovňový stroj",
+      "Model": m.type || "",
+      "Depo": m.depo || "",
+      "Revízia ZZ": m.revizia || "",
+      "Sledovať revíziu ZZ": m.trackRevisions === false ? "Nie" : "Áno",
+      "Revízia EZ": m.reviziaEZ || "",
+      "Sledovať revíziu EZ": m.trackRevisionsEZ === false ? "Nie" : "Áno",
+      "Úradná skúška": m.uradnaSkuska || "",
+      "Sledovať úradnú skúšku": m.trackUradnaSkuska === false ? "Nie" : "Áno",
+      "Archivovaný": m.archived ? "Áno" : "Nie",
+    }));
+    const csv = Papa.unparse(rows);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mateco-stroje-${todayISO()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
   function exportBackup() {
     const backup = {
       __mateco_backup__: true,
@@ -1948,15 +1973,23 @@ function DispatcherApp() {
         ? `EZ po termíne (mala byť ${fmtDate(m.reviziaEZ)})`
         : `EZ o ${ezDaysLeft} dní (${fmtDate(m.reviziaEZ)})`;
 
-      if (zzActive || ezActive) {
-        // appka appka... platforma drží pre stroj len JEDEN otvorený tiket na revíziu naraz —
+      const existingRevisionTicket = damages.find((d) => d.type === "revizia" && d.machineId === m.id && !d.resolved);
+
+      if (!zzActive && !ezActive) {
+        // Dátum(y) boli medzičasom opravené (napr. cez import CSV alebo ručnú úpravu
+        // stroja) a už nič nie je po termíne ani chýbajúce — ak existoval otvorený
+        // tiket, systém ho automaticky zavrie, nech nezostáva zbytočne visieť.
+        if (existingRevisionTicket) {
+          updates[existingRevisionTicket.id] = { resolved: true };
+        }
+      } else {
+        // Systém drží pre stroj len JEDEN otvorený tiket na revíziu naraz —
         // ak treba aj ZZ aj EZ, spoja sa do jedného (robia sa spravidla naraz), s jedným
-        // pridelením technikovi. Existujúci tiket sa len rozširuje (nikdy automaticky nezmenšuje) —
-        // zmenšenie rieši výhradne dokončenie (čiastočné "Revízia vykonaná").
+        // pridelením technikovi.
         const desiredType = zzActive && ezActive ? "ZZ+EZ" : zzActive ? "ZZ" : "EZ";
         const desiredPopis = [zzPart, ezPart].filter(Boolean).join(" · ");
         const desiredOverdue = (zzActive && zzOverdue) || (ezActive && ezOverdue);
-        const existing = damages.find((d) => d.type === "revizia" && d.machineId === m.id && !d.resolved);
+        const existing = existingRevisionTicket;
         if (!existing) {
           additions.push({
             id: uid(),
@@ -1981,26 +2014,17 @@ function DispatcherApp() {
             assignmentId: null,
           });
         } else {
-          const existingType = existing.revizeType || "ZZ";
-          const hasZZ = existingType === "ZZ" || existingType === "ZZ+EZ";
-          const hasEZ = existingType === "EZ" || existingType === "ZZ+EZ";
-          const finalHasZZ = hasZZ || zzActive;
-          const finalHasEZ = hasEZ || ezActive;
-          const mergedType = finalHasZZ ? (finalHasEZ ? "ZZ+EZ" : "ZZ") : "EZ";
-          const mergedRevizia = zzActive ? m.revizia || null : hasZZ ? existing.revizia : null;
-          const mergedReviziaEZ = ezActive ? m.reviziaEZ || null : hasEZ ? existing.reviziaEZ : null;
-          const mergedPopis = `Revízia ${[finalHasZZ ? zzPart || "ZZ" : null, finalHasEZ ? ezPart || "EZ" : null].filter(Boolean).join(" · ")}`;
           if (
-            mergedType !== existing.revizeType ||
-            mergedRevizia !== existing.revizia ||
-            mergedReviziaEZ !== existing.reviziaEZ
+            desiredType !== existing.revizeType ||
+            (zzActive ? m.revizia || null : null) !== existing.revizia ||
+            (ezActive ? m.reviziaEZ || null : null) !== existing.reviziaEZ
           ) {
             updates[existing.id] = {
-              revizeType: mergedType,
-              revizia: mergedRevizia,
-              reviziaEZ: mergedReviziaEZ,
-              overdue: desiredOverdue || existing.overdue,
-              popis: mergedPopis || existing.popis,
+              revizeType: desiredType,
+              revizia: zzActive ? m.revizia || null : null,
+              reviziaEZ: ezActive ? m.reviziaEZ || null : null,
+              overdue: desiredOverdue,
+              popis: `Revízia ${desiredPopis}`,
             };
           }
         }
@@ -3034,6 +3058,7 @@ function DispatcherApp() {
             user={effectiveUser}
             onAddMachine={() => setShowAddMachine({})}
             onImport={() => setShowImport(true)}
+            onExportCsv={exportMachinesCsv}
             onOpenCard={(m) => setMachineCard(m)}
             onClearAll={() =>
               askDelete(
@@ -3635,7 +3660,31 @@ function DispatcherApp() {
               const newModels = [...newModelNames].map((name) => ({ id: uid(), name, category: "", liftHeight: "", outreach: "" }));
               persistMachineModels([...machineModels, ...newModels]);
             }
-            persistMachines([...machines, ...rows]);
+            // Import podľa sériového čísla AKTUALIZUJE existujúci stroj (nevytvorí
+            // duplicitu) — presne kvôli tomu, aby export → úprava v Exceli → import
+            // naspäť reálne prepísal dátumy na tých istých strojoch. Prázdna bunka
+            // v CSV nič nevymaže — ponechá, čo tam už bolo.
+            const byCode = new Map(machines.map((m) => [(m.code || "").trim().toLowerCase(), m]));
+            const usedExistingIds = new Set();
+            const merged = rows.map((r) => {
+              const key = (r.code || "").trim().toLowerCase();
+              const existing = key ? byCode.get(key) : null;
+              if (existing && !usedExistingIds.has(existing.id)) {
+                usedExistingIds.add(existing.id);
+                return {
+                  ...existing,
+                  objekt: r.objekt || existing.objekt,
+                  type: r.type || existing.type,
+                  depo: r.depo || existing.depo,
+                  revizia: r.revizia || existing.revizia,
+                  reviziaEZ: r.reviziaEZ || existing.reviziaEZ,
+                  uradnaSkuska: r.uradnaSkuska || existing.uradnaSkuska,
+                };
+              }
+              return r;
+            });
+            const untouched = machines.filter((m) => !usedExistingIds.has(m.id));
+            persistMachines([...untouched, ...merged]);
             setShowImport(false);
           }}
         />
@@ -3649,7 +3698,7 @@ function DispatcherApp() {
             // Zákazky, čo už fyzicky bežia (dátum začiatku je v minulosti), sa
             // preberajú zo starého systému bez toho, aby v tomto systéme prešli
             // reálnym prevzatím — to prevzatie sa stalo predtým, než tento systém
-            // existoval. Aby sa dalo neskôr normálne vypísať vrátenie, appka im
+            // existoval. Aby sa dalo neskôr normálne vypísať vrátenie, systém im
             // pri importe automaticky založí protokol označený ako "prevzaté mimo
             // systému" — nikto toto ručne nespúšťa, deje sa to len tu, automaticky.
             const today = todayISO();
@@ -5198,6 +5247,7 @@ function Dashboard({
   user,
   onAddMachine,
   onImport,
+  onExportCsv,
   onOpenCard,
   onClearAll,
   today,
@@ -5234,6 +5284,9 @@ function Dashboard({
         )}
         {can(user, "machine_import_csv") && (
           <button className="btn btn-ghost" onClick={onImport}>Import CSV</button>
+        )}
+        {can(user, "machine_import_csv") && (
+          <button className="btn btn-ghost" onClick={onExportCsv}>Export CSV</button>
         )}
         {can(user, "machine_add") && (
           <button className="btn btn-accent" onClick={onAddMachine}>+ Pridať stroj</button>
@@ -8018,7 +8071,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       if (ca !== cb) return ca - cb;
       const ha = liftHeight(a), hb = liftHeight(b);
       if (ha !== hb) return ha - hb; // nižšie hore
-      // Pri rovnakej (alebo chýbajúcej) výške zdvihu drží appka rovnaké
+      // Pri rovnakej (alebo chýbajúcej) výške zdvihu drží systém rovnaké
       // modely pod sebou podľa názvu, nech sa nerozhádžu medzi sebou.
       const ta = (a.type || "").trim(), tb = (b.type || "").trim();
       if (ta !== tb) return ta.localeCompare(tb);
