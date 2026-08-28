@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 
@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.265";
+const APP_VERSION = "1.0.266";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10169,12 +10169,18 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
 
-  // Plynulé vodorovné rolovanie cez hranicu mesiaca — vykreslí sa predchádzajúci,
-  // aktuálny aj nasledujúci mesiac naraz ako jeden nepretržitý pás dní. Šípky
-  // ↔ naďalej fungujú ako rýchly skok o celý mesiac (posunú stred okna).
+  const [monthWindow, setMonthWindow] = useState({ start: -1, end: 1 });
+  useEffect(() => {
+    setMonthWindow({ start: -1, end: 1 });
+  }, [monthOffset]);
+
+  // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len
+  // malý pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac
+  // na daný koniec (viď handleCalendarScroll nižšie). Posuvník sa tým
+  // prirodzene zmenšuje, tak ako pri bežnom nekonečnom scrollovaní.
   const allDays = useMemo(() => {
     const days = [];
-    for (let mOff = -4; mOff <= 4; mOff++) {
+    for (let mOff = monthWindow.start; mOff <= monthWindow.end; mOff++) {
       const d = new Date(year, month + mOff, 1);
       const y = d.getFullYear();
       const mo = d.getMonth();
@@ -10184,7 +10190,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
       }
     }
     return days;
-  }, [year, month]);
+  }, [year, month, monthWindow]);
 
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const damageById = useMemo(() => Object.fromEntries((damages || []).map((d) => [d.id, d])), [damages]);
@@ -10200,15 +10206,35 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
+  const prependAnchorRef = useRef(null); // { iso, left } zachytené tesne pred pridaním mesiaca dozadu
 
   useEffect(() => {
     setDisplayedMonthLabel(monthLabel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset]);
 
+  // Po pridaní mesiaca na začiatok (dozadu) sa obsah predĺži smerom doľava —
+  // bez tejto kompenzácie by to trhlo pohľad. Namiesto odhadu podľa celkovej
+  // šírky (tá sa nedá spoľahnúť, lebo stĺpce sa mierne prepočítajú, keď ich
+  // pribudne) sa zakotví na konkrétny deň — po prekreslení sa dohľadá presne
+  // ten istý deň a scrollLeft sa doladí tak, aby ostal na tom istom mieste.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const anchor = prependAnchorRef.current;
+    if (!container || !anchor) return;
+    const cell = container.querySelector(`[data-day-iso="${anchor.iso}"]`);
+    if (cell) {
+      const newLeft = cell.getBoundingClientRect().left;
+      container.scrollLeft += newLeft - anchor.left;
+    }
+    prependAnchorRef.current = null;
+  }, [allDays]);
+
   // Nadpis hore ("August 2026") sa pri vodorovnom rolovaní priebežne
   // aktualizuje podľa toho, ktorý deň je práve uprostred viditeľnej oblasti —
-  // nech vždy ukazuje mesiac, na ktorom si sa reálne pozeráš.
+  // nech vždy ukazuje mesiac, na ktorom si sa reálne pozeráš. Zároveň, keď sa
+  // priblížiš k jednému z okrajov, potichu sa pridá ďalší mesiac na ten
+  // koniec — nekonečné rolovanie, kým nestlačíš "Dnes".
   function handleCalendarScroll() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
@@ -10217,6 +10243,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
     const headerCells = container.querySelectorAll("[data-day-iso]");
     let closestIso = null;
     let closestDist = Infinity;
+    let leftmostIso = null;
+    let leftmostLeft = Infinity;
     headerCells.forEach((cell) => {
       const rect = cell.getBoundingClientRect();
       const dist = Math.abs(rect.left + rect.width / 2 - centerX);
@@ -10224,10 +10252,22 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         closestDist = dist;
         closestIso = cell.getAttribute("data-day-iso");
       }
+      if (rect.right >= containerRect.left && rect.left < leftmostLeft) {
+        leftmostLeft = rect.left;
+        leftmostIso = cell.getAttribute("data-day-iso");
+      }
     });
     if (closestIso) {
       const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
       setDisplayedMonthLabel(label);
+    }
+
+    const EDGE_PX = 600;
+    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current) {
+      if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      setMonthWindow((w) => ({ ...w, start: w.start - 1 }));
+    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX) {
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
     }
   }
 
@@ -10256,6 +10296,21 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
     }
   }
 
+  // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa
+  // klikli šípky (monthOffset teda ostáva 0) — preto tu explicitne
+  // zresetujeme okno dní aj pozíciu scrollu, namiesto spoliehania sa na
+  // efekt viazaný len na zmenu monthOffset.
+  function goToToday() {
+    setMonthWindow({ start: -1, end: 1 });
+    setDisplayedMonthLabel(monthLabel);
+    if (monthOffset !== 0) {
+      setMonthOffset(0);
+    } else {
+      const t = setTimeout(scrollToToday, 50);
+      return () => clearTimeout(t);
+    }
+  }
+
   useEffect(() => {
     if (monthOffset !== 0) return;
     const t = setTimeout(scrollToToday, 50);
@@ -10278,8 +10333,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
         <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
         <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
-        {monthOffset !== 0 && (
-          <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
+        {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
+          <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
         )}
         {can(user, "technician_archive") && (
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
