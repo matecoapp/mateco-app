@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.268";
+const APP_VERSION = "1.0.269";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10435,7 +10435,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   gap: 2,
                   marginBottom: 3,
                   paddingBottom: 3,
-                  borderBottom: "1px solid var(--border)",
+                  borderBottom: "1px solid var(--gantt-cell-border)",
                 }}
               >
                 <div
@@ -10508,8 +10508,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           style={{
                             height: 26,
                             borderRadius: 4,
-                            background: isWeekend ? "var(--warn-bg)" : "var(--panel-2)",
-                            border: "1px dashed var(--border)",
+                            background: isWeekend ? "var(--warn-bg)" : "var(--gantt-cell-bg)",
+                            border: "1px solid var(--gantt-cell-border)",
                             cursor: cellClickable ? "pointer" : "default",
                           }}
                         />
@@ -12645,6 +12645,8 @@ function GlobalStyle() {
         --danger-row-bg: rgba(227,6,19,.13);
         --info: #185fa5;
         --info-bg: #e6f1fb;
+        --gantt-cell-bg: #e8eaed;
+        --gantt-cell-border: #c9ccd1;
       }
       .app-shell.dark {
         --bg: #14171a;
@@ -12665,6 +12667,8 @@ function GlobalStyle() {
         --danger-row-bg: rgba(255,90,90,.22);
         --info: #6db1e8;
         --info-bg: rgba(24,95,165,.3);
+        --gantt-cell-bg: #2c323a;
+        --gantt-cell-border: #3f4750;
       }
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
