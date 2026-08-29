@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.276";
+const APP_VERSION = "1.0.277";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -190,6 +190,8 @@ const PERM = {
   statistics_edit_poziciovna: ["veduci_pozicovne"],
   statistics_edit_servis: ["veduci_servisu"],
   handover_protocol_write: ["sofer", "externy_sofer"],
+  transport_issue_report: ["sofer", "externy_sofer"],
+  transport_issue_resolve: ["dispecer_pozicovne", "veduci_pozicovne"],
   // Oprava UŽ ODOSLANEJ (podpísanej) fázy protokolu — zámerne len dispečer/vedúci,
   // šofér po odoslaní vidí len náhľad a vie vyplniť najviac ďalšiu fázu.
   handover_protocol_edit_locked: ["dispecer_pozicovne", "veduci_pozicovne"],
@@ -1125,6 +1127,8 @@ function DispatcherApp() {
   const [showAddJob, setShowAddJob] = useState(null); // machineId prefill or true
   const [showAddReservation, setShowAddReservation] = useState(null); // null | { machineId? }
   const [reservationCardTarget, setReservationCardTarget] = useState(null); // rezervácia zobrazená v karte
+  const [rejectReservationTarget, setRejectReservationTarget] = useState(null); // rezervácia čakajúca na dôvod zmazania
+  const [reportTransportIssueTarget, setReportTransportIssueTarget] = useState(null); // zákazka čakajúca na popis problému s prepravou
   const [showImport, setShowImport] = useState(false);
   const [showImportJobs, setShowImportJobs] = useState(false);
   const [showImportCustomers, setShowImportCustomers] = useState(false);
@@ -2896,7 +2900,45 @@ function DispatcherApp() {
     return record;
   }
   function updateJob(id, patch) {
+    const before = jobs.find((j) => j.id === id);
     persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+    // Ak je na zákazke už priradený šofér (vývoz alebo zvoz) a zmenil sa dátum
+    // alebo depo, nech to nezistí až na mieste — pošli mu krátke upozornenie.
+    if (before) {
+      const WATCHED_FIELDS = ["startDate", "endDate", "fromDepo", "returnDepo"];
+      const changed = WATCHED_FIELDS.filter((f) => patch[f] !== undefined && patch[f] !== before[f]);
+      if (changed.length > 0) {
+        const machine = machineById[before.machineId];
+        const notifyDriver = (driverId) => {
+          const driver = driverById[driverId];
+          if (!driver) return;
+          pushNotification({
+            roles: [],
+            userName: driver.name,
+            title: "Zmena na zákazke, kde vozíte stroj",
+            message: `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`,
+            link: { module: "poziciovna", view: "jobs", jobId: id },
+          });
+        };
+        if (before.driverId) notifyDriver(before.driverId);
+        if (before.returnDriverId && before.returnDriverId !== before.driverId) notifyDriver(before.returnDriverId);
+      }
+    }
+  }
+  function reportTransportIssue(jobId, note) {
+    const job = jobs.find((j) => j.id === jobId);
+    if (!job) return;
+    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: note, transportIssueAt: new Date().toISOString(), transportIssueBy: currentUser?.name || null } : j)));
+    const machine = machineById[job.machineId];
+    pushNotification({
+      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Problém s prepravou",
+      message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}`,
+      link: { module: "poziciovna", view: "jobs", jobId },
+    });
+  }
+  function resolveTransportIssue(jobId) {
+    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : j)));
   }
   function deleteJob(id) {
     persistJobs(jobs.filter((j) => j.id !== id));
@@ -3678,20 +3720,7 @@ function DispatcherApp() {
           salespeople={salespeople}
           user={effectiveUser}
           onClose={() => setReservationCardTarget(null)}
-          onDelete={() => {
-            askDelete(`nezáväznú rezerváciu (${machineById[reservationCardTarget.machineId]?.code || ""})`, () => {
-              const r = reservationCardTarget;
-              const machine = machineById[r.machineId];
-              pushNotification({
-                roles: [],
-                userName: r.obchodnik || null,
-                title: "Rezervácia zmazaná",
-                message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná.`,
-              });
-              deleteReservation(r.id);
-              setReservationCardTarget(null);
-            });
-          }}
+          onDelete={() => setRejectReservationTarget(reservationCardTarget)}
           onConvert={() => {
             setShowAddJob({ prefillReservation: reservationCardTarget });
             setReservationCardTarget(null);
@@ -3713,6 +3742,24 @@ function DispatcherApp() {
             requestReservationDelete(reservationCardTarget);
             setReservationCardTarget(null);
             alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o zmazanie rezervácie.");
+          }}
+        />
+      )}
+      {rejectReservationTarget && (
+        <RejectReservationModal
+          onClose={() => setRejectReservationTarget(null)}
+          onConfirm={(reason) => {
+            const r = rejectReservationTarget;
+            const machine = machineById[r.machineId];
+            pushNotification({
+              roles: [],
+              userName: r.obchodnik || null,
+              title: "Rezervácia zmazaná",
+              message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná. Dôvod: ${reason}`,
+            });
+            deleteReservation(r.id);
+            setRejectReservationTarget(null);
+            setReservationCardTarget(null);
           }}
         />
       )}
@@ -4143,6 +4190,23 @@ function DispatcherApp() {
             setJobDetail(null);
           }}
           onOpenMachineCard={(m) => { setJobDetail(null); setReturnToMachine(null); setMachineCard(m); }}
+          onReportTransportIssue={() => setReportTransportIssueTarget(jobDetail)}
+          onResolveTransportIssue={() => {
+            resolveTransportIssue(jobDetail.id);
+            setJobDetail((prev) => (prev ? { ...prev, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : prev));
+          }}
+        />
+      )}
+      {reportTransportIssueTarget && (
+        <ReportTransportIssueModal
+          job={reportTransportIssueTarget}
+          machine={machineById[reportTransportIssueTarget.machineId]}
+          onClose={() => setReportTransportIssueTarget(null)}
+          onConfirm={(note) => {
+            reportTransportIssue(reportTransportIssueTarget.id, note);
+            setReportTransportIssueTarget(null);
+            setJobDetail(null);
+          }}
         />
       )}
       {showHandoverProtocol && (
@@ -7303,7 +7367,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   );
 }
 
-function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue }) {
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
   const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
@@ -7325,6 +7389,18 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
           ← Späť na kartu stroja
         </button>
+      )}
+      {job.transportIssueNote && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span>
+            🚨 <strong>Problém s prepravou</strong> ({job.transportIssueBy || "šofér"}): {job.transportIssueNote}
+          </span>
+          {can(user, "transport_issue_resolve") && onResolveTransportIssue && (
+            <button className="btn btn-ghost" onClick={onResolveTransportIssue}>
+              Vyriešené
+            </button>
+          )}
+        </div>
       )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={job.customer} />
@@ -7371,6 +7447,11 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         {machine && onReportDamage && can(user, "job_report_damage") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportDamage}>
             Nahlásiť poškodenie
+          </button>
+        )}
+        {onReportTransportIssue && can(user, "transport_issue_report") && !job.transportIssueNote && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportTransportIssue}>
+            🚨 Problém s prepravou
           </button>
         )}
         {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
@@ -12232,6 +12313,34 @@ function RejectSparePartModal({ onClose, onConfirm }) {
       </Field>
       <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
         Zamietnuť
+      </button>
+    </Modal>
+  );
+}
+
+function RejectReservationModal({ onClose, onConfirm }) {
+  const [reason, setReason] = useState("");
+  return (
+    <Modal title="Zmazať rezerváciu" onClose={onClose}>
+      <Field label="Dôvod (obchodník ho uvidí) *">
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="napr. stroj potrebný inde, zákazník zrušil" style={{ width: "100%" }} />
+      </Field>
+      <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+        Zmazať a odoslať dôvod
+      </button>
+    </Modal>
+  );
+}
+
+function ReportTransportIssueModal({ job, machine, onClose, onConfirm }) {
+  const [note, setNote] = useState("");
+  return (
+    <Modal title={`Problém s prepravou · ${machine?.code || job.customer || ""}`} onClose={onClose}>
+      <Field label="Čo sa deje (dispečer to uvidí hneď) *">
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný" style={{ width: "100%" }} />
+      </Field>
+      <button className="btn btn-accent" disabled={!note.trim()} onClick={() => onConfirm(note.trim())}>
+        Odoslať dispečerovi
       </button>
     </Modal>
   );
