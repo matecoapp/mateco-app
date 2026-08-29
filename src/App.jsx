@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.275";
+const APP_VERSION = "1.0.276";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10028,7 +10028,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
     // len zo záložky Poškodenia/Externé, kde sú práva nastavené správne.
     const stavLabel = techIds.length ? "Pridelené" : "Nové";
     return (
-      <Modal title={`${stavLabel} · ${d.code}`} onClose={onClose}>
+      <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose}>
         {onBack && (
           <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
             ← Späť na kartu stroja
@@ -10046,10 +10046,9 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
     );
   }
 
-  const title = d.type === "revizia" ? "Revízia vykonaná" : d.type === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Poškodenie vyriešené";
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
-    <Modal title={`${title} · ${d.code}`} onClose={onClose}>
+    <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose}>
       {onBack && (
         <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
           ← Späť na kartu stroja
