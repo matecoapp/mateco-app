@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.274";
+const APP_VERSION = "1.0.275";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -949,7 +949,7 @@ function StatusBadge({ status }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
-function Modal({ title, onClose, children, wide }) {
+function Modal({ title, onClose, children, wide, headerExtra }) {
   return (
     <div
       className="modal-overlay"
@@ -971,13 +971,16 @@ function Modal({ title, onClose, children, wide }) {
         onClick={(e) => e.stopPropagation()}
         style={{ width: wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
       >
-        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 }}>
           <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
             {title}
           </h3>
-          <button className="btn btn-ghost" onClick={onClose}>
-            Zavrieť
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {headerExtra}
+            <button className="btn btn-ghost" onClick={onClose}>
+              Zavrieť
+            </button>
+          </div>
         </div>
         {children}
       </div>
@@ -3749,6 +3752,10 @@ function DispatcherApp() {
                   revizia: r.revizia || existing.revizia,
                   reviziaEZ: r.reviziaEZ || existing.reviziaEZ,
                   uradnaSkuska: r.uradnaSkuska || existing.uradnaSkuska,
+                  trackRevisions: r.trackRevisions !== undefined ? r.trackRevisions : existing.trackRevisions,
+                  trackRevisionsEZ: r.trackRevisionsEZ !== undefined ? r.trackRevisionsEZ : existing.trackRevisionsEZ,
+                  trackUradnaSkuska: r.trackUradnaSkuska !== undefined ? r.trackUradnaSkuska : existing.trackUradnaSkuska,
+                  archived: r.archived !== undefined ? r.archived : existing.archived,
                 };
               }
               return r;
@@ -3959,6 +3966,7 @@ function DispatcherApp() {
             setEditExternalTarget(d);
           }}
           onClose={() => setServiceEventDetail(null)}
+          onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
         />
       )}
       {damageAssignTarget && (
@@ -4037,6 +4045,7 @@ function DispatcherApp() {
           user={effectiveUser}
           onClose={() => setAssignmentDetail(null)}
           onReschedule={(dmg) => { setAssignmentDetail(null); setDamageAssignTarget(dmg); }}
+          onOpenMachineCard={(m) => { setAssignmentDetail(null); setMachineCard(m); }}
         />
       )}
       {protocolModalData && (
@@ -4133,6 +4142,7 @@ function DispatcherApp() {
             setShowHandoverProtocol(jobDetail);
             setJobDetail(null);
           }}
+          onOpenMachineCard={(m) => { setJobDetail(null); setReturnToMachine(null); setMachineCard(m); }}
         />
       )}
       {showHandoverProtocol && (
@@ -5200,7 +5210,7 @@ function ExpandListModal({ title, items, renderItem, onClose }) {
 /* ---------------------------------------------------------
    Assignment detail modal ("karta zákazky" from Servis Prehľad)
 --------------------------------------------------------- */
-function AssignmentDetailModal({ assignment, machine, damage, technicians, user, onClose, onReschedule }) {
+function AssignmentDetailModal({ assignment, machine, damage, technicians, user, onClose, onReschedule, onOpenMachineCard }) {
   const a = assignment;
   const technician = technicians.find((t) => t.id === a.technicianId);
   const protocolParams = damage
@@ -5218,7 +5228,18 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
       })();
 
   return (
-    <Modal title={`${machine?.code || a.stroj || "Zákazka"}${machine?.type ? " · " + machine.type : ""}`} onClose={onClose} wide>
+    <Modal
+      title={`Servisné pridelenie · ${machine?.code || a.stroj || "Zákazka"}${machine?.type ? " · " + machine.type : ""}`}
+      onClose={onClose}
+      wide
+      headerExtra={
+        machine && onOpenMachineCard ? (
+          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
+            Karta stroja
+          </button>
+        ) : null
+      }
+    >
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Technik" value={technician?.name} />
         <CardField label="Dátum" value={fmtDate(a.date)} />
@@ -7282,14 +7303,24 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   );
 }
 
-function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard }) {
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
   const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
   const checkerVyvoz = checkerVyvozId ? technicianById?.[checkerVyvozId] : null;
   const checkerZvoz = checkerZvozId ? technicianById?.[checkerZvozId] : null;
   return (
-    <Modal title={`${machine?.code || "—"}${job.machineDisplayName ? " · " + job.machineDisplayName : machine?.type ? " · " + machine.type : ""}`} onClose={onClose}>
+    <Modal
+      title={`Požičovňová zákazka · ${machine?.code || "—"}${job.machineDisplayName ? " · " + job.machineDisplayName : machine?.type ? " · " + machine.type : ""}`}
+      onClose={onClose}
+      headerExtra={
+        machine && onOpenMachineCard ? (
+          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
+            Karta stroja
+          </button>
+        ) : null
+      }
+    >
       {onBack && (
         <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
           ← Späť na kartu stroja
@@ -7824,6 +7855,10 @@ function ImportModal({ onClose, onImport }) {
   const [mapRevizia, setMapRevizia] = useState("");
   const [mapReviziaEZ, setMapReviziaEZ] = useState("");
   const [mapUradnaSkuska, setMapUradnaSkuska] = useState("");
+  const [mapTrackZZ, setMapTrackZZ] = useState("");
+  const [mapTrackEZ, setMapTrackEZ] = useState("");
+  const [mapTrackSkuska, setMapTrackSkuska] = useState("");
+  const [mapArchived, setMapArchived] = useState("");
   const [fileName, setFileName] = useState("");
 
   function handleFile(e) {
@@ -7842,6 +7877,16 @@ function ImportModal({ onClose, onImport }) {
 
   const canImport = mapCode && rows.length > 0;
 
+  // "Áno"/"Nie" (presne ako ich píše Export CSV) na boolean. Nezmapovaný
+  // stĺpec alebo prázdna bunka vráti undefined — pri aktualizácii existujúceho
+  // stroja to teda nič neprepíše (rovnaká zásada ako pri dátumoch).
+  function parseAnoNie(col, row) {
+    if (!col) return undefined;
+    const v = (row[col] || "").toString().trim().toLowerCase();
+    if (!v) return undefined;
+    return !(v === "nie" || v === "no" || v === "false" || v === "0");
+  }
+
   function doImport() {
     const machines = rows
       .map((r) => {
@@ -7855,6 +7900,10 @@ function ImportModal({ onClose, onImport }) {
           revizia: objekt === "Požičovňový stroj" && mapRevizia ? (r[mapRevizia] || "").toString().trim() : "",
           reviziaEZ: objekt === "Požičovňový stroj" && mapReviziaEZ ? (r[mapReviziaEZ] || "").toString().trim() : "",
           uradnaSkuska: objekt === "Požičovňový stroj" && mapUradnaSkuska ? (r[mapUradnaSkuska] || "").toString().trim() : "",
+          trackRevisions: parseAnoNie(mapTrackZZ, r),
+          trackRevisionsEZ: parseAnoNie(mapTrackEZ, r),
+          trackUradnaSkuska: parseAnoNie(mapTrackSkuska, r),
+          archived: parseAnoNie(mapArchived, r),
         };
       })
       .filter((m) => m.code)
@@ -7871,7 +7920,7 @@ function ImportModal({ onClose, onImport }) {
 
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
             <Field label="Stĺpec = Sériové číslo *">
               <select value={mapCode} onChange={(e) => setMapCode(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
@@ -7902,14 +7951,38 @@ function ImportModal({ onClose, onImport }) {
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
+            <Field label="Stĺpec = Sledovať revíziu ZZ (Áno/Nie)">
+              <select value={mapTrackZZ} onChange={(e) => setMapTrackZZ(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
             <Field label="Stĺpec = Dátum najbližšej revízie EZ">
               <select value={mapReviziaEZ} onChange={(e) => setMapReviziaEZ(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
+            <Field label="Stĺpec = Sledovať revíziu EZ (Áno/Nie)">
+              <select value={mapTrackEZ} onChange={(e) => setMapTrackEZ(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
             <Field label="Stĺpec = Dátum najbližšej úradnej skúšky">
               <select value={mapUradnaSkuska} onChange={(e) => setMapUradnaSkuska(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = Sledovať úradnú skúšku (Áno/Nie)">
+              <select value={mapTrackSkuska} onChange={(e) => setMapTrackSkuska(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = Archivovaný (Áno/Nie)">
+              <select value={mapArchived} onChange={(e) => setMapArchived(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
@@ -8871,7 +8944,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -8881,9 +8954,27 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
   const machine = !isExterna && d.machineId ? machineById[d.machineId] : null;
   const liveLocation = machineCurrentLocation(machine);
   const locationChanged = machine && liveLocation && d.location && liveLocation !== d.location;
+  const kindLabel = isRevizia
+    ? "Revízna zákazka"
+    : isUradnaSkuska
+    ? "Zákazka úradnej skúšky"
+    : isExterna
+    ? "Externý servis"
+    : "Poškodenie stroja požičovne";
 
   return (
-    <Modal title={d.code || "Detail"} onClose={onClose} wide>
+    <Modal
+      title={`${kindLabel} · ${d.code || "Detail"}`}
+      onClose={onClose}
+      wide
+      headerExtra={
+        machine && onOpenMachineCard ? (
+          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
+            Karta stroja
+          </button>
+        ) : null
+      }
+    >
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         {isExterna ? (
           <>
