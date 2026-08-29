@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.278";
+const APP_VERSION = "1.0.279";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2872,11 +2872,22 @@ function DispatcherApp() {
       machines.map((m) =>
         m.id === id
           ? archived
-            ? { ...m, archived: true, archivedReason: reason, archivedNote: note, archivedDate: today }
+            ? { ...m, archived: true, archivedReason: reason, archivedNote: note, archivedDate: today, trackRevisions: false, trackRevisionsEZ: false, trackUradnaSkuska: false }
             : { ...m, archived: false, archivedReason: null, archivedNote: null, archivedDate: null }
           : m
       )
     );
+    if (archived) {
+      // Archivovaný stroj sa už reálne nepoužíva — netreba naň ďalej generovať
+      // upozornenia na revízie/úradné skúšky. Čo bolo otvorené, sa rovno zavrie.
+      persistDamages(
+        damages.map((d) =>
+          d.machineId === id && (d.type === "revizia" || d.type === "uradnaSkuska") && !d.resolved
+            ? { ...d, resolved: true }
+            : d
+        )
+      );
+    }
   }
   function setMachineTrackRevisions(id, track) {
     persistMachines(machines.map((m) => (m.id === id ? { ...m, trackRevisions: track } : m)));
@@ -10005,9 +10016,17 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
 
   // Vyťaženosť — koľko má technik na zvolený deň už priradených iných vecí.
   // Len informatívne, nič to neblokuje (technik môže mať aj viac servisov v deň).
+  // Dovolenka/PN sa do tohto počtu nezarátava — na tie sa upozorňuje zvlášť,
+  // jasne, nižšie (aby sa dispečer omylom nespoliehal na to, že technik je
+  // k dispozícii len preto, že počet vyzeral nízky).
+  const ABSENCE_LABELS = { dovolenka: "Na dovolenke", pn: "Na PN / u doktora" };
+  function absenceOn(technicianId) {
+    const a = (assignments || []).find((x) => x.technicianId === technicianId && x.date === date && (x.kind === "dovolenka" || x.kind === "pn"));
+    return a ? ABSENCE_LABELS[a.kind] : null;
+  }
   function workloadOn(technicianId) {
     return (assignments || []).filter(
-      (a) => a.technicianId === technicianId && a.date === date && a.damageId !== damage.id
+      (a) => a.technicianId === technicianId && a.date === date && a.damageId !== damage.id && a.kind !== "dovolenka" && a.kind !== "pn"
     ).length;
   }
 
@@ -10021,15 +10040,22 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
           {technicians.filter((t) => !t.archived).map((t) => {
+            const absence = absenceOn(t.id);
             const workload = workloadOn(t.id);
             return (
               <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
                 <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} />
                 {t.skratka ? `${t.skratka} — ${t.name}` : t.name}
-                {workload > 0 && (
-                  <span style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600 }}>
-                    — už má na {fmtDate(date)} {workload} {workload === 1 ? "úlohu" : workload < 5 ? "úlohy" : "úloh"}
+                {absence ? (
+                  <span style={{ fontSize: 11, color: "var(--danger)", fontWeight: 700 }}>
+                    — ⚠ {absence} {fmtDate(date)}
                   </span>
+                ) : (
+                  workload > 0 && (
+                    <span style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600 }}>
+                      — už má na {fmtDate(date)} {workload} {workload === 1 ? "úlohu" : workload < 5 ? "úlohy" : "úloh"}
+                    </span>
+                  )
                 )}
               </label>
             );
