@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.277";
+const APP_VERSION = "1.0.278";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1273,9 +1273,11 @@ function DispatcherApp() {
     if (currentUser?.role === "veduci_servisu" && !alreadySentToday("veduci_servisu")) {
       const newDamagesCount = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId).length;
       const pendingPartsCount = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length;
-      if (newDamagesCount > 0 || pendingPartsCount > 0) {
+      const overdueRevisionsCount = damages.filter((d) => (d.type === "revizia" || d.type === "uradnaSkuska") && d.overdue && !d.resolved).length;
+      if (newDamagesCount > 0 || pendingPartsCount > 0 || overdueRevisionsCount > 0) {
         const parts = [];
         if (newDamagesCount > 0) parts.push(`${newDamagesCount} nových nepridelených poškodení`);
+        if (overdueRevisionsCount > 0) parts.push(`${overdueRevisionsCount} revízií/úradných skúšok po termíne`);
         if (pendingPartsCount > 0) parts.push(`${pendingPartsCount} požiadaviek na diely čaká na schválenie`);
         pushNotification({
           roles: ["veduci_servisu"],
@@ -2521,6 +2523,20 @@ function DispatcherApp() {
           : d
       )
     );
+    // Technik doteraz o novom pridelení nemal ako vedieť inak, než že si sám
+    // otvoril kalendár — teraz dostane krátke upozornenie.
+    const damageView = damage.type === "revizia" ? "revizie" : damage.type === "uradnaSkuska" ? "uradne_skusky" : damage.type === "externa" ? "externe" : "poskodenia";
+    ids.forEach((technicianId) => {
+      const tech = technicians.find((t) => t.id === technicianId);
+      if (!tech) return;
+      pushNotification({
+        roles: [],
+        userName: tech.name,
+        title: "Nové pridelenie",
+        message: `${notePrefix} (${damage.code}) — ${fmtDate(date)}${damage.location ? ", " + damage.location : ""}.`,
+        link: { module: "servis", view: damageView, damageId },
+      });
+    });
     setDamageAssignTarget(null);
   }
   const QUICK_KIND_LABELS = { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" };
@@ -2529,6 +2545,18 @@ function DispatcherApp() {
       ...assignments,
       { id: uid(), technicianId, date, kind, stroj: QUICK_KIND_LABELS[kind] || kind, umiestnenie: "", firma: "", poznamka: QUICK_KIND_LABELS[kind] || kind },
     ]);
+    if (kind === "pohotovost") {
+      const tech = technicians.find((t) => t.id === technicianId);
+      if (tech) {
+        pushNotification({
+          roles: [],
+          userName: tech.name,
+          title: "Pridelená pohotovosť",
+          message: `Máte pridelenú pohotovosť na ${fmtDate(date)}.`,
+          link: { module: "servis", view: "plan" },
+        });
+      }
+    }
   }
   function addQuickEventNote(technicianId, date, text) {
     persistAssignments([
@@ -2556,6 +2584,28 @@ function DispatcherApp() {
       endDate,
     }));
     persistCheckerSubstitutions([...checkerSubstitutions, ...newSubs]);
+    const tech = technicians.find((t) => t.id === technicianId);
+    if (tech) {
+      pushNotification({
+        roles: [],
+        userName: tech.name,
+        title: "Dovolenka zapísaná",
+        message: `Máte zapísanú dovolenku od ${fmtDate(startDate)} do ${fmtDate(endDate)}.`,
+        link: { module: "servis", view: "plan" },
+      });
+    }
+    if (substituteId) {
+      const substitute = technicians.find((t) => t.id === substituteId);
+      if (substitute) {
+        pushNotification({
+          roles: [],
+          userName: substitute.name,
+          title: "Ste náhradný checker",
+          message: `Od ${fmtDate(startDate)} do ${fmtDate(endDate)} zastupujete ${tech?.name || "kolegu"} ako checker (${depos.join(", ") || "—"}).`,
+          link: { module: "servis", view: "plan" },
+        });
+      }
+    }
   }
   function toggleWeeklyDuty(technicianId, dateIso) {
     const { weekStart, weekEnd } = weekRangeFor(dateIso);
@@ -2566,6 +2616,16 @@ function DispatcherApp() {
       persistWeeklyDuty(weeklyDuty.filter((w) => w.id !== existing.id));
     } else {
       persistWeeklyDuty([...weeklyDuty, { id: uid(), technicianId, weekStart, weekEnd }]);
+      const tech = technicians.find((t) => t.id === technicianId);
+      if (tech) {
+        pushNotification({
+          roles: [],
+          userName: tech.name,
+          title: "Pridelená pohotovosť",
+          message: `Máte pridelenú týždennú pohotovosť (${fmtDate(weekStart)} – ${fmtDate(weekEnd)}).`,
+          link: { module: "servis", view: "plan" },
+        });
+      }
     }
   }
   function addTechnician(data) {
