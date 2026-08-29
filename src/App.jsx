@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.273";
+const APP_VERSION = "1.0.274";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -150,16 +150,20 @@ const PERM = {
   damage_assign: ["veduci_servisu", "dispecer_servisu"],
   damage_status: ["veduci_servisu", "dispecer_servisu"],
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
+  damage_clear_all: [], // len administrátor
   external_add: ["veduci_servisu", "dispecer_servisu"],
   external_assign: ["veduci_servisu", "dispecer_servisu"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
   external_delete: ["veduci_servisu", "dispecer_servisu"],
+  external_clear_all: [], // len administrátor
 
   // Servis — revízie / úradné skúšky
   revision_assign: ["veduci_servisu", "dispecer_servisu"],
   revision_complete: ["veduci_servisu", "dispecer_servisu"],
+  revision_clear_all: [], // len administrátor
   uradnaskuska_assign: ["veduci_servisu", "dispecer_servisu"],
   uradnaskuska_complete: ["veduci_servisu", "dispecer_servisu"],
+  uradnaskuska_clear_all: [], // len administrátor
 
   // Servis — plán servisu / technici
   plan_assign: ["veduci_servisu", "dispecer_servisu"],
@@ -742,18 +746,52 @@ function saveRecordRow(table, item) {
   _recordSaveQueues[qKey] = next;
   return next;
 }
-async function deleteRecordRow(table, id) {
+async function deleteRecordRow(table, id, attempt = 1) {
   const qKey = `${table}:${id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const next = prev.then(async () => {
     try {
-      await supabase.from(table).delete().eq("id", id);
+      const { error } = await supabase.from(table).delete().eq("id", id);
+      if (error) throw error;
     } catch (e) {
-      console.error(`deleteRecordRow(${table}) failed`, id, e);
+      if (attempt < 4) {
+        await sleep(attempt * 800);
+        return deleteRecordRow(table, id, attempt + 1);
+      }
+      console.error(`deleteRecordRow(${table}) failed after retries`, id, e);
     }
   });
   _recordSaveQueues[qKey] = next;
   return next;
+}
+// Hromadné mazanie (napr. "Vymazať všetky stroje/revízie") posiela jednu
+// dávkovú požiadavku na blok riadkov naraz namiesto stoviek jednotlivých —
+// jednotlivé žiadosti pri veľkom počte vedeli časť tichých zlyhaní
+// (nesprávne sa javilo, že sa vymazalo všetko, no po obnovení stránky sa
+// nevymazaný zvyšok vrátil naspäť). Dávka má zabudovaný retry aj chunkovanie.
+async function deleteRecordRowsWithRetry(table, ids, attempt = 1) {
+  if (ids.length === 0) return true;
+  try {
+    const { error } = await supabase.from(table).delete().in("id", ids);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    if (attempt < 4) {
+      await sleep(attempt * 800);
+      return deleteRecordRowsWithRetry(table, ids, attempt + 1);
+    }
+    console.error(`Batch delete failed after retries (${table})`, ids.length, "rows", e);
+    return false;
+  }
+}
+async function deleteRecordRowsBatch(table, ids) {
+  const CHUNK = 200;
+  let allOk = true;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const ok = await deleteRecordRowsWithRetry(table, ids.slice(i, i + CHUNK));
+    if (!ok) allOk = false;
+  }
+  return allOk;
 }
 // Postaví "persist" funkciu pre danú tabuľku — volá sa rovnako ako doteraz
 // (dostane celý nový zoznam), ale interne porovná, čo sa reálne zmenilo,
@@ -763,8 +801,14 @@ function makeRecordPersist(table, setState) {
     setState((prev) => {
       const prevById = new Map(prev.map((x) => [x.id, x]));
       const nextIds = new Set(next.map((x) => x.id));
+      const toDelete = [];
       for (const id of prevById.keys()) {
-        if (!nextIds.has(id)) deleteRecordRow(table, id);
+        if (!nextIds.has(id)) toDelete.push(id);
+      }
+      if (toDelete.length === 1) {
+        deleteRecordRow(table, toDelete[0]);
+      } else if (toDelete.length > 1) {
+        deleteRecordRowsBatch(table, toDelete);
       }
       for (const item of next) {
         const before = prevById.get(item.id);
@@ -2728,6 +2772,28 @@ function DispatcherApp() {
     persistJobs([]);
     persistDamages([]);
   }
+  // Hromadné mazanie podľa typu (revízie / úradné skúšky / externé zákazky /
+  // poškodenia požičovne) — administrátorský "reset" jednej konkrétnej
+  // kategórie bez toho, aby sa museli mazať aj stroje. Zmaže aj priradenia
+  // technikom naviazané na tieto záznamy, nech v Pláne servisu nezostanú
+  // osirotené bunky.
+  function clearDamagesByType(type) {
+    const idsToRemove = new Set(damages.filter((d) => d.type === type).map((d) => d.id));
+    persistDamages(damages.filter((d) => !idsToRemove.has(d.id)));
+    persistAssignments(assignments.filter((a) => !a.damageId || !idsToRemove.has(a.damageId)));
+  }
+  function clearAllRevisions() {
+    clearDamagesByType("revizia");
+  }
+  function clearAllUradneSkusky() {
+    clearDamagesByType("uradnaSkuska");
+  }
+  function clearAllExterna() {
+    clearDamagesByType("externa");
+  }
+  function clearAllPoskodenia() {
+    clearDamagesByType("poskodenie");
+  }
   function clearAllJobs() {
     persistJobs([]);
   }
@@ -3285,6 +3351,7 @@ function DispatcherApp() {
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
+            onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
           />
         )}
 
@@ -3304,6 +3371,7 @@ function DispatcherApp() {
             onComplete={(d) => setResolveDamageTarget(d)}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
+            onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
           />
         )}
 
@@ -3409,6 +3477,7 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+            onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
           />
         )}
 
@@ -3424,6 +3493,7 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+            onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
           />
         )}
 
@@ -9032,7 +9102,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -9101,8 +9171,14 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 
   return (
     <div>
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div style={{ flex: 1 }} />
+        {can(user, "damage_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky poškodenia
+          </button>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -9159,7 +9235,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -9232,7 +9308,14 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {can(user, "external_clear_all") && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+              Vymazať všetky externé zákazky
+            </button>
+          )}
+          {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
+        </div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -9357,7 +9440,7 @@ function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -9409,8 +9492,14 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 
   return (
     <div>
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div style={{ flex: 1 }} />
+        {can(user, "revision_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky revízie
+          </button>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
@@ -9511,7 +9600,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 /* ---------------------------------------------------------
    Úradné skúšky view — same mechanics as revisions, year-based
 --------------------------------------------------------- */
-function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail }) {
+function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -9564,8 +9653,14 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 
   return (
     <div>
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div style={{ flex: 1 }} />
+        {can(user, "uradnaskuska_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky úradné skúšky
+          </button>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
