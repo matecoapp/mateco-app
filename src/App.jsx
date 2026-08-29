@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.279";
+const APP_VERSION = "1.0.280";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1668,7 +1668,53 @@ function DispatcherApp() {
     );
   }
   function deleteEmployee(id) {
+    const emp = employees.find((e) => e.id === id);
     persistEmployees(employees.filter((e) => e.id !== id));
+    // Zmazanie zamestnanca (odteraz jediné miesto, kde sa to dá spraviť —
+    // z kariet technika/šoféra bolo tlačidlo zámerne odstránené) musí zároveň
+    // vyčistiť všetky miesta, čo naň odkazujú, nech nezostanú "duchovia" v
+    // pláne servisu, revíziách/poškodeniach, pohotovosti, zastupovaní alebo
+    // v prepravách.
+    if (emp?.role === "technik") {
+      persistAssignments(assignments.filter((a) => a.technicianId !== id));
+      const changedDamages = damages.filter((d) => {
+        const ids = d.technicianIds || (d.technicianId ? [d.technicianId] : []);
+        return ids.includes(id);
+      });
+      if (changedDamages.length > 0) {
+        persistDamages(
+          damages.map((d) => {
+            const ids = (d.technicianIds || (d.technicianId ? [d.technicianId] : [])).filter((tid) => tid !== id);
+            const before = d.technicianIds || (d.technicianId ? [d.technicianId] : []);
+            if (ids.length === before.length) return d;
+            return { ...d, technicianId: ids[0] || null, technicianIds: ids };
+          })
+        );
+      }
+      persistWeeklyDuty(weeklyDuty.filter((w) => w.technicianId !== id));
+      persistCheckerSubstitutions(checkerSubstitutions.filter((s) => s.originalTechnicianId !== id && s.substituteTechnicianId !== id));
+      const depoCheckersNext = { ...depoCheckers };
+      let depoCheckersChanged = false;
+      Object.keys(depoCheckersNext).forEach((depo) => {
+        if (depoCheckersNext[depo] === id) {
+          delete depoCheckersNext[depo];
+          depoCheckersChanged = true;
+        }
+      });
+      if (depoCheckersChanged) persistDepoCheckers(depoCheckersNext);
+    } else if (emp?.role === "sofer" || emp?.role === "externy_sofer") {
+      const changedJobs = jobs.filter((j) => j.driverId === id || j.returnDriverId === id);
+      if (changedJobs.length > 0) {
+        persistJobs(
+          jobs.map((j) => {
+            const patch = {};
+            if (j.driverId === id) patch.driverId = null;
+            if (j.returnDriverId === id) patch.returnDriverId = null;
+            return Object.keys(patch).length ? { ...j, ...patch } : j;
+          })
+        );
+      }
+    }
   }
   function linkEmployeeToUser(employeeId, userId) {
     // Poistka aj tu (nielen v UI): nikdy neprepísať rolu administrátorského účtu.
@@ -2644,10 +2690,6 @@ function DispatcherApp() {
       addTechnician(data);
     }
   }
-  function deleteTechnician(id) {
-    persistTechnicians(technicians.filter((t) => t.id !== id));
-    persistAssignments(assignments.filter((a) => a.technicianId !== id));
-  }
   function saveAssignment(data, id) {
     if (id) {
       persistAssignments(assignments.map((a) => (a.id === id ? { ...a, ...data } : a)));
@@ -2949,9 +2991,6 @@ function DispatcherApp() {
           : d
       )
     );
-  }
-  function deleteDriver(id) {
-    persistDrivers(drivers.filter((d) => d.id !== id));
   }
   function setTechnicianArchived(id, archived, reason, note) {
     persistTechnicians(
@@ -3738,12 +3777,6 @@ function DispatcherApp() {
             setDriverArchived(driverCard.id, false);
             setDriverCard((prev) => (prev ? { ...prev, archived: false } : prev));
           }}
-          onDelete={(id) => {
-            askDelete(`šoféra ${driverCard?.name || ""}`, () => {
-              deleteDriver(id);
-              setDriverCard(null);
-            });
-          }}
         />
       )}
       {showAddJob && (
@@ -4329,13 +4362,6 @@ function DispatcherApp() {
           onUnarchive={() => {
             setTechnicianArchived(technicianCard.id, false);
             setTechnicianCard((prev) => (prev ? { ...prev, archived: false } : prev));
-          }}
-          onDelete={(id) => {
-            const t = technicianCard;
-            askDelete(`technika ${t?.name || ""}`, () => {
-              deleteTechnician(id);
-              setTechnicianCard(null);
-            });
           }}
         />
       )}
@@ -5277,68 +5303,6 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
         </div>
       )}
     </div>
-  );
-}
-
-/* ---------------------------------------------------------
-   Alerts
---------------------------------------------------------- */
-function AlertsPanel({ alerts, machineById, salespeople, onNavigate, onOpenJob, onOpenReservation }) {
-  const [drilldownTile, setDrilldownTile] = useState(null);
-  const categories = [
-    { key: "overdue", title: "Zákazka po termíne", color: "var(--danger)", count: alerts.overdue.length, items: alerts.overdue, label: "Zákazka po termíne" },
-    { key: "endingSoon", title: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", count: alerts.endingSoon.length, items: alerts.endingSoon, label: "Zákazka končí čoskoro (do 5 dní)" },
-    { key: "tomorrowUnassigned", title: "Zákazka bez šoféra", color: "var(--info)", count: alerts.tomorrowUnassigned.length, items: alerts.tomorrowUnassigned, label: "Zákazka bez šoféra", tileId: "noDriver" },
-    { key: "noEndDate", title: "Zákazka bez dátumu ukončenia", color: "var(--warn)", count: alerts.noEndDate.length, items: alerts.noEndDate, label: "Zákazka bez dátumu ukončenia" },
-    { key: "approvedReservations", title: "Schválené nezáväzné rezervácie", color: "var(--accent)", count: alerts.approvedReservations.length, items: alerts.approvedReservations, label: "Nezáväzné rezervácie (schválené)", tileId: "reservations", isReservation: true },
-    { key: "inService", title: "V servisnom stave", color: "var(--danger)", count: alerts.inService.length, nav: { module: "servis", view: "poskodenia" } },
-    { key: "revisionOverdue", title: "Revízia po termíne", color: "var(--danger)", count: alerts.revisionOverdue.length, nav: { module: "servis", view: "revizie" } },
-    { key: "revisionSoon", title: "Revízia končí do 30 dní", color: "var(--warn)", count: alerts.revisionSoon.length, nav: { module: "servis", view: "revizie" } },
-    { key: "uradneSkusky", title: "Končiace úradné skúšky", color: "var(--warn)", count: alerts.uradneSkusky.length, nav: { module: "servis", view: "uradne_skusky" } },
-  ];
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
-      {categories.filter((c) => c.count > 0).map((c) => (
-        <div
-          key={c.key}
-          className="panel"
-          onClick={() => (c.items ? setDrilldownTile({ id: c.tileId || c.key, label: c.label, items: c.items, isReservation: c.isReservation }) : onNavigate(c.nav))}
-          style={{ padding: "12px 14px", borderLeft: `3px solid ${c.color}`, cursor: "pointer" }}
-          title="Kliknutím prejdete na podrobný zoznam"
-        >
-          <div className="label-font" style={{ color: c.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{c.count}</div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{c.title}</div>
-        </div>
-      ))}
-      {drilldownTile && (
-        <JobsQuickDrilldownModal
-          tile={drilldownTile}
-          machineById={machineById}
-          salespeople={salespeople}
-          onClose={() => setDrilldownTile(null)}
-          onOpenJob={onOpenJob}
-          onOpenReservation={onOpenReservation}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------
-   Generic scrollable list modal (alert / summary expansion)
---------------------------------------------------------- */
-function ExpandListModal({ title, items, renderItem, onClose }) {
-  return (
-    <Modal title={`${title} (${items.length})`} onClose={onClose} wide>
-      <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-        {items.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
-        ) : (
-          items.map(renderItem)
-        )}
-      </div>
-    </Modal>
   );
 }
 
@@ -6693,7 +6657,7 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 /* ---------------------------------------------------------
    Driver card modal (karta šoféra)
 --------------------------------------------------------- */
-function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
+function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive }) {
   const d = driver;
   const upcoming = jobs
     .filter((j) => j.driverId === d.id && j.status !== "completed" && (!j.endDate || j.endDate >= today))
@@ -6729,11 +6693,6 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
         {can(user, "driver_archive") && (
           <button className="btn btn-ghost" onClick={() => (d.archived ? onUnarchive() : onArchive())}>
             {d.archived ? "Vrátiť z archívu" : "Archivovať"}
-          </button>
-        )}
-        {can(user, "driver_delete") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
-            Zmazať šoféra
           </button>
         )}
       </div>
@@ -10247,59 +10206,6 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
   );
 }
 
-/* ---------------------------------------------------------
-   Technicians view
---------------------------------------------------------- */
-function TechniciansView({ technicians, assignments, today, onAdd, onDelete }) {
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-        <button className="btn btn-accent" onClick={onAdd}>+ Pridať technika</button>
-      </div>
-      <div className="panel">
-        <table>
-          <thead>
-            <tr>
-              <th>Meno</th>
-              <th>Skratka</th>
-              <th>ŠPZ</th>
-              <th>Depo</th>
-              <th>Telefón</th>
-              <th>Email</th>
-              <th>Dnes</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {technicians.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni technici.</td></tr>
-            )}
-            {technicians.map((t) => {
-              const todaysAssignment = assignments.find((a) => a.technicianId === t.id && a.date === today);
-              return (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 600 }}>{t.name}</td>
-                  <td className="mono">{t.skratka || "—"}</td>
-                  <td className="mono">{t.spz || "—"}</td>
-                  <td>{t.depo || "—"}</td>
-                  <td className="mono">{t.phone || "—"}</td>
-                  <td className="mono">{t.email || "—"}</td>
-                  <td>{todaysAssignment ? <StatusBadge status="active" /> : <StatusBadge status="free" />}</td>
-                  <td>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(t.id)}>
-                      Zmazať
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function AddTechnicianModal({ existing, onClose, onSave }) {
   const [name, setName] = useState(existing?.name || "");
   const [skratka, setSkratka] = useState(existing?.skratka || "");
@@ -10632,7 +10538,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
 /* ---------------------------------------------------------
    Technician card modal (karta technika)
 --------------------------------------------------------- */
-function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive, onDelete }) {
+function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive }) {
   const t = technician;
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const upcoming = assignments
@@ -10674,11 +10580,6 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
         {can(user, "technician_archive") && (
           <button className="btn btn-ghost" onClick={() => (t.archived ? onUnarchive() : onArchive())}>
             {t.archived ? "Vrátiť z archívu" : "Archivovať"}
-          </button>
-        )}
-        {can(user, "technician_delete") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(t.id)}>
-            Zmazať technika
           </button>
         )}
       </div>
