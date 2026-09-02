@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.288";
+const APP_VERSION = "1.0.289";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9236,12 +9236,14 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
   const [sortDir, setSortDir] = useState("desc");
   const [depoFilter, setDepoFilter] = useState("");
 
-  const rows = damages.map((d) => {
+  // Zaujímajú nás len otvorené zákazky — vyriešené poškodenia do tohto
+  // prehľadu na týždennú poradu nepatria.
+  const rows = damages.filter((d) => !d.resolved).map((d) => {
     const m = !isExterna ? machineById[d.machineId] : null;
     const stroj = isExterna
       ? `${d.serialNumber || d.code || "—"}${d.model ? " · " + d.model : ""}`
       : `${m?.code || d.code || "—"}${m?.type ? " · " + m.type : ""}`;
-    const depo = isExterna ? (d.assignedDepo || "—") : (m?.depo || machineCurrentLocation(m) || "—");
+    const depo = isExterna ? (d.assignedDepo || "—") : (machineCurrentLocation(m) || m?.depo || "—");
     return {
       id: d.id,
       stroj,
@@ -9428,6 +9430,12 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             Nahlásené {fmtDate(d.dateReported)}{d.currentJobLabel ? ` · ${d.currentJobLabel}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
           </div>
           <div style={{ fontSize: 13 }}>{d.popis}</div>
+          {!isSimple && d.poznamkaDispecera && (
+            <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 4, display: "flex", gap: 4 }}>
+              <span>📝</span>
+              <span style={{ whiteSpace: "pre-wrap" }}>{d.poznamkaDispecera}</span>
+            </div>
+          )}
           {(d.opravaDatum || d.vykonanaDatum) && (
             <div style={{ fontSize: 12, color: barColor, marginTop: 4 }}>
               {isSimple ? "Vykonané" : damageLabel(d)} {fmtDate(d.opravaDatum || d.vykonanaDatum)}
