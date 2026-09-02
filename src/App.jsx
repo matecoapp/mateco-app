@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.287";
+const APP_VERSION = "1.0.288";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -951,7 +951,7 @@ function StatusBadge({ status }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
-function Modal({ title, onClose, children, wide, headerExtra }) {
+function Modal({ title, onClose, children, wide, xwide, headerExtra }) {
   return (
     <div
       className="modal-overlay"
@@ -971,7 +971,7 @@ function Modal({ title, onClose, children, wide, headerExtra }) {
       <div
         className="panel modal-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
+        style={{ width: xwide ? 980 : wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
       >
         <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 }}>
           <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
@@ -1192,6 +1192,8 @@ function DispatcherApp() {
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
+  const [damagesSummaryOpen, setDamagesSummaryOpen] = useState(false); // Zhrnutie — Poškodenia strojov požičovne
+  const [externaSummaryOpen, setExternaSummaryOpen] = useState(false); // Zhrnutie — Externé servisné zákazky
   const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
   const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo sa prepne
   const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
@@ -2467,6 +2469,9 @@ function DispatcherApp() {
   function deleteDamage(id) {
     persistDamages(damages.filter((d) => d.id !== id));
   }
+  function setDamageNote(id, note) {
+    persistDamages(damages.map((d) => (d.id === id ? { ...d, poznamkaDispecera: note } : d)));
+  }
   function setDamageResolved(id, resolved) {
     persistDamages(damages.map((d) => (d.id === id ? { ...d, resolved } : d)));
   }
@@ -3507,6 +3512,7 @@ function DispatcherApp() {
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
+            onOpenSummary={() => setDamagesSummaryOpen(true)}
           />
         )}
 
@@ -3527,6 +3533,7 @@ function DispatcherApp() {
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
+            onOpenSummary={() => setExternaSummaryOpen(true)}
           />
         )}
 
@@ -4118,6 +4125,30 @@ function DispatcherApp() {
           }}
           onClose={() => setServiceEventDetail(null)}
           onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
+          onSaveNote={(id, note) => {
+            setDamageNote(id, note);
+            setServiceEventDetail((prev) => (prev ? { ...prev, poznamkaDispecera: note } : prev));
+          }}
+        />
+      )}
+      {damagesSummaryOpen && (
+        <DamagesSummaryModal
+          title="Poškodenia strojov požičovne"
+          damages={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa")}
+          machineById={enrichedMachineById}
+          isExterna={false}
+          onClose={() => setDamagesSummaryOpen(false)}
+          onOpenDetail={(d) => { setDamagesSummaryOpen(false); setServiceEventDetail(d); }}
+        />
+      )}
+      {externaSummaryOpen && (
+        <DamagesSummaryModal
+          title="Externé servisné zákazky"
+          damages={damages.filter((d) => d.type === "externa")}
+          machineById={enrichedMachineById}
+          isExterna={true}
+          onClose={() => setExternaSummaryOpen(false)}
+          onOpenDetail={(d) => { setExternaSummaryOpen(false); setServiceEventDetail(d); }}
         />
       )}
       {damageAssignTarget && (
@@ -9053,7 +9084,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -9070,6 +9101,9 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     : isExterna
     ? "Externý servis"
     : "Poškodenie stroja požičovne";
+  const [noteDraft, setNoteDraft] = useState(d.poznamkaDispecera || "");
+  const [noteEditing, setNoteEditing] = useState(false);
+  const canEditNote = !isSimple && onSaveNote && (can(user, "damage_status") || can(user, "external_status"));
 
   return (
     <Modal
@@ -9150,11 +9184,157 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           </a>
         </div>
       ))}
+      {!isSimple && (
+        <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "var(--panel-2)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Poznámka dispečera (napr. čaká na diely, po prenájme…)</div>
+            {canEditNote && !noteEditing && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => { setNoteDraft(d.poznamkaDispecera || ""); setNoteEditing(true); }}>
+                {d.poznamkaDispecera ? "Upraviť" : "+ Pridať poznámku"}
+              </button>
+            )}
+          </div>
+          {noteEditing ? (
+            <>
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                rows={3}
+                style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: 13 }}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button
+                  className="btn btn-accent"
+                  onClick={() => { onSaveNote(d.id, noteDraft.trim()); setNoteEditing(false); }}
+                >
+                  Uložiť
+                </button>
+                <button className="btn btn-ghost" onClick={() => setNoteEditing(false)}>Zrušiť</button>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{d.poznamkaDispecera || "—"}</div>
+          )}
+        </div>
+      )}
       {isExterna && can(user, "external_add") && (
         <button className="btn btn-accent" onClick={() => onEdit(d)}>
           Upraviť zákazku
         </button>
       )}
+    </Modal>
+  );
+}
+
+/* ---------------------------------------------------------
+   Zhrnutie — triediteľný/filtrovateľný prehľad pre týždenné porady
+   (Poškodenia strojov požičovne / Externé servisné zákazky)
+--------------------------------------------------------- */
+function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, onOpenDetail }) {
+  const [sortKey, setSortKey] = useState("dateReported");
+  const [sortDir, setSortDir] = useState("desc");
+  const [depoFilter, setDepoFilter] = useState("");
+
+  const rows = damages.map((d) => {
+    const m = !isExterna ? machineById[d.machineId] : null;
+    const stroj = isExterna
+      ? `${d.serialNumber || d.code || "—"}${d.model ? " · " + d.model : ""}`
+      : `${m?.code || d.code || "—"}${m?.type ? " · " + m.type : ""}`;
+    const depo = isExterna ? (d.assignedDepo || "—") : (m?.depo || machineCurrentLocation(m) || "—");
+    return {
+      id: d.id,
+      stroj,
+      dateReported: d.dateReported || "",
+      depo,
+      popis: d.popis || "—",
+      servisSort: d.assignedDate || "",
+      servisDisplay: d.assignedDate ? fmtDate(d.assignedDate) : "— nepridelené —",
+      poznamka: d.poznamkaDispecera || "",
+      raw: d,
+    };
+  });
+
+  const columns = [
+    { key: "stroj", label: "Stroj", sort: (r) => r.stroj },
+    { key: "dateReported", label: "Kedy sa pokazil", sort: (r) => r.dateReported },
+    { key: "depo", label: "Kde je", sort: (r) => r.depo },
+    { key: "popis", label: "Čo s ním je", sort: (r) => r.popis },
+    { key: "servis", label: "Servis pridelený", sort: (r) => r.servisSort },
+    { key: "poznamka", label: "Poznámka", sort: (r) => r.poznamka },
+  ];
+
+  const depoOptions = [...new Set(rows.map((r) => r.depo).filter((x) => x && x !== "—"))].sort();
+  let filtered = depoFilter ? rows.filter((r) => r.depo === depoFilter) : rows;
+  const activeCol = columns.find((c) => c.key === sortKey) || columns[1];
+  filtered = [...filtered].sort((a, b) => {
+    const av = activeCol.sort(a);
+    const bv = activeCol.sort(b);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  return (
+    <Modal title={`Zhrnutie — ${title} (${filtered.length})`} onClose={onClose} xwide>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        <button
+          className="btn"
+          onClick={() => setDepoFilter("")}
+          style={{ padding: "5px 10px", fontSize: 11, background: !depoFilter ? "var(--accent)" : "transparent", color: !depoFilter ? "#fff" : "var(--text-dim)", border: "1px solid " + (!depoFilter ? "var(--accent)" : "var(--border)") }}
+        >
+          Všetky depa
+        </button>
+        {depoOptions.map((dep) => (
+          <button
+            key={dep}
+            className="btn"
+            onClick={() => setDepoFilter(dep)}
+            style={{ padding: "5px 10px", fontSize: 11, background: depoFilter === dep ? "var(--accent)" : "transparent", color: depoFilter === dep ? "#fff" : "var(--text-dim)", border: "1px solid " + (depoFilter === dep ? "var(--accent)" : "var(--border)") }}
+          >
+            {dep}
+          </button>
+        ))}
+      </div>
+      <div style={{ overflowX: "auto", maxHeight: "65vh" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr>
+              {columns.map((c) => (
+                <th
+                  key={c.key}
+                  onClick={() => toggleSort(c.key)}
+                  style={{ textAlign: "left", padding: "6px 8px", borderBottom: "2px solid var(--border)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", position: "sticky", top: 0, background: "var(--panel)" }}
+                >
+                  {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={columns.length} style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>Žiadne záznamy.</td></tr>
+            )}
+            {filtered.map((r) => (
+              <tr key={r.id} onClick={() => onOpenDetail(r.raw)} style={{ cursor: "pointer", borderBottom: "1px solid var(--border)" }}>
+                <td style={{ padding: "6px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>{r.stroj}</td>
+                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.dateReported ? fmtDate(r.dateReported) : "—"}</td>
+                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.depo}</td>
+                <td style={{ padding: "6px 8px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.popis}>{r.popis}</td>
+                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.servisDisplay}</td>
+                <td style={{ padding: "6px 8px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.poznamka}>{r.poznamka || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Modal>
   );
 }
@@ -9302,7 +9482,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -9374,6 +9554,11 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ flex: 1 }} />
+        {onOpenSummary && (
+          <button className="btn btn-ghost" onClick={onOpenSummary}>
+            📋 Zhrnutie
+          </button>
+        )}
         {can(user, "damage_clear_all") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
             Vymazať všetky poškodenia
@@ -9435,7 +9620,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -9509,6 +9694,11 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {onOpenSummary && (
+            <button className="btn btn-ghost" onClick={onOpenSummary}>
+              📋 Zhrnutie
+            </button>
+          )}
           {can(user, "external_clear_all") && (
             <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
               Vymazať všetky externé zákazky
