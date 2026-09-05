@@ -1222,6 +1222,36 @@ function DispatcherApp() {
   const tomorrow = addDaysISO(today, 1);
   const dayAfterTomorrow = addDaysISO(today, 2);
 
+
+  /* ---------------- derived (must be declared before effects that use them) ---------------- */
+  const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
+  const technicianByIdTop = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+
+  const openDamagesByMachine = useMemo(() => {
+    const map = {};
+    damages.forEach((d) => {
+      if (d.resolved) return;
+      if (d.type === "revizia" || d.type === "uradnaSkuska") return;
+      if (!map[d.machineId]) map[d.machineId] = d;
+    });
+    return map;
+  }, [damages]);
+
+  const enrichedMachines = useMemo(() => {
+    return machines.map((m) => {
+      const cur = currentJobFor(jobs, m.id, today);
+      const nxt = nextJobFor(jobs, m.id, today);
+      const status = cur ? effectiveStatus(cur, today) : "free";
+      const openDamage = openDamagesByMachine[m.id] || null;
+      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage };
+    });
+  }, [machines, jobs, today, openDamagesByMachine]);
+
+  const enrichedMachineById = useMemo(
+    () => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])),
+    [enrichedMachines]
+  );
+
   // Pripomienka pre obchodníka — ak rezervácia visí bez premeny na zákazku
   // (alebo zamietnutia) príliš dlho, systém upozorní na to obchodníka, nie len dispečera.
   // Posiela sa len raz za rezerváciu (reminderSentAt), nie pri každom obnovení stránky.
@@ -2778,32 +2808,7 @@ function DispatcherApp() {
     }
   }
 
-  /* ---------------- derived ---------------- */
   const driverById = useMemo(() => Object.fromEntries(drivers.map((d) => [d.id, d])), [drivers]);
-  const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
-  const technicianByIdTop = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
-
-  const openDamagesByMachine = useMemo(() => {
-    const map = {};
-    damages.forEach((d) => {
-      if (d.resolved) return;
-      if (d.type === "revizia" || d.type === "uradnaSkuska") return;
-      if (!map[d.machineId]) map[d.machineId] = d;
-    });
-    return map;
-  }, [damages]);
-
-  const enrichedMachines = useMemo(() => {
-    return machines.map((m) => {
-      const cur = currentJobFor(jobs, m.id, today);
-      const nxt = nextJobFor(jobs, m.id, today);
-      const status = cur ? effectiveStatus(cur, today) : "free";
-      const openDamage = openDamagesByMachine[m.id] || null;
-      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage };
-    });
-  }, [machines, jobs, today, openDamagesByMachine]);
-
-  const enrichedMachineById = useMemo(() => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])), [enrichedMachines]);
 
   // Univerzálne vyhľadávanie — jeden index naprieč strojmi, zákazkami, zákazníkmi a poškodeniami.
   const searchIndex = useMemo(() => {
