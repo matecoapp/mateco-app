@@ -10,11 +10,70 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Rovnaký zoznam ako HANDOVER_CHECKLIST_ITEMS v App.jsx — checklist v dátach je
+// pole indexov bez vlastných popisiek, tie sa priraďujú podľa poradia. Ak sa
+// zoznam v App.jsx zmení, treba ho zmeniť aj tu.
+const HANDOVER_CHECKLIST_ITEMS = [
+  "Technický stav zariadenia",
+  "Čistota stroja",
+  "Zaškolenie obsluhy",
+  "Nabitie akumulátorov",
+  "Ovládací pult a ovládanie zariadenia",
+  "Núdzové ovládanie zariadenia",
+  "Stav náplní (olej, elektrolyt, nafta)",
+  "Nabíjačka a pripojovací kábel",
+  "Podložky pod podperné nohy",
+  "Kľúče",
+  "Revízie a denník zdvíhacieho zariadenia",
+  "Návod na obsluhu",
+  "Svetelný panel, rezervné koleso a predné koleso",
+  "aDBlue - regenerácia motora",
+];
+
 function fmtDate(iso) {
   if (!iso) return "—";
   const [y, m, d] = String(iso).split("-");
   if (!y || !m || !d) return iso;
   return `${d}.${m}.${y}`;
+}
+
+function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig }) {
+  return (
+    <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 12, color: "#6b6b6b" }}>{fmtDate(date)}</div>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        {HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
+          const item = (checklist && checklist[i]) || {};
+          const status = item[statusKey];
+          const mark = status === "ok" ? "✓" : status === "problem" ? "✗" : "—";
+          const markColor = status === "ok" ? "#2f7d32" : status === "problem" ? "#c62828" : "#bbb";
+          const note = status === "problem" && item[noteKey] ? item[noteKey] : null;
+          return (
+            <div key={i} style={{ padding: "4px 0", borderBottom: i < HANDOVER_CHECKLIST_ITEMS.length - 1 ? "1px solid #f2f2f2" : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                <span>{label}</span>
+                <span style={{ color: markColor, fontWeight: 700 }}>{mark}</span>
+              </div>
+              {note && <div style={{ fontSize: 11.5, color: "#c62828", marginTop: 2 }}>{note}</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
+          <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis nájomcu</div>
+          {custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+        </div>
+        <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
+          <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis prenajímateľa</div>
+          {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function CustomerPortal({ token }) {
@@ -105,20 +164,34 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
-              <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 8 }}>Odovzdávací protokol</div>
-              {data.handoverDone ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid #eee" }}>
-                  <div style={{ fontSize: 13 }}>Prevzatie</div>
-                  <div style={{ fontSize: 12, color: "#6b6b6b" }}>{fmtDate(data.handoverDate)}</div>
+              <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
+              {!data.handoverDone ? (
+                <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>Zatiaľ nevypísaný.</div>
+              ) : data.migratedWithoutHandover ? (
+                <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "10px 0" }}>
+                  Stroj bol prevzatý pred zavedením tohto systému — prevzatie nie je zdokumentované.
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>Zatiaľ nevypísaný.</div>
+                <ProtocolPhase
+                  title="Prevzatie"
+                  date={data.handoverDate}
+                  statusKey="handoverStatus"
+                  noteKey="handoverNote"
+                  checklist={data.checklist}
+                  custSig={data.handoverCustomerSignature}
+                  driverSig={data.handoverDriverSignature}
+                />
               )}
               {data.returnDone && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid #eee" }}>
-                  <div style={{ fontSize: 13 }}>Vrátenie</div>
-                  <div style={{ fontSize: 12, color: "#6b6b6b" }}>{fmtDate(data.returnDate)}</div>
-                </div>
+                <ProtocolPhase
+                  title="Vrátenie"
+                  date={data.returnDate}
+                  statusKey="returnStatus"
+                  noteKey="returnNote"
+                  checklist={data.checklist}
+                  custSig={data.returnCustomerSignature}
+                  driverSig={data.returnDriverSignature}
+                />
               )}
             </div>
           </div>

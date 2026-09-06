@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.302";
+const APP_VERSION = "1.0.306";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -643,6 +643,10 @@ function canFillHandoverPhase(job, myEmployee, phase) {
   if (phase === "prevzatie") {
     return job.driverId === myEmployee.id && job.startDate === today;
   }
+  // Vrátenie stroja dáva zmysel riešiť len na reálne ukončenej zákazke — inak by
+  // šofér mohol dokončiť protokol o vrátení aj na aktívnej zákazke, napr. keď
+  // dispečer ukončenie predtým zrušil a zákazka sa vrátila do aktívneho stavu.
+  if (job.status !== "completed") return false;
   const dateOk = !job.endDate || job.endDate === today;
   return job.returnDriverId === myEmployee.id && dateOk;
 }
@@ -1438,11 +1442,9 @@ function DispatcherApp() {
       return;
     }
     (async () => {
-      const [m, oldDrivers, jobsTable, oldTechnicians, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts] = await Promise.all([
         loadRecordTable("machines"),
-        loadKey("drivers", []),
         loadRecordTable("jobs"),
-        loadKey("technicians", []),
         loadRecordTable("assignments"),
         loadRecordTable("damages"),
         loadRecordTable("weeklyDuty"),
@@ -1478,30 +1480,7 @@ function DispatcherApp() {
       setMachineModels(mmodels);
       setSpareParts(sprts);
 
-      // Jednorazová migrácia: kým platforma nemala jednotný zoznam osôb, technici a šoféri
-      // boli v samostatných zoznamoch a obchodníci len napevno zapísaní v kóde platformy.
-      // Ak je nový zoznam "employees" ešte prázdny, platforma ho pri prvom načítaní zloží
-      // z toho, čo už existuje — nič sa nestratí, ID záznamov zostávajú rovnaké.
-      let finalEmployees = emp;
-      if (finalEmployees.length === 0 && (oldTechnicians.length > 0 || oldDrivers.length > 0)) {
-        finalEmployees = [
-          ...oldTechnicians.map((t) => ({ ...t, role: "technik", linkedUserId: t.linkedUserId || null })),
-          ...oldDrivers.map((d) => ({ ...d, role: "sofer", linkedUserId: d.linkedUserId || null })),
-          ...SALESPEOPLE.map((s) => ({
-            id: uid(),
-            name: s.name,
-            role: "obchodnik",
-            color: s.color,
-            depo: "",
-            phone: "",
-            email: "",
-            archived: false,
-            linkedUserId: null,
-          })),
-        ];
-        finalEmployees.forEach((e) => saveRecordRow("employees", e));
-      }
-      setEmployees(finalEmployees);
+      setEmployees(emp);
       setLoaded(true);
     })();
   }, [authChecked, session?.user?.id]);
@@ -2514,8 +2493,13 @@ function DispatcherApp() {
     // Nech je odkaz na zákaznícky portál pripravený hneď od prevzatia stroja
     // (napr. na vytlačenie QR kódu šoférovi na mieste) — netreba naň čakať, kým
     // ho niekto ručne vygeneruje z karty zákazky.
-    if (job && !job.publicToken) {
-      updateJob(jobId, { publicToken: uid() });
+    // Zámerne crypto.randomUUID(), NIE uid() — tento token je verejný bezpečnostný
+    // prvok (jediné, čo chráni dáta zákazníka bez prihlásenia), na rozdiel od
+    // bežných interných ID používa kryptograficky bezpečný generátor.
+    let publicToken = job?.publicToken || null;
+    if (job && !publicToken) {
+      publicToken = crypto.randomUUID();
+      updateJob(jobId, { publicToken });
     }
     let recordId;
     if (existing) {
@@ -2541,7 +2525,7 @@ function DispatcherApp() {
         link: { module: "poziciovna", view: "jobs", jobId },
       });
     }
-    return recordId;
+    return { id: recordId, publicToken };
   }
   function deleteHandoverProtocol(id) {
     persistHandoverProtocols(handoverProtocols.filter((h) => h.id !== id));
@@ -3250,11 +3234,42 @@ function DispatcherApp() {
   function uncompleteJob(jobId) {
     updateJob(jobId, { status: "planned" });
   }
+  // Pri prvom pridelení šoféra na vývoz/zvoz o tom šofér dostane notifikáciu —
+  // pri zmene dátumu/depa na už priradenej zákazke to rieši samostatná logika
+  // v updateJob() vyššie, toto je len pre samotné pridelenie.
   function assignDriver(jobId, driverId) {
+    const job = jobs.find((j) => j.id === jobId);
     updateJob(jobId, { driverId: driverId || null });
+    if (driverId && driverId !== job?.driverId) {
+      const driver = driverById[driverId];
+      const machine = job ? machineById[job.machineId] : null;
+      if (driver && job) {
+        pushNotification({
+          roles: [],
+          userName: driver.name,
+          title: "Pridelený vývoz stroja",
+          message: `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${job.customer || "—"} — ${fmtDate(job.startDate)}.`,
+          link: { module: "poziciovna", view: "jobs", jobId },
+        });
+      }
+    }
   }
   function assignReturnDriver(jobId, driverId) {
+    const job = jobs.find((j) => j.id === jobId);
     updateJob(jobId, { returnDriverId: driverId || null });
+    if (driverId && driverId !== job?.returnDriverId) {
+      const driver = driverById[driverId];
+      const machine = job ? machineById[job.machineId] : null;
+      if (driver && job) {
+        pushNotification({
+          roles: [],
+          userName: driver.name,
+          title: "Pridelený zvoz stroja",
+          message: `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${job.customer || "—"}${job.endDate ? ` — ${fmtDate(job.endDate)}` : ""}.`,
+          link: { module: "poziciovna", view: "jobs", jobId },
+        });
+      }
+    }
   }
   // Checker sa už nezadáva ručne — vypočíta sa automaticky podľa depa (nastavenie nižšie),
   // s prihliadnutím na prípadnú dočasnú náhradu (napr. dovolenka checkera).
@@ -4525,7 +4540,9 @@ function DispatcherApp() {
           }}
           onGeneratePortalLink={() => {
             if (!jobDetail.publicToken) {
-              const token = uid();
+              // crypto.randomUUID() — pozri poznámku pri saveHandoverProtocol, prečo
+              // nie uid().
+              const token = crypto.randomUUID();
               updateJob(jobDetail.id, { publicToken: token });
               setJobDetail((prev) => (prev ? { ...prev, publicToken: token } : prev));
             }
@@ -4569,9 +4586,16 @@ function DispatcherApp() {
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
           onClose={() => setShowHandoverProtocol(null)}
-          onSave={(patch, baseRev) => {
-            const savedId = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
-            if (savedId) setShowHandoverProtocol(null);
+          onSave={(patch, baseRev, showSuccessScreen) => {
+            const result = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
+            if (!result) return;
+            if (showSuccessScreen) {
+              // Nová "hotovo" obrazovka v samotnom komponente potrebuje čerstvý token
+              // (mohol sa práve teraz prvýkrát vygenerovať vyššie) — karta sa nezatvára.
+              setShowHandoverProtocol((prev) => (prev ? { ...prev, publicToken: result.publicToken } : prev));
+            } else {
+              setShowHandoverProtocol(null);
+            }
           }}
           onDelete={(id) => {
             askDelete("tento protokol o odovzdaní", () => {
@@ -6245,16 +6269,15 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
           overdue: j.startDate < today,
         });
       }
-      // Zvoz — pri "Ukončiť zákazku" platforma nastaví stav "completed" aj prideleného
-      // šoféra naraz, v tom istom kroku. Keby platforma zvoz skryla hneď ako je zákazka
-      // "completed" (ako predtým), pridelený šofér by ho v Prepravách vôbec nevidel
-      // a nemal by ako vypísať protokol o vrátení. Preto zvoz zostáva viditeľný,
-      // kým nie je táto fáza protokolu reálne dokončená — bez ohľadu na stav zákazky.
-      if (j.endDate) {
+      // Zvoz — viditeľný a akcieschopný výlučne po reálnom ukončení zákazky
+      // ("Ukončiť zákazku"), nikdy podľa dátumu ani podľa toho, či je vopred
+      // priradený šofér. Ak dispečer ukončenie zruší (vráti zákazku do aktívneho
+      // stavu), zvoz sa má hneď stratiť rovnako ako vývoz — vrátenie stroja
+      // koncepčne nedáva zmysel riešiť na zákazke, ktorá nie je ukončená.
+      if (j.endDate && j.status === "completed") {
         const hp = (handoverProtocols || []).find((h) => h.jobId === j.id);
         const returnDone = hp?.returnDone;
-        const stillPending = j.status === "completed" ? !returnDone : (!returnDone && (j.endDate >= today || !j.returnDriverId));
-        if (stillPending) {
+        if (!returnDone) {
           list.push({
             id: j.id + "-zvoz",
             jobId: j.id,
@@ -6265,7 +6288,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             from: j.toLocation || "—",
             to: j.returnDepo || j.fromDepo || "—",
             customer: j.customer,
-            overdue: j.status !== "completed" && j.endDate < today,
+            overdue: j.endDate < today,
           });
         }
       }
@@ -6408,18 +6431,35 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             // Vývoz sa vždy týka fázy "prevzatie". Zvoz sa týka "vratenie" — ale tá
             // fáza vôbec neexistuje, kým nie je hotové prevzatie (vypĺňa sa v poradí).
             const missingPrevzatie = t.type === "zvoz" && !hp?.handoverDone;
-            const nextPhase = t.type === "zvoz" ? "vratenie" : !hp ? "prevzatie" : !hp.returnDone ? "vratenie" : null;
+            // Vývoz sleduje handoverDone (fáza prevzatia), zvoz sleduje returnDone
+            // (fáza vrátenia) — každá karta len svoju vlastnú fázu, nie tú druhú.
+            const nextPhase = t.type === "zvoz" ? "vratenie" : (!hp ? "prevzatie" : null);
             const isMyDriverAction = nextPhase && can(user, "handover_protocol_write") && !can(user, "handover_protocol_edit_locked");
             const eligible = !missingPrevzatie && (!isMyDriverAction || canFillHandoverPhase(fullJob, myEmployee, nextPhase));
-            const statusLabel = !hp ? "Bez protokolu" : !hp.returnDone ? "Čaká na vrátenie" : "Hotovo";
-            const statusColor = !hp ? "var(--text-dim)" : !hp.returnDone ? "var(--warn)" : "var(--ok)";
-            const actionLabel = missingPrevzatie
-              ? "📋 Čaká na prevzatie"
-              : !hp
-              ? "📋 Vypísať protokol"
-              : !hp.returnDone
-              ? "📋 Dokončiť vrátenie"
-              : "📋 Zobraziť";
+            const statusLabel =
+              t.type === "vyvoz"
+                ? (!hp ? "Bez protokolu" : "Hotovo")
+                : missingPrevzatie
+                ? "Čaká na prevzatie"
+                : !hp.returnDone
+                ? "Čaká na vrátenie"
+                : "Hotovo";
+            const statusColor =
+              t.type === "vyvoz"
+                ? (!hp ? "var(--text-dim)" : "var(--ok)")
+                : missingPrevzatie
+                ? "var(--text-dim)"
+                : !hp.returnDone
+                ? "var(--warn)"
+                : "var(--ok)";
+            const actionLabel =
+              t.type === "vyvoz"
+                ? (!hp ? "📋 Vypísať protokol" : "📋 Zobraziť")
+                : missingPrevzatie
+                ? "📋 Čaká na prevzatie"
+                : !hp.returnDone
+                ? "📋 Dokončiť vrátenie"
+                : "📋 Zobraziť";
             return (
               <div>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Protokol</div>
@@ -7390,19 +7430,19 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const portalLink = job?.publicToken
     ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
     : null;
-  useEffect(() => {
-    if (!showPortalQr || !portalLink) return;
-    let cancelled = false;
-    QRCode.toDataURL(portalLink, { width: 220, margin: 1 })
-      .then((url) => { if (!cancelled) setPortalQrDataUrl(url); })
-      .catch((e) => console.error("QR generovanie zlyhalo", e));
-    return () => { cancelled = true; };
-  }, [showPortalQr, portalLink]);
   // Zachytené len raz, pri otvorení — nech vieme neskôr rozoznať, či niekto iný
   // medzičasom (kým sme toto vypĺňali) záznam nezmenil, a nedôjde tak k jeho
   // tichému prepísaniu.
   const [baseRev] = useState(existing?._rev || 0);
   const [screen, setScreen] = useState(existing ? "view" : "edit");
+  useEffect(() => {
+    if (!portalLink || (!showPortalQr && screen !== "sent")) return;
+    let cancelled = false;
+    QRCode.toDataURL(portalLink, { width: 220, margin: 1 })
+      .then((url) => { if (!cancelled) setPortalQrDataUrl(url); })
+      .catch((e) => console.error("QR generovanie zlyhalo", e));
+    return () => { cancelled = true; };
+  }, [showPortalQr, portalLink, screen]);
   const startPhase = existing && !existing.returnDone ? "vratenie" : "prevzatie";
   const [phase, setPhase] = useState(startPhase);
   const [protocolNumber, setProtocolNumber] = useState(existing?.protocolNumber || "");
@@ -7449,6 +7489,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   function handleSave() {
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
+    const isFirstHandover = !isReturnPhase && !existing?.handoverDone;
     if (isReturnPhase) {
       patch.returnCustomerSignature = customerSig;
       patch.returnDriverSignature = driverSig;
@@ -7464,7 +7505,45 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.editedBy = user?.name || "";
       patch.editedAt = new Date().toISOString();
     }
-    onSave(patch, baseRev);
+    onSave(patch, baseRev, isFirstHandover);
+    if (isFirstHandover) setScreen("sent");
+  }
+
+  if (screen === "sent") {
+    return (
+      <Modal title="Protokol o odovzdaní" onClose={onClose}>
+        <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Protokol o prevzatí bol odoslaný</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
+            {machine?.code || "—"} · {job?.customer || "—"}
+          </div>
+        </div>
+        {portalLink && (
+          <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+            {portalQrDataUrl ? (
+              <img src={portalQrDataUrl} alt="QR kód pre zákazníka" style={{ width: 140, height: 140, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 140, height: 140, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+                Generujem…
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                Ukážte tento QR kód zákazníkovi — naskenovaním uvidí stav zákazky a tento protokol, bez prihlásenia.
+              </div>
+              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ width: "100%", fontSize: 12, marginBottom: 6 }} />
+              <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>
+                Kopírovať odkaz
+              </button>
+            </div>
+          </div>
+        )}
+        <button className="btn btn-accent" style={{ marginTop: 16, width: "100%" }} onClick={onClose}>
+          Zavrieť
+        </button>
+      </Modal>
+    );
   }
 
   if (screen === "view" && existing) {
@@ -7498,18 +7577,20 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
               className="btn btn-ghost"
               title={
                 job?.customerEmail
-                  ? "Otvorí tlačovú verziu na uloženie ako PDF a zároveň pripraví email zákazníkovi — PDF treba do mailu ručne priložiť, prehliadač to nevie spraviť automaticky"
+                  ? "Pripraví email zákazníkovi s odkazom na stav zákazky a protokol"
                   : "Zákazka nemá vyplnený email zákazníka — adresu doplníte priamo v otvorenom maile"
               }
               onClick={() => {
                 composeMail({
                   to: job?.customerEmail || "",
-                  subject: `Protokol o odovzdaní a prevzatí stroja — ${machine?.code || ""}`,
+                  subject: `Prevzatie stroja ${machine?.code || ""} — ${job?.customer || ""}`,
                   body:
-                    `Dobrý deň,\n\nv prílohe zasielame protokol o odovzdaní a prevzatí stroja ${machine?.code || ""} (protokol č. ${existing.protocolNumber || "—"}).\n\n` +
-                    `Príloha: uložte si otvorenú tlačovú verziu ako PDF (Ctrl/Cmd+P → Uložiť ako PDF) a priložte ju k tomuto mailu.\n\nS pozdravom,\nmateco Slovakia s.r.o.`,
+                    `Dobrý deň,\n\npotvrdzujeme prevzatie stroja ${machine?.code || ""}${existing.protocolNumber ? ` (protokol č. ${existing.protocolNumber})` : ""}.\n\n` +
+                    (portalLink
+                      ? `Stav zákazky aj protokol o odovzdaní si môžete kedykoľvek pozrieť tu:\n${portalLink}\n\n`
+                      : "") +
+                    `S pozdravom,\nmateco Slovakia s.r.o.`,
                 });
-                openPrintableHandoverProtocol(job, machine, existing);
               }}
             >
               ✉️ Poslať zákazníkovi
