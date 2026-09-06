@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
+import QRCode from "qrcode";
 
 /* ---------------------------------------------------------
    Utility
@@ -24,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.301";
+const APP_VERSION = "1.0.302";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2510,6 +2511,12 @@ function DispatcherApp() {
       alert("Tento protokol medzičasom zmenil niekto iný. Obnov stránku (F5) a skús to znova, nech sa nič neprepíše.");
       return null;
     }
+    // Nech je odkaz na zákaznícky portál pripravený hneď od prevzatia stroja
+    // (napr. na vytlačenie QR kódu šoférovi na mieste) — netreba naň čakať, kým
+    // ho niekto ručne vygeneruje z karty zákazky.
+    if (job && !job.publicToken) {
+      updateJob(jobId, { publicToken: uid() });
+    }
     let recordId;
     if (existing) {
       persistHandoverProtocols(handoverProtocols.map((h) => (h.id === existing.id ? { ...h, ...data, _rev: (h._rev || 0) + 1 } : h)));
@@ -4515,6 +4522,18 @@ function DispatcherApp() {
             const m = enrichedMachineById[jobDetail.machineId];
             if (m) setShowDamageReport(m);
             setJobDetail(null);
+          }}
+          onGeneratePortalLink={() => {
+            if (!jobDetail.publicToken) {
+              const token = uid();
+              updateJob(jobDetail.id, { publicToken: token });
+              setJobDetail((prev) => (prev ? { ...prev, publicToken: token } : prev));
+            }
+          }}
+          onTogglePortalRevoked={() => {
+            const next = !jobDetail.portalRevoked;
+            updateJob(jobDetail.id, { portalRevoked: next });
+            setJobDetail((prev) => (prev ? { ...prev, portalRevoked: next } : prev));
           }}
           handoverProtocol={handoverProtocols.find((h) => h.jobId === jobDetail.id)}
           onOpenHandoverProtocol={() => {
@@ -7366,6 +7385,19 @@ function HandoverProtocolViewPanel({ existing, job, myEmployee, user, onGoEditNe
 }
 
 function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete }) {
+  const [showPortalQr, setShowPortalQr] = useState(false);
+  const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
+  const portalLink = job?.publicToken
+    ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
+    : null;
+  useEffect(() => {
+    if (!showPortalQr || !portalLink) return;
+    let cancelled = false;
+    QRCode.toDataURL(portalLink, { width: 220, margin: 1 })
+      .then((url) => { if (!cancelled) setPortalQrDataUrl(url); })
+      .catch((e) => console.error("QR generovanie zlyhalo", e));
+    return () => { cancelled = true; };
+  }, [showPortalQr, portalLink]);
   // Zachytené len raz, pri otvorení — nech vieme neskôr rozoznať, či niekto iný
   // medzičasom (kým sme toto vypĺňali) záznam nezmenil, a nedôjde tak k jeho
   // tichému prepísaniu.
@@ -7456,6 +7488,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <button className="btn btn-ghost" onClick={() => openPrintableHandoverProtocol(job, machine, existing)}>
             🖨 Tlačová verzia (PDF)
           </button>
+          {portalLink && (
+            <button className="btn btn-ghost" onClick={() => setShowPortalQr((v) => !v)}>
+              📱 QR pre zákazníka
+            </button>
+          )}
           {can(user, "job_email") && (
             <button
               className="btn btn-ghost"
@@ -7484,6 +7521,26 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
             </button>
           )}
         </div>
+        {showPortalQr && portalLink && (
+          <div style={{ marginTop: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+            {portalQrDataUrl ? (
+              <img src={portalQrDataUrl} alt="QR kód pre zákazníka" style={{ width: 140, height: 140, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 140, height: 140, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+                Generujem…
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                Zákazník naskenovaním uvidí stav zákazky, dátumy prenájmu a tento protokol — bez prihlásenia.
+              </div>
+              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ width: "100%", fontSize: 12, marginBottom: 6 }} />
+              <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>
+                Kopírovať odkaz
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     );
   }
@@ -7638,7 +7695,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   );
 }
 
-function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue }) {
+function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked }) {
+  const [showPortalPanel, setShowPortalPanel] = useState(false);
+  const portalLink = job.publicToken
+    ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
+    : null;
   const st = effectiveStatus(job, todayISO());
   const checkerVyvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
   const checkerZvozId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.returnDepo || job.fromDepo, job.endDate || todayISO());
@@ -7736,7 +7797,33 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
             </button>
           )
         )}
+        {onGeneratePortalLink && can(user, "job_edit") && (
+          <button className="btn btn-ghost" onClick={() => { onGeneratePortalLink(); setShowPortalPanel((v) => !v); }}>
+            🔗 Odkaz pre zákazníka
+          </button>
+        )}
       </div>
+      {showPortalPanel && (
+        <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
+            Odkaz pre zákazníka (bez prihlásenia) — platný od začiatku prenájmu do 14 dní po vrátení stroja.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <input readOnly value={portalLink || ""} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12 }} />
+            <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink || "")}>Kopírovať</button>
+          </div>
+          {onTogglePortalRevoked && (
+            <button className="btn btn-ghost" style={{ color: job.portalRevoked ? "var(--ok)" : "var(--danger)" }} onClick={onTogglePortalRevoked}>
+              {job.portalRevoked ? "Obnoviť odkaz" : "Zneplatniť odkaz"}
+            </button>
+          )}
+          {job.portalRevoked && (
+            <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
+              Odkaz je momentálne ručne zneplatnený — zákazník cez neho nič neuvidí.
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }
