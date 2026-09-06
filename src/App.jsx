@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.299";
+const APP_VERSION = "1.0.300";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9105,7 +9105,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                           </div>
                         </div>
                       </a>
-                      {onAssignProtocolToDamage && (
+                      {onAssignProtocolToDamage && (can(user, "damage_status") || can(user, "external_status")) && (
                         <button
                           className="btn btn-ghost"
                           style={{ fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}
@@ -9459,7 +9459,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
             <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
               Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)}){p.status ? ` · stav: ${p.status}` : ""}
             </div>
-            {onUnassignProtocol && (
+            {onUnassignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)", flexShrink: 0 }} onClick={() => onUnassignProtocol(p)}>
                 Vyradiť zo zákazky
               </button>
@@ -9470,7 +9470,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           </a>
         </div>
       ))}
-      {!isSimple && onAssignProtocol && (
+      {!isSimple && onAssignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
         <div style={{ marginBottom: 14 }}>
           {showAssignProtocolPicker ? (
             <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
