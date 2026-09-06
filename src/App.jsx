@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.295";
+const APP_VERSION = "1.0.296";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4201,6 +4201,7 @@ function DispatcherApp() {
           }}
           onClose={() => setServiceEventDetail(null)}
           onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
+          onAssign={(dd) => { setServiceEventDetail(null); setDamageAssignTarget(dd); }}
           onComplete={(dd) => {
             setServiceEventDetail(null);
             const hasProtocol = protocolLogs.some((p) => p.damageId === dd.id);
@@ -9227,7 +9228,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -9317,25 +9318,6 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.opravaKomentar || "—"}</div>
         </>
       )}
-      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
-        <div key={p.id} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
-            Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
-          </div>
-          <a href={p.imageUrl} target="_blank" rel="noreferrer">
-            <img src={p.imageUrl} alt="Protokol" style={{ maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
-          </a>
-        </div>
-      ))}
-      {!isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status") && (
-        <button
-          className="btn btn-accent"
-          style={{ marginBottom: 14 }}
-          onClick={() => onComplete(d)}
-        >
-          {d.resolved ? "Upraviť stav zákazky →" : "Ukončiť zákazku →"}
-        </button>
-      )}
       {!isSimple && (
         <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "var(--panel-2)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -9370,6 +9352,28 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           )}
         </div>
       )}
+      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
+        <div key={p.id} style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
+            Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
+          </div>
+          <a href={p.imageUrl} target="_blank" rel="noreferrer">
+            <img src={p.imageUrl} alt="Protokol" style={{ maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
+          </a>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {!isSimple && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && (
+          <button className="btn btn-ghost" onClick={() => onAssign(d)}>
+            {techIds.length ? "Zmeniť pridelenie (napr. na iný deň) →" : "Prideliť technikovi →"}
+          </button>
+        )}
+        {!isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status") && (
+          <button className="btn btn-accent" onClick={() => onComplete(d)}>
+            {d.resolved ? "Upraviť stav zákazky →" : "Ukončiť zákazku →"}
+          </button>
+        )}
+      </div>
       {isExterna && can(user, "external_add") && (
         <button className="btn btn-accent" onClick={() => onEdit(d)}>
           Upraviť zákazku
