@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.296";
+const APP_VERSION = "1.0.297";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1032,6 +1032,51 @@ function ConfirmDeleteModal({ label, onClose, onConfirm }) {
   );
 }
 
+// Dvojkrokové potvrdenie pred vyradením protokolu zo zákazky — nech sa nedá omylom
+// odkliknúť (napr. keď checker pri umytí stroja omylom klikne na upozornenie na
+// otvorenú zákazku a protokol sa priradí nesprávne). Protokol sa nezmaže, len sa
+// odpojí od zákazky a vráti na kartu stroja medzi "Ostatné protokoly".
+function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
+  const [step, setStep] = useState(1);
+  return (
+    <Modal title={step === 1 ? "Vyradiť protokol zo zákazky?" : "Potvrďte vyradenie"} onClose={onClose}>
+      {step === 1 ? (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 6 }}>
+            Protokol — {protocol.technicianName || "—"} ({fmtDate(protocol.createdAt)}) — sa odpojí od tejto
+            zákazky a vráti sa medzi "Ostatné protokoly" na karte stroja. Samotný protokol sa nezmaže.
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18, whiteSpace: "pre-line" }}>
+            {protocol.workDescription || "— bez popisu vykonanej práce —"}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button className="btn" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => setStep(2)}>
+              Áno, vyradiť →
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--danger)", fontWeight: 600 }}>
+            Naozaj vyradiť tento protokol zo zákazky? Zákazka tým môže ostať bez priradeného protokolu.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button
+              className="btn"
+              style={{ background: "var(--danger)", color: "#fff" }}
+              onClick={() => { onConfirm(); onClose(); }}
+            >
+              Vyradiť zo zákazky
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /* ---------------------------------------------------------
    Archive with reason (machine sold, staff left, etc.)
 --------------------------------------------------------- */
@@ -1202,6 +1247,7 @@ function DispatcherApp() {
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
   const [resolveDamageTarget, setResolveDamageTarget] = useState(null); // poškodenie being resolved (date+comment form)
   const [noProtocolTarget, setNoProtocolTarget] = useState(null); // poškodenie/externá bez priradeného protokolu — najprv upozornenie pred ukončením
+  const [confirmUnassignProtocol, setConfirmUnassignProtocol] = useState(null); // { protocol, onConfirm } — dvojkrokové potvrdenie pred vyradením protokolu zo zákazky
   const [viewResolutionTarget, setViewResolutionTarget] = useState(null); // resolved damage/revision being viewed from machine card history
   const [returnToMachine, setReturnToMachine] = useState(null); // stroj, na ktorý sa vrátiť tlačidlom "Späť"
 
@@ -2390,8 +2436,37 @@ function DispatcherApp() {
   // Dodatočné priradenie "čisto" vypísaného protokolu (bez pôvodného priradenia) ku
   // konkrétnej zákazke — napr. keď ho technik vypísal mimo zákazky a dispečer to
   // dohľadá ručne z karty stroja, alebo tesne pred ukončením zákazky bez protokolu.
+  // Zámerne nekontroluje, či zákazka už protokol má — k jednej zákazke ich môže byť
+  // priradených aj viac (napr. diagnostika bez opravy + neskoršia výmena dielu).
   function assignProtocolToDamage(protocolId, damageId) {
     persistProtocolLogs(protocolLogs.map((p) => (p.id === protocolId ? { ...p, damageId } : p)));
+  }
+  // Opak vyššie — vyradí protokol zo zákazky (vráti ho medzi "Ostatné protokoly" na
+  // karte stroja), napr. keď ho niekto omylom priradil nesprávne.
+  function unassignProtocolFromDamage(protocolId) {
+    persistProtocolLogs(protocolLogs.map((p) => (p.id === protocolId ? { ...p, damageId: null } : p)));
+  }
+  // Spoločná kontrola pred ukončením poškodenia/externej zákazky — najprv over, či má
+  // vôbec priradený protokol, potom či podľa protokolu (tlačidlá "Stav zákazky" vo
+  // formulári) bol servis skutočne dokončený. Ak nie je ani jeden protokol označený
+  // "Dokončené", dispečera na to upozorní a nechá mu možnosť napriek tomu pokračovať.
+  function handleAttemptCompleteDamage(d) {
+    const damageProtocols = protocolLogs.filter((p) => p.damageId === d.id);
+    if (damageProtocols.length === 0) {
+      setNoProtocolTarget(d);
+      return;
+    }
+    const hasCompleted = damageProtocols.some((p) => p.status === "Dokončené");
+    if (!hasCompleted) {
+      const lastStatus = damageProtocols[damageProtocols.length - 1]?.status || "—";
+      setConfirmAction({
+        message: `Podľa vypísaného protokolu servis ešte nie je dokončený (posledný stav: ${lastStatus}). Naozaj chceš zákazku ukončiť?`,
+        confirmLabel: "Napriek tomu ukončiť →",
+        onConfirm: () => setResolveDamageTarget(d),
+      });
+      return;
+    }
+    setResolveDamageTarget(d);
   }
   const persistHandoverProtocols = useCallback(makeRecordPersist("handoverProtocols", setHandoverProtocols), []);
   const persistMachineModels = useCallback(makeRecordPersist("machineModels", setMachineModels), []);
@@ -3575,11 +3650,7 @@ function DispatcherApp() {
             }}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onResolve={setDamageResolved}
-            onComplete={(d) => {
-              const hasProtocol = protocolLogs.some((p) => p.damageId === d.id);
-              if (!hasProtocol) setNoProtocolTarget(d);
-              else setResolveDamageTarget(d);
-            }}
+            onComplete={handleAttemptCompleteDamage}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
@@ -3600,11 +3671,7 @@ function DispatcherApp() {
             }}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onResolve={setDamageResolved}
-            onComplete={(d) => {
-              const hasProtocol = protocolLogs.some((p) => p.damageId === d.id);
-              if (!hasProtocol) setNoProtocolTarget(d);
-              else setResolveDamageTarget(d);
-            }}
+            onComplete={handleAttemptCompleteDamage}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
@@ -4204,10 +4271,15 @@ function DispatcherApp() {
           onAssign={(dd) => { setServiceEventDetail(null); setDamageAssignTarget(dd); }}
           onComplete={(dd) => {
             setServiceEventDetail(null);
-            const hasProtocol = protocolLogs.some((p) => p.damageId === dd.id);
-            if (!hasProtocol) setNoProtocolTarget(dd);
-            else setResolveDamageTarget(dd);
+            handleAttemptCompleteDamage(dd);
           }}
+          onAssignProtocol={(protocolId) => assignProtocolToDamage(protocolId, serviceEventDetail.id)}
+          onUnassignProtocol={(p) =>
+            setConfirmUnassignProtocol({
+              protocol: p,
+              onConfirm: () => unassignProtocolFromDamage(p.id),
+            })
+          }
           onSaveNote={(id, note) => {
             setDamageNote(id, note);
             setServiceEventDetail((prev) => (prev ? { ...prev, poznamkaDispecera: note } : prev));
@@ -4283,6 +4355,13 @@ function DispatcherApp() {
             setResolveDamageTarget(noProtocolTarget);
             setNoProtocolTarget(null);
           }}
+        />
+      )}
+      {confirmUnassignProtocol && (
+        <UnassignProtocolModal
+          protocol={confirmUnassignProtocol.protocol}
+          onClose={() => setConfirmUnassignProtocol(null)}
+          onConfirm={confirmUnassignProtocol.onConfirm}
         />
       )}
       {viewResolutionTarget && (
@@ -9228,7 +9307,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -9247,7 +9326,11 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     : "Poškodenie stroja požičovne";
   const [noteDraft, setNoteDraft] = useState(d.poznamkaDispecera || "");
   const [noteEditing, setNoteEditing] = useState(false);
+  const [showAssignProtocolPicker, setShowAssignProtocolPicker] = useState(false);
   const canEditNote = !isSimple && onSaveNote && (can(user, "damage_status") || can(user, "external_status"));
+  const unassignedProtocolsForMachine = d.machineId
+    ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && !p.damageId && !p.assignmentId)
+    : [];
 
   return (
     <Modal
@@ -9354,14 +9437,59 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
       )}
       {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
         <div key={p.id} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
-            Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)}){p.status ? ` · stav: ${p.status}` : ""}
+            </div>
+            {onUnassignProtocol && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)", flexShrink: 0 }} onClick={() => onUnassignProtocol(p)}>
+                Vyradiť zo zákazky
+              </button>
+            )}
           </div>
           <a href={p.imageUrl} target="_blank" rel="noreferrer">
             <img src={p.imageUrl} alt="Protokol" style={{ maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
           </a>
         </div>
       ))}
+      {!isSimple && onAssignProtocol && (
+        <div style={{ marginBottom: 14 }}>
+          {showAssignProtocolPicker ? (
+            <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Nepriradené protokoly pre tento stroj</div>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setShowAssignProtocolPicker(false)}>✕</button>
+              </div>
+              {unassignedProtocolsForMachine.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {unassignedProtocolsForMachine.map((p) => (
+                    <button
+                      key={p.id}
+                      className="panel"
+                      style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
+                      onClick={() => { onAssignProtocol(p.id); setShowAssignProtocolPicker(false); }}
+                    >
+                      <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                      <div style={{ fontSize: 12, color: "var(--text)" }}>
+                        <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
+                        <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                          {p.workDescription || "— bez popisu vykonanej práce —"}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => setShowAssignProtocolPicker(true)}>
+              + Prideliť ďalší protokol{unassignedProtocolsForMachine.length ? ` (${unassignedProtocolsForMachine.length})` : ""}
+            </button>
+          )}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
         {!isSimple && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && (
           <button className="btn btn-ghost" onClick={() => onAssign(d)}>
