@@ -164,6 +164,28 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
+              <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Kontakty</div>
+              {data.salespersonName && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{data.salespersonName}</div>
+                  {data.salespersonPhone && (
+                    <div style={{ fontSize: 13 }}>
+                      <a href={`tel:${data.salespersonPhone}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonPhone}</a>
+                    </div>
+                  )}
+                  {data.salespersonEmail && (
+                    <div style={{ fontSize: 13 }}>
+                      <a href={`mailto:${data.salespersonEmail}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonEmail}</a>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: "#999", fontWeight: 600, marginBottom: 2 }}>Nahlasovanie porúch</div>
+              <div style={{ fontSize: 13, marginBottom: 14 }}>
+                <div><a href="tel:+421905979484" style={{ color: "#B3131D", textDecoration: "none" }}>+421 905 979 484</a></div>
+                <div><a href="mailto:servis@matecoslovakia.sk" style={{ color: "#B3131D", textDecoration: "none" }}>servis@matecoslovakia.sk</a></div>
+              </div>
+
               <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
               {!data.handoverDone ? (
                 <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>Zatiaľ nevypísaný.</div>
