@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.297";
+const APP_VERSION = "1.0.299";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -594,6 +594,15 @@ function currentJobFor(jobs, machineId, today) {
 function machineCurrentLocation(machine) {
   if (!machine) return "";
   return machine.currentJob?.toLocation || machine.depo || "";
+}
+// Depo, z ktorého bol stroj vypravený — na rozdiel od machineCurrentLocation (živé
+// MIESTO zákazky, napr. u zákazníka) toto vracia DEPO zodpovedné za stroj, aj keď je
+// práve na zákazke von. Používa sa na filtrovanie podľa depa (napr. v Poškodeniach
+// strojov požičovne), kde "miesto zákazky" nie je zo zoznamu diep a filter by inak
+// stroje na zákazke von ticho vyradil.
+function machineDispatchDepo(machine) {
+  if (!machine) return "";
+  return machine.currentJob?.fromDepo || machine.depo || "";
 }
 // To isté pre priradenia v Pláne servisu — uprednostní živú polohu stroja (ak ho
 // vieme dohľadať), inak sa vráti k pôvodne uloženej hodnote (napr. rýchle udalosti
@@ -4347,9 +4356,18 @@ function DispatcherApp() {
           protocolLogs={protocolLogs}
           onClose={() => setNoProtocolTarget(null)}
           onAssign={(protocolId) => {
+            const picked = protocolLogs.find((p) => p.id === protocolId);
             assignProtocolToDamage(protocolId, noProtocolTarget.id);
-            setResolveDamageTarget(noProtocolTarget);
             setNoProtocolTarget(null);
+            if (picked && picked.status !== "Dokončené") {
+              setConfirmAction({
+                message: `Podľa práve prideleného protokolu servis ešte nie je dokončený (stav: ${picked.status || "—"}). Naozaj chceš zákazku ukončiť?`,
+                confirmLabel: "Napriek tomu ukončiť →",
+                onConfirm: () => setResolveDamageTarget(noProtocolTarget),
+              });
+            } else {
+              setResolveDamageTarget(noProtocolTarget);
+            }
           }}
           onContinueWithoutProtocol={() => {
             setResolveDamageTarget(noProtocolTarget);
@@ -9802,7 +9820,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
     return activeFilters.has(status);
   });
   if (depoFilter) {
-    statusFiltered = statusFiltered.filter((d) => machineCurrentLocation(machineById[d.machineId]).toLowerCase() === depoFilter.toLowerCase());
+    statusFiltered = statusFiltered.filter((d) => machineDispatchDepo(machineById[d.machineId]).toLowerCase() === depoFilter.toLowerCase());
   }
   if (search.trim()) {
     const q = search.toLowerCase();
@@ -10791,7 +10809,7 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
 function ServisOverview({ damages, technicians, assignments, weeklyDuty, machineById, depoCheckers, checkerSubstitutions, today, onNavigate }) {
   const [depoFilter, setDepoFilter] = useState(null);
   const depoOptions = DEPO_OPTIONS;
-  const damageDepo = (d) => (d.type === "externa" ? d.assignedDepo : (machineCurrentLocation(machineById[d.machineId]) || d.location)) || "";
+  const damageDepo = (d) => (d.type === "externa" ? d.assignedDepo : (machineDispatchDepo(machineById[d.machineId]) || d.location)) || "";
   const damagesInDepo = depoFilter ? damages.filter((d) => damageDepo(d).toLowerCase() === depoFilter.toLowerCase()) : damages;
   const techniciansInDepo = depoFilter ? technicians.filter((t) => (t.depo || "").toLowerCase() === depoFilter.toLowerCase()) : technicians;
 
