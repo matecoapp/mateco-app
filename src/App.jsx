@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.294";
+const APP_VERSION = "1.0.295";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4201,6 +4201,12 @@ function DispatcherApp() {
           }}
           onClose={() => setServiceEventDetail(null)}
           onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
+          onComplete={(dd) => {
+            setServiceEventDetail(null);
+            const hasProtocol = protocolLogs.some((p) => p.damageId === dd.id);
+            if (!hasProtocol) setNoProtocolTarget(dd);
+            else setResolveDamageTarget(dd);
+          }}
           onSaveNote={(id, note) => {
             setDamageNote(id, note);
             setServiceEventDetail((prev) => (prev ? { ...prev, poznamkaDispecera: note } : prev));
@@ -9221,7 +9227,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -9321,6 +9327,15 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           </a>
         </div>
       ))}
+      {!isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status") && (
+        <button
+          className="btn btn-accent"
+          style={{ marginBottom: 14 }}
+          onClick={() => onComplete(d)}
+        >
+          {d.resolved ? "Upraviť stav zákazky →" : "Ukončiť zákazku →"}
+        </button>
+      )}
       {!isSimple && (
         <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "var(--panel-2)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
