@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.293";
+const APP_VERSION = "1.0.294";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1222,6 +1222,34 @@ function DispatcherApp() {
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
   const dayAfterTomorrow = addDaysISO(today, 2);
+
+  /* ---------------- derived (musí byť pred efektmi nižšie, ktoré tieto hodnoty
+     používajú vo svojom dependency array — ten sa vyhodnocuje okamžite, nie až
+     pri behu efektu, takže poradie deklarácií tu má význam) ---------------- */
+  const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
+  const technicianByIdTop = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+
+  const openDamagesByMachine = useMemo(() => {
+    const map = {};
+    damages.forEach((d) => {
+      if (d.resolved) return;
+      if (d.type === "revizia" || d.type === "uradnaSkuska") return;
+      if (!map[d.machineId]) map[d.machineId] = d;
+    });
+    return map;
+  }, [damages]);
+
+  const enrichedMachines = useMemo(() => {
+    return machines.map((m) => {
+      const cur = currentJobFor(jobs, m.id, today);
+      const nxt = nextJobFor(jobs, m.id, today);
+      const status = cur ? effectiveStatus(cur, today) : "free";
+      const openDamage = openDamagesByMachine[m.id] || null;
+      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage };
+    });
+  }, [machines, jobs, today, openDamagesByMachine]);
+
+  const enrichedMachineById = useMemo(() => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])), [enrichedMachines]);
 
   // Pripomienka pre obchodníka — ak rezervácia visí bez premeny na zákazku
   // (alebo zamietnutia) príliš dlho, systém upozorní na to obchodníka, nie len dispečera.
@@ -2787,30 +2815,9 @@ function DispatcherApp() {
 
   /* ---------------- derived ---------------- */
   const driverById = useMemo(() => Object.fromEntries(drivers.map((d) => [d.id, d])), [drivers]);
-  const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
-  const technicianByIdTop = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
-
-  const openDamagesByMachine = useMemo(() => {
-    const map = {};
-    damages.forEach((d) => {
-      if (d.resolved) return;
-      if (d.type === "revizia" || d.type === "uradnaSkuska") return;
-      if (!map[d.machineId]) map[d.machineId] = d;
-    });
-    return map;
-  }, [damages]);
-
-  const enrichedMachines = useMemo(() => {
-    return machines.map((m) => {
-      const cur = currentJobFor(jobs, m.id, today);
-      const nxt = nextJobFor(jobs, m.id, today);
-      const status = cur ? effectiveStatus(cur, today) : "free";
-      const openDamage = openDamagesByMachine[m.id] || null;
-      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage };
-    });
-  }, [machines, jobs, today, openDamagesByMachine]);
-
-  const enrichedMachineById = useMemo(() => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])), [enrichedMachines]);
+  // machineById, technicianByIdTop, openDamagesByMachine, enrichedMachines a enrichedMachineById
+  // sú presunuté vyššie (hneď za `today`), lebo efekty nižšie v komponente ich potrebujú
+  // vo svojom dependency array skôr, než by tu boli deklarované.
 
   // Univerzálne vyhľadávanie — jeden index naprieč strojmi, zákazkami, zákazníkmi a poškodeniami.
   const searchIndex = useMemo(() => {
