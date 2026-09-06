@@ -24,7 +24,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.300";
+const APP_VERSION = "1.0.301";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3899,6 +3899,7 @@ function DispatcherApp() {
         <AddMachineModal
           existing={showAddMachine.existing}
           machineModels={machineModels}
+          machines={machines}
           onClose={() => setShowAddMachine(null)}
           onSave={saveMachineModal}
           onCreateModel={(data) => {
@@ -6928,7 +6929,7 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
 /* ---------------------------------------------------------
    Add Machine Modal
 --------------------------------------------------------- */
-function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateModel }) {
+function AddMachineModal({ existing, machineModels, machines, onClose, onSave, onCreateModel }) {
   const NEW_MODEL_VALUE = "__new__";
   const [code, setCode] = useState(existing?.code || "");
   const [note, setNote] = useState(existing?.note || "");
@@ -6953,6 +6954,13 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
   const isStroj = objekt === "Požičovňový stroj";
   const isExterny = objekt === "Externý stroj";
   const canSave = code.trim() && depo.trim() && (isExterny || type.trim());
+  // Len upozornenie, nič neblokuje — sériové číslo sa zámerne dá aj tak uložiť
+  // (napr. legitímne znovupoužitie čísla po vyradenom stroji).
+  const duplicateMachine = code.trim()
+    ? (machines || []).find(
+        (m) => m.id !== existing?.id && (m.code || "").trim().toLowerCase() === code.trim().toLowerCase()
+      )
+    : null;
 
   function handleSave() {
     const patch = {
@@ -6997,6 +7005,14 @@ function AddMachineModal({ existing, machineModels, onClose, onSave, onCreateMod
   return (
     <Modal title={existing ? "Upraviť údaje stroja" : "Pridať stroj"} onClose={onClose}>
       <Field label="Sériové číslo *"><input value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} /></Field>
+      {duplicateMachine && (
+        <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", background: "var(--warn-bg, #fff8e1)", border: "1px solid #f0b429", borderRadius: 6, padding: "8px 10px", marginBottom: 12 }}>
+          ⚠ Stroj s týmto sériovým číslom už existuje: {duplicateMachine.code}
+          {duplicateMachine.type ? ` · ${duplicateMachine.type}` : ""}
+          {duplicateMachine.depo ? ` · ${duplicateMachine.depo}` : ""}
+          {duplicateMachine.archived ? " (archivovaný)" : ""}. Uložením vznikne duplicita.
+        </div>
+      )}
       <Field label="Poznámka (voliteľné, napr. VOLVO nie)"><input value={note} onChange={(e) => setNote(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Objekt *">
         <select value={objekt} onChange={(e) => setObjekt(e.target.value)} style={{ width: "100%" }}>
