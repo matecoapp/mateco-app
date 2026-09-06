@@ -150,7 +150,7 @@ export default function CustomerPortal({ token }) {
                   {data.machineType || "Stroj"}
                 </div>
                 {data.machineCode && <div style={{ fontSize: 13, color: "#6b6b6b" }}>Sériové číslo {data.machineCode}</div>}
-                {data.depo && <div style={{ fontSize: 13, color: "#6b6b6b" }}>Depo {data.depo}</div>}
+                {data.address && <div style={{ fontSize: 13, color: "#6b6b6b" }}>{data.address}</div>}
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>

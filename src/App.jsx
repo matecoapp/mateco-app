@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.306";
+const APP_VERSION = "1.0.307";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3154,31 +3154,68 @@ function DispatcherApp() {
     const record = { id: uid(), status: "planned", ...data };
     persistJobs([...jobs, record]);
     setShowAddJob(null);
+    // Nová zákazka môže mať šoféra priradeného rovno pri vzniku (vo formulári) —
+    // updateJob() tu ešte nebeží (záznam ešte neexistoval), preto rovnaká
+    // notifikácia zvlášť aj tu.
+    const machine = machineById[record.machineId];
+    if (record.driverId) {
+      const driver = driverById[record.driverId];
+      if (driver) {
+        pushNotification({
+          roles: [],
+          userName: driver.name,
+          title: "Pridelený vývoz stroja",
+          message: `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${record.customer || "—"} — ${fmtDate(record.startDate)}.`,
+          link: { module: "poziciovna", view: "jobs", jobId: record.id },
+        });
+      }
+    }
+    if (record.returnDriverId) {
+      const driver = driverById[record.returnDriverId];
+      if (driver) {
+        pushNotification({
+          roles: [],
+          userName: driver.name,
+          title: "Pridelený zvoz stroja",
+          message: `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${record.customer || "—"}${record.endDate ? ` — ${fmtDate(record.endDate)}` : ""}.`,
+          link: { module: "poziciovna", view: "jobs", jobId: record.id },
+        });
+      }
+    }
     return record;
   }
   function updateJob(id, patch) {
     const before = jobs.find((j) => j.id === id);
     persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)));
-    // Ak je na zákazke už priradený šofér (vývoz alebo zvoz) a zmenil sa dátum
-    // alebo depo, nech to nezistí až na mieste — pošli mu krátke upozornenie.
     if (before) {
+      const machine = machineById[before.machineId];
+      const notifyDriver = (driverId, title, message) => {
+        const driver = driverById[driverId];
+        if (!driver) return;
+        pushNotification({ roles: [], userName: driver.name, title, message, link: { module: "poziciovna", view: "jobs", jobId: id } });
+      };
+      // Nové pridelenie šoféra na vývoz/zvoz — funguje bez ohľadu na to, či sa
+      // zákazka mení cez formulár "Upraviť zákazku" alebo priamo z Preprav.
+      if (patch.driverId !== undefined && patch.driverId && patch.driverId !== before.driverId) {
+        notifyDriver(patch.driverId, "Pridelený vývoz stroja", `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${before.customer || "—"} — ${fmtDate(patch.startDate || before.startDate)}.`);
+      }
+      if (patch.returnDriverId !== undefined && patch.returnDriverId && patch.returnDriverId !== before.returnDriverId) {
+        const endDate = patch.endDate || before.endDate;
+        notifyDriver(patch.returnDriverId, "Pridelený zvoz stroja", `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${before.customer || "—"}${endDate ? ` — ${fmtDate(endDate)}` : ""}.`);
+      }
+      // Ak je na zákazke už priradený šofér (vývoz alebo zvoz) a zmenil sa dátum
+      // alebo depo, nech to nezistí až na mieste — pošli mu krátke upozornenie.
       const WATCHED_FIELDS = ["startDate", "endDate", "fromDepo", "returnDepo"];
       const changed = WATCHED_FIELDS.filter((f) => patch[f] !== undefined && patch[f] !== before[f]);
       if (changed.length > 0) {
-        const machine = machineById[before.machineId];
-        const notifyDriver = (driverId) => {
-          const driver = driverById[driverId];
-          if (!driver) return;
-          pushNotification({
-            roles: [],
-            userName: driver.name,
-            title: "Zmena na zákazke, kde vozíte stroj",
-            message: `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`,
-            link: { module: "poziciovna", view: "jobs", jobId: id },
-          });
-        };
-        if (before.driverId) notifyDriver(before.driverId);
-        if (before.returnDriverId && before.returnDriverId !== before.driverId) notifyDriver(before.returnDriverId);
+        // Nepribaľuj sem notifikáciu niekomu, koho sme práve teraz (v tomto istom
+        // patchi) prvýkrát priradili — ten už dostal svoju vlastnú správu vyššie.
+        if (before.driverId && before.driverId !== patch.driverId) {
+          notifyDriver(before.driverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+        }
+        if (before.returnDriverId && before.returnDriverId !== before.driverId && before.returnDriverId !== patch.returnDriverId) {
+          notifyDriver(before.returnDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+        }
       }
     }
   }
@@ -3234,42 +3271,11 @@ function DispatcherApp() {
   function uncompleteJob(jobId) {
     updateJob(jobId, { status: "planned" });
   }
-  // Pri prvom pridelení šoféra na vývoz/zvoz o tom šofér dostane notifikáciu —
-  // pri zmene dátumu/depa na už priradenej zákazke to rieši samostatná logika
-  // v updateJob() vyššie, toto je len pre samotné pridelenie.
   function assignDriver(jobId, driverId) {
-    const job = jobs.find((j) => j.id === jobId);
     updateJob(jobId, { driverId: driverId || null });
-    if (driverId && driverId !== job?.driverId) {
-      const driver = driverById[driverId];
-      const machine = job ? machineById[job.machineId] : null;
-      if (driver && job) {
-        pushNotification({
-          roles: [],
-          userName: driver.name,
-          title: "Pridelený vývoz stroja",
-          message: `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${job.customer || "—"} — ${fmtDate(job.startDate)}.`,
-          link: { module: "poziciovna", view: "jobs", jobId },
-        });
-      }
-    }
   }
   function assignReturnDriver(jobId, driverId) {
-    const job = jobs.find((j) => j.id === jobId);
     updateJob(jobId, { returnDriverId: driverId || null });
-    if (driverId && driverId !== job?.returnDriverId) {
-      const driver = driverById[driverId];
-      const machine = job ? machineById[job.machineId] : null;
-      if (driver && job) {
-        pushNotification({
-          roles: [],
-          userName: driver.name,
-          title: "Pridelený zvoz stroja",
-          message: `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${job.customer || "—"}${job.endDate ? ` — ${fmtDate(job.endDate)}` : ""}.`,
-          link: { module: "poziciovna", view: "jobs", jobId },
-        });
-      }
-    }
   }
   // Checker sa už nezadáva ručne — vypočíta sa automaticky podľa depa (nastavenie nižšie),
   // s prihliadnutím na prípadnú dočasnú náhradu (napr. dovolenka checkera).
@@ -6709,12 +6715,31 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
   const visible = employees.filter((e) => manageableRoles.includes(e.role) && (showArchived || !e.archived));
   const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
 
+  // Kontrola duplicitných zamestnancov — rovnaké meno (bez ohľadu na veľkosť
+  // písmen) medzi aktívnymi (nearchivovanými) záznamami. Nič sa neblokuje, len
+  // upozorní — napr. presne situácia, čo raz vznikla pri chybnej migrácii.
+  const nameCounts = {};
+  const nameDisplay = {};
+  employees.forEach((e) => {
+    if (e.archived) return;
+    const key = e.name.trim().toLowerCase();
+    if (!key) return;
+    nameCounts[key] = (nameCounts[key] || 0) + 1;
+    if (!nameDisplay[key]) nameDisplay[key] = e.name.trim();
+  });
+  const duplicateKeys = Object.keys(nameCounts).filter((k) => nameCounts[k] > 1);
+
   return (
     <div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         Zoznam zamestnancov — odtiaľto platforma ťahá zoznamy technikov, šoférov a obchodníkov na
         ostatných miestach. Vidíte a spravujete len role z vlastnej oblasti.
       </div>
+      {duplicateKeys.length > 0 && (
+        <div style={{ background: "#fff7e6", border: "1px solid #f0b429", color: "#7a5200", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+          ⚠ Duplicitný záznam — {duplicateKeys.map((k) => `"${nameDisplay[k]}" (${nameCounts[k]}×)`).join(", ")}. Skontrolujte nižšie (označené) a jeden zo záznamov zmažte.
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
@@ -6742,9 +6767,17 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
           )}
           {visible.map((e) => {
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
+            const isDuplicate = !e.archived && duplicateKeys.includes(e.name.trim().toLowerCase());
             return (
-              <tr key={e.id}>
-                <td style={{ fontWeight: 600 }}>{e.name}</td>
+              <tr key={e.id} style={isDuplicate ? { background: "#fff7e6" } : undefined}>
+                <td style={{ fontWeight: 600 }}>
+                  {e.name}
+                  {isDuplicate && (
+                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: "#7a5200" }} title="Rovnaké meno má aj iný aktívny záznam">
+                      ⚠ duplicita
+                    </span>
+                  )}
+                </td>
                 <td>{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}</td>
                 <td>{e.depo || "—"}</td>
                 <td>{e.phone || "—"}</td>
