@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.307";
+const APP_VERSION = "1.0.308";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1329,6 +1329,7 @@ function DispatcherApp() {
       const machine = machineById[r.machineId];
       if (r.obchodnik) {
         pushNotification({
+          kind: "reservation",
           roles: [],
           userName: r.obchodnik,
           title: "Nezáväzná rezervácia dlho nevybavená",
@@ -1353,6 +1354,7 @@ function DispatcherApp() {
       );
       if (expiringReservations.length > 0) {
         pushNotification({
+          kind: "daily_summary",
           roles: ["veduci_pozicovne"],
           title: "Denný súhrn",
           message: `Dnešný prehľad požičovne: ${expiringReservations.length} nezáväzných rezervácií so začiatkom v najbližších 3 dňoch, ešte nepremenených na zákazku.`,
@@ -1371,6 +1373,7 @@ function DispatcherApp() {
         if (overdueRevisionsCount > 0) parts.push(`${overdueRevisionsCount} revízií/úradných skúšok po termíne`);
         if (pendingPartsCount > 0) parts.push(`${pendingPartsCount} požiadaviek na diely čaká na schválenie`);
         pushNotification({
+          kind: "daily_summary",
           roles: ["veduci_servisu"],
           title: "Denný súhrn",
           message: `Dnešný prehľad servisu: ${parts.join(", ")}.`,
@@ -1608,7 +1611,7 @@ function DispatcherApp() {
     if (!session?.user) return null;
     const profile = profiles.find((p) => p.id === session.user.id);
     if (!profile) return null;
-    return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email };
+    return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {} };
   }, [session, profiles]);
 
   // Admin si vie platformu dočasne "prezrieť" ako iná rola (napr. aby nevidel mazacie
@@ -1962,8 +1965,8 @@ function DispatcherApp() {
   // roles: pole rolí, ktoré majú upozornenie vidieť (napr. ["dispecer_pozicovne","veduci_pozicovne"])
   // userName: ak je zadané, upozornenie navyše dostane presne ten používateľ, ktorého profilové
   //           meno sa s týmto textom zhoduje (napr. konkrétny obchodník) — bez ohľadu na jeho rolu
-  function pushNotification({ roles, userName, title, message, link }) {
-    const newNotif = { id: uid(), createdAt: new Date().toISOString(), roles: roles || [], userName: userName || null, title, message, link: link || null, readBy: [] };
+  function pushNotification({ roles, userName, title, message, link, kind }) {
+    const newNotif = { id: uid(), createdAt: new Date().toISOString(), roles: roles || [], userName: userName || null, title, message, link: link || null, kind: kind || null, readBy: [] };
     setNotifications((prev) => {
       const combined = [newNotif, ...prev];
       const next = combined.slice(0, 300); // poistka nech to nerastie donekonečna
@@ -2022,7 +2025,11 @@ function DispatcherApp() {
   const myNotifications = useMemo(() => {
     if (!currentUser) return [];
     if (isAdminUser(currentUser)) return notifications; // admin vidí všetko, na testovanie aj dohľad
-    return notifications.filter((n) => (n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name));
+    return notifications.filter(
+      (n) =>
+        ((n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name)) &&
+        (!n.kind || currentUser.notificationPrefs?.[n.kind] !== false)
+    );
   }, [notifications, currentUser]);
   const unreadNotificationCount = useMemo(
     () => myNotifications.filter((n) => !n.readBy.includes(currentUser?.id)).length,
@@ -2306,6 +2313,7 @@ function DispatcherApp() {
     persistReservations([...reservations, record]);
     const machine = machineById[data.machineId];
     pushNotification({
+      kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: autoApproved ? "Nezáväzná rezervácia" : "Žiadosť o nezáväznú rezerváciu",
       message: autoApproved
@@ -2321,6 +2329,7 @@ function DispatcherApp() {
     if (r) {
       const machine = machineById[r.machineId];
       pushNotification({
+        kind: "reservation",
         roles: [],
         userName: r.obchodnik || null,
         title: "Rezervácia schválená",
@@ -2397,6 +2406,7 @@ function DispatcherApp() {
       }
       if (matchedOpenTicket) {
         pushNotification({
+          kind: "damage",
           roles: ["dispecer_servisu", "veduci_servisu"],
           title: "Protokol vypísaný mimo zákazky — pravdepodobne ju rieši",
           message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"} bez toho, aby ho vypísal zo zákazky ${matchedOpenTicket.code} (pridelená tomu istému technikovi). Skontrolujte a v prípade potreby zákazku zavrite.`,
@@ -2404,6 +2414,7 @@ function DispatcherApp() {
         });
       } else {
         pushNotification({
+          kind: "damage",
           roles: ["dispecer_servisu", "veduci_servisu"],
           title: "Protokol odoslaný — servis pravdepodobne ukončený",
           message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"}. Skontrolujte a v prípade potreby ukončite zákazku.`,
@@ -2512,6 +2523,7 @@ function DispatcherApp() {
     }
     if (data.returnDone) {
       pushNotification({
+        kind: "handover_protocol",
         roles: ["dispecer_pozicovne", "veduci_pozicovne"],
         title: "Protokol o vrátení vypísaný",
         message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"}). Dostupné na karte zákazky.`,
@@ -2519,6 +2531,7 @@ function DispatcherApp() {
       });
     } else if (data.handoverDone) {
       pushNotification({
+        kind: "handover_protocol",
         roles: ["dispecer_pozicovne", "veduci_pozicovne"],
         title: "Protokol o prevzatí vypísaný",
         message: `${currentUser?.name || "Šofér"} dokončil protokol o prevzatí pre stroj ${machine?.code || "—"} (${job?.customer || "—"}).`,
@@ -2535,6 +2548,7 @@ function DispatcherApp() {
   function requestReservationConvert(r) {
     const machine = machineById[r.machineId];
     pushNotification({
+      kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Podnet: premeniť rezerváciu na zákazku",
       message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) na skutočnú zákazku.`,
@@ -2544,6 +2558,7 @@ function DispatcherApp() {
   function requestReservationDelete(r) {
     const machine = machineById[r.machineId];
     pushNotification({
+      kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Podnet: zmazať rezerváciu",
       message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) — obchod pravdepodobne nevyšiel.`,
@@ -2573,6 +2588,7 @@ function DispatcherApp() {
     };
     persistDamages([...damages, record]);
     pushNotification({
+      kind: "damage",
       roles: ["dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
       userName: record.obchodnik || null,
       title: "Nové poškodenie",
@@ -2603,6 +2619,7 @@ function DispatcherApp() {
     };
     persistDamages([...damages, record]);
     pushNotification({
+      kind: "damage",
       roles: ["dispecer_servisu", "veduci_servisu"],
       title: "Nová externá zákazka",
       message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
@@ -2648,6 +2665,7 @@ function DispatcherApp() {
     if (d && stav === "opravene" && d.type !== "externa") {
       const where = d.customer || d.location || "—";
       pushNotification({
+        kind: "damage",
         roles: ["dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"],
         userName: d.obchodnik || null,
         title: "Stroj opravený",
@@ -2657,6 +2675,7 @@ function DispatcherApp() {
     } else if (d && stav === "opravene" && d.type === "externa") {
       const where = d.customer || d.location || "—";
       pushNotification({
+        kind: "damage",
         roles: ["dispecer_servisu", "veduci_servisu"],
         title: "Externá servisná zákazka ukončená",
         message: `Externá servisná zákazka ${d.code}${where !== "—" ? " — " + where : ""} bola ukončená dňa ${fmtDate(opravaDatum)}.`,
@@ -2744,6 +2763,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (!tech) return;
       pushNotification({
+        kind: "assignment",
         roles: [],
         userName: tech.name,
         title: "Nové pridelenie",
@@ -2752,6 +2772,49 @@ function DispatcherApp() {
       });
     });
     setDamageAssignTarget(null);
+  }
+  // Hromadné priradenie technika na viacero poškodení naraz — rovnaká logika ako
+  // assignDamage(), len pre viac záznamov jedným zápisom (nie N samostatných).
+  function assignDamagesBulk(damageIds, technicianIds, date) {
+    const ids = Array.isArray(technicianIds) ? technicianIds : [technicianIds];
+    const targets = damages.filter((d) => damageIds.includes(d.id));
+    if (targets.length === 0 || ids.length === 0) return;
+    const withoutOld = assignments.filter((a) => !damageIds.includes(a.damageId));
+    const newAssignmentsAll = [];
+    const patchByDamageId = {};
+    targets.forEach((damage) => {
+      const notePrefix = damage.type === "externa" ? "Externá zákazka" : damage.type === "revizia" ? "Revízia" : damage.type === "uradnaSkuska" ? "Úradná skúška" : "Poškodenie";
+      const newAssignments = ids.map((technicianId) => ({
+        id: uid(),
+        technicianId,
+        date,
+        machineId: damage.machineId || null,
+        stroj: damage.machineId ? "" : damage.code || "",
+        umiestnenie: damage.location || "",
+        firma: damage.customer || "",
+        poznamka: `${notePrefix}: ${damage.popis}`,
+        damageId: damage.id,
+      }));
+      newAssignmentsAll.push(...newAssignments);
+      patchByDamageId[damage.id] = { technicianId: ids[0] || null, technicianIds: ids, assignedDate: date, assignmentId: newAssignments[0]?.id || null };
+    });
+    persistAssignments([...withoutOld, ...newAssignmentsAll]);
+    persistDamages(damages.map((d) => (patchByDamageId[d.id] ? { ...d, ...patchByDamageId[d.id] } : d)));
+    // Jedna súhrnná notifikácia na technika (nie jedna za každé poškodenie zvlášť).
+    ids.forEach((technicianId) => {
+      const tech = technicians.find((t) => t.id === technicianId);
+      if (!tech) return;
+      const codes = targets.map((d) => d.code).filter(Boolean).join(", ");
+      const damageView = targets[0].type === "externa" ? "externe" : "poskodenia";
+      pushNotification({
+        kind: "assignment",
+        roles: [],
+        userName: tech.name,
+        title: "Nové hromadné pridelenie",
+        message: `Boli vám pridelené ${targets.length} položky na ${fmtDate(date)}: ${codes}.`,
+        link: { module: "servis", view: damageView },
+      });
+    });
   }
   const QUICK_KIND_LABELS = { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" };
   function addQuickAssignment(technicianId, date, kind) {
@@ -2763,6 +2826,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (tech) {
         pushNotification({
+          kind: "assignment",
           roles: [],
           userName: tech.name,
           title: "Pridelená pohotovosť",
@@ -2801,6 +2865,7 @@ function DispatcherApp() {
     const tech = technicians.find((t) => t.id === technicianId);
     if (tech) {
       pushNotification({
+        kind: "assignment",
         roles: [],
         userName: tech.name,
         title: "Dovolenka zapísaná",
@@ -2812,6 +2877,7 @@ function DispatcherApp() {
       const substitute = technicians.find((t) => t.id === substituteId);
       if (substitute) {
         pushNotification({
+          kind: "assignment",
           roles: [],
           userName: substitute.name,
           title: "Ste náhradný checker",
@@ -2833,6 +2899,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (tech) {
         pushNotification({
+          kind: "assignment",
           roles: [],
           userName: tech.name,
           title: "Pridelená pohotovosť",
@@ -2940,8 +3007,23 @@ function DispatcherApp() {
         searchText: `${d.code || ""} ${d.popis || ""} ${m?.code || ""} ${d.customer || ""}`.toLowerCase(),
       });
     });
+    (protocolLogs || []).forEach((p) => {
+      const m = p.machineId ? machineById[p.machineId] : null;
+      const linkedDamage = p.damageId ? damages.find((d) => d.id === p.damageId) : null;
+      items.push({
+        type: "protocol",
+        id: p.id,
+        kindLabel: "Servisný protokol",
+        title: `Protokol — ${p.technicianName || "—"}`,
+        subtitle: m ? `${m.code} · ${fmtDate(p.createdAt)}` : fmtDate(p.createdAt),
+        searchText: `${p.workDescription || ""} ${p.technicianName || ""} ${m?.code || ""} ${m?.type || ""}`.toLowerCase(),
+        damageId: p.damageId || null,
+        damageType: linkedDamage?.type || null,
+        machineId: p.machineId || null,
+      });
+    });
     return items;
-  }, [enrichedMachines, jobs, damages, customers, machineById]);
+  }, [enrichedMachines, jobs, damages, customers, machineById, protocolLogs]);
 
   function handleSearchNavigate(result) {
     if (result.type === "machine") {
@@ -2955,6 +3037,18 @@ function DispatcherApp() {
     } else if (result.type === "damage") {
       setModule("servis");
       setView("poskodenia");
+    } else if (result.type === "protocol") {
+      if (result.damageId) {
+        setModule("servis");
+        setView(result.damageType === "externa" ? "externe" : "poskodenia");
+        setHighlightDamageId(result.damageId);
+        setHighlightLocation({ module: "servis", view: result.damageType === "externa" ? "externe" : "poskodenia" });
+      } else if (result.machineId) {
+        setModule("poziciovna");
+        setView("dashboard");
+        const m = enrichedMachineById[result.machineId];
+        if (m) setMachineCard(m);
+      }
     }
   }
 
@@ -3162,6 +3256,7 @@ function DispatcherApp() {
       const driver = driverById[record.driverId];
       if (driver) {
         pushNotification({
+          kind: "assignment",
           roles: [],
           userName: driver.name,
           title: "Pridelený vývoz stroja",
@@ -3174,6 +3269,7 @@ function DispatcherApp() {
       const driver = driverById[record.returnDriverId];
       if (driver) {
         pushNotification({
+          kind: "assignment",
           roles: [],
           userName: driver.name,
           title: "Pridelený zvoz stroja",
@@ -3192,7 +3288,7 @@ function DispatcherApp() {
       const notifyDriver = (driverId, title, message) => {
         const driver = driverById[driverId];
         if (!driver) return;
-        pushNotification({ roles: [], userName: driver.name, title, message, link: { module: "poziciovna", view: "jobs", jobId: id } });
+        pushNotification({ roles: [], userName: driver.name, title, message, kind: "assignment", link: { module: "poziciovna", view: "jobs", jobId: id } });
       };
       // Nové pridelenie šoféra na vývoz/zvoz — funguje bez ohľadu na to, či sa
       // zákazka mení cez formulár "Upraviť zákazku" alebo priamo z Preprav.
@@ -3225,6 +3321,7 @@ function DispatcherApp() {
     persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: note, transportIssueAt: new Date().toISOString(), transportIssueBy: currentUser?.name || null } : j)));
     const machine = machineById[job.machineId];
     pushNotification({
+      kind: "assignment",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Problém s prepravou",
       message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}`,
@@ -3248,6 +3345,7 @@ function DispatcherApp() {
         const r = showAddJob.prefillReservation;
         const machine = machineById[r.machineId];
         pushNotification({
+          kind: "reservation",
           roles: [],
           userName: r.obchodnik || null,
           title: "Rezervácia premenená na zákazku",
@@ -3398,6 +3496,7 @@ function DispatcherApp() {
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
         currentUser={currentUser}
+        onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
         effectiveUser={effectiveUser}
         viewAsRole={viewAsRole}
         onSetViewAsRole={setViewAsRole}
@@ -3692,6 +3791,8 @@ function DispatcherApp() {
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
             onOpenSummary={() => setDamagesSummaryOpen(true)}
+            onBulkAssign={assignDamagesBulk}
+            today={today}
           />
         )}
 
@@ -3744,6 +3845,7 @@ function DispatcherApp() {
               ]);
               if (!canManage) {
                 pushNotification({
+                  kind: "spare_parts",
                   roles: ["veduci_servisu", "dispecer_servisu"],
                   title: "Nová požiadavka na náhradné diely",
                   message:
@@ -3759,6 +3861,7 @@ function DispatcherApp() {
               persistSpareParts(spareParts.map((x) => (x.id === id ? { ...x, stav: SPAREPART_STAV.CAKA_NA_OBJEDNANIE } : x)));
               if (p?.requestedBy) {
                 pushNotification({
+                  kind: "spare_parts",
                   userName: p.requestedBy,
                   title: "Požiadavka na diel schválená",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo schválené, čaká na objednanie.`,
@@ -3771,6 +3874,7 @@ function DispatcherApp() {
               persistSpareParts(spareParts.map((x) => (x.id === id ? { ...x, stav: SPAREPART_STAV.ZAMIETNUTE, rejectionReason: reason } : x)));
               if (p?.requestedBy) {
                 pushNotification({
+                  kind: "spare_parts",
                   userName: p.requestedBy,
                   title: "Požiadavka na diel zamietnutá",
                   message: `${p.cisloDielu} — ${p.popisDielu}: ${reason}`,
@@ -3785,6 +3889,7 @@ function DispatcherApp() {
               persistSpareParts(spareParts.map((x) => (x.id === id ? { ...x, ...patch } : x)));
               if (p?.requestedBy && patch.stav === SPAREPART_STAV.OBJEDNANE && p.stav !== SPAREPART_STAV.OBJEDNANE) {
                 pushNotification({
+                  kind: "spare_parts",
                   userName: p.requestedBy,
                   title: "Náhradný diel objednaný",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo objednané.`,
@@ -3895,6 +4000,9 @@ function DispatcherApp() {
             onDeleteSubstitution={deleteCheckerSubstitution}
             onSave={persistDepoCheckers}
           />
+        )}
+        {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
+          <AuditLogView profiles={profiles} />
         )}
       </div>
 
@@ -4043,6 +4151,7 @@ function DispatcherApp() {
             const r = rejectReservationTarget;
             const machine = machineById[r.machineId];
             pushNotification({
+              kind: "reservation",
               roles: [],
               userName: r.obchodnik || null,
               title: "Rezervácia zmazaná",
@@ -4709,8 +4818,9 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+function UserMenu({ currentUser, onSaveNotificationPrefs, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
   const [open, setOpen] = useState(false);
+  const [showPrefs, setShowPrefs] = useState(false);
   const isAdmin = isAdminUser(currentUser);
 
   const itemStyle = {
@@ -4769,6 +4879,15 @@ function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggle
               }}
             >
               ✉️ Zmeniť spôsob mailu
+            </button>
+
+            <button
+              style={itemStyle}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onClick={() => { setShowPrefs(true); setOpen(false); }}
+            >
+              🔔 Notifikácie
             </button>
 
             {isAdmin && (
@@ -4833,7 +4952,51 @@ function UserMenu({ currentUser, viewAsRole, onSetViewAsRole, darkMode, onToggle
           </div>
         </>
       )}
+      {showPrefs && (
+        <NotificationPrefsModal
+          currentUser={currentUser}
+          onSave={onSaveNotificationPrefs}
+          onClose={() => setShowPrefs(false)}
+        />
+      )}
     </div>
+  );
+}
+
+const NOTIFICATION_KIND_LABELS = {
+  reservation: "Nezáväzné rezervácie",
+  daily_summary: "Denný súhrn",
+  damage: "Poškodenia a servisné zákazky",
+  handover_protocol: "Protokoly o odovzdaní/vrátení",
+  assignment: "Priradenia (technik, šofér, pohotovosť, dovolenka)",
+  spare_parts: "Náhradné diely",
+};
+// Nastavenie, ktoré kategórie notifikácií si používateľ chce nechať zobrazovať —
+// vypnuté sa neobjavia ani v zvončeku, ani sa nepočítajú medzi neprečítané.
+// Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté), aby staršie
+// notifikácie bez "kind" neboli nikdy stratené kvôli tomuto nastaveniu.
+function NotificationPrefsModal({ currentUser, onSave, onClose }) {
+  const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
+  function toggle(kind) {
+    setPrefs((prev) => ({ ...prev, [kind]: prev[kind] === false ? true : false }));
+  }
+  return (
+    <Modal title="Nastavenie notifikácií" onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+        Vypnuté kategórie sa vám nebudú zobrazovať v zvončeku ani počítať medzi neprečítané.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+        {Object.entries(NOTIFICATION_KIND_LABELS).map(([kind, label]) => (
+          <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, gap: 10 }}>
+            <span>{label}</span>
+            <input type="checkbox" checked={prefs[kind] !== false} onChange={() => toggle(kind)} />
+          </label>
+        ))}
+      </div>
+      <button className="btn btn-accent" onClick={() => { onSave(prefs); onClose(); }}>
+        Uložiť
+      </button>
+    </Modal>
   );
 }
 
@@ -5338,7 +5501,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, searchIndex, onSearchNavigate }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -5362,6 +5525,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "modely", label: "Modely strojov" },
     { id: "zamestnanci", label: "Zamestnanci" },
     { id: "checkeri", label: "Checkeri podľa depa" },
+    ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }] : []),
   ];
   const rawTabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
   // Externý šofér nemá vidieť nič okrem svojich preprav — ani ostatné záložky v
@@ -5412,6 +5576,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             {currentUser && (
               <UserMenu
                 currentUser={currentUser}
+                onSaveNotificationPrefs={onSaveNotificationPrefs}
                 viewAsRole={viewAsRole}
                 onSetViewAsRole={onSetViewAsRole}
                 darkMode={darkMode}
@@ -9860,7 +10025,7 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
   );
 }
 
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel, highlighted }) {
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
   const cardRef = useRef(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -9890,8 +10055,17 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelect(d.id)}
+              style={{ marginTop: 4, flexShrink: 0, cursor: "pointer" }}
+            />
+          )}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
             <span
               className="mono"
               style={{
@@ -9962,6 +10136,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             </div>
           )}
         </div>
+          </div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
           {!isDone && can(user, perm.assign) && (
             <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onAssign(d)}>
@@ -10009,11 +10184,23 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
   const depoOptions = DEPO_OPTIONS;
+  const canBulkAssign = onBulkAssign && can(user, "damage_assign");
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Ak platforma navigovala sem kvôli konkrétnemu záznamu (klik na notifikáciu),
   // uisti sa, že ho aktuálne filtre neschovávajú (napr. medzitým vyriešený).
@@ -10128,6 +10315,17 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
           </button>
         ))}
       </div>
+      {canBulkAssign && selectedIds.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {selectedIds.size}</span>
+          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
+            Prideliť vybraným →
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
+            Zrušiť výber
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.length === 0 && (
           <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
@@ -10137,9 +10335,38 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} />
+          <ServiceEventCard
+            key={d.id}
+            d={d}
+            technicianById={technicianById}
+            user={user}
+            onAssign={onAssign}
+            onDelete={onDelete}
+            onOpenDetail={onOpenDetail}
+            onResolve={onResolve}
+            onComplete={onComplete}
+            onProtocol={onProtocol}
+            locationLabel={locationLabel(d)}
+            highlighted={d.id === highlightDamageId}
+            selectable={canBulkAssign}
+            selected={selectedIds.has(d.id)}
+            onToggleSelect={toggleSelect}
+          />
         ))}
       </div>
+      {showBulkAssign && (
+        <BulkAssignModal
+          damages={sorted.filter((d) => selectedIds.has(d.id))}
+          technicians={technicians}
+          today={today}
+          onClose={() => setShowBulkAssign(false)}
+          onSave={(technicianIds, date) => {
+            onBulkAssign([...selectedIds], technicianIds, date);
+            setSelectedIds(new Set());
+            setShowBulkAssign(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -10752,6 +10979,42 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
           </button>
         )}
       </div>
+    </Modal>
+  );
+}
+
+// Hromadné priradenie technika na viacero vybraných poškodení naraz — jeden
+// výber technika(ov) a dátumu sa aplikuje na všetky. Zámerne oddelené od
+// DamageAssignModal vyššie (tá je naviazaná na jedno konkrétne poškodenie —
+// predvyplnenie, vylúčenie seba z workloadu), tu ide o čistý hromadný zápis.
+function BulkAssignModal({ damages, technicians, today, onClose, onSave }) {
+  const [technicianIds, setTechnicianIds] = useState([]);
+  const [date, setDate] = useState(today);
+  const canSave = technicianIds.length > 0 && date;
+
+  function toggle(id) {
+    setTechnicianIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  return (
+    <Modal title={`Hromadne prideliť · ${damages.length} položky`} onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+        {damages.map((d) => d.code).filter(Boolean).join(", ")}
+      </div>
+      <Field label="Technici * (dá sa vybrať viac)">
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
+          {technicians.filter((t) => !t.archived).map((t) => (
+            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+              <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} />
+              {t.skratka ? `${t.skratka} — ${t.name}` : t.name}
+            </label>
+          ))}
+        </div>
+      </Field>
+      <Field label="Deň *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
+        Prideliť na {damages.length} {damages.length === 1 ? "položku" : damages.length < 5 ? "položky" : "položiek"}
+      </button>
     </Modal>
   );
 }
@@ -13777,6 +14040,121 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
             ))}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// Audit log (13.3) — kto čo zmenil/zmazal. Dáta sa neťahajú pri štarte appky ako
+// ostatné (bolo by to zbytočné pre 99% otvorení appky) — načíta sa až pri otvorení
+// tejto záložky. Prístup majú len administrátori (rovnako obmedzené aj v RLS).
+const AUDIT_TABLE_LABELS = {
+  damages: "Poškodenia / servis",
+  jobs: "Zákazky (požičovňa)",
+  machines: "Stroje",
+  spareParts: "Náhradné diely",
+};
+const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
+function AuditLogView({ profiles }) {
+  const [entries, setEntries] = useState(null); // null = ešte sa načítava
+  const [tableFilter, setTableFilter] = useState("");
+  const [error, setError] = useState(null);
+  const profileById = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("audit_log")
+      .select("*")
+      .order("changed_at", { ascending: false })
+      .limit(300)
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (err) {
+          console.error("Načítanie audit logu zlyhalo", err);
+          setError(err.message || "Neznáma chyba");
+          return;
+        }
+        setEntries(data || []);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = tableFilter ? (entries || []).filter((e) => e.table_name === tableFilter) : entries || [];
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        Posledných {entries?.length || 0} zmien v citlivých tabuľkách (poškodenia/servis, zákazky, stroje, náhradné
+        diely) — zaznamenáva sa priamo v databáze, nedá sa obísť z appky.
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        <button
+          className="btn"
+          onClick={() => setTableFilter("")}
+          style={{ padding: "5px 10px", fontSize: 11, background: !tableFilter ? "var(--accent)" : "transparent", color: !tableFilter ? "#fff" : "var(--text-dim)", border: "1px solid " + (!tableFilter ? "var(--accent)" : "var(--border)") }}
+        >
+          Všetko
+        </button>
+        {Object.entries(AUDIT_TABLE_LABELS).map(([t, label]) => (
+          <button
+            key={t}
+            className="btn"
+            onClick={() => setTableFilter(tableFilter === t ? "" : t)}
+            style={{ padding: "5px 10px", fontSize: 11, background: tableFilter === t ? "var(--accent)" : "transparent", color: tableFilter === t ? "#fff" : "var(--text-dim)", border: "1px solid " + (tableFilter === t ? "var(--accent)" : "var(--border)") }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <div className="panel" style={{ padding: 20, color: "var(--danger)" }}>
+          Nepodarilo sa načítať audit log: {error}
+        </div>
+      )}
+      {!error && entries === null && (
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>Načítavam…</div>
+      )}
+      {!error && entries !== null && (
+        <div className="panel">
+          <table>
+            <thead>
+              <tr>
+                <th>Kedy</th>
+                <th>Kto</th>
+                <th>Tabuľka</th>
+                <th>Akcia</th>
+                <th>Záznam</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Žiadne zmeny v tomto filtri.</td></tr>
+              )}
+              {filtered.map((e) => {
+                const who = e.changed_by ? profileById[e.changed_by]?.name || "— neznámy účet —" : "— systém —";
+                const data = e.action === "delete" ? e.old_data : e.new_data;
+                const label = data?.code || data?.name || data?.customer || e.record_id;
+                return (
+                  <tr key={e.id}>
+                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
+                    <td>{who}</td>
+                    <td>{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
+                    <td>
+                      <span className="badge" style={{
+                        background: e.action === "delete" ? "var(--danger-bg)" : e.action === "insert" ? "var(--ok-bg, var(--info-bg))" : "var(--info-bg)",
+                        color: e.action === "delete" ? "var(--danger)" : e.action === "insert" ? "var(--ok)" : "var(--info)",
+                      }}>
+                        {AUDIT_ACTION_LABELS[e.action] || e.action}
+                      </span>
+                    </td>
+                    <td className="mono" style={{ fontSize: 12 }}>{label}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
