@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.310";
+const APP_VERSION = "1.0.311";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2410,7 +2410,7 @@ function DispatcherApp() {
       }
       if (matchedOpenTicket) {
         pushNotification({
-          kind: "damage",
+          kind: "damage_new",
           roles: ["dispecer_servisu", "veduci_servisu"],
           title: "Protokol vypísaný mimo zákazky — pravdepodobne ju rieši",
           message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"} bez toho, aby ho vypísal zo zákazky ${matchedOpenTicket.code} (pridelená tomu istému technikovi). Skontrolujte a v prípade potreby zákazku zavrite.`,
@@ -2418,7 +2418,7 @@ function DispatcherApp() {
         });
       } else {
         pushNotification({
-          kind: "damage",
+          kind: "damage_resolved",
           roles: ["dispecer_servisu", "veduci_servisu"],
           title: "Protokol odoslaný — servis pravdepodobne ukončený",
           message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"}. Skontrolujte a v prípade potreby ukončite zákazku.`,
@@ -2592,7 +2592,7 @@ function DispatcherApp() {
     };
     persistDamages([...damages, record]);
     pushNotification({
-      kind: "damage",
+      kind: "damage_new",
       roles: ["dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
       userName: record.obchodnik || null,
       title: "Nové poškodenie",
@@ -2623,7 +2623,7 @@ function DispatcherApp() {
     };
     persistDamages([...damages, record]);
     pushNotification({
-      kind: "damage",
+      kind: "damage_new",
       roles: ["dispecer_servisu", "veduci_servisu"],
       title: "Nová externá zákazka",
       message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
@@ -2677,7 +2677,7 @@ function DispatcherApp() {
     if (d && stav === "opravene" && d.type !== "externa") {
       const where = d.customer || d.location || "—";
       pushNotification({
-        kind: "damage",
+        kind: "damage_resolved",
         roles: ["dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"],
         userName: d.obchodnik || null,
         title: "Stroj opravený",
@@ -2687,7 +2687,7 @@ function DispatcherApp() {
     } else if (d && stav === "opravene" && d.type === "externa") {
       const where = d.customer || d.location || "—";
       pushNotification({
-        kind: "damage",
+        kind: "damage_resolved",
         roles: ["dispecer_servisu", "veduci_servisu"],
         title: "Externá servisná zákazka ukončená",
         message: `Externá servisná zákazka ${d.code}${where !== "—" ? " — " + where : ""} bola ukončená dňa ${fmtDate(opravaDatum)}.`,
@@ -2775,7 +2775,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (!tech) return;
       pushNotification({
-        kind: "assignment",
+        kind: "assignment_service",
         roles: [],
         userName: tech.name,
         title: "Nové pridelenie",
@@ -2819,7 +2819,7 @@ function DispatcherApp() {
       const codes = targets.map((d) => d.code).filter(Boolean).join(", ");
       const damageView = targets[0].type === "externa" ? "externe" : "poskodenia";
       pushNotification({
-        kind: "assignment",
+        kind: "assignment_service",
         roles: [],
         userName: tech.name,
         title: "Nové hromadné pridelenie",
@@ -2838,7 +2838,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (tech) {
         pushNotification({
-          kind: "assignment",
+          kind: "assignment_service",
           roles: [],
           userName: tech.name,
           title: "Pridelená pohotovosť",
@@ -2877,7 +2877,7 @@ function DispatcherApp() {
     const tech = technicians.find((t) => t.id === technicianId);
     if (tech) {
       pushNotification({
-        kind: "assignment",
+        kind: "assignment_service",
         roles: [],
         userName: tech.name,
         title: "Dovolenka zapísaná",
@@ -2889,7 +2889,7 @@ function DispatcherApp() {
       const substitute = technicians.find((t) => t.id === substituteId);
       if (substitute) {
         pushNotification({
-          kind: "assignment",
+          kind: "assignment_service",
           roles: [],
           userName: substitute.name,
           title: "Ste náhradný checker",
@@ -2911,7 +2911,7 @@ function DispatcherApp() {
       const tech = technicians.find((t) => t.id === technicianId);
       if (tech) {
         pushNotification({
-          kind: "assignment",
+          kind: "assignment_service",
           roles: [],
           userName: tech.name,
           title: "Pridelená pohotovosť",
@@ -3268,7 +3268,7 @@ function DispatcherApp() {
       const driver = driverById[record.driverId];
       if (driver) {
         pushNotification({
-          kind: "assignment",
+          kind: "assignment_transport",
           roles: [],
           userName: driver.name,
           title: "Pridelený vývoz stroja",
@@ -3281,7 +3281,7 @@ function DispatcherApp() {
       const driver = driverById[record.returnDriverId];
       if (driver) {
         pushNotification({
-          kind: "assignment",
+          kind: "assignment_transport",
           roles: [],
           userName: driver.name,
           title: "Pridelený zvoz stroja",
@@ -3300,7 +3300,7 @@ function DispatcherApp() {
       const notifyDriver = (driverId, title, message) => {
         const driver = driverById[driverId];
         if (!driver) return;
-        pushNotification({ roles: [], userName: driver.name, title, message, kind: "assignment", link: { module: "poziciovna", view: "jobs", jobId: id } });
+        pushNotification({ roles: [], userName: driver.name, title, message, kind: "assignment_transport", link: { module: "poziciovna", view: "jobs", jobId: id } });
       };
       // Nové pridelenie šoféra na vývoz/zvoz — funguje bez ohľadu na to, či sa
       // zákazka mení cez formulár "Upraviť zákazku" alebo priamo z Preprav.
@@ -3333,7 +3333,7 @@ function DispatcherApp() {
     persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: note, transportIssueAt: new Date().toISOString(), transportIssueBy: currentUser?.name || null } : j)));
     const machine = machineById[job.machineId];
     pushNotification({
-      kind: "assignment",
+      kind: "assignment_transport",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Problém s prepravou",
       message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}`,
@@ -5003,10 +5003,29 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, viewAsRole, onSetViewA
 const NOTIFICATION_KIND_LABELS = {
   reservation: "Nezáväzné rezervácie",
   daily_summary: "Denný súhrn",
-  damage: "Poškodenia a servisné zákazky",
+  damage_new: "Nové poškodenia a servisné zákazky",
+  damage_resolved: "Dokončený servis / opravený stroj",
   handover_protocol: "Protokoly o odovzdaní/vrátení",
-  assignment: "Priradenia (technik, šofér, pohotovosť, dovolenka)",
+  assignment_service: "Priradenia — technik (servis, pohotovosť, dovolenka)",
+  assignment_transport: "Priradenia — šofér (vývoz/zvoz, prepravy)",
   spare_parts: "Náhradné diely",
+};
+// Ktoré kategórie sú pre danú rolu vôbec relevantné — v nastaveniach sa
+// ponúkajú len tieto, nech si niekto nemusí prezerať prepínače pre veci, čo sa
+// ho netýkajú (napr. šofér a náhradné diely). Admin vidí všetko — má tak či tak
+// notifikácie bez filtrovania, toto je len pre prípad, že by si niekedy chcel
+// vyskúšať, ako to vidí iná rola.
+const ROLE_NOTIFICATION_KINDS = {
+  admin: Object.keys(NOTIFICATION_KIND_LABELS),
+  veduci_pozicovne: ["reservation", "daily_summary", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport"],
+  dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport"],
+  obchodnik: ["reservation", "damage_new", "damage_resolved"],
+  veduci_servisu: ["daily_summary", "damage_new", "damage_resolved", "assignment_service", "spare_parts"],
+  dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts"],
+  technik: ["assignment_service", "spare_parts"],
+  sofer: ["assignment_transport"],
+  externy_sofer: ["assignment_transport"],
+  nezaradeny: [],
 };
 // Nastavenie, ktoré kategórie notifikácií si používateľ chce nechať zobrazovať —
 // vypnuté sa neobjavia ani v zvončeku, ani sa nepočítajú medzi neprečítané.
@@ -5017,19 +5036,27 @@ function NotificationPrefsModal({ currentUser, onSave, onClose }) {
   function toggle(kind) {
     setPrefs((prev) => ({ ...prev, [kind]: prev[kind] === false ? true : false }));
   }
+  const relevantKinds = ROLE_NOTIFICATION_KINDS[currentUser.role] || Object.keys(NOTIFICATION_KIND_LABELS);
   return (
     <Modal title="Nastavenie notifikácií" onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-        Vypnuté kategórie sa vám nebudú zobrazovať v zvončeku ani počítať medzi neprečítané.
+        Vypnuté kategórie sa vám nebudú zobrazovať v zvončeku ani počítať medzi neprečítané. Zobrazujú sa len
+        kategórie, ktoré sa týkajú vašej role.
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
-        {Object.entries(NOTIFICATION_KIND_LABELS).map(([kind, label]) => (
-          <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, gap: 10 }}>
-            <span>{label}</span>
-            <input type="checkbox" checked={prefs[kind] !== false} onChange={() => toggle(kind)} />
-          </label>
-        ))}
-      </div>
+      {relevantKinds.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
+          Pre vašu rolu momentálne platforma neposiela žiadne notifikácie na nastavenie.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+          {relevantKinds.map((kind) => (
+            <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, gap: 10 }}>
+              <span>{NOTIFICATION_KIND_LABELS[kind]}</span>
+              <input type="checkbox" checked={prefs[kind] !== false} onChange={() => toggle(kind)} />
+            </label>
+          ))}
+        </div>
+      )}
       <button className="btn btn-accent" onClick={() => { onSave(prefs); onClose(); }}>
         Uložiť
       </button>
