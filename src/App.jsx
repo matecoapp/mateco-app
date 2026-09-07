@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.308";
+const APP_VERSION = "1.0.310";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -152,11 +152,13 @@ const PERM = {
   damage_status: ["veduci_servisu", "dispecer_servisu"],
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
   damage_clear_all: [], // len administrátor
+  damage_import_csv: ["veduci_servisu", "dispecer_servisu"],
   external_add: ["veduci_servisu", "dispecer_servisu"],
   external_assign: ["veduci_servisu", "dispecer_servisu"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
   external_delete: ["veduci_servisu", "dispecer_servisu"],
   external_clear_all: [], // len administrátor
+  external_import_csv: ["veduci_servisu", "dispecer_servisu"],
 
   // Servis — revízie / úradné skúšky
   revision_assign: ["veduci_servisu", "dispecer_servisu"],
@@ -1191,6 +1193,8 @@ function DispatcherApp() {
   const [showImport, setShowImport] = useState(false);
   const [showImportJobs, setShowImportJobs] = useState(false);
   const [showImportCustomers, setShowImportCustomers] = useState(false);
+  const [showImportDamages, setShowImportDamages] = useState(false);
+  const [showImportExterna, setShowImportExterna] = useState(false);
   const [machineCard, setMachineCard] = useState(null); // machine object for detail modal
   const [confirmDelete, setConfirmDelete] = useState(null); // { label, onConfirm }
   const [archiveTarget, setArchiveTarget] = useState(null); // { label, reasons, onConfirm }
@@ -2646,6 +2650,14 @@ function DispatcherApp() {
     );
     setEditExternalTarget(null);
   }
+  // Hromadný import poškodení/externých zákaziek z Excelu (napr. migrácia
+  // aktívnych rozpracovaných vecí zo starej evidencie). Spoločné pre oba typy —
+  // len pridá záznamy do damages, prípadne aj priradenia do assignments, ak
+  // import obsahoval aj priradeného technika.
+  function importDamageRecordsBulk(records, newAssignments) {
+    if (records.length > 0) persistDamages([...damages, ...records]);
+    if (newAssignments && newAssignments.length > 0) persistAssignments([...assignments, ...newAssignments]);
+  }
   function deleteDamage(id) {
     persistDamages(damages.filter((d) => d.id !== id));
   }
@@ -3793,6 +3805,7 @@ function DispatcherApp() {
             onOpenSummary={() => setDamagesSummaryOpen(true)}
             onBulkAssign={assignDamagesBulk}
             today={today}
+            onImport={() => setShowImportDamages(true)}
           />
         )}
 
@@ -3814,6 +3827,7 @@ function DispatcherApp() {
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
             onOpenSummary={() => setExternaSummaryOpen(true)}
+            onImport={() => setShowImportExterna(true)}
           />
         )}
 
@@ -4254,6 +4268,29 @@ function DispatcherApp() {
           onImport={(rows) => {
             importCustomers(rows);
             setShowImportCustomers(false);
+          }}
+        />
+      )}
+      {showImportDamages && (
+        <DamageImportModal
+          machines={enrichedMachines}
+          technicians={technicians}
+          today={today}
+          onClose={() => setShowImportDamages(false)}
+          onImport={(records, newAssignments) => {
+            importDamageRecordsBulk(records, newAssignments);
+            setShowImportDamages(false);
+          }}
+        />
+      )}
+      {showImportExterna && (
+        <ExternalServiceImportModal
+          technicians={technicians}
+          today={today}
+          onClose={() => setShowImportExterna(false)}
+          onImport={(records, newAssignments) => {
+            importDamageRecordsBulk(records, newAssignments);
+            setShowImportExterna(false);
           }}
         />
       )}
@@ -8559,6 +8596,316 @@ function ImportCustomersModal({ onClose, onImport }) {
   );
 }
 
+// Spoločné pole na výber jedného stĺpca z nahraného CSV/Excelu pre mapovanie.
+function ImportFieldSelect({ label, required, value, onChange, headers }) {
+  return (
+    <Field label={`Stĺpec = ${label}${required ? " *" : ""}`}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%" }}>
+        <option value="">—</option>
+        {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+/* ---------------------------------------------------------
+   Import poškodení strojov požičovne z CSV/Excelu — napr. migrácia aktívnych
+   rozpracovaných hlásení zo staršej evidencie. Sériové číslo sa musí spárovať
+   s existujúcim strojom (zákazník/miesto sa inak preberie z jeho aktuálnej
+   zákazky, dá sa to ale v súbore aj prebiť).
+--------------------------------------------------------- */
+function DamageImportModal({ machines, technicians, today, onClose, onImport }) {
+  const [rows, setRows] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [fileName, setFileName] = useState("");
+  const [mapSerial, setMapSerial] = useState("");
+  const [mapPopis, setMapPopis] = useState("");
+  const [mapDate, setMapDate] = useState("");
+  const [mapCustomer, setMapCustomer] = useState("");
+  const [mapLocation, setMapLocation] = useState("");
+  const [mapTechnician, setMapTechnician] = useState("");
+  const [mapAssignedDate, setMapAssignedDate] = useState("");
+  const [mapNote, setMapNote] = useState("");
+  const [notFoundMachines, setNotFoundMachines] = useState([]);
+  const [notFoundTechs, setNotFoundTechs] = useState([]);
+
+  const machineByCode = useMemo(
+    () => Object.fromEntries(machines.map((m) => [(m.code || "").trim().toLowerCase(), m])),
+    [machines]
+  );
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        setHeaders(res.meta.fields || []);
+        setRows(res.data);
+        setNotFoundMachines([]);
+        setNotFoundTechs([]);
+      },
+    });
+  }
+
+  const canImport = mapSerial && mapPopis && rows.length > 0;
+
+  function doImport() {
+    const missingMachines = [];
+    const missingTechs = [];
+    const records = [];
+    const newAssignments = [];
+    rows.forEach((r) => {
+      const serialRaw = (r[mapSerial] || "").toString().trim();
+      if (!serialRaw) return;
+      const machine = machineByCode[serialRaw.toLowerCase()];
+      if (!machine) {
+        missingMachines.push(serialRaw);
+        return;
+      }
+      const popis = (r[mapPopis] || "").toString().trim();
+      if (!popis) return;
+      const dateReported = (mapDate ? (r[mapDate] || "").toString().trim() : "") || today;
+      const customerOverride = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
+      const locationOverride = mapLocation ? (r[mapLocation] || "").toString().trim() : "";
+      const techName = mapTechnician ? (r[mapTechnician] || "").toString().trim() : "";
+      const tech = techName ? technicians.find((t) => (t.name || "").trim().toLowerCase() === techName.toLowerCase()) : null;
+      if (techName && !tech) missingTechs.push(techName);
+      const assignedDateRaw = mapAssignedDate ? (r[mapAssignedDate] || "").toString().trim() : "";
+      const assignedDate = tech ? assignedDateRaw || today : null;
+      const note = mapNote ? (r[mapNote] || "").toString().trim() : "";
+
+      const damageId = uid();
+      let assignmentId = null;
+      const location = locationOverride || machine.currentJob?.toLocation || machine.depo || "";
+      const customer = customerOverride || machine.currentJob?.customer || "";
+      if (tech) {
+        assignmentId = uid();
+        newAssignments.push({
+          id: assignmentId,
+          technicianId: tech.id,
+          date: assignedDate,
+          machineId: machine.id,
+          stroj: "",
+          umiestnenie: location,
+          firma: customer,
+          poznamka: `Poškodenie: ${popis}`,
+          damageId,
+        });
+      }
+      records.push({
+        id: damageId,
+        type: "poskodenie",
+        machineId: machine.id,
+        code: machine.code,
+        model: [machine.manufacturer, machine.type].filter(Boolean).join(" ") || machine.type || "—",
+        serialNumber: machine.code || "",
+        currentJobLabel: machine.currentJob ? (machine.currentJob.customer || machine.currentJob.toLocation || "") : "",
+        customerContact: machine.currentJob?.customerEmail || "",
+        location,
+        customer,
+        obchodnik: machine.currentJob?.obchodnik || "",
+        dateReported,
+        popis,
+        resolved: false,
+        technicianId: tech?.id || null,
+        technicianIds: tech ? [tech.id] : [],
+        assignedDate,
+        assignmentId,
+        poznamkaDispecera: note,
+      });
+    });
+    setNotFoundMachines(missingMachines);
+    setNotFoundTechs(missingTechs);
+    if (records.length > 0) onImport(records, newAssignments);
+  }
+
+  return (
+    <Modal title="Import poškodení strojov požičovne z Excelu" onClose={onClose} wide>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+        Určené na presun aktívnych (nevyriešených) hlásení zo staršej evidencie. Sériové číslo sa musí presne
+        spárovať s existujúcim strojom v platforme — inak sa riadok preskočí. Zákazník/miesto sa prevezmú
+        z aktuálnej zákazky stroja, pokiaľ ich v súbore nevyplníte vlastné.
+      </div>
+      <Field label="Vyberte CSV/Excel súbor (uložený ako .csv)">
+        <input type="file" accept=".csv" onChange={handleFile} />
+      </Field>
+      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
+      {headers.length > 0 && (
+        <>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <ImportFieldSelect label="Sériové číslo stroja" required value={mapSerial} onChange={setMapSerial} headers={headers} />
+            <ImportFieldSelect label="Popis poruchy / zákazky" required value={mapPopis} onChange={setMapPopis} headers={headers} />
+            <ImportFieldSelect label="Dátum nahlásenia" value={mapDate} onChange={setMapDate} headers={headers} />
+            <ImportFieldSelect label="Zákazník (ak iný než aktuálna zákazka)" value={mapCustomer} onChange={setMapCustomer} headers={headers} />
+            <ImportFieldSelect label="Miesto (ak iné než aktuálna zákazka)" value={mapLocation} onChange={setMapLocation} headers={headers} />
+            <ImportFieldSelect label="Pridelený technik (meno)" value={mapTechnician} onChange={setMapTechnician} headers={headers} />
+            <ImportFieldSelect label="Dátum pridelenia" value={mapAssignedDate} onChange={setMapAssignedDate} headers={headers} />
+            <ImportFieldSelect label="Poznámka dispečera" value={mapNote} onChange={setMapNote} headers={headers} />
+          </div>
+          {notFoundMachines.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>
+              Nenájdené sériové čísla ({notFoundMachines.length}): {notFoundMachines.slice(0, 20).join(", ")}
+              {notFoundMachines.length > 20 ? "…" : ""}
+            </div>
+          )}
+          {notFoundTechs.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", marginBottom: 10 }}>
+              Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
+              {notFoundTechs.length > 20 ? "…" : ""}
+            </div>
+          )}
+          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+            Importovať poškodenia
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/* ---------------------------------------------------------
+   Import externých servisných zákaziek z CSV/Excelu — rovnaký princíp ako
+   import poškodení, len bez naviazania na konkrétny stroj vo flotile (externé
+   stroje sa evidujú len textovo — sériové číslo/model sú voľné polia).
+--------------------------------------------------------- */
+function ExternalServiceImportModal({ technicians, today, onClose, onImport }) {
+  const [rows, setRows] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [fileName, setFileName] = useState("");
+  const [mapCustomer, setMapCustomer] = useState("");
+  const [mapPopis, setMapPopis] = useState("");
+  const [mapSerial, setMapSerial] = useState("");
+  const [mapModel, setMapModel] = useState("");
+  const [mapLocation, setMapLocation] = useState("");
+  const [mapDepo, setMapDepo] = useState("");
+  const [mapDate, setMapDate] = useState("");
+  const [mapTechnician, setMapTechnician] = useState("");
+  const [mapAssignedDate, setMapAssignedDate] = useState("");
+  const [mapNote, setMapNote] = useState("");
+  const [notFoundTechs, setNotFoundTechs] = useState([]);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        setHeaders(res.meta.fields || []);
+        setRows(res.data);
+        setNotFoundTechs([]);
+      },
+    });
+  }
+
+  const canImport = mapCustomer && mapPopis && rows.length > 0;
+
+  function doImport() {
+    const missingTechs = [];
+    const records = [];
+    const newAssignments = [];
+    rows.forEach((r) => {
+      const customer = (r[mapCustomer] || "").toString().trim();
+      const popis = (r[mapPopis] || "").toString().trim();
+      if (!customer || !popis) return;
+      const serialNumber = mapSerial ? (r[mapSerial] || "").toString().trim() : "";
+      const model = mapModel ? (r[mapModel] || "").toString().trim() : "";
+      const location = mapLocation ? (r[mapLocation] || "").toString().trim() : "";
+      const depoRaw = mapDepo ? (r[mapDepo] || "").toString().trim() : "";
+      const assignedDepo = DEPO_OPTIONS.find((d) => d.toLowerCase() === depoRaw.toLowerCase()) || "";
+      const dateReported = (mapDate ? (r[mapDate] || "").toString().trim() : "") || today;
+      const techName = mapTechnician ? (r[mapTechnician] || "").toString().trim() : "";
+      const tech = techName ? technicians.find((t) => (t.name || "").trim().toLowerCase() === techName.toLowerCase()) : null;
+      if (techName && !tech) missingTechs.push(techName);
+      const assignedDateRaw = mapAssignedDate ? (r[mapAssignedDate] || "").toString().trim() : "";
+      const assignedDate = tech ? assignedDateRaw || today : null;
+      const note = mapNote ? (r[mapNote] || "").toString().trim() : "";
+
+      const damageId = uid();
+      let assignmentId = null;
+      if (tech) {
+        assignmentId = uid();
+        newAssignments.push({
+          id: assignmentId,
+          technicianId: tech.id,
+          date: assignedDate,
+          machineId: null,
+          stroj: serialNumber || "Externá zákazka",
+          umiestnenie: location,
+          firma: customer,
+          poznamka: `Externá zákazka: ${popis}`,
+          damageId,
+        });
+      }
+      records.push({
+        id: damageId,
+        type: "externa",
+        machineId: null,
+        code: serialNumber || `EXT · ${customer}`,
+        model,
+        serialNumber,
+        currentJobLabel: "",
+        customerContact: "",
+        location,
+        customer,
+        assignedDepo,
+        dateReported,
+        popis,
+        resolved: false,
+        technicianId: tech?.id || null,
+        technicianIds: tech ? [tech.id] : [],
+        assignedDate,
+        assignmentId,
+        poznamkaDispecera: note,
+      });
+    });
+    setNotFoundTechs(missingTechs);
+    if (records.length > 0) onImport(records, newAssignments);
+  }
+
+  return (
+    <Modal title="Import externých servisných zákaziek z Excelu" onClose={onClose} wide>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+        Určené na presun aktívnych (nevyriešených) externých zákaziek zo staršej evidencie. Stĺpec "Depo" sa
+        priradí len ak presne sedí s jedným z diep (Bratislava, Nitra, Zvolen, Žilina, Prešov, Externé) —
+        inak zostane zákazka nepriradená a depo sa doplní ručne.
+      </div>
+      <Field label="Vyberte CSV/Excel súbor (uložený ako .csv)">
+        <input type="file" accept=".csv" onChange={handleFile} />
+      </Field>
+      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
+      {headers.length > 0 && (
+        <>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <ImportFieldSelect label="Zákazník" required value={mapCustomer} onChange={setMapCustomer} headers={headers} />
+            <ImportFieldSelect label="Popis poruchy / zákazky" required value={mapPopis} onChange={setMapPopis} headers={headers} />
+            <ImportFieldSelect label="Sériové číslo (zákazníkovho stroja)" value={mapSerial} onChange={setMapSerial} headers={headers} />
+            <ImportFieldSelect label="Model" value={mapModel} onChange={setMapModel} headers={headers} />
+            <ImportFieldSelect label="Miesto" value={mapLocation} onChange={setMapLocation} headers={headers} />
+            <ImportFieldSelect label="Pridelené depo" value={mapDepo} onChange={setMapDepo} headers={headers} />
+            <ImportFieldSelect label="Dátum nahlásenia" value={mapDate} onChange={setMapDate} headers={headers} />
+            <ImportFieldSelect label="Pridelený technik (meno)" value={mapTechnician} onChange={setMapTechnician} headers={headers} />
+            <ImportFieldSelect label="Dátum pridelenia" value={mapAssignedDate} onChange={setMapAssignedDate} headers={headers} />
+            <ImportFieldSelect label="Poznámka dispečera" value={mapNote} onChange={setMapNote} headers={headers} />
+          </div>
+          {notFoundTechs.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", marginBottom: 10 }}>
+              Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
+              {notFoundTechs.length > 20 ? "…" : ""}
+            </div>
+          )}
+          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+            Importovať externé zákazky
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
 
 /* ---------------------------------------------------------
    Import Modal (CSV)
@@ -8738,6 +9085,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
   const [mapToLocation, setMapToLocation] = useState("");
   const [mapStart, setMapStart] = useState("");
   const [mapEnd, setMapEnd] = useState("");
+  const [mapObchodnik, setMapObchodnik] = useState("");
   const [fileName, setFileName] = useState("");
   const [notFound, setNotFound] = useState([]);
 
@@ -8782,6 +9130,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
         customerEmail: "",
         startDate,
         endDate: mapEnd ? (r[mapEnd] || "").toString().trim() || startDate : startDate,
+        obchodnik: mapObchodnik ? (r[mapObchodnik] || "").toString().trim() : "",
         status: "planned",
         notes: "Importované z kontrolného súboru",
       });
@@ -8829,6 +9178,12 @@ function ImportJobsModal({ machines, onClose, onImport }) {
             </Field>
             <Field label="Stĺpec = Dátum do">
               <select value={mapEnd} onChange={(e) => setMapEnd(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = Obchodník">
+              <select value={mapObchodnik} onChange={(e) => setMapObchodnik(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
@@ -10184,7 +10539,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -10271,6 +10626,11 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
         {onOpenSummary && (
           <button className="btn btn-ghost" onClick={onOpenSummary}>
             📋 Zhrnutie
+          </button>
+        )}
+        {onImport && can(user, "damage_import_csv") && (
+          <button className="btn btn-ghost" onClick={onImport}>
+            Import CSV
           </button>
         )}
         {can(user, "damage_clear_all") && (
@@ -10374,7 +10734,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary }) {
+function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -10456,6 +10816,11 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           {can(user, "external_clear_all") && (
             <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
               Vymazať všetky externé zákazky
+            </button>
+          )}
+          {onImport && can(user, "external_import_csv") && (
+            <button className="btn btn-ghost" onClick={onImport}>
+              Import CSV
             </button>
           )}
           {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
