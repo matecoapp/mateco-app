@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.320";
+const APP_VERSION = "1.0.321";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -968,7 +968,7 @@ function StatusBadge({ status }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
-function Modal({ title, onClose, children, wide, xwide, headerExtra }) {
+function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra }) {
   return (
     <div
       className="modal-overlay"
@@ -995,6 +995,11 @@ function Modal({ title, onClose, children, wide, xwide, headerExtra }) {
             {title}
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {onBack && (
+              <button className="btn btn-ghost" onClick={onBack}>
+                Späť
+              </button>
+            )}
             {headerExtra}
             <button className="btn btn-ghost" onClick={onClose}>
               Zavrieť
@@ -8343,6 +8348,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
     <Modal
       title={`Požičovňová zákazka · ${machine?.code || "—"}${job.machineDisplayName ? " · " + job.machineDisplayName : machine?.type ? " · " + machine.type : ""}`}
       onClose={onClose}
+      onBack={onBack}
       headerExtra={
         machine && onOpenMachineCard ? (
           <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
@@ -8351,11 +8357,6 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         ) : null
       }
     >
-      {onBack && (
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť
-        </button>
-      )}
       {job.transportIssueNote && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>
@@ -9969,12 +9970,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
     : [];
   return (
     <>
-    <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
-      {onBack && (
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť
-        </button>
-      )}
+    <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} onBack={onBack} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
@@ -10547,6 +10543,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     <Modal
       title={`${kindLabel} · ${d.code || "Detail"}`}
       onClose={onClose}
+      onBack={onBack}
       wide
       headerExtra={
         machine && onOpenMachineCard ? (
@@ -10556,11 +10553,6 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         ) : null
       }
     >
-      {onBack && (
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť
-        </button>
-      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         {isExterna ? (
           <>
@@ -11778,12 +11770,7 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
   }
 
   return (
-    <Modal title={`Prideliť · ${damage.code}`} onClose={onClose}>
-      {onBack && (
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť na kartu stroja
-        </button>
-      )}
+    <Modal title={`Prideliť · ${damage.code}`} onClose={onClose} onBack={onBack}>
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
           {technicians.filter((t) => !t.archived).map((t) => {
@@ -11976,10 +11963,7 @@ function NoProtocolWarningModal({ damage, protocolLogs, onClose, onAssign, onCon
   );
   if (showPicker) {
     return (
-      <Modal title={`Prideliť protokol · ${damage.code}`} onClose={onClose}>
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={() => setShowPicker(false)}>
-          ← Späť
-        </button>
+      <Modal title={`Prideliť protokol · ${damage.code}`} onClose={onClose} onBack={() => setShowPicker(false)}>
         {available.length === 0 ? (
           <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
             Pre tento stroj nie sú žiadne nepriradené protokoly.
@@ -12040,12 +12024,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
     // len zo záložky Poškodenia/Externé, kde sú práva nastavené správne.
     const stavLabel = techIds.length ? "Pridelené" : "Nové";
     return (
-      <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose}>
-        {onBack && (
-          <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-            ← Späť na kartu stroja
-          </button>
-        )}
+      <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose} onBack={onBack}>
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
           <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
           <CardField label="Stav" value={stavLabel} danger={!techIds.length} />
@@ -12060,12 +12039,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
 
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
-    <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose}>
-      {onBack && (
-        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť na kartu stroja
-        </button>
-      )}
+    <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose} onBack={onBack}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
         <CardField label={isSimple ? "Dátum vykonania" : "Dátum opravy"} value={doneDate ? fmtDate(doneDate) : null} />
