@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.314";
+const APP_VERSION = "1.0.315";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1094,6 +1094,57 @@ function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
   );
 }
 
+// Dvojkrokové potvrdenie pred zrušením ukončenia zákazky — ukáže, aké protokoly
+// zákazka reálne má (prevzatie/vrátenie), nech dispečer vidí presne, čoho sa to
+// týka, skôr než to potvrdí. Bez tejto kontroly by sa dala vyviezená/vrátená
+// zákazka omylom "znovuotvoriť" jedným klikom bez akéhokoľvek varovania.
+function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }) {
+  const [step, setStep] = useState(1);
+  const hasHandover = !!handoverProtocol?.handoverDone;
+  const hasReturn = !!handoverProtocol?.returnDone;
+  return (
+    <Modal title={step === 1 ? "Zrušiť ukončenie zákazky?" : "Potvrďte zrušenie ukončenia"} onClose={onClose}>
+      {step === 1 ? (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 10 }}>
+            Zákazka {job.code ? `${job.code} ` : ""}sa vráti medzi aktívne — prestane byť "ukončená".
+          </div>
+          <div style={{ fontSize: 13, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 18 }}>
+            <div style={{ marginBottom: 4 }}>
+              Protokol o prevzatí: {hasHandover ? `✓ áno (${fmtDate(handoverProtocol.handoverDate)})` : "— nie je vypísaný"}
+            </div>
+            <div>
+              Protokol o vrátení: {hasReturn ? `✓ áno (${fmtDate(handoverProtocol.returnDate)})` : "— nie je vypísaný"}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button className="btn" style={{ background: "var(--warn)", color: "#fff" }} onClick={() => setStep(2)}>
+              Áno, zrušiť ukončenie →
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--warn)", fontWeight: 600 }}>
+            Naozaj zrušiť ukončenie tejto zákazky? Vráti sa medzi aktívne, kým ju niekto znova neukončí.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button
+              className="btn"
+              style={{ background: "var(--warn)", color: "#fff" }}
+              onClick={() => { onConfirm(); onClose(); }}
+            >
+              Zrušiť ukončenie
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /* ---------------------------------------------------------
    Archive with reason (machine sold, staff left, etc.)
 --------------------------------------------------------- */
@@ -1255,6 +1306,7 @@ function DispatcherApp() {
   const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
   const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
   const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
+  const [uncompleteJobTarget, setUncompleteJobTarget] = useState(null); // zákazka, ktorej sa ruší ukončenie — dvojkrokové potvrdenie
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
@@ -4517,6 +4569,14 @@ function DispatcherApp() {
           }}
         />
       )}
+      {uncompleteJobTarget && (
+        <UncompleteJobConfirmModal
+          job={uncompleteJobTarget}
+          handoverProtocol={handoverProtocols.find((h) => h.jobId === uncompleteJobTarget.id)}
+          onClose={() => setUncompleteJobTarget(null)}
+          onConfirm={() => uncompleteJob(uncompleteJobTarget.id)}
+        />
+      )}
       {showExternalReport && (
         <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
       )}
@@ -4774,7 +4834,7 @@ function DispatcherApp() {
             setJobDetail(null);
           }}
           onUncomplete={() => {
-            uncompleteJob(jobDetail.id);
+            setUncompleteJobTarget(jobDetail);
             setJobDetail(null);
           }}
           onReportDamage={() => {
