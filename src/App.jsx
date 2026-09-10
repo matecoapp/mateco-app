@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.322";
+const APP_VERSION = "1.0.323";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2444,8 +2444,8 @@ function DispatcherApp() {
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: autoApproved ? "Nezáväzná rezervácia" : "Žiadosť o nezáväznú rezerváciu",
       message: autoApproved
-        ? `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`
-        : `${currentUser?.name || "Obchodník"} žiada o nezáväznú rezerváciu: stroj ${machine?.code || "—"} pre ${data.customer} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Čaká na schválenie.`,
+        ? `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`
+        : `${currentUser?.name || "Obchodník"} žiada o nezáväznú rezerváciu: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Čaká na schválenie.`,
       link: { module: "poziciovna", view: "calendar", reservationId: record.id },
     });
     return record;
@@ -2670,7 +2670,7 @@ function DispatcherApp() {
       kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Podnet: premeniť rezerváciu na zákazku",
-      message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) na skutočnú zákazku.`,
+      message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) na skutočnú zákazku.`,
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
     });
   }
@@ -2680,7 +2680,7 @@ function DispatcherApp() {
       kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Podnet: zmazať rezerváciu",
-      message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (stroj ${machine?.code || "—"}, ${r.customer}) — obchod pravdepodobne nevyšiel.`,
+      message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — obchod pravdepodobne nevyšiel.`,
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
     });
   }
@@ -3608,6 +3608,13 @@ function DispatcherApp() {
   function uncompleteJob(jobId) {
     updateJob(jobId, { status: "planned" });
   }
+  // Skutočný dátum vývozu/zvozu — nezávislý od oficiálneho začiatku/konca nájmu
+  // (startDate/endDate). Dispečer ho mení priamo v Prepravách, keď sa reálny
+  // termín jazdy líši od dátumu na zmluve (napr. zvoz o pár dní neskôr, alebo
+  // prednávoz deň vopred).
+  function updateTransportDate(jobId, type, date) {
+    updateJob(jobId, type === "vyvoz" ? { departureDate: date } : { pickupDate: date });
+  }
   function assignDriver(jobId, driverId) {
     updateJob(jobId, { driverId: driverId || null });
   }
@@ -3868,6 +3875,7 @@ function DispatcherApp() {
             myEmployee={myEmployee}
             assignDriver={assignDriver}
             assignReturnDriver={assignReturnDriver}
+            onSetTransportDate={updateTransportDate}
             depoCheckers={depoCheckers}
             checkerSubstitutions={checkerSubstitutions}
             technicianById={technicianByIdTop}
@@ -6821,7 +6829,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const isMyselfSofer = user?.role === "sofer" && myEmployee?.role === "sofer";
@@ -6844,13 +6852,13 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
           id: j.id + "-vyvoz",
           jobId: j.id,
           type: "vyvoz",
-          date: j.startDate,
+          date: j.departureDate || j.startDate,
           driverId: j.driverId || null,
           machineId: j.machineId,
           from: j.fromDepo || "—",
           to: j.toLocation || "—",
           customer: j.customer,
-          overdue: j.startDate < today,
+          overdue: (j.departureDate || j.startDate) < today,
         });
       }
       // Zvoz — viditeľný a akcieschopný výlučne po reálnom ukončení zákazky
@@ -6866,13 +6874,13 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             id: j.id + "-zvoz",
             jobId: j.id,
             type: "zvoz",
-            date: j.endDate,
+            date: j.pickupDate || j.endDate,
             driverId: j.returnDriverId || null,
             machineId: j.machineId,
             from: j.toLocation || "—",
             to: j.returnDepo || j.fromDepo || "—",
             customer: j.customer,
-            overdue: j.endDate < today,
+            overdue: (j.pickupDate || j.endDate) < today,
           });
         }
       }
@@ -6971,6 +6979,19 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             {isVyvoz ? "Vývoz" : "Zvoz"}
           </span>
           <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
+          {can(user, "transport_assign_driver") && (
+            <input
+              type="date"
+              value={t.date}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                e.stopPropagation();
+                if (e.target.value) onSetTransportDate && onSetTransportDate(t.jobId, t.type, e.target.value);
+              }}
+              style={{ fontSize: 11, padding: "3px 5px", width: 130 }}
+              title={isVyvoz ? "Zmeniť skutočný dátum vývozu" : "Zmeniť skutočný dátum zvozu"}
+            />
+          )}
           {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
           <span className="mono" style={{ fontSize: 12 }}>{machine?.code || "—"}</span>
           <span style={{ fontSize: 12 }}>
@@ -8692,6 +8713,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
 }
 
 function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
+  const [tab, setTab] = useState("zakazka"); // "zakazka" | "preprava"
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
   const machine = machines.find((m) => m.id === machineId);
@@ -8704,6 +8726,12 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
   const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || todayISO());
   const [endDate, setEndDate] = useState(existing?.endDate || prefillReservation?.expectedEnd || "");
+  // Skutočný dátum vývozu/zvozu — nezávislý od zmluvného začiatku/konca nájmu
+  // vyššie. Predvyplní sa z nich, ale dá sa kedykoľvek prepísať (tu aj neskôr
+  // priamo v Prepravách) — napr. pri prednávoze deň vopred, alebo keď sa zvoz
+  // spája s iným dňom.
+  const [departureDate, setDepartureDate] = useState(existing?.departureDate || existing?.startDate || prefillReservation?.expectedStart || todayISO());
+  const [pickupDate, setPickupDate] = useState(existing?.pickupDate || existing?.endDate || "");
   const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
   const [machineDisplayName, setMachineDisplayName] = useState(existing?.machineDisplayName || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
@@ -8742,91 +8770,136 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Stroj *">
-          <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" />
-        </Field>
-        {machine?.objekt === "Externý stroj" && (
-          <Field label="Názov stroja pre túto zákazku">
-            <input
-              value={machineDisplayName}
-              onChange={(e) => setMachineDisplayName(e.target.value)}
-              placeholder="napr. GS-1932 (podľa toho, čo rieši subdodávka)"
-              style={{ width: "100%" }}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
+        {[
+          { id: "zakazka", label: "1. Zákazka" },
+          { id: "preprava", label: "2. Preprava" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className="btn btn-ghost"
+            style={{
+              borderRadius: 0,
+              borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
+              color: tab === t.id ? "var(--accent)" : "var(--text-dim)",
+              fontWeight: tab === t.id ? 600 : 400,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "zakazka" && (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Stroj *">
+            <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" />
+          </Field>
+          {machine?.objekt === "Externý stroj" && (
+            <Field label="Názov stroja pre túto zákazku">
+              <input
+                value={machineDisplayName}
+                onChange={(e) => setMachineDisplayName(e.target.value)}
+                placeholder="napr. GS-1932 (podľa toho, čo rieši subdodávka)"
+                style={{ width: "100%" }}
+              />
+            </Field>
+          )}
+          <Field label="Zákazník *">
+            <CustomerAutocomplete
+              value={customer}
+              onChange={setCustomer}
+              customers={customers || []}
+              placeholder="Názov firmy…"
+              onSelectCustomer={(c) => {
+                setCustomer(c.firma);
+                if (c.email && !customerEmail) setCustomerEmail(c.email);
+                if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
+              }}
             />
           </Field>
-        )}
-        <Field label="Šofér (vývoz)">
-          <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
-            <option value="">— zatiaľ neurčený —</option>
-            {driverOptionsGrouped(drivers)}
-          </select>
-        </Field>
-        <Field label="Odkiaľ (depo) *">
-          <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} style={{ width: "100%" }}>
-            <option value="">— vybrať depo —</option>
-            {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </Field>
-        <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Zákazník *">
-          <CustomerAutocomplete
-            value={customer}
-            onChange={setCustomer}
-            customers={customers || []}
-            placeholder="Názov firmy…"
-            onSelectCustomer={(c) => {
-              setCustomer(c.firma);
-              if (c.email && !customerEmail) setCustomerEmail(c.email);
-              if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
-            }}
-          />
-        </Field>
-        <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Telefón zákazníka"><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Obchodník">
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {obchodnik && (
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
-            )}
-            <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
-              <option value="">— vybrať obchodníka —</option>
-              {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-            </select>
+          <Field label="Začiatok *">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+            />
+          </Field>
+          <Field label="Koniec">
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+            />
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
+          </Field>
+          <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Telefón zákazníka"><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Obchodník">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {obchodnik && (
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
+              )}
+              <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— vybrať obchodníka —</option>
+                {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+          </Field>
+          <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
           </div>
-        </Field>
-        <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Začiatok *">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
-          />
-        </Field>
-        <Field label="Koniec">
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
-          />
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
-        </Field>
-      </div>
+        </div>
+      )}
+
+      {tab === "preprava" && (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Odkiaľ (depo) *">
+            <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} style={{ width: "100%" }}>
+              <option value="">— vybrať depo —</option>
+              {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </Field>
+          <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Šofér (vývoz)">
+            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
+              <option value="">— zatiaľ neurčený —</option>
+              {driverOptionsGrouped(drivers)}
+            </select>
+          </Field>
+          <div />
+          <Field label="Dátum vývozu">
+            <input type="date" value={departureDate} onChange={(e) => setDepartureDate(e.target.value)} style={{ width: "100%" }} />
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz).</div>
+          </Field>
+          <Field label="Dátum zvozu">
+            <input type="date" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa konca — dá sa zmeniť aj neskôr priamo v Prepravách.</div>
+          </Field>
+        </div>
+      )}
+
       {conflict && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
           ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má už inú zákazku" : "má schválenú nezáväznú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
         </div>
       )}
-      <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
-      {customer.trim() && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+      {tab === "zakazka" && customer.trim() && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "14px 0 12px" }}>
           <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
           Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
         </label>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        {tab === "zakazka" && !existing && (
+          <button className="btn btn-ghost" onClick={() => setTab("preprava")}>
+            Ďalej: Preprava →
+          </button>
+        )}
         <button
           className="btn btn-accent"
           disabled={!canSave}
@@ -8847,6 +8920,8 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
               cisloZmluvy: cisloZmluvy.trim(),
               startDate,
               endDate: endDate || null,
+              departureDate: departureDate || startDate,
+              pickupDate: pickupDate || null,
               notes: notes.trim(),
             });
           }}
@@ -9782,7 +9857,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
               </div>
 
               {relevantMachines.map((m, idx) => {
-                const mJobs = jobsByMachine[m.id] || [];
+                const mJobs = (jobsByMachine[m.id] || []).slice().sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+                // Riadok tohto stroja je vyšší, len keď má aspoň jedna AKTÍVNA (neukončená)
+                // zákazka poznámku — ukončené poznámku v Gantte už neukazujú (dáta ostávajú,
+                // len sa prestanú počítať do výšky riadku), nech sa kalendár zbytočne
+                // nerozrastá do budúcna.
+                const rowHasNote = mJobs.some((j) => j.notes && j.status !== "completed");
+                const rowMinHeight = rowHasNote ? 46 : 34;
                 const mReservations = reservationsByMachine[m.id] || [];
                 const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
                 const label = categoryLabelOf ? categoryLabelOf(m) : null;
@@ -9818,7 +9899,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         gap: 2,
                         alignItems: "center",
                         marginBottom: 3,
-                        minHeight: 34,
+                        minHeight: rowMinHeight,
                         cursor: "pointer",
                         background: rowBg,
                         borderRadius: 4,
@@ -9863,7 +9944,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         />
                       );
                     })}
-                    {mJobs.map((j) => {
+                    {mJobs.map((j, jIdx) => {
                       const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
                       const isDone = j.status === "completed";
                       const noEnd = !j.endDate;
@@ -9871,16 +9952,39 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       const st = effectiveStatus(j, today);
                       const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
+                      const showNote = !isDone && j.notes;
                       // Textový štítok sa nikdy nesmie roztiahnuť viac než samotný farebný blok
                       // (inak by pri krátkej zákazke prerastal do susedného bloku). Odhad šírky
                       // dňového stĺpca je zámerne konzervatívny (menší ako reálny), aby to sedelo
                       // aj na mobile aj na desktope.
                       const dayCount = endCol - startCol + 1;
-                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
+                      const colWidth = 24; // rovnaký konzervatívny odhad ako labelMaxWidth nižšie
+                      // Pri krátkej zákazke skús meno "pretiecť" do voľného priestoru vedľa —
+                      // najprv doprava (kým nenarazí na ďalšiu zákazku na tom istom riadku,
+                      // alebo koniec mesiaca), a až keď vpravo vôbec nie je miesto, skús doľava
+                      // (zarovnané doprava, aby text končil presne pri bloku, nie visel v prázdne).
+                      let labelMaxWidth = Math.max(18, dayCount * colWidth - 10);
+                      let overflowLeft = false;
+                      if (dayCount <= 2) {
+                        const nextJob = mJobs[jIdx + 1];
+                        const nextStartCol = nextJob ? (nextJob.startDate < monthStartISO ? 1 : dayIndex(nextJob.startDate)) : daysInMonth + 1;
+                        const freeRight = Math.max(0, nextStartCol - endCol - 1);
+                        if (freeRight > 0) {
+                          labelMaxWidth = Math.max(18, (dayCount + freeRight) * colWidth - 10);
+                        } else {
+                          const prevJob = mJobs[jIdx - 1];
+                          const prevEndCol = prevJob ? (prevJob.endDate && prevJob.endDate <= monthEndISO ? dayIndex(prevJob.endDate) : daysInMonth) : 0;
+                          const freeLeft = Math.max(0, startCol - prevEndCol - 1);
+                          if (freeLeft > 0) {
+                            labelMaxWidth = Math.max(18, (dayCount + freeLeft) * colWidth - 10);
+                            overflowLeft = true;
+                          }
+                        }
+                      }
                       return (
                         <div
                           key={j.id}
-                          title={`${isDone ? "UKONČENÁ · " : ""}${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}`}
+                          title={`${isDone ? "UKONČENÁ · " : ""}${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}${showNote ? " · Pozn.: " + j.notes : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onOpenJob(j);
@@ -9899,26 +10003,40 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
+                            position: "relative",
+                            zIndex: overflowLeft ? 1 : "auto",
                           }}
                         >
                           {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
-                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku mimo záber. */}
+                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku mimo záber.
+                              Pri krátkej zákazke (labelMaxWidth rozšírený vyššie) text namiesto toho
+                              "pretečie" mimo farebný blok do voľného priestoru vedľa. */}
                           <div
                             className="gantt-cell"
                             style={{
-                              position: "sticky",
-                              left: "calc(var(--gantt-name-col) + 6px)",
+                              position: overflowLeft ? "absolute" : "sticky",
+                              left: overflowLeft ? "auto" : "calc(var(--gantt-name-col) + 6px)",
+                              right: overflowLeft ? 0 : "auto",
                               display: "inline-block",
                               maxWidth: labelMaxWidth,
                               overflow: "hidden",
                               whiteSpace: "nowrap",
                               textOverflow: "ellipsis",
+                              textAlign: overflowLeft ? "right" : "left",
                               fontSize: 10,
                               color: "#fff",
                               padding: "3px 6px",
+                              lineHeight: 1.3,
                             }}
                           >
-                            {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
+                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
+                            </div>
+                            {showNote && (
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
+                                📝 {j.notes}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
