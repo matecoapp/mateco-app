@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.313";
+const APP_VERSION = "1.0.314";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3405,7 +3405,13 @@ function DispatcherApp() {
   function resolveTransportIssue(jobId) {
     persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : j)));
   }
+  // Poistka aj tu, nielen skryté tlačidlo vo formulári — zákazka so zaznamenaným
+  // vývozom stroja (protokol o prevzatí) sa nedá zmazať, nech to skúsi odkiaľkoľvek.
+  // Zámerne sa netýka hromadného "Vymazať všetky zákazky" (clearAllJobs) — to má
+  // zmazať naozaj všetko, napr. pri čistení testovacích dát pred ostrou prevádzkou.
   function deleteJob(id) {
+    const departed = handoverProtocols.find((h) => h.jobId === id)?.handoverDone;
+    if (departed) return;
     persistJobs(jobs.filter((j) => j.id !== id));
     setShowAddJob(null);
   }
@@ -4167,6 +4173,7 @@ function DispatcherApp() {
           onClose={() => setShowAddJob(null)}
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id))}
+          isDeparted={!!(showAddJob.existing && handoverProtocols.find((h) => h.jobId === showAddJob.existing.id)?.handoverDone)}
         />
       )}
       {showAddReservation && (
@@ -8435,7 +8442,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete }) {
+function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
   const machine = machines.find((m) => m.id === machineId);
@@ -8594,9 +8601,15 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
           {existing ? "Uložiť zmeny" : "Vytvoriť zákazku"}
         </button>
         {existing && onDelete && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
-            Vymazať zákazku
-          </button>
+          isDeparted ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>
+              Zákazka má zaznamenaný vývoz stroja — nedá sa zmazať, zostáva natrvalo v histórii.
+            </div>
+          ) : (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
+              Vymazať zákazku
+            </button>
+          )
         )}
       </div>
     </Modal>
