@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.317";
+const APP_VERSION = "1.0.318";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3841,9 +3841,9 @@ function DispatcherApp() {
             technicianById={technicianByIdTop}
             technicians={technicians}
             handoverProtocols={handoverProtocols}
-            onOpenHandoverProtocol={(jobId, machineId) => {
+            onOpenJob={(jobId) => {
               const j = jobs.find((x) => x.id === jobId);
-              if (j) setShowHandoverProtocol(j);
+              if (j) setJobDetail(j);
             }}
             getTransportSendStatus={getTransportSendStatus}
             recordTransportSend={recordTransportSend}
@@ -6733,7 +6733,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenHandoverProtocol, getTransportSendStatus, recordTransportSend, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const isMyselfSofer = user?.role === "sofer" && myEmployee?.role === "sofer";
@@ -6871,9 +6871,11 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     return (
       <div
         key={t.id}
+        onClick={() => onOpenJob && onOpenJob(t.jobId)}
         style={{
           padding: "8px 0",
           borderTop: t.overdue ? "1px solid var(--danger)" : "1px solid var(--border)",
+          cursor: onOpenJob ? "pointer" : "default",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
@@ -6904,7 +6906,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
               );
             })()}
           </div>
-          <div>
+          <div onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Šofér</div>
             {can(user, "transport_assign_driver") ? (
               <select
@@ -6923,15 +6925,11 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
             if (!hp && !can(user, "handover_protocol_write")) return null;
             if (hp && !can(user, "handover_protocol_write") && !can(user, "handover_protocol_edit_locked")) return null;
-            const fullJob = jobs.find((j) => j.id === t.jobId);
             // Vývoz sa vždy týka fázy "prevzatie". Zvoz sa týka "vratenie" — ale tá
             // fáza vôbec neexistuje, kým nie je hotové prevzatie (vypĺňa sa v poradí).
             const missingPrevzatie = t.type === "zvoz" && !hp?.handoverDone;
             // Vývoz sleduje handoverDone (fáza prevzatia), zvoz sleduje returnDone
             // (fáza vrátenia) — každá karta len svoju vlastnú fázu, nie tú druhú.
-            const nextPhase = t.type === "zvoz" ? "vratenie" : (!hp ? "prevzatie" : null);
-            const isMyDriverAction = nextPhase && can(user, "handover_protocol_write") && !can(user, "handover_protocol_edit_locked");
-            const eligible = !missingPrevzatie && (!isMyDriverAction || canFillHandoverPhase(fullJob, myEmployee, nextPhase));
             const statusLabel =
               t.type === "vyvoz"
                 ? (!hp ? "Bez protokolu" : "Hotovo")
@@ -6948,44 +6946,10 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                 : !hp.returnDone
                 ? "var(--warn)"
                 : "var(--ok)";
-            const actionLabel =
-              t.type === "vyvoz"
-                ? (!hp ? "📋 Vypísať protokol" : "📋 Zobraziť")
-                : missingPrevzatie
-                ? "📋 Čaká na prevzatie"
-                : !hp.returnDone
-                ? "📋 Dokončiť vrátenie"
-                : "📋 Zobraziť";
             return (
               <div>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Protokol</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, color: statusColor }}>{statusLabel}</span>
-                  {eligible ? (
-                    <button
-                      className="btn btn-accent"
-                      style={{ fontSize: 11, padding: "4px 9px" }}
-                      onClick={() => onOpenHandoverProtocol(t.jobId, t.machineId)}
-                    >
-                      {actionLabel}
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-ghost"
-                      disabled
-                      title={
-                        missingPrevzatie
-                          ? "Vrátenie sa dá vypísať až po tom, čo je hotové prevzatie tohto stroja zákazníkom"
-                          : nextPhase === "prevzatie"
-                          ? "Vypísať vie len pridelený šofér v deň vývozu"
-                          : "Dokončiť vie len pridelený šofér v deň zvozu"
-                      }
-                      style={{ fontSize: 11, padding: "4px 9px", opacity: 0.5 }}
-                    >
-                      {actionLabel}
-                    </button>
-                  )}
-                </div>
+                <span style={{ fontSize: 11, color: statusColor }}>{statusLabel}</span>
               </div>
             );
           })()}
@@ -8391,14 +8355,18 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
           </button>
         )}
         {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
-          !handoverProtocol && can(user, "handover_protocol_write") && !canFillHandoverPhase(job, myEmployee, "prevzatie") ? (
-            <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér v deň vývozu" style={{ opacity: 0.5 }}>
-              📋 Protokol o odovzdaní
-            </button>
+          !handoverProtocol ? (
+            canFillHandoverPhase(job, myEmployee, "prevzatie") ? (
+              <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Vypísať protokol</button>
+            ) : (
+              <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér v deň vývozu" style={{ opacity: 0.5 }}>
+                📋 Vypísať protokol
+              </button>
+            )
+          ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie") ? (
+            <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Dokončiť vrátenie</button>
           ) : (
-            <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>
-              {!handoverProtocol ? "📋 Protokol o odovzdaní" : "📋 Zobraziť protokol"}
-            </button>
+            <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Zobraziť protokol</button>
           )
         )}
         {onGeneratePortalLink && can(user, "job_edit") && (
