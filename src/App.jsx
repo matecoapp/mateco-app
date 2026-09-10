@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.311";
+const APP_VERSION = "1.0.312";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -153,6 +153,7 @@ const PERM = {
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
   damage_clear_all: [], // len administrátor
   damage_import_csv: ["veduci_servisu", "dispecer_servisu"],
+  damage_quick_report: ["technik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
   external_add: ["veduci_servisu", "dispecer_servisu"],
   external_assign: ["veduci_servisu", "dispecer_servisu"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
@@ -1252,6 +1253,8 @@ function DispatcherApp() {
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť platformu ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
+  const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
+  const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
@@ -2601,6 +2604,65 @@ function DispatcherApp() {
     });
     setShowDamageReport(null);
   }
+  // Čisté nahlásenie, keď volajúci nepozná sériové číslo stroja — vytvorí sa
+  // poškodenie BEZ priradeného stroja (machineId: null). V zozname sa označí ako
+  // chýbajúce sériové číslo a nedá sa prideliť technikovi, kým sa nedoplní
+  // (pozri attachMachineToDamage nižšie) — bez toho nevieme spoľahlivo povedať,
+  // kde presne technik má zasahovať.
+  function reportDamageUnknownSerial(data) {
+    const record = {
+      id: uid(),
+      type: "poskodenie",
+      machineId: null,
+      code: null,
+      model: "",
+      serialNumber: "",
+      currentJobLabel: "",
+      customerContact: data.callerPhone || "",
+      location: data.location || "",
+      customer: data.customer || "",
+      dateReported: today,
+      popis: data.popis,
+      resolved: false,
+      technicianId: null,
+      assignedDate: null,
+      assignmentId: null,
+    };
+    persistDamages([...damages, record]);
+    pushNotification({
+      kind: "damage_new",
+      roles: ["dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Nové poškodenie — chýba sériové číslo",
+      message: `Nahlásené poškodenie bez sériového čísla${data.customer ? " — " + data.customer : ""}: „${data.popis}“. Treba doplniť stroj, kým sa dá prideliť technikovi.`,
+      link: { module: "servis", view: "poskodenia", damageId: record.id },
+    });
+    setShowUnknownSerialReport(false);
+  }
+  // Dodatočné "dokreslenie" poškodenia bez sériového čísla — dotiahne presne tie
+  // isté údaje ako pri bežnom nahlásení z karty stroja (kód, model, aktuálna
+  // zákazka/depo). Zámerne NEPREPISUJE ticho zákazníka/miesto, čo prípadne zadal
+  // volajúci pri vytvorení — tie zostávajú v zázname aj naďalej, nech je vidieť,
+  // ak si nesedia s tým, čo hovorí aktuálna zákazka stroja (kontrola nezhody je
+  // v samotnom AttachMachineModal, pred potvrdením).
+  function attachMachineToDamage(damageId, machine) {
+    persistDamages(
+      damages.map((d) =>
+        d.id === damageId
+          ? {
+              ...d,
+              machineId: machine.id,
+              code: machine.code,
+              model: [machine.manufacturer, machine.type].filter(Boolean).join(" ") || machine.type || "—",
+              serialNumber: machine.code || "",
+              currentJobLabel: machine.currentJob ? (machine.currentJob.customer || machine.currentJob.toLocation || "") : "",
+              location: d.location || machine.currentJob?.toLocation || machine.depo || "",
+              customer: d.customer || machine.currentJob?.customer || "",
+              obchodnik: machine.currentJob?.obchodnik || "",
+            }
+          : d
+      )
+    );
+  }
   function reportExternalService(data) {
     const record = {
       id: uid(),
@@ -3800,6 +3862,7 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onComplete={handleAttemptCompleteDamage}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            onAttachMachine={(d) => setAttachMachineTarget(d)}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
             onOpenSummary={() => setDamagesSummaryOpen(true)}
@@ -4424,6 +4487,27 @@ function DispatcherApp() {
             const m = enrichedMachineById[machineId];
             if (m) setShowDamageReport(m);
           }}
+          onUnknownSerial={() => {
+            setShowQuickDamagePicker(false);
+            setShowUnknownSerialReport(true);
+          }}
+        />
+      )}
+      {showUnknownSerialReport && (
+        <UnknownSerialDamageModal
+          onClose={() => setShowUnknownSerialReport(false)}
+          onSave={reportDamageUnknownSerial}
+        />
+      )}
+      {attachMachineTarget && (
+        <AttachMachineModal
+          damage={attachMachineTarget}
+          machines={enrichedMachines}
+          onClose={() => setAttachMachineTarget(null)}
+          onAttach={(machine) => {
+            attachMachineToDamage(attachMachineTarget.id, machine);
+            setAttachMachineTarget(null);
+          }}
         />
       )}
       {showExternalReport && (
@@ -4453,6 +4537,7 @@ function DispatcherApp() {
           onClose={() => setServiceEventDetail(null)}
           onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
           onAssign={(dd) => { setServiceEventDetail(null); setDamageAssignTarget(dd); }}
+          onAttachMachine={(dd) => { setServiceEventDetail(null); setAttachMachineTarget(dd); }}
           onComplete={(dd) => {
             setServiceEventDetail(null);
             handleAttemptCompleteDamage(dd);
@@ -5749,32 +5834,41 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             )
           )}
         </nav>
-        {module === "servis" && can(effectiveUser, "protocol_write") && (
+        {(module === "servis" || module === "poziciovna") &&
+          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report")) && (
           <div className="header-tech-actions" style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
-              Vypísať protokol
-            </button>
-            <button onClick={onOpenQuickDamageReport} className="btn btn-ghost" style={{ fontSize: 12, color: "var(--danger)" }}>
-              ⚠️ Nahlásiť poškodenie
-            </button>
-            <a
-              href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost"
-              style={{ fontSize: 12 }}
-            >
-              Záznam z merania pre VTZ EZ ↗
-            </a>
-            <a
-              href="https://matecoapp.netlify.app/fotky"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost"
-              style={{ fontSize: 12 }}
-            >
-              Odfotiť stroj požičovne ↗
-            </a>
+            {module === "servis" && can(effectiveUser, "protocol_write") && (
+              <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
+                Vypísať protokol
+              </button>
+            )}
+            {can(effectiveUser, "damage_quick_report") && (
+              <button onClick={onOpenQuickDamageReport} className="btn btn-ghost" style={{ fontSize: 12, color: "var(--danger)" }}>
+                ⚠️ Nahlásiť poškodenie
+              </button>
+            )}
+            {module === "servis" && can(effectiveUser, "protocol_write") && (
+              <>
+                <a
+                  href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12 }}
+                >
+                  Záznam z merania pre VTZ EZ ↗
+                </a>
+                <a
+                  href="https://matecoapp.netlify.app/fotky"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12 }}
+                >
+                  Odfotiť stroj požičovne ↗
+                </a>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -9979,7 +10073,7 @@ function CardField({ label, value, danger, dotColor }) {
 // Rýchle nahlásenie poškodenia z mobilnej lišty technika — na rozdiel od
 // bežného nahlásenia (z karty stroja) tu nie je čo predvyplniť, technik si
 // najprv sám vyhľadá a vyberie stroj.
-function QuickDamagePickerModal({ machines, onClose, onPick }) {
+function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) {
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [showList, setShowList] = useState(false);
@@ -10039,6 +10133,126 @@ function QuickDamagePickerModal({ machines, onClose, onPick }) {
       <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
         Pokračovať
       </button>
+      {onUnknownSerial && (
+        <>
+          <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-dim)", margin: "12px 0" }}>alebo</div>
+          <button className="btn btn-ghost" style={{ width: "100%" }} onClick={onUnknownSerial}>
+            Nepoznám sériové číslo →
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// Čisté nahlásenie, keď volajúci nepozná sériové číslo stroja — zachytí aspoň to,
+// čo vie povedať, nech má dispečer z čoho vychádzať, kým sa stroj nedoplní.
+function UnknownSerialDamageModal({ onClose, onSave }) {
+  const [popis, setPopis] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [location, setLocation] = useState("");
+  const [callerPhone, setCallerPhone] = useState("");
+  const canSave = popis.trim().length > 0;
+
+  return (
+    <Modal title="Nahlásenie bez sériového čísla" onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+        Vytvorí sa záznam bez priradeného stroja — dispečer ho neskôr doplní podľa sériového čísla, až potom sa dá
+        prideliť technikovi.
+      </div>
+      <Field label="Popis poruchy *">
+        <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={3} style={{ width: "100%" }} autoFocus />
+      </Field>
+      <Field label="Zákazník (ak ho volajúci povedal)">
+        <input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <Field label="Miesto (ak ho volajúci povedal)">
+        <input value={location} onChange={(e) => setLocation(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <Field label="Telefón na volajúceho">
+        <input value={callerPhone} onChange={(e) => setCallerPhone(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <button
+        className="btn btn-accent"
+        disabled={!canSave}
+        onClick={() => onSave({ popis: popis.trim(), customer: customer.trim(), location: location.trim(), callerPhone: callerPhone.trim() })}
+      >
+        Nahlásiť
+      </button>
+    </Modal>
+  );
+}
+
+// Dodatočné doplnenie sériového čísla k poškodeniu, čo bolo nahlásené bez neho.
+// Ak sa zadaný zákazník/miesto pri vytvorení nezhoduje s aktuálnou zákazkou
+// vybraného stroja, len na to upozorní (nič neblokuje) — dispečer sám posúdi,
+// či ide naozaj o ten istý stroj.
+function AttachMachineModal({ damage, machines, onClose, onAttach }) {
+  const [text, setText] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [showList, setShowList] = useState(false);
+  const options = [...machines].filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const q = text.trim().toLowerCase();
+  const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
+  const selected = options.find((m) => m.id === selectedId);
+
+  const mismatches = [];
+  if (selected) {
+    const actualCustomer = selected.currentJob?.customer || "";
+    const actualLocation = selected.currentJob?.toLocation || selected.depo || "";
+    if (damage.customer && actualCustomer && damage.customer.trim().toLowerCase() !== actualCustomer.trim().toLowerCase()) {
+      mismatches.push(`Zadaný zákazník: "${damage.customer}" — aktuálna zákazka stroja: "${actualCustomer}".`);
+    }
+    if (damage.location && actualLocation && damage.location.trim().toLowerCase() !== actualLocation.trim().toLowerCase()) {
+      mismatches.push(`Zadané miesto: "${damage.location}" — aktuálne miesto stroja: "${actualLocation}".`);
+    }
+  }
+
+  return (
+    <Modal title="Doplniť sériové číslo" onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+        Popis poruchy: „{damage.popis}“{damage.customer ? ` · zadaný zákazník: ${damage.customer}` : ""}
+        {damage.location ? ` · zadané miesto: ${damage.location}` : ""}
+      </div>
+      <Field label="Sériové číslo alebo model stroja *">
+        <div style={{ position: "relative" }}>
+          <input
+            value={text}
+            onChange={(e) => { setText(e.target.value); setSelectedId(""); setShowList(true); }}
+            onFocus={() => setShowList(true)}
+            placeholder="Píš sériové číslo alebo model..."
+            style={{ width: "100%" }}
+            autoFocus
+          />
+          {showList && (
+            <div className="panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+              {filtered.length === 0 ? (
+                <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
+              ) : (
+                filtered.slice(0, 50).map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => { setSelectedId(m.id); setText(m.code || ""); setShowList(false); }}
+                    style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <strong>{m.code}</strong>
+                    <span style={{ color: "var(--text-dim)" }}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </Field>
+      {mismatches.length > 0 && (
+        <div style={{ fontSize: 12.5, color: "#7a5200", background: "#fff7e6", border: "1px solid #f0b429", borderRadius: 6, padding: "8px 10px", marginBottom: 14 }}>
+          ⚠ {mismatches.join(" ")} Over si, že ide o správny stroj.
+        </div>
+      )}
+      <button className="btn btn-accent" disabled={!selected} onClick={() => onAttach(selected)}>
+        Priradiť stroj
+      </button>
     </Modal>
   );
 }
@@ -10089,7 +10303,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -10273,7 +10487,12 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        {!isSimple && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && (
+        {!isSimple && !d.machineId && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign") && (
+          <button className="btn btn-accent" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
+            Doplniť sériové číslo →
+          </button>
+        )}
+        {!isSimple && !!d.machineId && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && (
           <button className="btn btn-ghost" onClick={() => onAssign(d)}>
             {techIds.length ? "Zmeniť pridelenie (napr. na iný deň) →" : "Prideliť technikovi →"}
           </button>
@@ -10407,7 +10626,7 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
   );
 }
 
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, onAttachMachine, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
   const cardRef = useRef(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -10418,7 +10637,8 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   const assignedTech = techIds.length ? technicianById[techIds[0]] : null;
   const assignedTechNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ");
   const isSimple = variant === "revizia" || variant === "uradnaSkuska";
-  const barColor = isSimple ? (d.resolved ? "var(--ok)" : assignedTech ? "var(--info)" : "var(--danger)") : damageColor(d);
+  const missingSerial = variant === "poskodenie" && !d.machineId;
+  const barColor = isSimple ? (d.resolved ? "var(--ok)" : assignedTech ? "var(--info)" : "var(--danger)") : missingSerial ? "var(--danger)" : damageColor(d);
   const isDone = isSimple ? d.resolved : damageDisplayStav(d) === "opravene";
   const completeLabel = variant === "revizia" ? "Revízia vykonaná" : variant === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Upraviť stav zákazky";
   const permGroup = d.type === "externa" ? "external" : variant === "revizia" ? "revision" : variant === "uradnaSkuska" ? "uradnaskuska" : "damage";
@@ -10459,9 +10679,14 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               }}
               onClick={onOpenDetail ? () => onOpenDetail(d) : undefined}
             >
-              {d.code}
+              {d.code || "Bez sériového čísla"}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
+            {missingSerial && (
+              <span className="badge" style={{ background: "var(--danger-bg)", color: "var(--danger)", fontSize: 10 }}>
+                ⚠ Chýba sériové číslo
+              </span>
+            )}
             {variant === "revizia" && (
               <span
                 className="badge"
@@ -10520,10 +10745,18 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
         </div>
           </div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
-          {!isDone && can(user, perm.assign) && (
-            <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onAssign(d)}>
-              {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
-            </button>
+          {missingSerial ? (
+            onAttachMachine && can(user, perm.assign) && (
+              <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px", background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
+                Doplniť sériové číslo →
+              </button>
+            )
+          ) : (
+            !isDone && can(user, perm.assign) && (
+              <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onAssign(d)}>
+                {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
+              </button>
+            )
           )}
           {can(user, perm.status) && (isSimple ? (
             d.resolved ? (
@@ -10566,7 +10799,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
   );
 }
 
-function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today, onImport }) {
+function DamagesView({ damages, technicians, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, onAttachMachine, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -10733,9 +10966,10 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
             onResolve={onResolve}
             onComplete={onComplete}
             onProtocol={onProtocol}
+            onAttachMachine={onAttachMachine}
             locationLabel={locationLabel(d)}
             highlighted={d.id === highlightDamageId}
-            selectable={canBulkAssign}
+            selectable={canBulkAssign && !!d.machineId}
             selected={selectedIds.has(d.id)}
             onToggleSelect={toggleSelect}
           />
