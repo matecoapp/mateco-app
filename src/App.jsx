@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.319";
+const APP_VERSION = "1.0.320";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4866,8 +4866,8 @@ function DispatcherApp() {
           damage={viewResolutionTarget}
           technicianById={technicianByIdTop}
           protocolLogs={protocolLogs}
-          onClose={() => { setViewResolutionTarget(null); setReturnToMachine(null); }}
-          onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setViewResolutionTarget(null); } : null}
+          onClose={() => { setViewResolutionTarget(null); setCardHistory([]); }}
+          onBack={cardHistory.length > 0 ? () => { goBackCard(); setViewResolutionTarget(null); } : null}
         />
       )}
       {confirmDelete && (
