@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.321";
+const APP_VERSION = "1.0.322";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -153,7 +153,7 @@ const PERM = {
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
   damage_clear_all: [], // len administrátor
   damage_import_csv: ["veduci_servisu", "dispecer_servisu"],
-  damage_quick_report: ["technik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
+  damage_quick_report: ["technik", "sofer", "externy_sofer", "obchodnik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
   external_add: ["veduci_servisu", "dispecer_servisu"],
   external_assign: ["veduci_servisu", "dispecer_servisu"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
@@ -1348,6 +1348,7 @@ function DispatcherApp() {
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť platformu ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
+  const [showPhoneDirectory, setShowPhoneDirectory] = useState(false); // telefónny zoznam zamestnancov, z mobilnej lišty
   const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
   const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
   const [uncompleteJobTarget, setUncompleteJobTarget] = useState(null); // zákazka, ktorej sa ruší ukončenie — dvojkrokové potvrdenie
@@ -3747,6 +3748,7 @@ function DispatcherApp() {
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
         onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
+        onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
       />
@@ -4686,6 +4688,9 @@ function DispatcherApp() {
             setShowUnknownSerialReport(true);
           }}
         />
+      )}
+      {showPhoneDirectory && (
+        <PhoneDirectoryModal employees={employees} onClose={() => setShowPhoneDirectory(false)} />
       )}
       {showUnknownSerialReport && (
         <UnknownSerialDamageModal
@@ -5888,7 +5893,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, searchIndex, onSearchNavigate }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -6110,34 +6115,46 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           </div>
         )}
       </div>
-      {module === "servis" && can(effectiveUser, "protocol_write") && (
+      {(can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report")) && (
         <div className="mobile-tech-actions">
-          <button onClick={() => openProtocol({})} className="mobile-tech-action-btn mobile-tech-action-accent">
-            <span className="mobile-tech-action-icon">📋</span>
-            Protokol
+          <button onClick={onOpenPhoneDirectory} className="mobile-tech-action-btn">
+            <span className="mobile-tech-action-icon">📞</span>
+            Telefón
           </button>
-          <button onClick={onOpenQuickDamageReport} className="mobile-tech-action-btn">
-            <span className="mobile-tech-action-icon">⚠️</span>
-            Porucha
-          </button>
-          <a
-            href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mobile-tech-action-btn"
-          >
-            <span className="mobile-tech-action-icon">📏</span>
-            VTZ EZ
-          </a>
-          <a
-            href="https://matecoapp.netlify.app/fotky"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mobile-tech-action-btn"
-          >
-            <span className="mobile-tech-action-icon">📷</span>
-            Odfotiť
-          </a>
+          {can(effectiveUser, "protocol_write") && (
+            <button onClick={() => openProtocol({})} className="mobile-tech-action-btn mobile-tech-action-accent">
+              <span className="mobile-tech-action-icon">📋</span>
+              Protokol
+            </button>
+          )}
+          {can(effectiveUser, "damage_quick_report") && (
+            <button onClick={onOpenQuickDamageReport} className="mobile-tech-action-btn">
+              <span className="mobile-tech-action-icon">⚠️</span>
+              Porucha
+            </button>
+          )}
+          {can(effectiveUser, "protocol_write") && (
+            <>
+              <a
+                href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mobile-tech-action-btn"
+              >
+                <span className="mobile-tech-action-icon">📏</span>
+                VTZ EZ
+              </a>
+              <a
+                href="https://matecoapp.netlify.app/fotky"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mobile-tech-action-btn"
+              >
+                <span className="mobile-tech-action-icon">📷</span>
+                Odfotiť
+              </a>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -7500,6 +7517,39 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 /* ---------------------------------------------------------
    Driver card modal (karta šoféra)
 --------------------------------------------------------- */
+// Telefónny zoznam — všetci aktívni zamestnanci naprieč rolami, s klikateľným
+// číslom (tel: odkaz). Na mobile to rovno otvorí telefón, na počítači to závisí
+// od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
+function PhoneDirectoryModal({ employees, onClose }) {
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const list = (employees || [])
+    .filter((e) => !e.archived && e.phone)
+    .filter((e) => !q || e.name.toLowerCase().includes(q) || roleLabel(e.role).toLowerCase().includes(q) || (e.depo || "").toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <Modal title="Telefónny zoznam" onClose={onClose}>
+      <Field label="Hľadať meno, rolu alebo depo">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} autoFocus />
+      </Field>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+        {list.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "10px 0" }}>Nikto nezodpovedá hľadaniu.</div>}
+        {list.map((e) => (
+          <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{roleLabel(e.role)}{e.depo ? ` · ${e.depo}` : ""}</div>
+            </div>
+            <a href={`tel:${e.phone}`} className="btn btn-accent" style={{ fontSize: 12, textDecoration: "none" }}>
+              📞 {e.phone}
+            </a>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive }) {
   const d = driver;
   const upcoming = jobs
@@ -8371,6 +8421,10 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
       )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={job.customer} />
+        <CardField
+          label="Telefón zákazníka"
+          value={job.customerPhone ? <a href={`tel:${job.customerPhone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerPhone}</a> : null}
+        />
         <CardField label="Stav" value={{ overdue: "Po termíne", active: "Na zákazke", planned: "Naplánovaná", completed: "Ukončená" }[st]} danger={st === "overdue"} />
         <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
         <CardField label="Kam" value={job.toLocation} />
@@ -8645,6 +8699,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
   const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
   const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
   const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
+  const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
   const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || todayISO());
@@ -8723,10 +8778,12 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
             onSelectCustomer={(c) => {
               setCustomer(c.firma);
               if (c.email && !customerEmail) setCustomerEmail(c.email);
+              if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
             }}
           />
         </Field>
         <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Telefón zákazníka"><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Obchodník">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {obchodnik && (
@@ -8775,7 +8832,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
           disabled={!canSave}
           onClick={() => {
             if (saveCustomer && customer.trim()) {
-              onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim() });
+              onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim(), telefon: customerPhone.trim() });
             }
             onSave({
               machineId,
@@ -8785,6 +8842,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
               toLocation: toLocation.trim(),
               customer: customer.trim(),
               customerEmail: customerEmail.trim(),
+              customerPhone: customerPhone.trim(),
               obchodnik: obchodnik || null,
               cisloZmluvy: cisloZmluvy.trim(),
               startDate,
