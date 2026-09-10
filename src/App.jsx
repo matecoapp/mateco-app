@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.312";
+const APP_VERSION = "1.0.313";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10084,6 +10084,16 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) 
 
   return (
     <Modal title="Nahlásiť poškodenie stroja" onClose={onClose}>
+      {onUnknownSerial && (
+        <button
+          className="btn btn-ghost"
+          style={{ width: "100%", marginBottom: 14, color: "var(--danger)" }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onUnknownSerial}
+        >
+          Nepoznám sériové číslo →
+        </button>
+      )}
       <Field label="Sériové číslo alebo model stroja *">
         <div style={{ position: "relative" }}>
           <input
@@ -10094,6 +10104,7 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) 
               setShowList(true);
             }}
             onFocus={() => setShowList(true)}
+            onBlur={() => setShowList(false)}
             placeholder="Píš sériové číslo alebo model..."
             style={{ width: "100%" }}
             autoFocus
@@ -10133,14 +10144,6 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) 
       <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
         Pokračovať
       </button>
-      {onUnknownSerial && (
-        <>
-          <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-dim)", margin: "12px 0" }}>alebo</div>
-          <button className="btn btn-ghost" style={{ width: "100%" }} onClick={onUnknownSerial}>
-            Nepoznám sériové číslo →
-          </button>
-        </>
-      )}
     </Modal>
   );
 }
