@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.315";
+const APP_VERSION = "1.0.316";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1098,6 +1098,45 @@ function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
 // zákazka reálne má (prevzatie/vrátenie), nech dispečer vidí presne, čoho sa to
 // týka, skôr než to potvrdí. Bez tejto kontroly by sa dala vyviezená/vrátená
 // zákazka omylom "znovuotvoriť" jedným klikom bez akéhokoľvek varovania.
+// Dvojkrokové potvrdenie pred opätovným otvorením vyriešenej revízie/úradnej
+// skúšky — vráti sa medzi nevyriešené, nech sa to nedá omylom odkliknúť.
+function ReopenConfirmModal({ label, onClose, onConfirm }) {
+  const [step, setStep] = useState(1);
+  return (
+    <Modal title={step === 1 ? "Otvoriť znova?" : "Potvrďte opätovné otvorenie"} onClose={onClose}>
+      {step === 1 ? (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 18 }}>
+            Naozaj chcete znova otvoriť {label}? Vráti sa medzi nevyriešené.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button className="btn" style={{ background: "var(--warn)", color: "#fff" }} onClick={() => setStep(2)}>
+              Áno, pokračovať →
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--warn)", fontWeight: 600 }}>
+            Potvrďte: {label} sa znova otvorí ako nevyriešené.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <button
+              className="btn"
+              style={{ background: "var(--warn)", color: "#fff" }}
+              onClick={() => { onConfirm(); onClose(); }}
+            >
+              Otvoriť znova
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   const hasHandover = !!handoverProtocol?.handoverDone;
@@ -1307,6 +1346,7 @@ function DispatcherApp() {
   const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
   const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
   const [uncompleteJobTarget, setUncompleteJobTarget] = useState(null); // zákazka, ktorej sa ruší ukončenie — dvojkrokové potvrdenie
+  const [reopenTarget, setReopenTarget] = useState(null); // revízia/úradná skúška, ktorá sa otvára znova — dvojkrokové potvrdenie
   const [showExternalReport, setShowExternalReport] = useState(false); // manual external service entry
   const [editExternalTarget, setEditExternalTarget] = useState(null); // existujúca externá zákazka na úpravu
   const [serviceEventDetail, setServiceEventDetail] = useState(null); // detail karta poškodenia/externej zákazky
@@ -2482,14 +2522,6 @@ function DispatcherApp() {
       }
     } catch (e) {
       console.error("[protokol] Spracovanie protokolu zlyhalo", e);
-    }
-  }
-  function deleteProtocolLog(id) {
-    const log = protocolLogs.find((p) => p.id === id);
-    persistProtocolLogs(protocolLogs.filter((p) => p.id !== id));
-    if (log) {
-      const path = log.imageUrl.split("/protocols/")[1];
-      if (path) supabase.storage.from("protocols").remove([path]).catch(() => {});
     }
   }
   // Dodatočné priradenie "čisto" vypísaného protokolu (bez pôvodného priradenia) ku
@@ -4055,7 +4087,14 @@ function DispatcherApp() {
             user={effectiveUser}
             onAssign={(d) => setDamageAssignTarget(d)}
             onComplete={(d) => setCompleteRevisionTarget(d)}
-            onResolve={setDamageResolved}
+            onResolve={(id, resolved) => {
+              if (resolved === false) {
+                const d = damages.find((x) => x.id === id);
+                if (d) setReopenTarget({ damage: d, label: `revíziu ${d.code || ""}` });
+              } else {
+                setDamageResolved(id, resolved);
+              }
+            }}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
@@ -4071,7 +4110,14 @@ function DispatcherApp() {
             user={effectiveUser}
             onAssign={(d) => setDamageAssignTarget(d)}
             onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
-            onResolve={setDamageResolved}
+            onResolve={(id, resolved) => {
+              if (resolved === false) {
+                const d = damages.find((x) => x.id === id);
+                if (d) setReopenTarget({ damage: d, label: `úradnú skúšku ${d.code || ""}` });
+              } else {
+                setDamageResolved(id, resolved);
+              }
+            }}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
@@ -4132,7 +4178,10 @@ function DispatcherApp() {
             depoCheckers={depoCheckers}
             technicians={technicians}
             checkerSubstitutions={checkerSubstitutions}
-            onDeleteSubstitution={deleteCheckerSubstitution}
+            onDeleteSubstitution={(id) => {
+              const s = checkerSubstitutions.find((x) => x.id === id);
+              askDelete(`náhradu checkera${s?.depo ? ` (${s.depo})` : ""}`, () => deleteCheckerSubstitution(id));
+            }}
             onSave={persistDepoCheckers}
           />
         )}
@@ -4577,6 +4626,13 @@ function DispatcherApp() {
           onConfirm={() => uncompleteJob(uncompleteJobTarget.id)}
         />
       )}
+      {reopenTarget && (
+        <ReopenConfirmModal
+          label={reopenTarget.label}
+          onClose={() => setReopenTarget(null)}
+          onConfirm={() => setDamageResolved(reopenTarget.damage.id, false)}
+        />
+      )}
       {showExternalReport && (
         <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
       )}
@@ -4952,7 +5008,7 @@ function DispatcherApp() {
           user={effectiveUser}
           onClose={() => setAssignSlot(null)}
           onSave={saveAssignment}
-          onDelete={deleteAssignment}
+          onDelete={(id) => askDelete("toto priradenie", () => deleteAssignment(id))}
           onReschedule={(damage) => { setAssignSlot(null); setDamageAssignTarget(damage); }}
         />
       )}
