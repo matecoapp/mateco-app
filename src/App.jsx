@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.316";
+const APP_VERSION = "1.0.317";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2845,6 +2845,7 @@ function DispatcherApp() {
   function completeRevision(damageId, performedDate, parts) {
     const d = damages.find((x) => x.id === damageId);
     if (!d) return;
+    const machine = machines.find((m) => m.id === d.machineId);
     const isMerged = d.revizeType === "ZZ+EZ";
     const doneZZ = isMerged ? !!parts?.zz : d.revizeType === "ZZ";
     const doneEZ = isMerged ? !!parts?.ez : d.revizeType === "EZ";
@@ -2876,17 +2877,60 @@ function DispatcherApp() {
         )
       );
     } else {
-      persistDamages(damages.map((x) => (x.id === damageId ? { ...x, resolved: true, vykonanaDatum: performedDate } : x)));
+      // Uložíme aj pôvodný dátum revízie na stroji (pred posunutím) — nech ho vieme
+      // vrátiť späť, ak sa toto dokončenie neskôr zruší cez "Otvoriť znova".
+      persistDamages(
+        damages.map((x) =>
+          x.id === damageId
+            ? {
+                ...x,
+                resolved: true,
+                vykonanaDatum: performedDate,
+                previousRevizia: doneZZ ? machine?.revizia ?? null : x.previousRevizia,
+                previousReviziaEZ: doneEZ ? machine?.reviziaEZ ?? null : x.previousReviziaEZ,
+              }
+            : x
+        )
+      );
     }
     setCompleteRevisionTarget(null);
   }
   function completeUradnaSkuska(damageId, performedDate) {
     const d = damages.find((x) => x.id === damageId);
     if (!d) return;
-    persistDamages(damages.map((x) => (x.id === damageId ? { ...x, resolved: true, vykonanaDatum: performedDate } : x)));
+    const machine = machines.find((m) => m.id === d.machineId);
+    persistDamages(
+      damages.map((x) =>
+        x.id === damageId
+          ? { ...x, resolved: true, vykonanaDatum: performedDate, previousUradnaSkuska: machine?.uradnaSkuska ?? null }
+          : x
+      )
+    );
     const nextDue = addYearsISO(performedDate, 10);
     persistMachines(machines.map((m) => (m.id === d.machineId ? { ...m, uradnaSkuska: nextDue } : m)));
     setCompleteUradnaSkuskaTarget(null);
+  }
+  // Opak completeRevision/completeUradnaSkuska — vráti stroju pôvodný dátum (spred
+  // dokončenia) a vyčistí, čo si zákazka o dokončení pamätala. Používa sa len z
+  // "Otvoriť znova" (po dvojkrokovom potvrdení), nie zo setDamageResolved priamo.
+  function reopenRevisionOrSkuska(d) {
+    const machinePatch = {};
+    if (d.type === "revizia") {
+      if (d.previousRevizia !== undefined) machinePatch.revizia = d.previousRevizia;
+      if (d.previousReviziaEZ !== undefined) machinePatch.reviziaEZ = d.previousReviziaEZ;
+    } else if (d.type === "uradnaSkuska") {
+      if (d.previousUradnaSkuska !== undefined) machinePatch.uradnaSkuska = d.previousUradnaSkuska;
+    }
+    if (d.machineId && Object.keys(machinePatch).length > 0) {
+      persistMachines(machines.map((m) => (m.id === d.machineId ? { ...m, ...machinePatch } : m)));
+    }
+    persistDamages(
+      damages.map((x) =>
+        x.id === d.id
+          ? { ...x, resolved: false, vykonanaDatum: null, previousRevizia: null, previousReviziaEZ: null, previousUradnaSkuska: null }
+          : x
+      )
+    );
   }
   function assignDamage(damageId, technicianIds, date) {
     const damage = damages.find((d) => d.id === damageId);
@@ -4630,7 +4674,7 @@ function DispatcherApp() {
         <ReopenConfirmModal
           label={reopenTarget.label}
           onClose={() => setReopenTarget(null)}
-          onConfirm={() => setDamageResolved(reopenTarget.damage.id, false)}
+          onConfirm={() => reopenRevisionOrSkuska(reopenTarget.damage)}
         />
       )}
       {showExternalReport && (
