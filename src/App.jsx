@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.318";
+const APP_VERSION = "1.0.319";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1362,7 +1362,29 @@ function DispatcherApp() {
   const [noProtocolTarget, setNoProtocolTarget] = useState(null); // poškodenie/externá bez priradeného protokolu — najprv upozornenie pred ukončením
   const [confirmUnassignProtocol, setConfirmUnassignProtocol] = useState(null); // { protocol, onConfirm } — dvojkrokové potvrdenie pred vyradením protokolu zo zákazky
   const [viewResolutionTarget, setViewResolutionTarget] = useState(null); // resolved damage/revision being viewed from machine card history
-  const [returnToMachine, setReturnToMachine] = useState(null); // stroj, na ktorý sa vrátiť tlačidlom "Späť"
+  // Všeobecná "história kariet" — keď sa z jednej karty (stroj/zákazka/poškodenie/
+  // šofér/technik) otvorí ďalšia, predošlá sa sem odloží, nech je na ňu cesta späť
+  // (tlačidlo "Späť"), namiesto toho, aby proste zmizla. "Zavrieť" na najhlbšej
+  // karte históriu vyprázdni celú (vráti na pôvodný zoznam), "Späť" len o krok.
+  const [cardHistory, setCardHistory] = useState([]); // [{ type, data }]
+  function pushCard(type, data) {
+    if (!data) return;
+    setCardHistory((prev) => [...prev, { type, data }]);
+  }
+  function goBackCard() {
+    const last = cardHistory[cardHistory.length - 1];
+    if (!last) return;
+    setCardHistory((prev) => prev.slice(0, -1));
+    // Vždy sa vráti čerstvá verzia záznamu (nie zamrznutá kópia spred otvorenia
+    // ďalšej karty) — inak by po úprave/uložení karta pri návrate ukazovala
+    // starý stav, kým by sa appka znova neobnovila.
+    if (last.type === "machine") setMachineCard(enrichedMachineById[last.data.id] || last.data);
+    else if (last.type === "job") setJobDetail(jobs.find((j) => j.id === last.data.id) || last.data);
+    else if (last.type === "serviceEvent") setServiceEventDetail(damages.find((d) => d.id === last.data.id) || last.data);
+    else if (last.type === "driver") setDriverCard(drivers.find((d) => d.id === last.data.id) || last.data);
+    else if (last.type === "technician") setTechnicianCard(technicians.find((t) => t.id === last.data.id) || last.data);
+    else if (last.type === "reservation") setReservationCardTarget(reservations.find((r) => r.id === last.data.id) || last.data);
+  }
 
   function setModule(m) {
     setModuleRaw(m);
@@ -2687,6 +2709,7 @@ function DispatcherApp() {
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
     setShowDamageReport(null);
+    goBackCard();
   }
   // Čisté nahlásenie, keď volajúci nepozná sériové číslo stroja — vytvorí sa
   // poškodenie BEZ priradeného stroja (machineId: null). V zozname sa označí ako
@@ -3122,10 +3145,10 @@ function DispatcherApp() {
     if (showAddTechnician?.existing) {
       updateTechnician(showAddTechnician.existing.id, data);
       setShowAddTechnician(null);
-      setTechnicianCard((prev) => (prev ? { ...prev, ...data } : prev));
     } else {
       addTechnician(data);
     }
+    goBackCard();
   }
   function saveAssignment(data, id) {
     if (id) {
@@ -3312,10 +3335,10 @@ function DispatcherApp() {
     if (showAddMachine?.existing) {
       updateMachine(showAddMachine.existing.id, data);
       setShowAddMachine(null);
-      setMachineCard((prev) => (prev ? { ...prev, ...data } : prev));
     } else {
       addMachine(data);
     }
+    goBackCard();
   }
   function clearAllMachines() {
     // Wipes machines, their jobs, and their damage/revision events so the
@@ -3419,10 +3442,10 @@ function DispatcherApp() {
     if (showAddDriver?.existing) {
       updateDriver(showAddDriver.existing.id, data);
       setShowAddDriver(null);
-      setDriverCard((prev) => (prev ? { ...prev, ...data } : prev));
     } else {
       addDriver(data);
     }
+    goBackCard();
   }
   function setDriverArchived(id, archived, reason, note) {
     persistDrivers(
@@ -3542,6 +3565,7 @@ function DispatcherApp() {
     if (departed) return;
     persistJobs(jobs.filter((j) => j.id !== id));
     setShowAddJob(null);
+    setCardHistory([]);
   }
   function saveJobModal(data) {
     if (showAddJob?.existing) {
@@ -3565,6 +3589,7 @@ function DispatcherApp() {
         updateReservation(r.id, { status: "converted", convertedJobId: newJob.id, convertedAt: new Date().toISOString() });
       }
     }
+    goBackCard();
   }
   function completeJob(jobId, data) {
     updateJob(jobId, { status: "completed", endDate: data.endDate, returnDepo: data.returnDepo, returnDriverId: data.returnDriverId || null });
@@ -4264,7 +4289,7 @@ function DispatcherApp() {
           existing={showAddMachine.existing}
           machineModels={machineModels}
           machines={machines}
-          onClose={() => setShowAddMachine(null)}
+          onClose={() => { setShowAddMachine(null); goBackCard(); }}
           onSave={saveMachineModal}
           onCreateModel={(data) => {
             if (findMachineModelLoose(data.name)) return;
@@ -4273,7 +4298,7 @@ function DispatcherApp() {
         />
       )}
       {showAddDriver && (
-        <AddDriverModal existing={showAddDriver.existing} onClose={() => setShowAddDriver(null)} onSave={saveDriverModal} />
+        <AddDriverModal existing={showAddDriver.existing} onClose={() => { setShowAddDriver(null); goBackCard(); }} onSave={saveDriverModal} />
       )}
       {driverCard && (
         <DriverCardModal
@@ -4281,8 +4306,9 @@ function DispatcherApp() {
           jobs={jobs}
           today={today}
           user={effectiveUser}
-          onClose={() => setDriverCard(null)}
+          onClose={() => { setDriverCard(null); setCardHistory([]); }}
           onEdit={() => {
+            pushCard("driver", driverCard);
             setShowAddDriver({ existing: driverCard });
             setDriverCard(null);
           }}
@@ -4315,7 +4341,7 @@ function DispatcherApp() {
           prefillMachineId={showAddJob.machineId}
           prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
-          onClose={() => setShowAddJob(null)}
+          onClose={() => { setShowAddJob(null); goBackCard(); }}
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id))}
           isDeparted={!!(showAddJob.existing && handoverProtocols.find((h) => h.jobId === showAddJob.existing.id)?.handoverDone)}
@@ -4330,7 +4356,7 @@ function DispatcherApp() {
           prefillMachineId={showAddReservation.machineId}
           existing={showAddReservation.existing}
           currentUser={currentUser}
-          onClose={() => setShowAddReservation(null)}
+          onClose={() => { setShowAddReservation(null); goBackCard(); }}
           onSave={(data) => {
             if (showAddReservation.existing) {
               updateReservation(showAddReservation.existing.id, data);
@@ -4338,6 +4364,7 @@ function DispatcherApp() {
               addReservation(data);
             }
             setShowAddReservation(null);
+            goBackCard();
           }}
         />
       )}
@@ -4347,13 +4374,15 @@ function DispatcherApp() {
           machine={machineById[reservationCardTarget.machineId]}
           salespeople={salespeople}
           user={effectiveUser}
-          onClose={() => setReservationCardTarget(null)}
+          onClose={() => { setReservationCardTarget(null); setCardHistory([]); }}
           onDelete={() => setRejectReservationTarget(reservationCardTarget)}
           onConvert={() => {
+            pushCard("reservation", reservationCardTarget);
             setShowAddJob({ prefillReservation: reservationCardTarget });
             setReservationCardTarget(null);
           }}
           onEdit={() => {
+            pushCard("reservation", reservationCardTarget);
             setShowAddReservation({ existing: reservationCardTarget });
             setReservationCardTarget(null);
           }}
@@ -4519,43 +4548,51 @@ function DispatcherApp() {
           protocolLogs={protocolLogs}
           myEmployee={myEmployee}
           user={effectiveUser}
-          onClose={() => setMachineCard(null)}
+          onClose={() => { setMachineCard(null); setCardHistory([]); }}
+          onBack={cardHistory.length > 0 ? () => { goBackCard(); setMachineCard(null); } : null}
           onAssignProtocolToDamage={assignProtocolToDamage}
           onOpenJob={(j) => {
-            setReturnToMachine(machineCard);
+            pushCard("machine", machineCard);
             setJobDetail(j);
             setMachineCard(null);
           }}
           onOpenHandoverProtocol={(j) => {
+            pushCard("machine", machineCard);
             setShowHandoverProtocol(j);
             setMachineCard(null);
           }}
           onEditMachine={() => {
+            pushCard("machine", machineCard);
             setShowAddMachine({ existing: machineCard });
             setMachineCard(null);
           }}
           onReportDamage={() => {
+            pushCard("machine", machineCard);
             setShowDamageReport(machineCard);
             setMachineCard(null);
           }}
           onAddJob={() => {
+            pushCard("machine", machineCard);
             setShowAddJob({ machineId: machineCard.id });
             setMachineCard(null);
           }}
           onAddReservation={() => {
+            pushCard("machine", machineCard);
             setShowAddReservation({ machineId: machineCard.id });
             setMachineCard(null);
           }}
           onEditJob={() => {
+            pushCard("machine", machineCard);
             setShowAddJob({ existing: machineCard.currentJob });
             setMachineCard(null);
           }}
           onCompleteJob={() => {
+            pushCard("machine", machineCard);
             setCompleteJobTarget(machineCard.currentJob);
             setMachineCard(null);
           }}
           onOpenDamage={(d) => {
-            setReturnToMachine(machineCard);
+            pushCard("machine", machineCard);
             setViewResolutionTarget(d);
             setMachineCard(null);
           }}
@@ -4628,7 +4665,7 @@ function DispatcherApp() {
         />
       )}
       {showDamageReport && (
-        <DamageReportModal machine={showDamageReport} today={today} onClose={() => setShowDamageReport(null)} onSave={(popis) => reportDamage(showDamageReport, popis)} />
+        <DamageReportModal machine={showDamageReport} today={today} onClose={() => { setShowDamageReport(null); goBackCard(); }} onSave={(popis) => reportDamage(showDamageReport, popis)} />
       )}
       {showQuickDamagePicker && (
         <QuickDamagePickerModal
@@ -4655,10 +4692,11 @@ function DispatcherApp() {
         <AttachMachineModal
           damage={attachMachineTarget}
           machines={enrichedMachines}
-          onClose={() => setAttachMachineTarget(null)}
+          onClose={() => { setAttachMachineTarget(null); goBackCard(); }}
           onAttach={(machine) => {
             attachMachineToDamage(attachMachineTarget.id, machine);
             setAttachMachineTarget(null);
+            goBackCard();
           }}
         />
       )}
@@ -4666,7 +4704,7 @@ function DispatcherApp() {
         <UncompleteJobConfirmModal
           job={uncompleteJobTarget}
           handoverProtocol={handoverProtocols.find((h) => h.jobId === uncompleteJobTarget.id)}
-          onClose={() => setUncompleteJobTarget(null)}
+          onClose={() => { setUncompleteJobTarget(null); goBackCard(); }}
           onConfirm={() => uncompleteJob(uncompleteJobTarget.id)}
         />
       )}
@@ -4686,7 +4724,7 @@ function DispatcherApp() {
           today={today}
           customers={customers}
           onSaveCustomer={upsertCustomer}
-          onClose={() => setEditExternalTarget(null)}
+          onClose={() => { setEditExternalTarget(null); goBackCard(); }}
           onSave={(data) => updateExternalService(editExternalTarget.id, data)}
         />
       )}
@@ -4697,14 +4735,28 @@ function DispatcherApp() {
           machineById={enrichedMachineById}
           protocolLogs={protocolLogs}
           user={effectiveUser}
+          onBack={cardHistory.length > 0 ? () => { goBackCard(); setServiceEventDetail(null); } : null}
           onEdit={(d) => {
+            pushCard("serviceEvent", serviceEventDetail);
             setServiceEventDetail(null);
             setEditExternalTarget(d);
           }}
-          onClose={() => setServiceEventDetail(null)}
-          onOpenMachineCard={(m) => { setServiceEventDetail(null); setMachineCard(m); }}
-          onAssign={(dd) => { setServiceEventDetail(null); setDamageAssignTarget(dd); }}
-          onAttachMachine={(dd) => { setServiceEventDetail(null); setAttachMachineTarget(dd); }}
+          onClose={() => { setServiceEventDetail(null); setCardHistory([]); }}
+          onOpenMachineCard={(m) => {
+            pushCard("serviceEvent", serviceEventDetail);
+            setServiceEventDetail(null);
+            setMachineCard(m);
+          }}
+          onAssign={(dd) => {
+            pushCard("serviceEvent", serviceEventDetail);
+            setServiceEventDetail(null);
+            setDamageAssignTarget(dd);
+          }}
+          onAttachMachine={(dd) => {
+            pushCard("serviceEvent", serviceEventDetail);
+            setServiceEventDetail(null);
+            setAttachMachineTarget(dd);
+          }}
           onComplete={(dd) => {
             setServiceEventDetail(null);
             handleAttemptCompleteDamage(dd);
@@ -4748,9 +4800,9 @@ function DispatcherApp() {
           technicians={technicians}
           assignments={assignments}
           today={today}
-          onClose={() => { setDamageAssignTarget(null); setReturnToMachine(null); }}
+          onClose={() => { setDamageAssignTarget(null); setCardHistory([]); }}
           onSave={(technicianIds, date) => assignDamage(damageAssignTarget.id, technicianIds, date)}
-          onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setDamageAssignTarget(null); } : null}
+          onBack={cardHistory.length > 0 ? () => { goBackCard(); setDamageAssignTarget(null); } : null}
         />
       )}
       {completeRevisionTarget && (
@@ -4908,7 +4960,7 @@ function DispatcherApp() {
           drivers={drivers}
           technicians={technicians}
           today={today}
-          onClose={() => setCompleteJobTarget(null)}
+          onClose={() => { setCompleteJobTarget(null); goBackCard(); }}
           onSave={(data) => completeJob(completeJobTarget.id, data)}
         />
       )}
@@ -4923,23 +4975,29 @@ function DispatcherApp() {
           salespeople={salespeople}
           myEmployee={myEmployee}
           user={effectiveUser}
-          onClose={() => { setJobDetail(null); setReturnToMachine(null); }}
-          onBack={returnToMachine ? () => { setMachineCard(returnToMachine); setReturnToMachine(null); setJobDetail(null); } : null}
+          onClose={() => { setJobDetail(null); setCardHistory([]); }}
+          onBack={cardHistory.length > 0 ? () => { goBackCard(); setJobDetail(null); } : null}
           onEdit={() => {
+            pushCard("job", jobDetail);
             setShowAddJob({ existing: jobDetail });
             setJobDetail(null);
           }}
           onComplete={() => {
+            pushCard("job", jobDetail);
             setCompleteJobTarget(jobDetail);
             setJobDetail(null);
           }}
           onUncomplete={() => {
+            pushCard("job", jobDetail);
             setUncompleteJobTarget(jobDetail);
             setJobDetail(null);
           }}
           onReportDamage={() => {
             const m = enrichedMachineById[jobDetail.machineId];
-            if (m) setShowDamageReport(m);
+            if (m) {
+              pushCard("job", jobDetail);
+              setShowDamageReport(m);
+            }
             setJobDetail(null);
           }}
           onGeneratePortalLink={() => {
@@ -4958,10 +5016,15 @@ function DispatcherApp() {
           }}
           handoverProtocol={handoverProtocols.find((h) => h.jobId === jobDetail.id)}
           onOpenHandoverProtocol={() => {
+            pushCard("job", jobDetail);
             setShowHandoverProtocol(jobDetail);
             setJobDetail(null);
           }}
-          onOpenMachineCard={(m) => { setJobDetail(null); setReturnToMachine(null); setMachineCard(m); }}
+          onOpenMachineCard={(m) => {
+            pushCard("job", jobDetail);
+            setJobDetail(null);
+            setMachineCard(m);
+          }}
           onReportTransportIssue={() => setReportTransportIssueTarget(jobDetail)}
           onResolveTransportIssue={() => {
             resolveTransportIssue(jobDetail.id);
@@ -4989,7 +5052,7 @@ function DispatcherApp() {
           myEmployee={myEmployee}
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
-          onClose={() => setShowHandoverProtocol(null)}
+          onClose={() => { setShowHandoverProtocol(null); goBackCard(); }}
           onSave={(patch, baseRev, showSuccessScreen) => {
             const result = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
             if (!result) return;
@@ -4999,18 +5062,20 @@ function DispatcherApp() {
               setShowHandoverProtocol((prev) => (prev ? { ...prev, publicToken: result.publicToken } : prev));
             } else {
               setShowHandoverProtocol(null);
+              goBackCard();
             }
           }}
           onDelete={(id) => {
             askDelete("tento protokol o odovzdaní", () => {
               deleteHandoverProtocol(id);
               setShowHandoverProtocol(null);
+              goBackCard();
             });
           }}
         />
       )}
       {showAddTechnician && (
-        <AddTechnicianModal existing={showAddTechnician.existing} onClose={() => setShowAddTechnician(null)} onSave={saveTechnicianModal} />
+        <AddTechnicianModal existing={showAddTechnician.existing} onClose={() => { setShowAddTechnician(null); goBackCard(); }} onSave={saveTechnicianModal} />
       )}
       {technicianCard && (
         <TechnicianCardModal
@@ -5019,8 +5084,9 @@ function DispatcherApp() {
           machines={enrichedMachines}
           today={today}
           user={effectiveUser}
-          onClose={() => setTechnicianCard(null)}
+          onClose={() => { setTechnicianCard(null); setCardHistory([]); }}
           onEdit={() => {
+            pushCard("technician", technicianCard);
             setShowAddTechnician({ existing: technicianCard });
             setTechnicianCard(null);
           }}
@@ -8287,7 +8353,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
     >
       {onBack && (
         <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
-          ← Späť na kartu stroja
+          ← Späť
         </button>
       )}
       {job.transportIssueNote && (
@@ -9875,7 +9941,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom"
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -9904,6 +9970,11 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   return (
     <>
     <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
+      {onBack && (
+        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
+          ← Späť
+        </button>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
@@ -10447,7 +10518,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -10485,6 +10556,11 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         ) : null
       }
     >
+      {onBack && (
+        <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={onBack}>
+          ← Späť
+        </button>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         {isExterna ? (
           <>
