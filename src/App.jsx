@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.332";
+const APP_VERSION = "1.0.333";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9688,6 +9688,20 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const [depoFilter, setDepoFilter] = useState(null);
   const [sortMode, setSortMode] = useState("category"); // code | category
   const depoOptions = DEPO_OPTIONS;
+  // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
+  // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
+  // presné číslo pozná až prehliadač po vykreslení) — preto sa tu rovno odmeria
+  // (ref callback nižšie) a text sa orežie presne na túto nameranú šírku. Toto
+  // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
+  // veci počítať — spoľahlivo funguje bez ohľadu na to.
+  const [barWidths, setBarWidths] = useState({});
+  const measureBarRef = (id) => (el) => {
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w > 0) {
+      setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
+    }
+  };
 
   const base = new Date(today + "T00:00:00");
   const viewDate = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
@@ -9956,6 +9970,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       return (
                         <div
                           key={j.id}
+                          ref={measureBarRef(j.id)}
                           title={`${isDone ? "UKONČENÁ · " : ""}${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}${showNote ? " · Pozn.: " + j.notes : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -9975,22 +9990,19 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
+                            maxWidth: "100%",
                             overflow: "hidden",
+                            boxSizing: "border-box",
                           }}
                         >
-                          {/* Šírka sa NEODHADUJE v JS (skutočná šírka stĺpca v appke nie je pevné
-                              číslo — stĺpce sa naťahujú podľa voľného miesta), necháva sa na CSS/flex,
-                              nech si vezme presne toľko miesta, koľko blok reálne má. Ak sa meno (alebo
-                              poznámka) nezmestí na jeden riadok, zalomí sa na max. 2 riadky namiesto
-                              orezania — riadok stroja sa vtedy prirodzene zvýši. Zámerne bez
-                              position:sticky — v kombinácii s pružnou šírkou opakovane spôsobovalo
-                              nesprávne naťahovanie bunky, takže "drží sa pri scrollovaní" pri dlhých
-                              zákazkách teraz chýba (kompromis kvôli spoľahlivosti). */}
+                          {/* Šírka textu sa NEODHADUJE ani sa nesplieha na CSS — priamo sa odmeria
+                              skutočná vykreslená šírka tohto bloku (ref vyššie) a text sa orežie
+                              presne na ňu. Pred prvým odmeraním (zlomok sekundy) sa použije bezpečný
+                              konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria. */}
                           <div
                             className="gantt-cell"
                             style={{
-                              flex: "1 1 auto",
-                              minWidth: 0,
+                              width: barWidths[j.id] ? barWidths[j.id] - 12 : 18,
                               overflow: "hidden",
                               fontSize: 10,
                               color: "#fff",
@@ -10018,6 +10030,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       return (
                         <div
                           key={r.id}
+                          ref={measureBarRef("r-" + r.id)}
                           title={`REZERVÁCIA (nezáväzná) · ${r.customer} · ${fmtDate(r.expectedStart)} – ${noEnd ? "?" : fmtDate(r.expectedEnd)}${r.obchodnik ? " · " + r.obchodnik : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -10036,15 +10049,16 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
+                            maxWidth: "100%",
                             overflow: "hidden",
+                            boxSizing: "border-box",
                             opacity: 0.85,
                           }}
                         >
                           <div
                             className="gantt-cell"
                             style={{
-                              flex: "1 1 auto",
-                              minWidth: 0,
+                              width: barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18,
                               overflow: "hidden",
                               fontSize: 10,
                               color: "#fff",
