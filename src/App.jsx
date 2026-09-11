@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.337";
+const APP_VERSION = "1.0.338";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10033,7 +10033,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                 }}
               >
                 <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)" }}></div>
-                {allDays.map((iso) => {
+                {allDays.map((iso, i) => {
                   const isToday = iso === today;
                   const dow = new Date(iso + "T00:00:00").getDay();
                   const isWeekend = dow === 0 || dow === 6;
@@ -10045,6 +10045,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       className="mono gantt-header-cell"
                       title={iso}
                       style={{
+                        gridColumn: i + 2,
                         textAlign: "center",
                         fontSize: 11,
                         color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
@@ -10132,13 +10133,14 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         </div>
                       )}
                     </div>
-                    {allDays.map((iso) => {
+                    {allDays.map((iso, i) => {
                       const dow = new Date(iso + "T00:00:00").getDay();
                       const isWeekend = dow === 0 || dow === 6;
                       return (
                         <div
                           key={`bg-${iso}`}
                           style={{
+                            gridColumn: i + 2,
                             gridRow: 1,
                             alignSelf: "stretch",
                             height: "100%",
