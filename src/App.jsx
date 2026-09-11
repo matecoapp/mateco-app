@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.333";
+const APP_VERSION = "1.0.334";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -447,6 +447,18 @@ function salespersonColor(name, salespeople) {
   return SALESPEOPLE.find((s) => s.name === name)?.color || null;
 }
 const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Zmeria skutočnú šírku textu (v pixeloch) pre daný font, bez toho, aby sa
+// čokoľvek muselo vykresliť do DOM — používa sa na to, aby appka vopred vedela,
+// či sa krátka zákazka s dlhým menom zmestí do stĺpca, alebo či treba ten
+// konkrétny deň v Gantte rozšíriť. Jeden zdieľaný canvas (nie nový pri každom
+// volaní) kvôli výkonu.
+let _measureCanvas = null;
+function measureTextWidth(text, font) {
+  if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
+  const ctx = _measureCanvas.getContext("2d");
+  ctx.font = font;
+  return ctx.measureText(text || "").width;
+}
 const todayISO = () => toLocalISO(new Date());
 
 // meno.priezvisko@matecoslovakia.sk — odstráni diakritiku, zmení na malé písmená
@@ -9777,6 +9789,41 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     return Number(iso.slice(8, 10));
   }
 
+  // Aktívne (neukončené) krátke zákazky s dlhým menom firmy môžu potrebovať viac
+  // miesta, než im dáva základná šírka stĺpca — namiesto skrátenia textu appka
+  // v takom prípade radšej rozšíri PRESNE TEN JEDEN DEŇ, a to naprieč celým
+  // kalendárom (všetky riadky použijú ten istý vypočítaný reťazec šírok, takže
+  // ostanú medzi sebou zarovnané, bez nutnosti spájať ich do jednej mriežky).
+  // Po ukončení zákazky sa do tohto výpočtu už nezaráta a stĺpec sa sám vráti
+  // na základnú šírku. Meria sa cez canvas (rýchle, presné, nezávislé od CSS).
+  const BASE_DAY_COL_PX = 34;
+  const dayColumnExtraPx = {};
+  relevantMachines.forEach((m) => {
+    (jobsByMachine[m.id] || []).forEach((j) => {
+      if (j.status === "completed") return;
+      const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
+      const noEnd = !j.endDate;
+      const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
+      const dayCount = endCol - startCol + 1;
+      if (dayCount > 3) return; // dlhšie zákazky majú aj tak zvyčajne dosť miesta
+      const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
+      const prefixed = noEnd ? `⚠ ${label}` : label;
+      const needed = measureTextWidth(prefixed, "600 10px Barlow, sans-serif") + 16;
+      const available = dayCount * BASE_DAY_COL_PX;
+      if (needed > available) {
+        const extra = needed - available;
+        if (!dayColumnExtraPx[endCol] || dayColumnExtraPx[endCol] < extra) {
+          dayColumnExtraPx[endCol] = extra;
+        }
+      }
+    });
+  });
+  const gridColumnsTemplate = `var(--gantt-name-col) ${Array.from({ length: daysInMonth }, (_, i) => {
+    const d = i + 1;
+    const extra = dayColumnExtraPx[d] || 0;
+    return extra > 0 ? `minmax(${Math.round(BASE_DAY_COL_PX + extra)}px, 1fr)` : `minmax(var(--gantt-day-col), 1fr)`;
+  }).join(" ")}`;
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
@@ -9832,7 +9879,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-day-col), 1fr))`,
+                  gridTemplateColumns: gridColumnsTemplate,
                   gap: 2,
                   marginBottom: 4,
                   position: "sticky",
@@ -9909,7 +9956,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       onClick={() => onOpenCard(m)}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: `var(--gantt-name-col) repeat(${daysInMonth}, minmax(var(--gantt-day-col), 1fr))`,
+                        gridTemplateColumns: gridColumnsTemplate,
                         gap: 2,
                         alignItems: "center",
                         marginBottom: 3,
