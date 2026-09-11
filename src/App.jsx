@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.325";
+const APP_VERSION = "1.0.326";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9953,36 +9953,29 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
                       const showNote = !isDone && j.notes;
-                      // Textový štítok sa nikdy nesmie roztiahnuť viac než samotný farebný blok
-                      // (inak by pri krátkej zákazke prerastal do susedného bloku). Odhad šírky
-                      // dňového stĺpca je zámerne konzervatívny (menší ako reálny), aby to sedelo
-                      // aj na mobile aj na desktope.
                       const dayCount = endCol - startCol + 1;
-                      const colWidth = 24; // rovnaký konzervatívny odhad ako labelMaxWidth nižšie
-                      // Pri krátkej zákazke skús meno "pretiecť" do voľného priestoru vedľa —
-                      // najprv doprava (kým nenarazí na ďalšiu zákazku na tom istom riadku,
-                      // alebo koniec mesiaca), a až keď vpravo vôbec nie je miesto, skús doľava
-                      // (zarovnané doprava, aby text končil presne pri bloku, nie visel v prázdne).
                       // Skús pretiecť do voľného priestoru vedľa vždy, keď je nejaký k dispozícii —
-                      // netýka sa to len jednodňových/dvojdňových zákaziek, aj dlhšia zákazka
-                      // s dlhým menom firmy môže potrebovať kúsok miesta navyše.
+                      // najprv doprava (kým nenarazí na ďalšiu zákazku na tom istom riadku, alebo
+                      // koniec mesiaca), a až keď vpravo vôbec nie je miesto, skús doľava. Obmedzené
+                      // na pár dní navyše (nie "až kým niečo nenarazí"), aby sa pri poslednej/jedinej
+                      // zákazke na riadku text nenaťahoval cez takmer celý zvyšok mesiaca.
                       const MAX_OVERFLOW_COLS = 6;
-                      let labelMaxWidth = Math.max(18, dayCount * colWidth - 10);
-                      let overflowLeft = false;
                       const nextJob = mJobs[jIdx + 1];
                       const nextStartCol = nextJob ? (nextJob.startDate < monthStartISO ? 1 : dayIndex(nextJob.startDate)) : daysInMonth + 1;
                       const freeRight = Math.min(MAX_OVERFLOW_COLS, Math.max(0, nextStartCol - endCol - 1));
-                      if (freeRight > 0) {
-                        labelMaxWidth = Math.max(18, (dayCount + freeRight) * colWidth - 10);
-                      } else {
+                      let freeLeft = 0;
+                      if (freeRight === 0) {
                         const prevJob = mJobs[jIdx - 1];
                         const prevEndCol = prevJob ? (prevJob.endDate && prevJob.endDate <= monthEndISO ? dayIndex(prevJob.endDate) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS)) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS);
-                        const freeLeft = Math.min(MAX_OVERFLOW_COLS, Math.max(0, startCol - prevEndCol - 1));
-                        if (freeLeft > 0) {
-                          labelMaxWidth = Math.max(18, (dayCount + freeLeft) * colWidth - 10);
-                          overflowLeft = true;
-                        }
+                        freeLeft = Math.min(MAX_OVERFLOW_COLS, Math.max(0, startCol - prevEndCol - 1));
                       }
+                      const overflowLeft = freeRight === 0 && freeLeft > 0;
+                      // Dôležité: keď sa blok pretiahne do voľného priestoru, musí to byť naozaj
+                      // cez skutočné stĺpce mriežky (gridColumn), nie len cez CSS maxWidth na
+                      // vnorenom texte — inak sa (kvôli tomu, ako flexbox počíta minimálnu šírku
+                      // podľa obsahu) vie celá bunka riadku nečakane roztiahnuť.
+                      const displayStartCol = overflowLeft ? startCol - freeLeft : startCol;
+                      const displayEndCol = overflowLeft ? endCol : endCol + freeRight;
                       return (
                         <div
                           key={j.id}
@@ -9992,11 +9985,12 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             onOpenJob(j);
                           }}
                           style={{
-                            gridColumn: `${startCol + 1} / ${endCol + 2}`,
+                            gridColumn: `${displayStartCol + 1} / ${displayEndCol + 2}`,
                             gridRow: 1,
                             alignSelf: "stretch",
                             display: "flex",
                             alignItems: "center",
+                            justifyContent: overflowLeft ? "flex-end" : "flex-start",
                             background: bg,
                             opacity: isDone ? 0.45 : 1,
                             outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
@@ -10005,26 +9999,14 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
-                            position: "relative",
-                            zIndex: overflowLeft ? 1 : "auto",
+                            overflow: "hidden",
                           }}
                         >
-                          {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
-                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku mimo záber.
-                              Pri krátkej zákazke (labelMaxWidth rozšírený vyššie) text namiesto toho
-                              "pretečie" mimo farebný blok do voľného priestoru vedľa. */}
                           <div
                             className="gantt-cell"
                             style={{
-                              position: overflowLeft ? "absolute" : "sticky",
-                              left: overflowLeft ? "auto" : "calc(var(--gantt-name-col) + 6px)",
-                              right: overflowLeft ? 0 : "auto",
-                              display: "inline-block",
-                              maxWidth: labelMaxWidth,
+                              minWidth: 0,
                               overflow: "hidden",
-                              whiteSpace: "nowrap",
-                              textOverflow: "ellipsis",
-                              textAlign: overflowLeft ? "right" : "left",
                               fontSize: 10,
                               color: "#fff",
                               padding: "3px 6px",
