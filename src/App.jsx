@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.338";
+const APP_VERSION = "1.0.339";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9724,10 +9724,12 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
   // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
   // koniec (viď handleCalendarScroll nižšie). Rovnaký vzor ako v servisnom Gantte
-  // (TechnicianPlanner) — overený, funkčný, len prenesený sem.
-  const [monthWindow, setMonthWindow] = useState({ start: -1, end: 1 });
+  // (TechnicianPlanner) — overený, funkčný, len prenesený sem. Na začiatok len
+  // aktuálny mesiac (nie -1/+1), nech kalendár nezobrazuje zbytočne veľký rozsah
+  // dní naraz — ďalšie mesiace sa pridajú, len keď sa k okraju reálne priblížiš.
+  const [monthWindow, setMonthWindow] = useState({ start: 0, end: 0 });
   useEffect(() => {
-    setMonthWindow({ start: -1, end: 1 });
+    setMonthWindow({ start: 0, end: 0 });
   }, [monthOffset]);
 
   const allDays = useMemo(() => {
@@ -9834,6 +9836,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   relevantMachines.forEach((m) => {
     (jobsByMachine[m.id] || []).forEach((j) => {
       if (j.status === "completed") return;
+      // Ak sa začiatok alebo koniec zákazky "orezáva" na okraj aktuálne načítaného
+      // okna dní (zákazka v skutočnosti siaha ešte pred/za ním), počet dní, čo
+      // appka vidí, by bol skreslený — mohlo by to vyzerať ako krátka zákazka,
+      // hoci v skutočnosti krátka nie je, a zbytočne by to rozšírilo nesprávny
+      // stĺpec. Preto sa taká zákazka do rozširovania vôbec nepočíta.
+      if (j.startDate < windowStartISO) return;
+      if (j.endDate && j.endDate > windowEndISO) return;
       const startCol = colForDate(j.startDate, true);
       const noEnd = !j.endDate;
       const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
@@ -9947,7 +9956,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // aj pozíciu scrollu, namiesto spoliehania sa na efekt viazaný len na zmenu
   // monthOffset.
   function goToToday() {
-    setMonthWindow({ start: -1, end: 1 });
+    setMonthWindow({ start: 0, end: 0 });
     setDisplayedMonthLabel(monthLabel);
     if (monthOffset !== 0) {
       setMonthOffset(0);
@@ -9998,7 +10007,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
+          <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
@@ -10006,9 +10016,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
           )}
         </div>
-        <div style={{ justifySelf: "end" }}>
-          <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
-        </div>
+        <div />
       </div>
 
       <div className="panel" style={{ padding: 16 }}>
