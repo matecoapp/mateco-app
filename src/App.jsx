@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.324";
+const APP_VERSION = "1.0.325";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9963,26 +9963,24 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       // najprv doprava (kým nenarazí na ďalšiu zákazku na tom istom riadku,
                       // alebo koniec mesiaca), a až keď vpravo vôbec nie je miesto, skús doľava
                       // (zarovnané doprava, aby text končil presne pri bloku, nie visel v prázdne).
-                      // Voľný priestor je zámerne obmedzený na pár dní navyše (nie "až kým niečo
-                      // nenarazí") — inak by sa pri poslednej/jedinej zákazke na riadku text
-                      // naťahoval cez takmer celý zvyšok mesiaca.
+                      // Skús pretiecť do voľného priestoru vedľa vždy, keď je nejaký k dispozícii —
+                      // netýka sa to len jednodňových/dvojdňových zákaziek, aj dlhšia zákazka
+                      // s dlhým menom firmy môže potrebovať kúsok miesta navyše.
                       const MAX_OVERFLOW_COLS = 6;
                       let labelMaxWidth = Math.max(18, dayCount * colWidth - 10);
                       let overflowLeft = false;
-                      if (dayCount <= 2) {
-                        const nextJob = mJobs[jIdx + 1];
-                        const nextStartCol = nextJob ? (nextJob.startDate < monthStartISO ? 1 : dayIndex(nextJob.startDate)) : daysInMonth + 1;
-                        const freeRight = Math.min(MAX_OVERFLOW_COLS, Math.max(0, nextStartCol - endCol - 1));
-                        if (freeRight > 0) {
-                          labelMaxWidth = Math.max(18, (dayCount + freeRight) * colWidth - 10);
-                        } else {
-                          const prevJob = mJobs[jIdx - 1];
-                          const prevEndCol = prevJob ? (prevJob.endDate && prevJob.endDate <= monthEndISO ? dayIndex(prevJob.endDate) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS)) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS);
-                          const freeLeft = Math.min(MAX_OVERFLOW_COLS, Math.max(0, startCol - prevEndCol - 1));
-                          if (freeLeft > 0) {
-                            labelMaxWidth = Math.max(18, (dayCount + freeLeft) * colWidth - 10);
-                            overflowLeft = true;
-                          }
+                      const nextJob = mJobs[jIdx + 1];
+                      const nextStartCol = nextJob ? (nextJob.startDate < monthStartISO ? 1 : dayIndex(nextJob.startDate)) : daysInMonth + 1;
+                      const freeRight = Math.min(MAX_OVERFLOW_COLS, Math.max(0, nextStartCol - endCol - 1));
+                      if (freeRight > 0) {
+                        labelMaxWidth = Math.max(18, (dayCount + freeRight) * colWidth - 10);
+                      } else {
+                        const prevJob = mJobs[jIdx - 1];
+                        const prevEndCol = prevJob ? (prevJob.endDate && prevJob.endDate <= monthEndISO ? dayIndex(prevJob.endDate) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS)) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS);
+                        const freeLeft = Math.min(MAX_OVERFLOW_COLS, Math.max(0, startCol - prevEndCol - 1));
+                        if (freeLeft > 0) {
+                          labelMaxWidth = Math.max(18, (dayCount + freeLeft) * colWidth - 10);
+                          overflowLeft = true;
                         }
                       }
                       return (
