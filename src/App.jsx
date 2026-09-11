@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.326";
+const APP_VERSION = "1.0.327";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9974,8 +9974,21 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       // cez skutočné stĺpce mriežky (gridColumn), nie len cez CSS maxWidth na
                       // vnorenom texte — inak sa (kvôli tomu, ako flexbox počíta minimálnu šírku
                       // podľa obsahu) vie celá bunka riadku nečakane roztiahnuť.
+                      const overflowCols = overflowLeft ? freeLeft : freeRight;
                       const displayStartCol = overflowLeft ? startCol - freeLeft : startCol;
                       const displayEndCol = overflowLeft ? endCol : endCol + freeRight;
+                      // Farba smie pokrývať len skutočný dátumový rozsah zákazky — inak by to
+                      // vyzeralo, že zákazka trvá dlhšie, než v skutočnosti trvá. Priestor navyše
+                      // (len na text) dostane jemne priesvitnú verziu tej istej farby, oddelenú
+                      // tenkou bielou čiarou, nech je jasne vidno, kde sa reálny rozsah končí.
+                      const totalCols = dayCount + overflowCols;
+                      const realFraction = (dayCount / totalCols) * 100;
+                      const background =
+                        overflowCols === 0
+                          ? bg
+                          : overflowLeft
+                          ? `linear-gradient(to right, ${bg}55 0%, ${bg}55 calc(${100 - realFraction}% - 1px), #fff calc(${100 - realFraction}% - 1px), #fff calc(${100 - realFraction}% + 1px), ${bg} calc(${100 - realFraction}% + 1px), ${bg} 100%)`
+                          : `linear-gradient(to right, ${bg} 0%, ${bg} calc(${realFraction}% - 1px), #fff calc(${realFraction}% - 1px), #fff calc(${realFraction}% + 1px), ${bg}55 calc(${realFraction}% + 1px), ${bg}55 100%)`;
                       return (
                         <div
                           key={j.id}
@@ -9991,7 +10004,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             display: "flex",
                             alignItems: "center",
                             justifyContent: overflowLeft ? "flex-end" : "flex-start",
-                            background: bg,
+                            background,
                             opacity: isDone ? 0.45 : 1,
                             outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
                             outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
