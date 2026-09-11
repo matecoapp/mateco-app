@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.327";
+const APP_VERSION = "1.0.328";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9944,7 +9944,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         />
                       );
                     })}
-                    {mJobs.map((j, jIdx) => {
+                    {mJobs.map((j) => {
                       const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
                       const isDone = j.status === "completed";
                       const noEnd = !j.endDate;
@@ -9953,42 +9953,12 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
                       const showNote = !isDone && j.notes;
+                      // Musí to byť pevná hodnota v pixeloch, nie percentuálna (napr. "calc(100% - 8px)")
+                      // — percentuálna šírka sa vnútri flex položky v mriežke nevie vždy spoľahlivo
+                      // dopočítať a vie spôsobiť presne to isté neželané naťahovanie bunky, čo sme
+                      // riešili predtým.
                       const dayCount = endCol - startCol + 1;
-                      // Skús pretiecť do voľného priestoru vedľa vždy, keď je nejaký k dispozícii —
-                      // najprv doprava (kým nenarazí na ďalšiu zákazku na tom istom riadku, alebo
-                      // koniec mesiaca), a až keď vpravo vôbec nie je miesto, skús doľava. Obmedzené
-                      // na pár dní navyše (nie "až kým niečo nenarazí"), aby sa pri poslednej/jedinej
-                      // zákazke na riadku text nenaťahoval cez takmer celý zvyšok mesiaca.
-                      const MAX_OVERFLOW_COLS = 6;
-                      const nextJob = mJobs[jIdx + 1];
-                      const nextStartCol = nextJob ? (nextJob.startDate < monthStartISO ? 1 : dayIndex(nextJob.startDate)) : daysInMonth + 1;
-                      const freeRight = Math.min(MAX_OVERFLOW_COLS, Math.max(0, nextStartCol - endCol - 1));
-                      let freeLeft = 0;
-                      if (freeRight === 0) {
-                        const prevJob = mJobs[jIdx - 1];
-                        const prevEndCol = prevJob ? (prevJob.endDate && prevJob.endDate <= monthEndISO ? dayIndex(prevJob.endDate) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS)) : Math.max(0, startCol - 1 - MAX_OVERFLOW_COLS);
-                        freeLeft = Math.min(MAX_OVERFLOW_COLS, Math.max(0, startCol - prevEndCol - 1));
-                      }
-                      const overflowLeft = freeRight === 0 && freeLeft > 0;
-                      // Dôležité: keď sa blok pretiahne do voľného priestoru, musí to byť naozaj
-                      // cez skutočné stĺpce mriežky (gridColumn), nie len cez CSS maxWidth na
-                      // vnorenom texte — inak sa (kvôli tomu, ako flexbox počíta minimálnu šírku
-                      // podľa obsahu) vie celá bunka riadku nečakane roztiahnuť.
-                      const overflowCols = overflowLeft ? freeLeft : freeRight;
-                      const displayStartCol = overflowLeft ? startCol - freeLeft : startCol;
-                      const displayEndCol = overflowLeft ? endCol : endCol + freeRight;
-                      // Farba smie pokrývať len skutočný dátumový rozsah zákazky — inak by to
-                      // vyzeralo, že zákazka trvá dlhšie, než v skutočnosti trvá. Priestor navyše
-                      // (len na text) dostane jemne priesvitnú verziu tej istej farby, oddelenú
-                      // tenkou bielou čiarou, nech je jasne vidno, kde sa reálny rozsah končí.
-                      const totalCols = dayCount + overflowCols;
-                      const realFraction = (dayCount / totalCols) * 100;
-                      const background =
-                        overflowCols === 0
-                          ? bg
-                          : overflowLeft
-                          ? `linear-gradient(to right, ${bg}55 0%, ${bg}55 calc(${100 - realFraction}% - 1px), #fff calc(${100 - realFraction}% - 1px), #fff calc(${100 - realFraction}% + 1px), ${bg} calc(${100 - realFraction}% + 1px), ${bg} 100%)`
-                          : `linear-gradient(to right, ${bg} 0%, ${bg} calc(${realFraction}% - 1px), #fff calc(${realFraction}% - 1px), #fff calc(${realFraction}% + 1px), ${bg}55 calc(${realFraction}% + 1px), ${bg}55 100%)`;
+                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
                       return (
                         <div
                           key={j.id}
@@ -9998,13 +9968,12 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             onOpenJob(j);
                           }}
                           style={{
-                            gridColumn: `${displayStartCol + 1} / ${displayEndCol + 2}`,
+                            gridColumn: `${startCol + 1} / ${endCol + 2}`,
                             gridRow: 1,
                             alignSelf: "stretch",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: overflowLeft ? "flex-end" : "flex-start",
-                            background,
+                            background: bg,
                             opacity: isDone ? 0.45 : 1,
                             outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
                             outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
@@ -10012,21 +9981,33 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
-                            overflow: "hidden",
                           }}
                         >
+                          {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
+                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku
+                              mimo záber. Ak sa meno (alebo poznámka) nezmestí na jeden riadok v rámci
+                              vlastnej šírky bloku, zalomí sa na max. 2 riadky namiesto orezania — riadok
+                              stroja sa vtedy prirodzene zvýši (CSS to spraví samo, netreba to počítať). */}
                           <div
                             className="gantt-cell"
                             style={{
-                              minWidth: 0,
-                              overflow: "hidden",
+                              position: "sticky",
+                              left: "calc(var(--gantt-name-col) + 6px)",
+                              maxWidth: labelMaxWidth,
                               fontSize: 10,
                               color: "#fff",
                               padding: "3px 6px",
                               lineHeight: 1.3,
                             }}
                           >
-                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <div
+                              style={{
+                                display: "-webkit-box",
+                                WebkitBoxOrient: "vertical",
+                                WebkitLineClamp: 2,
+                                overflow: "hidden",
+                              }}
+                            >
                               {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                             </div>
                             {showNote && (
