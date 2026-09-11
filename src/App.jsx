@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.329";
+const APP_VERSION = "1.0.330";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9975,22 +9975,23 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
+                            overflow: "hidden",
                           }}
                         >
-                          {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
-                              tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku
-                              mimo záber. Šírka sa NEODHADUJE v JS (skutočná šírka stĺpca v appke nie je
-                              pevné číslo — stĺpce sa naťahujú podľa voľného miesta), necháva sa na CSS,
+                          {/* Šírka sa NEODHADUJE v JS (skutočná šírka stĺpca v appke nie je pevné
+                              číslo — stĺpce sa naťahujú podľa voľného miesta), necháva sa na CSS/flex,
                               nech si vezme presne toľko miesta, koľko blok reálne má. Ak sa meno (alebo
                               poznámka) nezmestí na jeden riadok, zalomí sa na max. 2 riadky namiesto
-                              orezania — riadok stroja sa vtedy prirodzene zvýši. */}
+                              orezania — riadok stroja sa vtedy prirodzene zvýši. Zámerne bez
+                              position:sticky — v kombinácii s pružnou šírkou opakovane spôsobovalo
+                              nesprávne naťahovanie bunky, takže "drží sa pri scrollovaní" pri dlhých
+                              zákazkách teraz chýba (kompromis kvôli spoľahlivosti). */}
                           <div
                             className="gantt-cell"
                             style={{
-                              position: "sticky",
-                              left: "calc(var(--gantt-name-col) + 6px)",
                               flex: "1 1 auto",
                               minWidth: 0,
+                              overflow: "hidden",
                               fontSize: 10,
                               color: "#fff",
                               padding: "3px 6px",
