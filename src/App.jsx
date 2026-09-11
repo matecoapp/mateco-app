@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.336";
+const APP_VERSION = "1.0.337";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9719,29 +9719,65 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const viewDate = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthStartISO = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const monthEndISO = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
   const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+
+  // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
+  // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
+  // koniec (viď handleCalendarScroll nižšie). Rovnaký vzor ako v servisnom Gantte
+  // (TechnicianPlanner) — overený, funkčný, len prenesený sem.
+  const [monthWindow, setMonthWindow] = useState({ start: -1, end: 1 });
+  useEffect(() => {
+    setMonthWindow({ start: -1, end: 1 });
+  }, [monthOffset]);
+
+  const allDays = useMemo(() => {
+    const days = [];
+    for (let mOff = monthWindow.start; mOff <= monthWindow.end; mOff++) {
+      const d = new Date(year, month + mOff, 1);
+      const y = d.getFullYear();
+      const mo = d.getMonth();
+      const count = new Date(y, mo + 1, 0).getDate();
+      for (let day = 1; day <= count; day++) {
+        days.push(`${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+      }
+    }
+    return days;
+  }, [year, month, monthWindow]);
+
+  // Poloha dňa v aktuálne zobrazenom pásme (nie číslo dňa v mesiaci — pri
+  // nekonečnom rolovaní je toto jediný spoľahlivý spôsob, ako umiestniť viacdňovú
+  // zákazku, keďže dni z rôznych mesiacov sedia vedľa seba).
+  const dayColByIso = useMemo(() => {
+    const map = {};
+    allDays.forEach((iso, i) => { map[iso] = i + 1; });
+    return map;
+  }, [allDays]);
+  const windowStartISO = allDays[0];
+  const windowEndISO = allDays[allDays.length - 1];
+  function colForDate(iso, clipToStart) {
+    if (iso < windowStartISO) return 1;
+    if (iso > windowEndISO) return allDays.length;
+    return dayColByIso[iso] ?? (clipToStart ? 1 : allDays.length);
+  }
 
   const jobsByMachine = useMemo(() => {
     const map = {};
     jobs.forEach((j) => {
-      if ((j.endDate && j.endDate < monthStartISO) || j.startDate > monthEndISO) return;
+      if ((j.endDate && j.endDate < windowStartISO) || j.startDate > windowEndISO) return;
       (map[j.machineId] = map[j.machineId] || []).push(j);
     });
     return map;
-  }, [jobs, monthStartISO, monthEndISO]);
+  }, [jobs, windowStartISO, windowEndISO]);
 
   const reservationsByMachine = useMemo(() => {
     const map = {};
     (reservations || []).forEach((r) => {
       if (r.status !== "approved") return;
-      if ((r.expectedEnd && r.expectedEnd < monthStartISO) || r.expectedStart > monthEndISO) return;
+      if ((r.expectedEnd && r.expectedEnd < windowStartISO) || r.expectedStart > windowEndISO) return;
       (map[r.machineId] = map[r.machineId] || []).push(r);
     });
     return map;
-  }, [reservations, monthStartISO, monthEndISO]);
+  }, [reservations, windowStartISO, windowEndISO]);
 
   let relevantMachines = machines;
   if (depoFilter) {
@@ -9785,10 +9821,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     relevantMachines = [...relevantMachines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
   }
 
-  function dayIndex(iso) {
-    return Number(iso.slice(8, 10));
-  }
-
   // Aktívne (neukončené) krátke zákazky s dlhým menom firmy môžu potrebovať viac
   // miesta, než im dáva základná šírka stĺpca — namiesto skrátenia textu appka
   // v takom prípade radšej rozšíri PRESNE TEN JEDEN DEŇ, a to naprieč celým
@@ -9802,9 +9834,9 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   relevantMachines.forEach((m) => {
     (jobsByMachine[m.id] || []).forEach((j) => {
       if (j.status === "completed") return;
-      const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
+      const startCol = colForDate(j.startDate, true);
       const noEnd = !j.endDate;
-      const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
+      const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
       const dayCount = endCol - startCol + 1;
       if (dayCount > 3) return; // dlhšie zákazky majú aj tak zvyčajne dosť miesta
       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
@@ -9819,7 +9851,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       }
     });
   });
-  const gridColumnsTemplate = `var(--gantt-name-col) ${Array.from({ length: daysInMonth }, (_, i) => {
+  const gridColumnsTemplate = `var(--gantt-name-col) ${allDays.map((_, i) => {
     const d = i + 1;
     const extra = dayColumnExtraPx[d] || 0;
     // Dôležité: rozšírený stĺpec musí byť PEVNÉ číslo, nie "minmax(X, 1fr)" — keby
@@ -9830,22 +9862,116 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     return extra > 0 ? `${Math.round(BASE_DAY_COL_PX + extra)}px` : `minmax(var(--gantt-day-col), 1fr)`;
   }).join(" ")}`;
 
+  const todayCellRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
+  const prependAnchorRef = useRef(null); // { iso, left } zachytené tesne pred pridaním mesiaca dozadu
+
+  useEffect(() => {
+    setDisplayedMonthLabel(monthLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
+  // Po pridaní mesiaca na začiatok (dozadu) sa obsah predĺži smerom doľava —
+  // bez tejto kompenzácie by to trhlo pohľad. Zakotví sa na konkrétny deň — po
+  // prekreslení sa dohľadá presne ten istý deň a scrollLeft sa doladí tak, aby
+  // ostal na tom istom mieste.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const anchor = prependAnchorRef.current;
+    if (!container || !anchor) return;
+    const cell = container.querySelector(`[data-day-iso="${anchor.iso}"]`);
+    if (cell) {
+      const newLeft = cell.getBoundingClientRect().left;
+      container.scrollLeft += newLeft - anchor.left;
+    }
+    prependAnchorRef.current = null;
+  }, [allDays]);
+
+  // Nadpis hore sa pri vodorovnom rolovaní priebežne aktualizuje podľa toho,
+  // ktorý deň je práve uprostred viditeľnej oblasti. Zároveň, keď sa priblížiš
+  // k jednému z okrajov, potichu sa pridá ďalší mesiac na ten koniec —
+  // nekonečné rolovanie, kým nestlačíš "Dnes".
+  function handleCalendarScroll() {
+    const container = scrollContainerRef.current;
+    if (!container || allDays.length === 0) return;
+    const containerRect = container.getBoundingClientRect();
+    const centerX = containerRect.left + containerRect.width / 2;
+    const headerCells = container.querySelectorAll("[data-day-iso]");
+    let closestIso = null;
+    let closestDist = Infinity;
+    let leftmostIso = null;
+    let leftmostLeft = Infinity;
+    headerCells.forEach((cell) => {
+      const rect = cell.getBoundingClientRect();
+      const dist = Math.abs(rect.left + rect.width / 2 - centerX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestIso = cell.getAttribute("data-day-iso");
+      }
+      if (rect.right >= containerRect.left && rect.left < leftmostLeft) {
+        leftmostLeft = rect.left;
+        leftmostIso = cell.getAttribute("data-day-iso");
+      }
+    });
+    if (closestIso) {
+      const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+      setDisplayedMonthLabel(label);
+    }
+
+    const EDGE_PX = 600;
+    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current) {
+      if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      setMonthWindow((w) => ({ ...w, start: w.start - 1 }));
+    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX) {
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+    }
+  }
+
+  function scrollToToday() {
+    try {
+      const container = scrollContainerRef.current;
+      const cell = todayCellRef.current;
+      if (!container || !cell) return;
+      const containerRect = container.getBoundingClientRect();
+      const cellRect = cell.getBoundingClientRect();
+      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + containerRect.width / 2);
+      container.scrollLeft = container.scrollLeft + delta;
+    } catch (e) {
+      // ignore — purely a convenience scroll
+    }
+  }
+
+  // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa klikli
+  // šípky (monthOffset teda ostáva 0) — preto tu explicitne zresetujeme okno dní
+  // aj pozíciu scrollu, namiesto spoliehania sa na efekt viazaný len na zmenu
+  // monthOffset.
+  function goToToday() {
+    setMonthWindow({ start: -1, end: 1 });
+    setDisplayedMonthLabel(monthLabel);
+    if (monthOffset !== 0) {
+      setMonthOffset(0);
+    } else {
+      const t = setTimeout(scrollToToday, 50);
+      return () => clearTimeout(t);
+    }
+  }
+
+  useEffect(() => {
+    if (monthOffset !== 0) return;
+    const t = setTimeout(scrollToToday, 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{monthLabel}</span>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
-          {monthOffset !== 0 && (
-            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => setMonthOffset(0)}>Dnes</button>
-          )}
-          {can(user, "reservation_add") && (
-            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => onAddReservation()}>
-              + Nezáväzná rezervácia
-            </button>
-          )}
-        </div>
+        {can(user, "reservation_add") ? (
+          <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => onAddReservation()}>
+            + Nezáväzná rezervácia
+          </button>
+        ) : <div />}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{ fontSize: 12 }}>
             <option value="code">Zoradiť: sériové číslo</option>
@@ -9853,24 +9979,36 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
           </select>
         </div>
       </div>
-      <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {d}
-          </button>
-        ))}
-        <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {depoOptions.map((d) => (
+            <button
+              key={d}
+              className="btn"
+              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+              style={{
+                padding: "5px 10px",
+                fontSize: 11,
+                background: depoFilter === d ? "var(--accent)" : "transparent",
+                color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+              }}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
+          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
+          {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
+            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
+          )}
+        </div>
+        <div style={{ justifySelf: "end" }}>
+          <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        </div>
       </div>
 
       <div className="panel" style={{ padding: 16 }}>
@@ -9880,7 +10018,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
           </div>
         )}
         {relevantMachines.length > 0 && (
-          <div style={{ overflow: "auto", maxHeight: "65vh" }}>
+          <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
             <div style={{ width: "100%", minWidth: "max-content" }}>
               <div
                 style={{
@@ -9895,14 +10033,15 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                 }}
               >
                 <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)" }}></div>
-                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-                  const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                {allDays.map((iso) => {
                   const isToday = iso === today;
-                  const dow = new Date(year, month, d).getDay();
+                  const dow = new Date(iso + "T00:00:00").getDay();
                   const isWeekend = dow === 0 || dow === 6;
                   return (
                     <div
-                      key={d}
+                      key={iso}
+                      ref={isToday ? todayCellRef : null}
+                      data-day-iso={iso}
                       className="mono gantt-header-cell"
                       title={iso}
                       style={{
@@ -9917,7 +10056,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       }}
                     >
                       <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                      <div>{d}</div>
+                      <div>{Number(iso.slice(8, 10))}</div>
                     </div>
                   );
                 })}
@@ -9993,15 +10132,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         </div>
                       )}
                     </div>
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-                      const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                      const dow = new Date(year, month, d).getDay();
+                    {allDays.map((iso) => {
+                      const dow = new Date(iso + "T00:00:00").getDay();
                       const isWeekend = dow === 0 || dow === 6;
                       return (
                         <div
-                          key={`bg-${d}`}
+                          key={`bg-${iso}`}
                           style={{
-                            gridColumn: d + 1,
                             gridRow: 1,
                             alignSelf: "stretch",
                             height: "100%",
@@ -10012,10 +10149,10 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       );
                     })}
                     {mJobs.map((j) => {
-                      const startCol = j.startDate < monthStartISO ? 1 : dayIndex(j.startDate);
+                      const startCol = colForDate(j.startDate, true);
                       const isDone = j.status === "completed";
                       const noEnd = !j.endDate;
-                      const endCol = noEnd || j.endDate > monthEndISO ? daysInMonth : dayIndex(j.endDate);
+                      const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
                       const st = effectiveStatus(j, today);
                       const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
@@ -10092,9 +10229,9 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       );
                     })}
                     {mReservations.map((r) => {
-                      const startCol = r.expectedStart < monthStartISO ? 1 : dayIndex(r.expectedStart);
+                      const startCol = colForDate(r.expectedStart, true);
                       const noEnd = !r.expectedEnd;
-                      const endCol = noEnd || r.expectedEnd > monthEndISO ? daysInMonth : dayIndex(r.expectedEnd);
+                      const endCol = noEnd ? allDays.length : colForDate(r.expectedEnd, false);
                       const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       return (
                         <div
