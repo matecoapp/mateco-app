@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.331";
+const APP_VERSION = "1.0.332";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9998,14 +9998,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                               lineHeight: 1.3,
                             }}
                           >
-                            <div
-                              style={{
-                                display: "-webkit-box",
-                                WebkitBoxOrient: "vertical",
-                                WebkitLineClamp: 2,
-                                overflow: "hidden",
-                              }}
-                            >
+                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                             </div>
                             {showNote && (
@@ -10060,14 +10053,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                               lineHeight: 1.3,
                             }}
                           >
-                            <div
-                              style={{
-                                display: "-webkit-box",
-                                WebkitBoxOrient: "vertical",
-                                WebkitLineClamp: 2,
-                                overflow: "hidden",
-                              }}
-                            >
+                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               📋 {r.customer}
                             </div>
                           </div>
