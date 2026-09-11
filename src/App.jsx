@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.330";
+const APP_VERSION = "1.0.331";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10022,8 +10022,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       const noEnd = !r.expectedEnd;
                       const endCol = noEnd || r.expectedEnd > monthEndISO ? daysInMonth : dayIndex(r.expectedEnd);
                       const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
-                      const dayCount = endCol - startCol + 1;
-                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
                       return (
                         <div
                           key={r.id}
@@ -10045,26 +10043,33 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             fontWeight: 600,
                             cursor: "pointer",
                             minWidth: 0,
+                            overflow: "hidden",
                             opacity: 0.85,
                           }}
                         >
                           <div
                             className="gantt-cell"
                             style={{
-                              position: "sticky",
-                              left: "calc(var(--gantt-name-col) + 6px)",
-                              display: "inline-block",
-                              maxWidth: labelMaxWidth,
+                              flex: "1 1 auto",
+                              minWidth: 0,
                               overflow: "hidden",
-                              whiteSpace: "nowrap",
-                              textOverflow: "ellipsis",
                               fontSize: 10,
                               color: "#fff",
                               textShadow: "0 1px 2px rgba(0,0,0,.6)",
                               padding: "3px 6px",
+                              lineHeight: 1.3,
                             }}
                           >
-                            📋 {r.customer}
+                            <div
+                              style={{
+                                display: "-webkit-box",
+                                WebkitBoxOrient: "vertical",
+                                WebkitLineClamp: 2,
+                                overflow: "hidden",
+                              }}
+                            >
+                              📋 {r.customer}
+                            </div>
                           </div>
                         </div>
                       );
