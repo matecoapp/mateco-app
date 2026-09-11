@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.334";
+const APP_VERSION = "1.0.335";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9797,6 +9797,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // Po ukončení zákazky sa do tohto výpočtu už nezaráta a stĺpec sa sám vráti
   // na základnú šírku. Meria sa cez canvas (rýchle, presné, nezávislé od CSS).
   const BASE_DAY_COL_PX = 34;
+  const MAX_EXTRA_PX = 220; // strop na rozumnú maximálnu šírku stĺpca navyše, aj pri extrémne dlhom texte
   const dayColumnExtraPx = {};
   relevantMachines.forEach((m) => {
     (jobsByMachine[m.id] || []).forEach((j) => {
@@ -9811,7 +9812,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       const needed = measureTextWidth(prefixed, "600 10px Barlow, sans-serif") + 16;
       const available = dayCount * BASE_DAY_COL_PX;
       if (needed > available) {
-        const extra = needed - available;
+        const extra = Math.min(MAX_EXTRA_PX, needed - available);
         if (!dayColumnExtraPx[endCol] || dayColumnExtraPx[endCol] < extra) {
           dayColumnExtraPx[endCol] = extra;
         }
