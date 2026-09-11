@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.328";
+const APP_VERSION = "1.0.329";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9953,12 +9953,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                       const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
                       const showNote = !isDone && j.notes;
-                      // Musí to byť pevná hodnota v pixeloch, nie percentuálna (napr. "calc(100% - 8px)")
-                      // — percentuálna šírka sa vnútri flex položky v mriežke nevie vždy spoľahlivo
-                      // dopočítať a vie spôsobiť presne to isté neželané naťahovanie bunky, čo sme
-                      // riešili predtým.
-                      const dayCount = endCol - startCol + 1;
-                      const labelMaxWidth = Math.max(18, dayCount * 24 - 10);
                       return (
                         <div
                           key={j.id}
@@ -9985,15 +9979,18 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         >
                           {/* Text sa "drží" viditeľnej časti pri scrollovaní — pri viacdňovej zákazke
                               tak zostáva čitateľný názov firmy, nielen farba, aj keď je začiatok bloku
-                              mimo záber. Ak sa meno (alebo poznámka) nezmestí na jeden riadok v rámci
-                              vlastnej šírky bloku, zalomí sa na max. 2 riadky namiesto orezania — riadok
-                              stroja sa vtedy prirodzene zvýši (CSS to spraví samo, netreba to počítať). */}
+                              mimo záber. Šírka sa NEODHADUJE v JS (skutočná šírka stĺpca v appke nie je
+                              pevné číslo — stĺpce sa naťahujú podľa voľného miesta), necháva sa na CSS,
+                              nech si vezme presne toľko miesta, koľko blok reálne má. Ak sa meno (alebo
+                              poznámka) nezmestí na jeden riadok, zalomí sa na max. 2 riadky namiesto
+                              orezania — riadok stroja sa vtedy prirodzene zvýši. */}
                           <div
                             className="gantt-cell"
                             style={{
                               position: "sticky",
                               left: "calc(var(--gantt-name-col) + 6px)",
-                              maxWidth: labelMaxWidth,
+                              flex: "1 1 auto",
+                              minWidth: 0,
                               fontSize: 10,
                               color: "#fff",
                               padding: "3px 6px",
