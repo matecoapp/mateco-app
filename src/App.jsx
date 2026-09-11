@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.339";
+const APP_VERSION = "1.0.340";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9904,6 +9904,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   function handleCalendarScroll() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
+    // Poistka proti nekonečnej slučke: keď sa (napr. po znížení počiatočného
+    // rozsahu na jeden mesiac) celý obsah zmestí do viditeľnej šírky bez
+    // scrollovania, "scrollLeft" ostáva 0 — čo appka vyhodnotí ako "som pri
+    // okraji" a pridá ďalší mesiac, ten sa tiež hneď zmestí, znova sa vyhodnotí
+    // ako "pri okraji" atď. donekonečna. Ak sa reálne nedá scrollovať vôbec,
+    // netreba nič rozširovať — až prvý skutočný scroll tento mechanizmus zapne.
+    if (container.scrollWidth <= container.clientWidth) return;
     const containerRect = container.getBoundingClientRect();
     const centerX = containerRect.left + containerRect.width / 2;
     const headerCells = container.querySelectorAll("[data-day-iso]");
