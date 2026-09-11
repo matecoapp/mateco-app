@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.335";
+const APP_VERSION = "1.0.336";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9822,7 +9822,12 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const gridColumnsTemplate = `var(--gantt-name-col) ${Array.from({ length: daysInMonth }, (_, i) => {
     const d = i + 1;
     const extra = dayColumnExtraPx[d] || 0;
-    return extra > 0 ? `minmax(${Math.round(BASE_DAY_COL_PX + extra)}px, 1fr)` : `minmax(var(--gantt-day-col), 1fr)`;
+    // Dôležité: rozšírený stĺpec musí byť PEVNÉ číslo, nie "minmax(X, 1fr)" — keby
+    // bol aj on "1fr" (rovnaký podiel ako ostatné), CSS mriežka by ich všetky
+    // vyrovnala na najväčšiu potrebnú hodnotu spomedzi všetkých stĺpcov s "1fr"
+    // (presne to spôsobovalo, že sa "rozťahovalo všetko"). Overené priamo v
+    // reálnom prehliadači (Chromium cez Playwright), nie len odhadom.
+    return extra > 0 ? `${Math.round(BASE_DAY_COL_PX + extra)}px` : `minmax(var(--gantt-day-col), 1fr)`;
   }).join(" ")}`;
 
   return (
@@ -10018,54 +10023,70 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       return (
                         <div
                           key={j.id}
-                          ref={measureBarRef(j.id)}
-                          title={`${isDone ? "UKONČENÁ · " : ""}${j.customer || "—"} · ${fmtDate(j.startDate)} – ${noEnd ? "bez určeného konca" : fmtDate(j.endDate)}${j.obchodnik ? " · " + j.obchodnik : ""}${showNote ? " · Pozn.: " + j.notes : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenJob(j);
-                          }}
-                          style={{
-                            gridColumn: `${startCol + 1} / ${endCol + 2}`,
-                            gridRow: 1,
-                            alignSelf: "stretch",
-                            display: "flex",
-                            alignItems: "center",
-                            background: bg,
-                            opacity: isDone ? 0.45 : 1,
-                            outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
-                            outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            minWidth: 0,
-                            maxWidth: "100%",
-                            overflow: "hidden",
-                            boxSizing: "border-box",
-                          }}
+                          className="gantt-bar-wrap"
+                          style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
                         >
-                          {/* Šírka textu sa NEODHADUJE ani sa nesplieha na CSS — priamo sa odmeria
-                              skutočná vykreslená šírka tohto bloku (ref vyššie) a text sa orežie
-                              presne na ňu. Pred prvým odmeraním (zlomok sekundy) sa použije bezpečný
-                              konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria. */}
                           <div
-                            className="gantt-cell"
+                            ref={measureBarRef(j.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenJob(j);
+                            }}
                             style={{
-                              width: barWidths[j.id] ? barWidths[j.id] - 12 : 18,
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              background: bg,
+                              opacity: isDone ? 0.45 : 1,
+                              outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
+                              outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
+                              borderRadius: 4,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              minWidth: 0,
+                              maxWidth: "100%",
                               overflow: "hidden",
-                              fontSize: 10,
-                              color: "#fff",
-                              padding: "3px 6px",
-                              lineHeight: 1.3,
+                              boxSizing: "border-box",
                             }}
                           >
-                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
-                            </div>
-                            {showNote && (
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
-                                📝 {j.notes}
+                            {/* Šírka textu sa NEODHADUJE ani sa nesplieha na CSS — priamo sa odmeria
+                                skutočná vykreslená šírka tohto bloku (ref vyššie) a text sa orežie
+                                presne na ňu. Pred prvým odmeraním (zlomok sekundy) sa použije bezpečný
+                                konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria.
+                                position:sticky — overené priamo v reálnom prehliadači (Chromium/Playwright),
+                                že v kombinácii s pevnou (nie pružnou) šírkou je bezpečné — text sa pri
+                                viacdňovej zákazke drží viditeľnej časti obrazovky pri scrollovaní. */}
+                            <div
+                              className="gantt-cell"
+                              style={{
+                                position: "sticky",
+                                left: "calc(var(--gantt-name-col) + 6px)",
+                                width: barWidths[j.id] ? barWidths[j.id] - 12 : 18,
+                                overflow: "hidden",
+                                fontSize: 10,
+                                color: "#fff",
+                                padding: "3px 6px",
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                               </div>
-                            )}
+                              {showNote && (
+                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
+                                  📝 {j.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {/* Okamžitý tooltip (CSS :hover) namiesto pomalého natívneho — celé meno,
+                              dátumy, zákazník aj poznámka, hneď pri prejdení myšou. */}
+                          <div className="gantt-tooltip">
+                            <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
+                            <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
+                            {j.obchodnik && <div>Obchodník: {j.obchodnik}</div>}
+                            {showNote && <div>📝 {j.notes}</div>}
                           </div>
                         </div>
                       );
@@ -10078,46 +10099,56 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       return (
                         <div
                           key={r.id}
-                          ref={measureBarRef("r-" + r.id)}
-                          title={`REZERVÁCIA (nezáväzná) · ${r.customer} · ${fmtDate(r.expectedStart)} – ${noEnd ? "?" : fmtDate(r.expectedEnd)}${r.obchodnik ? " · " + r.obchodnik : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenReservation(r);
-                          }}
-                          style={{
-                            gridColumn: `${startCol + 1} / ${endCol + 2}`,
-                            gridRow: 1,
-                            alignSelf: "stretch",
-                            display: "flex",
-                            alignItems: "center",
-                            background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
-                            outline: "2px dashed var(--text-dim)",
-                            outlineOffset: "-1px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            minWidth: 0,
-                            maxWidth: "100%",
-                            overflow: "hidden",
-                            boxSizing: "border-box",
-                            opacity: 0.85,
-                          }}
+                          className="gantt-bar-wrap"
+                          style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
                         >
                           <div
-                            className="gantt-cell"
+                            ref={measureBarRef("r-" + r.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenReservation(r);
+                            }}
                             style={{
-                              width: barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18,
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
+                              outline: "2px dashed var(--text-dim)",
+                              outlineOffset: "-1px",
+                              borderRadius: 4,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              minWidth: 0,
+                              maxWidth: "100%",
                               overflow: "hidden",
-                              fontSize: 10,
-                              color: "#fff",
-                              textShadow: "0 1px 2px rgba(0,0,0,.6)",
-                              padding: "3px 6px",
-                              lineHeight: 1.3,
+                              boxSizing: "border-box",
+                              opacity: 0.85,
                             }}
                           >
-                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              📋 {r.customer}
+                            <div
+                              className="gantt-cell"
+                              style={{
+                                position: "sticky",
+                                left: "calc(var(--gantt-name-col) + 6px)",
+                                width: barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18,
+                                overflow: "hidden",
+                                fontSize: 10,
+                                color: "#fff",
+                                textShadow: "0 1px 2px rgba(0,0,0,.6)",
+                                padding: "3px 6px",
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                📋 {r.customer}
+                              </div>
                             </div>
+                          </div>
+                          <div className="gantt-tooltip">
+                            <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
+                            <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
+                            {r.obchodnik && <div>Obchodník: {r.obchodnik}</div>}
                           </div>
                         </div>
                       );
@@ -15323,6 +15354,29 @@ function GlobalStyle() {
       }
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+      /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
+         natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS. */
+      .gantt-bar-wrap { position: relative; }
+      .gantt-tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        margin-bottom: 5px;
+        background: #1a1a1a;
+        color: #fff;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 7px 10px;
+        border-radius: 6px;
+        white-space: normal;
+        width: max-content;
+        max-width: 260px;
+        z-index: 50;
+        pointer-events: none;
+      }
+      .gantt-bar-wrap:hover .gantt-tooltip { visibility: visible; opacity: 1; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
