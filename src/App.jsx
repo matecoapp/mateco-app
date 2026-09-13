@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.351";
+const APP_VERSION = "1.0.352";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9888,25 +9888,23 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     // Poistka č.2: nedovoľ prekrývajúce sa rozšírenia skôr, než sa predošlé
     // stihlo prejaviť vo vykreslení.
     if (scrollExpandLockRef.current) return;
-    const containerRect = container.getBoundingClientRect();
-    const centerX = containerRect.left + containerRect.width / 2;
-    const headerCells = container.querySelectorAll("[data-day-iso]");
-    let closestIso = null;
-    let closestDist = Infinity;
-    let leftmostIso = null;
-    let leftmostLeft = Infinity;
-    headerCells.forEach((cell) => {
-      const rect = cell.getBoundingClientRect();
-      const dist = Math.abs(rect.left + rect.width / 2 - centerX);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestIso = cell.getAttribute("data-day-iso");
-      }
-      if (rect.right >= containerRect.left && rect.left < leftmostLeft) {
-        leftmostLeft = rect.left;
-        leftmostIso = cell.getAttribute("data-day-iso");
-      }
-    });
+    // Dôležité pre plynulosť: poloha sa počíta ČISTO ARITMETICKY (šírka stĺpca
+    // dňa + medzera, obe známe vopred z CSS), nie meraním KAŽDEJ bunky v
+    // hlavičke cez getBoundingClientRect — to bolo pri desiatkach/stovkách dní
+    // (a najmä pri veľa riadkoch strojov) badateľne pomalé a spôsobovalo
+    // sekanie pri scrollovaní. Mierna nepresnosť (o deň-dva) tu nevadí, používa
+    // sa len na kozmetický popisok mesiaca a na kotviaci bod pri rozširovaní.
+    const styles = getComputedStyle(container);
+    const dayColPx = parseFloat(styles.getPropertyValue("--gantt-day-col")) || 34;
+    const nameColPx = parseFloat(styles.getPropertyValue("--gantt-name-col")) || 150;
+    const stepPx = dayColPx + 2; // +2 = grid gap
+    const scrollLeft = container.scrollLeft;
+    const containerLeft = container.getBoundingClientRect().left; // jediné meranie DOM za celý výpočet
+    const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
+    const leftmostIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor(scrollLeft / stepPx)));
+    const closestIso = allDays[centerIdx];
+    const leftmostIso = allDays[leftmostIdx];
+    const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
     if (closestIso) {
       const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
       setDisplayedMonthLabel(label);
