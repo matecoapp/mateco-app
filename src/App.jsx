@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.355";
+const APP_VERSION = "1.0.356";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7585,11 +7585,22 @@ function MaskotChatWidget({ session }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({ message: text, history }),
       });
-      const data = await resp.json();
+      const rawText = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        // Odpoveď nebola JSON — najčastejšie to znamená chybu ešte pred samotnou
+        // funkciou (napr. brána Supabase niečo odmietla) — ukáž aspoň stav a
+        // začiatok textu, nech je z toho jasnejšie, čo sa deje, než len "zlyhalo".
+        setMessages((m) => [...m, { role: "assistant", text: `⚠️ Neočakávaná odpoveď (HTTP ${resp.status}): ${rawText.slice(0, 200) || "(prázdne telo)"}` }]);
+        return;
+      }
       if (data.error) {
         setMessages((m) => [...m, { role: "assistant", text: "⚠️ " + data.error }]);
       } else {
