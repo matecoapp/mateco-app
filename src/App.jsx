@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.365";
+const APP_VERSION = "1.0.366";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7846,7 +7846,7 @@ function MaskotChatWidget({ session }) {
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        <img src="/maskot-logo.png" alt="maSKot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img src={import.meta.env.BASE_URL + "maskot-logo.png"} alt="maSKot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </button>
       {open && (
         <div
@@ -7871,7 +7871,7 @@ function MaskotChatWidget({ session }) {
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "2px solid #fff", overflow: "hidden", flexShrink: 0, display: "inline-block" }}>
-                <img src="/maskot-logo.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={import.meta.env.BASE_URL + "maskot-logo.png"} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               </span>
               maSKot (beta)
             </span>
