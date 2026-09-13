@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.345";
+const APP_VERSION = "1.0.347";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9858,7 +9858,15 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   }, [allDays, monthWindow]);
 
   const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam
+  const scrollFrameRef = useRef(null); // nech sa výpočet spustí max. raz za snímku, nie pri každom scroll evente
   function handleCalendarScroll() {
+    if (scrollFrameRef.current) return; // snímka je už naplánovaná, netreba plánovať ďalšiu
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      runCalendarScrollCheck();
+    });
+  }
+  function runCalendarScrollCheck() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
     // Poistka č.1: keď sa celý obsah zmestí do viditeľnej šírky bez
@@ -10163,7 +10171,10 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                               cursor: "pointer",
                               minWidth: 0,
                               maxWidth: "100%",
-                              overflow: "hidden",
+                              // Dôležité: NIE overflow:hidden tu — na priamom rodičovi elementu s
+                              // position:sticky by to sticky úplne vypNULO (overené priamo v
+                              // prehliadači). Orezanie textu rieši samotný label o riadok nižšie,
+                              // ktorý má vlastné overflow:hidden — to stačí, nič nepretečie.
                               boxSizing: "border-box",
                             }}
                           >
@@ -10240,7 +10251,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                               cursor: "pointer",
                               minWidth: 0,
                               maxWidth: "100%",
-                              overflow: "hidden",
                               boxSizing: "border-box",
                               opacity: 0.85,
                             }}
