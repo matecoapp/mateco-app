@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.360";
+const APP_VERSION = "1.0.361";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7598,6 +7598,13 @@ function MaskotChatWidget({ session }) {
   const recognitionRef = useRef(null);
   const historyRef = useRef([]); // aktuálna história pre send() volaný z hlasového callbacku (mimo React render cyklu)
   const conversationModeRef = useRef(false); // to isté — nech onend/onresult callbacky vidia aktuálnu hodnotu, nie tú zo starého uzáveru
+  const listeningRef = useRef(false); // to isté pre "listening" — potrebné pri rozhodovaní štart/stop mimo renderu
+  // Rastúce číslo pri každom novom spustení počúvania — starý ("zastaraný")
+  // objekt tak vie sám spoznať, že už nie je ten aktuálny, a jeho oneskorené
+  // udalosti (onend/onresult) sa jednoducho ignorujú namiesto toho, aby
+  // omylom prepísali stav novšieho počúvania. Presne toto spôsobovalo dojem
+  // "zapína/vypína sa samo".
+  const recognitionGenRef = useRef(0);
 
   useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
   useEffect(() => { historyRef.current = history; }, [history]);
@@ -7622,29 +7629,60 @@ function MaskotChatWidget({ session }) {
     window.speechSynthesis.speak(utter);
   }
 
-  function toggleVoiceInput() {
+  function stopListening() {
+    recognitionGenRef.current++; // zneplatní čokoľvek prebiehajúce, nech jeho udalosti už nič nerobia
+    recognitionRef.current?.stop();
+    listeningRef.current = false;
+    setListening(false);
+  }
+
+  function startListening() {
     if (!SpeechRecognitionApi) return;
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+    // Nikdy nespúšťaj dve naraz — najprv poriadne ukonči prípadné predošlé.
+    if (listeningRef.current) stopListening();
+    const myGen = ++recognitionGenRef.current;
     const recognition = new SpeechRecognitionApi();
     recognition.lang = "sk-SK";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (e) => {
+      if (recognitionGenRef.current !== myGen) return; // zastaraná inštancia, ignoruj
       const transcript = e.results[0][0].transcript;
+      // Explicitne zastav počúvanie HNEĎ, nech appka určite nezachytáva mikrofón
+      // ešte aj počas toho, čo sama odpovedá nahlas (tam by mohla "začuť" samu seba).
+      recognition.stop();
       if (conversationModeRef.current) {
         send(transcript); // v rozhovore sa pýtaj rovno, netreba ešte klikať na odoslanie
       } else {
         setInput((prev) => (prev ? prev + " " + transcript : transcript));
       }
     };
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
+    recognition.onerror = (e) => {
+      if (recognitionGenRef.current !== myGen) return;
+      listeningRef.current = false;
+      setListening(false);
+      // "no-speech" = jednoducho ešte nikto nič nepovedal — v rozhovore to nie
+      // je dôvod celý rozhovor ukončiť, len to skús počúvať znova.
+      if (conversationModeRef.current && e?.error === "no-speech") {
+        setTimeout(() => {
+          if (conversationModeRef.current && !listeningRef.current) startListening();
+        }, 400);
+      }
+    };
+    recognition.onend = () => {
+      if (recognitionGenRef.current !== myGen) return;
+      listeningRef.current = false;
+      setListening(false);
+    };
     recognitionRef.current = recognition;
     recognition.start();
+    listeningRef.current = true;
     setListening(true);
+  }
+
+  function toggleVoiceInput() {
+    if (listeningRef.current) stopListening();
+    else startListening();
   }
 
   useEffect(() => {
@@ -7656,9 +7694,13 @@ function MaskotChatWidget({ session }) {
   function toggleConversationMode() {
     setConversationMode((v) => {
       const next = !v;
+      conversationModeRef.current = next; // hneď, nech to callbacky vidia okamžite (nie až po budúcom renderi)
       if (!next) {
         window.speechSynthesis?.cancel();
-        recognitionRef.current?.stop();
+        stopListening();
+      } else {
+        // Hneď pri zapnutí začni počúvať, nech netreba ešte extra kliknúť na mikrofón.
+        startListening();
       }
       return next;
     });
@@ -7702,7 +7744,7 @@ function MaskotChatWidget({ session }) {
           // Po dohovorení appka sama znova začne počúvať — plynulý rozhovor
           // bez ďalšieho klikania, kým rozhovor niekto ručne nevypne.
           speak(replyText, () => {
-            if (conversationModeRef.current) toggleVoiceInput();
+            if (conversationModeRef.current) startListening();
           });
         }
       }
