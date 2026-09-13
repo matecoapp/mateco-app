@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.359";
+const APP_VERSION = "1.0.360";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7562,6 +7562,30 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 // od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
 // maSKot — AI asistent appky, plávajúce tlačidlo + jednoduché chat okno.
 // Zatiaľ len na testovanie (pozri podmienku vyššie, kde sa toto renderuje).
+// maSKot — logo/ikona: nožnicová pracovná plošina, čo v koši "vezie" nápis AI.
+// SVG (nie obrázok) — ostré pri akejkoľvek veľkosti, farba sa dá meniť cez props.
+function MaskotIcon({ size = 24, liftColor = "#fff", basketFill = "#fff", basketText = "var(--accent)" }) {
+  return (
+    <svg viewBox="0 0 100 120" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
+      <rect x="30" y="104" width="40" height="9" rx="2" fill={liftColor} />
+      <circle cx="38" cy="117" r="4" fill={liftColor} />
+      <circle cx="62" cy="117" r="4" fill={liftColor} />
+      <g stroke={liftColor} strokeWidth="5" fill="none" strokeLinecap="round">
+        <line x1="32" y1="104" x2="68" y2="74" />
+        <line x1="68" y1="104" x2="32" y2="74" />
+        <line x1="32" y1="74" x2="68" y2="44" />
+        <line x1="68" y1="74" x2="32" y2="44" />
+        <line x1="32" y1="44" x2="68" y2="18" />
+        <line x1="68" y1="44" x2="32" y2="18" />
+      </g>
+      <rect x="16" y="4" width="4" height="12" fill={liftColor} />
+      <rect x="80" y="4" width="4" height="12" fill={liftColor} />
+      <rect x="16" y="6" width="68" height="16" rx="3" fill={basketFill} />
+      <text x="50" y="19" fontSize="13" fontWeight="800" fill={basketText} textAnchor="middle" fontFamily="Arial, sans-serif">AI</text>
+    </svg>
+  );
+}
+
 function MaskotChatWidget({ session }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // [{ role: "user"|"assistant", text }]
@@ -7710,7 +7734,7 @@ function MaskotChatWidget({ session }) {
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        🐿️
+        <MaskotIcon size={30} />
       </button>
       {open && (
         <div
@@ -7733,7 +7757,7 @@ function MaskotChatWidget({ session }) {
           }}
         >
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>🐿️ maSKot (test)</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MaskotIcon size={18} /> maSKot (test)</span>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {SpeechRecognitionApi && canSpeak && (
                 <button
