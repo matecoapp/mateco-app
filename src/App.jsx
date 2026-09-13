@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.349";
+const APP_VERSION = "1.0.350";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10210,7 +10210,11 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                                 // vopred vyhradeného miesta. Horný strop (260px) je len pre extrémne
                                 // dlhé mená, nech má sticky vždy kam sa "posúvať". Overené v prehliadači.
                                 width: "fit-content",
-                                maxWidth: Math.min(barWidths[j.id] ? barWidths[j.id] - 12 : 18, 260),
+                                // Dôležité: NEODČÍTAVA sa nič na padding — appka má globálne
+                                // box-sizing:border-box, takže padding labelu je už súčasťou jeho
+                                // vlastnej šírky, nie navyše k nej. Odčítanie by len zbytočne
+                                // nechalo kúsok bloku bez textu (overené priamo v prehliadači).
+                                maxWidth: Math.min(barWidths[j.id] || 18, 260),
                                 overflow: "hidden",
                                 fontSize: 10,
                                 color: "#fff",
@@ -10280,7 +10284,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                                 position: "sticky",
                                 left: "calc(var(--gantt-name-col) + 6px)",
                                 width: "fit-content",
-                                maxWidth: Math.min(barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18, 260),
+                                maxWidth: Math.min(barWidths["r-" + r.id] || 18, 260),
                                 overflow: "hidden",
                                 fontSize: 10,
                                 color: "#fff",
