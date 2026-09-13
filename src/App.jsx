@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.341";
+const APP_VERSION = "1.0.342";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9707,13 +9707,21 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
   // veci počítať — spoľahlivo funguje bez ohľadu na to.
   const [barWidths, setBarWidths] = useState({});
-  const measureBarRef = (id) => (el) => {
+  // Dôležité: toto MUSÍ byť jedna stabilná funkcia (nie nová zakaždým cez
+  // "measureBarRef(id) => (el) => ..."), inak React pri KAŽDOM prekreslení
+  // (nielen keď sa blok naozaj zmení) odpojí a znova pripojí meranie na
+  // úplne všetkých blokoch naraz — presne to spôsobovalo nekonečnú slučku pri
+  // prepnutí mesiaca (veľa blokov s inými dátami naraz). ID bloku sa namiesto
+  // zachytávania v uzávere číta z data atribútu priamo na prvku.
+  const measureBarRef = useCallback((el) => {
     if (!el) return;
+    const id = el.getAttribute("data-bar-id");
+    if (!id) return;
     const w = el.clientWidth;
     if (w > 0) {
       setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
     }
-  };
+  }, []);
 
   const base = new Date(today + "T00:00:00");
   const viewDate = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
@@ -10194,7 +10202,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                           style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
                         >
                           <div
-                            ref={measureBarRef(j.id)}
+                            ref={measureBarRef}
+                            data-bar-id={j.id}
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenJob(j);
@@ -10270,7 +10279,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                           style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
                         >
                           <div
-                            ref={measureBarRef("r-" + r.id)}
+                            ref={measureBarRef}
+                            data-bar-id={"r-" + r.id}
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenReservation(r);
