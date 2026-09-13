@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.348";
+const APP_VERSION = "1.0.349";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9695,18 +9695,31 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
   // veci počítať — spoľahlivo funguje bez ohľadu na to.
   const [barWidths, setBarWidths] = useState({});
-  // Dôležité: toto MUSÍ byť jedna stabilná funkcia (nie nová zakaždým), inak
+  // Dôležité: ref callback MUSÍ byť jedna stabilná funkcia (nie nová zakaždým), inak
   // React pri KAŽDOM prekreslení odpojí a znova pripojí meranie na úplne
   // všetkých blokoch naraz — to spôsobovalo nekonečnú slučku pri prepnutí
-  // mesiaca. ID bloku sa preto číta z data atribútu priamo na prvku.
+  // mesiaca. Zároveň sa ale nesmie merať len raz pri vytvorení bloku (to viedlo
+  // k inému problému — zastaranej šírke, keď sa mriežka neskôr zúžila/rozšírila,
+  // napr. pridaním ďalších mesiacov pri scrollovaní) — preto sa šírka sleduje
+  // priebežne cez ResizeObserver, nie len pri prvom pripojení. ID bloku sa číta
+  // z data atribútu priamo na prvku.
+  const barObserversRef = useRef(new Map());
   const measureBarRef = useCallback((el) => {
     if (!el) return;
     const id = el.getAttribute("data-bar-id");
     if (!id) return;
-    const w = el.clientWidth;
-    if (w > 0) {
-      setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
-    }
+    const existing = barObserversRef.current.get(id);
+    if (existing) existing.disconnect();
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) {
+        setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    barObserversRef.current.set(id, ro);
   }, []);
 
   const base = new Date(today + "T00:00:00");
