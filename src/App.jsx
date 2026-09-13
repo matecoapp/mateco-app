@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.352";
+const APP_VERSION = "1.0.353";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5964,6 +5964,21 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               title="Otvorí email s pripomienkami k platforme"
             >
               ✉️ Odoslať mail s pripomienkami
+            </button>
+            <button
+              onClick={onOpenPhoneDirectory}
+              style={{
+                fontSize: 13,
+                color: "#fff",
+                background: "rgba(255,255,255,.12)",
+                border: "1px solid rgba(255,255,255,.25)",
+                borderRadius: 4,
+                padding: "3px 9px",
+                cursor: "pointer",
+              }}
+              title="Telefónny zoznam"
+            >
+              📞
             </button>
             <NotificationBell
               notifications={myNotifications}
