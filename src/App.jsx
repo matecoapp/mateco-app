@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.354";
+const APP_VERSION = "1.0.355";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4700,6 +4700,9 @@ function DispatcherApp() {
       {showPhoneDirectory && (
         <PhoneDirectoryModal employees={employees} onClose={() => setShowPhoneDirectory(false)} />
       )}
+      {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
+          Keď sa osvedčí, rozšíriť podmienku na ďalšie role. */}
+      {effectiveUser?.role === "admin" && <MaskotChatWidget session={session} />}
       {showUnknownSerialReport && (
         <UnknownSerialDamageModal
           onClose={() => setShowUnknownSerialReport(false)}
@@ -7557,6 +7560,138 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 // Telefónny zoznam — všetci aktívni zamestnanci naprieč rolami, s klikateľným
 // číslom (tel: odkaz). Na mobile to rovno otvorí telefón, na počítači to závisí
 // od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
+// maSKot — AI asistent appky, plávajúce tlačidlo + jednoduché chat okno.
+// Zatiaľ len na testovanie (pozri podmienku vyššie, kde sa toto renderuje).
+function MaskotChatWidget({ session }) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([]); // [{ role: "user"|"assistant", text }]
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState([]); // surové kolá konverzácie vo formáte Anthropic API
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, open]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || sending) return;
+    setMessages((m) => [...m, { role: "user", text }]);
+    setInput("");
+    setSending(true);
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/maskot-agent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ message: text, history }),
+      });
+      const data = await resp.json();
+      if (data.error) {
+        setMessages((m) => [...m, { role: "assistant", text: "⚠️ " + data.error }]);
+      } else {
+        setMessages((m) => [...m, { role: "assistant", text: data.reply || "(prázdna odpoveď)" }]);
+        setHistory(data.history || []);
+      }
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", text: "⚠️ Nepodarilo sa spojiť s agentom (" + String(e) + ")." }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="maSKot — AI asistent (testovacia verzia)"
+        style={{
+          position: "fixed",
+          right: 20,
+          bottom: 20,
+          zIndex: 200,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: "var(--accent)",
+          color: "#fff",
+          border: "none",
+          fontSize: 22,
+          cursor: "pointer",
+          boxShadow: "0 2px 10px rgba(0,0,0,.25)",
+        }}
+      >
+        🐿️
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 82,
+            zIndex: 200,
+            width: 340,
+            maxWidth: "90vw",
+            height: 460,
+            maxHeight: "70vh",
+            background: "var(--panel)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            boxShadow: "0 4px 20px rgba(0,0,0,.3)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>🐿️ maSKot (test)</span>
+            <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
+          </div>
+          <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+            {messages.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Skús napríklad: "kde je stroj GS-2032?" alebo "aké máme voľné nožnicové plošiny vo Zvolene?"</div>
+            )}
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  background: m.role === "user" ? "var(--accent)" : "var(--panel-2)",
+                  color: m.role === "user" ? "#fff" : "var(--text)",
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  maxWidth: "85%",
+                  fontSize: 13,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {m.text}
+              </div>
+            ))}
+            {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
+          </div>
+          <div style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid var(--border)" }}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Opýtaj sa maSKota..."
+              style={{ flex: 1, fontSize: 13 }}
+              disabled={sending}
+            />
+            <button className="btn btn-accent" onClick={send} disabled={sending} style={{ padding: "4px 12px" }}>
+              →
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function PhoneDirectoryModal({ employees, onClose }) {
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
