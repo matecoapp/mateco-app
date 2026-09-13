@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.358";
+const APP_VERSION = "1.0.359";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7569,14 +7569,34 @@ function MaskotChatWidget({ session }) {
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState([]); // surové kolá konverzácie vo formáte Anthropic API
   const [listening, setListening] = useState(false);
+  const [conversationMode, setConversationMode] = useState(false); // "rozhovor" — číta odpovede nahlas a sám počúva ďalej
   const scrollRef = useRef(null);
   const recognitionRef = useRef(null);
+  const historyRef = useRef([]); // aktuálna história pre send() volaný z hlasového callbacku (mimo React render cyklu)
+  const conversationModeRef = useRef(false); // to isté — nech onend/onresult callbacky vidia aktuálnu hodnotu, nie tú zo starého uzáveru
+
+  useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
+  useEffect(() => { historyRef.current = history; }, [history]);
 
   // Hlasový vstup — natívne vstavané v prehliadači (Chrome/Edge/Safari), nič
   // sa preň neinštaluje ani neplatí. Firefox to (zatiaľ) nepodporuje — v tom
   // prípade sa mikrofón jednoducho nezobrazí, appka funguje ďalej normálne
   // cez písanie.
   const SpeechRecognitionApi = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const canSpeak = typeof window !== "undefined" && !!window.speechSynthesis;
+
+  function speak(text, onDone) {
+    if (!canSpeak || !text) {
+      onDone?.();
+      return;
+    }
+    window.speechSynthesis.cancel(); // nič rozhovorené navyše, keby toto prišlo uprostred niečoho iného
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "sk-SK";
+    utter.onend = () => onDone?.();
+    utter.onerror = () => onDone?.();
+    window.speechSynthesis.speak(utter);
+  }
 
   function toggleVoiceInput() {
     if (!SpeechRecognitionApi) return;
@@ -7590,7 +7610,11 @@ function MaskotChatWidget({ session }) {
     recognition.maxAlternatives = 1;
     recognition.onresult = (e) => {
       const transcript = e.results[0][0].transcript;
-      setInput((prev) => (prev ? prev + " " + transcript : transcript));
+      if (conversationModeRef.current) {
+        send(transcript); // v rozhovore sa pýtaj rovno, netreba ešte klikať na odoslanie
+      } else {
+        setInput((prev) => (prev ? prev + " " + transcript : transcript));
+      }
     };
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
@@ -7603,8 +7627,21 @@ function MaskotChatWidget({ session }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
-  async function send() {
-    const text = input.trim();
+  // Zapnutie/vypnutie rozhovoru priamo prerušené — vypnutie zastaví aj
+  // prípadné aktuálne prehrávanie/počúvanie, nech sa to "nezacyklí" navyše.
+  function toggleConversationMode() {
+    setConversationMode((v) => {
+      const next = !v;
+      if (!next) {
+        window.speechSynthesis?.cancel();
+        recognitionRef.current?.stop();
+      }
+      return next;
+    });
+  }
+
+  async function send(voiceText) {
+    const text = (voiceText ?? input).trim();
     if (!text || sending) return;
     setMessages((m) => [...m, { role: "user", text }]);
     setInput("");
@@ -7617,7 +7654,7 @@ function MaskotChatWidget({ session }) {
           apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           Authorization: `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ message: text, history: historyRef.current }),
       });
       const rawText = await resp.text();
       let data;
@@ -7632,9 +7669,18 @@ function MaskotChatWidget({ session }) {
       }
       if (data.error) {
         setMessages((m) => [...m, { role: "assistant", text: "⚠️ " + data.error }]);
+        if (conversationModeRef.current) speak("Nastala chyba: " + data.error);
       } else {
-        setMessages((m) => [...m, { role: "assistant", text: data.reply || "(prázdna odpoveď)" }]);
+        const replyText = data.reply || "(prázdna odpoveď)";
+        setMessages((m) => [...m, { role: "assistant", text: replyText }]);
         setHistory(data.history || []);
+        if (conversationModeRef.current) {
+          // Po dohovorení appka sama znova začne počúvať — plynulý rozhovor
+          // bez ďalšieho klikania, kým rozhovor niekto ručne nevypne.
+          speak(replyText, () => {
+            if (conversationModeRef.current) toggleVoiceInput();
+          });
+        }
       }
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", text: "⚠️ Nepodarilo sa spojiť s agentom (" + String(e) + ")." }]);
@@ -7688,8 +7734,33 @@ function MaskotChatWidget({ session }) {
         >
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>🐿️ maSKot (test)</span>
-            <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {SpeechRecognitionApi && canSpeak && (
+                <button
+                  onClick={toggleConversationMode}
+                  title={conversationMode ? "Rozhovor zapnutý — klikni pre vypnutie" : "Zapnúť rozhovor (hlasom, hands-free)"}
+                  style={{
+                    background: conversationMode ? "#fff" : "rgba(255,255,255,.2)",
+                    color: conversationMode ? "var(--accent)" : "#fff",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "3px 8px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  🎧 {conversationMode ? "Rozhovor zapnutý" : "Rozhovor"}
+                </button>
+              )}
+              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
+            </div>
           </div>
+          {conversationMode && (
+            <div style={{ padding: "6px 12px", background: "var(--panel-2)", fontSize: 11, color: "var(--text-dim)", textAlign: "center" }}>
+              {listening ? "🔴 Počúvam..." : sending ? "Premýšľam..." : "Rozhovor zapnutý — po odpovedi sa spýtaj ďalej."}
+            </div>
+          )}
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
             {messages.length === 0 && (
               <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Skús napríklad: "kde je stroj GS-2032?" alebo "aké máme voľné nožnicové plošiny vo Zvolene?"</div>
@@ -7739,7 +7810,7 @@ function MaskotChatWidget({ session }) {
                 🎤
               </button>
             )}
-            <button className="btn btn-accent" onClick={send} disabled={sending} style={{ padding: "4px 12px" }}>
+            <button className="btn btn-accent" onClick={() => send()} disabled={sending} style={{ padding: "4px 12px" }}>
               →
             </button>
           </div>
