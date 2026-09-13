@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.361";
+const APP_VERSION = "1.0.362";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7586,6 +7586,98 @@ function MaskotIcon({ size = 24, liftColor = "#fff", basketFill = "#fff", basket
   );
 }
 
+// Jednoduché vykreslenie základného markdownu (tabuľky, odrážky, **tučné**) v
+// odpovedi maSKota — appka posiela čistý text, bez tohto by sa znaky "|" a
+// "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka.
+function renderInlineMd(text, keyPrefix) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**") ? <strong key={`${keyPrefix}-${i}`}>{p.slice(2, -2)}</strong> : <React.Fragment key={`${keyPrefix}-${i}`}>{p}</React.Fragment>
+  );
+}
+function MaskotMessageContent({ text }) {
+  const lines = String(text).split("\n");
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim().startsWith("|") && lines[i + 1] && /^\s*\|?[\s:-]+\|[\s:|-]*\|?\s*$/.test(lines[i + 1])) {
+      const header = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(lines[i].trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()));
+        i++;
+      }
+      blocks.push({ type: "table", header, rows });
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*]\s+/, ""));
+        i++;
+      }
+      blocks.push({ type: "list", items });
+      continue;
+    }
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+    blocks.push({ type: "p", text: line });
+    i++;
+  }
+  return (
+    <>
+      {blocks.map((b, bi) => {
+        if (b.type === "table") {
+          return (
+            <div key={bi} style={{ overflowX: "auto", margin: "4px 0" }}>
+              <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "100%" }}>
+                <thead>
+                  <tr>
+                    {b.header.map((h, hi) => (
+                      <th key={hi} style={{ border: "1px solid rgba(0,0,0,.15)", padding: "3px 6px", textAlign: "left", background: "rgba(0,0,0,.06)", whiteSpace: "nowrap" }}>
+                        {renderInlineMd(h, `h${bi}-${hi}`)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {b.rows.map((r, ri) => (
+                    <tr key={ri}>
+                      {r.map((c, ci) => (
+                        <td key={ci} style={{ border: "1px solid rgba(0,0,0,.1)", padding: "3px 6px", whiteSpace: "nowrap" }}>
+                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+        if (b.type === "list") {
+          return (
+            <ul key={bi} style={{ margin: "4px 0", paddingLeft: 18 }}>
+              {b.items.map((it, ii) => (
+                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <div key={bi} style={{ whiteSpace: "pre-wrap" }}>
+            {renderInlineMd(b.text, `p${bi}`)}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function MaskotChatWidget({ session }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // [{ role: "user"|"assistant", text }]
@@ -7785,10 +7877,10 @@ function MaskotChatWidget({ session }) {
             right: 20,
             bottom: 82,
             zIndex: 200,
-            width: 340,
+            width: 440,
             maxWidth: "90vw",
-            height: 460,
-            maxHeight: "70vh",
+            height: 520,
+            maxHeight: "75vh",
             background: "var(--panel)",
             border: "1px solid var(--border)",
             borderRadius: 10,
@@ -7840,12 +7932,11 @@ function MaskotChatWidget({ session }) {
                   color: m.role === "user" ? "#fff" : "var(--text)",
                   padding: "6px 10px",
                   borderRadius: 8,
-                  maxWidth: "85%",
+                  maxWidth: m.role === "user" ? "85%" : "100%",
                   fontSize: 13,
-                  whiteSpace: "pre-wrap",
                 }}
               >
-                {m.text}
+                <MaskotMessageContent text={m.text} />
               </div>
             ))}
             {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
