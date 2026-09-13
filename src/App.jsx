@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.363";
+const APP_VERSION = "1.0.364";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7565,30 +7565,28 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 // maSKot — logo/ikona: "A" a "I" (s pätkami) obklopujúce nožnicovú pracovnú
 // plošinu uprostred. SVG (nie obrázok) — ostré pri akejkoľvek veľkosti, farba
 // sa dá meniť cez props. "size" = šírka; výška sa dopočíta podľa pomeru strán.
+// Zjednodušené (menej krížení, hrubšie čiary) — overené priamo v prehliadači,
+// že pri malej veľkosti (napr. v hlavičke okna) ostáva čitateľné, nie rozmazané.
 function MaskotIcon({ size = 24, color = "#fff" }) {
   return (
-    <svg viewBox="0 0 200 120" width={size} height={size * 0.6} xmlns="http://www.w3.org/2000/svg">
-      <text x="16" y="82" fontSize="52" fontWeight="800" fill={color} textAnchor="middle" fontFamily="Arial, sans-serif">A</text>
-      <g transform="translate(52,0)">
-        <rect x="16" y="98" width="46" height="9" rx="2" fill={color} />
-        <circle cx="25" cy="112" r="4.5" fill={color} />
-        <circle cx="53" cy="112" r="4.5" fill={color} />
-        <g stroke={color} strokeWidth="5.5" fill="none" strokeLinecap="round">
-          <line x1="18" y1="98" x2="60" y2="68" />
-          <line x1="60" y1="98" x2="18" y2="68" />
-          <line x1="18" y1="68" x2="60" y2="38" />
-          <line x1="60" y1="68" x2="18" y2="38" />
-          <line x1="18" y1="38" x2="60" y2="12" />
-          <line x1="60" y1="38" x2="18" y2="12" />
+    <svg viewBox="0 0 190 100" width={size} height={size * (100 / 190)} xmlns="http://www.w3.org/2000/svg">
+      <text x="14" y="72" fontSize="46" fontWeight="800" fill={color} textAnchor="middle" fontFamily="Arial, sans-serif">A</text>
+      <g transform="translate(48,0)">
+        <rect x="14" y="80" width="44" height="10" rx="2" fill={color} />
+        <g stroke={color} strokeWidth="8" fill="none" strokeLinecap="round">
+          <line x1="16" y1="80" x2="56" y2="42" />
+          <line x1="56" y1="80" x2="16" y2="42" />
+          <line x1="16" y1="42" x2="56" y2="10" />
+          <line x1="56" y1="42" x2="16" y2="10" />
         </g>
-        <rect x="8" y="2" width="62" height="14" rx="3" fill={color} />
+        <rect x="6" y="0" width="64" height="16" rx="3" fill={color} />
       </g>
-      <g stroke={color} strokeWidth="9" strokeLinecap="butt">
-        <line x1="181" y1="14" x2="181" y2="102" />
+      <g stroke={color} strokeWidth="11" strokeLinecap="butt">
+        <line x1="172" y1="6" x2="172" y2="94" />
       </g>
-      <g stroke={color} strokeWidth="9" strokeLinecap="round">
-        <line x1="164" y1="14" x2="198" y2="14" />
-        <line x1="164" y1="102" x2="198" y2="102" />
+      <g stroke={color} strokeWidth="11" strokeLinecap="round">
+        <line x1="153" y1="6" x2="191" y2="6" />
+        <line x1="153" y1="94" x2="191" y2="94" />
       </g>
     </svg>
   );
@@ -7859,7 +7857,7 @@ function MaskotChatWidget({ session }) {
     <>
       <button
         onClick={() => setOpen((v) => !v)}
-        title="maSKot — AI asistent (testovacia verzia)"
+        title="maSKot — AI asistent (beta verzia)"
         style={{
           position: "fixed",
           right: 20,
@@ -7876,7 +7874,7 @@ function MaskotChatWidget({ session }) {
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        <MaskotIcon size={36} />
+        <MaskotIcon size={38} />
       </button>
       {open && (
         <div
@@ -7899,7 +7897,7 @@ function MaskotChatWidget({ session }) {
           }}
         >
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MaskotIcon size={18} /> maSKot (test)</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MaskotIcon size={26} /> maSKot (beta)</span>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {SpeechRecognitionApi && canSpeak && (
                 <button
