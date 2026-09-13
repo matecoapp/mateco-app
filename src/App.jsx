@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.364";
+const APP_VERSION = "1.0.365";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7562,35 +7562,7 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 // od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
 // maSKot — AI asistent appky, plávajúce tlačidlo + jednoduché chat okno.
 // Zatiaľ len na testovanie (pozri podmienku vyššie, kde sa toto renderuje).
-// maSKot — logo/ikona: "A" a "I" (s pätkami) obklopujúce nožnicovú pracovnú
-// plošinu uprostred. SVG (nie obrázok) — ostré pri akejkoľvek veľkosti, farba
-// sa dá meniť cez props. "size" = šírka; výška sa dopočíta podľa pomeru strán.
-// Zjednodušené (menej krížení, hrubšie čiary) — overené priamo v prehliadači,
-// že pri malej veľkosti (napr. v hlavičke okna) ostáva čitateľné, nie rozmazané.
-function MaskotIcon({ size = 24, color = "#fff" }) {
-  return (
-    <svg viewBox="0 0 190 100" width={size} height={size * (100 / 190)} xmlns="http://www.w3.org/2000/svg">
-      <text x="14" y="72" fontSize="46" fontWeight="800" fill={color} textAnchor="middle" fontFamily="Arial, sans-serif">A</text>
-      <g transform="translate(48,0)">
-        <rect x="14" y="80" width="44" height="10" rx="2" fill={color} />
-        <g stroke={color} strokeWidth="8" fill="none" strokeLinecap="round">
-          <line x1="16" y1="80" x2="56" y2="42" />
-          <line x1="56" y1="80" x2="16" y2="42" />
-          <line x1="16" y1="42" x2="56" y2="10" />
-          <line x1="56" y1="42" x2="16" y2="10" />
-        </g>
-        <rect x="6" y="0" width="64" height="16" rx="3" fill={color} />
-      </g>
-      <g stroke={color} strokeWidth="11" strokeLinecap="butt">
-        <line x1="172" y1="6" x2="172" y2="94" />
-      </g>
-      <g stroke={color} strokeWidth="11" strokeLinecap="round">
-        <line x1="153" y1="6" x2="191" y2="6" />
-        <line x1="153" y1="94" x2="191" y2="94" />
-      </g>
-    </svg>
-  );
-}
+// Logo je od v1.0.365 skutočný obrázok (public/maskot-logo.png), nie kreslené SVG.
 
 // Jednoduché vykreslenie základného markdownu (tabuľky, odrážky, **tučné**) v
 // odpovedi maSKota — appka posiela čistý text, bez tohto by sa znaky "|" a
@@ -7866,15 +7838,15 @@ function MaskotChatWidget({ session }) {
           width: 52,
           height: 52,
           borderRadius: "50%",
-          background: "var(--accent)",
-          color: "#fff",
-          border: "none",
-          fontSize: 22,
+          background: "#fff",
+          border: "3px solid var(--accent)",
+          padding: 0,
+          overflow: "hidden",
           cursor: "pointer",
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        <MaskotIcon size={38} />
+        <img src="/maskot-logo.png" alt="maSKot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </button>
       {open && (
         <div
@@ -7897,7 +7869,12 @@ function MaskotChatWidget({ session }) {
           }}
         >
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MaskotIcon size={26} /> maSKot (beta)</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "2px solid #fff", overflow: "hidden", flexShrink: 0, display: "inline-block" }}>
+                <img src="/maskot-logo.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </span>
+              maSKot (beta)
+            </span>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {SpeechRecognitionApi && canSpeak && (
                 <button
