@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.357";
+const APP_VERSION = "1.0.358";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7568,7 +7568,36 @@ function MaskotChatWidget({ session }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState([]); // surové kolá konverzácie vo formáte Anthropic API
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  // Hlasový vstup — natívne vstavané v prehliadači (Chrome/Edge/Safari), nič
+  // sa preň neinštaluje ani neplatí. Firefox to (zatiaľ) nepodporuje — v tom
+  // prípade sa mikrofón jednoducho nezobrazí, appka funguje ďalej normálne
+  // cez písanie.
+  const SpeechRecognitionApi = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function toggleVoiceInput() {
+    if (!SpeechRecognitionApi) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = "sk-SK";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -7693,6 +7722,23 @@ function MaskotChatWidget({ session }) {
               style={{ flex: 1, fontSize: 13 }}
               disabled={sending}
             />
+            {SpeechRecognitionApi && (
+              <button
+                onClick={toggleVoiceInput}
+                disabled={sending}
+                title={listening ? "Nahrávanie... (klikni pre zastavenie)" : "Hlasový vstup"}
+                style={{
+                  padding: "4px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  background: listening ? "var(--danger)" : "var(--panel-2)",
+                  color: listening ? "#fff" : "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                🎤
+              </button>
+            )}
             <button className="btn btn-accent" onClick={send} disabled={sending} style={{ padding: "4px 12px" }}>
               →
             </button>
