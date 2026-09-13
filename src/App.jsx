@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.362";
+const APP_VERSION = "1.0.363";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7562,26 +7562,34 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 // od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
 // maSKot — AI asistent appky, plávajúce tlačidlo + jednoduché chat okno.
 // Zatiaľ len na testovanie (pozri podmienku vyššie, kde sa toto renderuje).
-// maSKot — logo/ikona: nožnicová pracovná plošina, čo v koši "vezie" nápis AI.
-// SVG (nie obrázok) — ostré pri akejkoľvek veľkosti, farba sa dá meniť cez props.
-function MaskotIcon({ size = 24, liftColor = "#fff", basketFill = "#fff", basketText = "var(--accent)" }) {
+// maSKot — logo/ikona: "A" a "I" (s pätkami) obklopujúce nožnicovú pracovnú
+// plošinu uprostred. SVG (nie obrázok) — ostré pri akejkoľvek veľkosti, farba
+// sa dá meniť cez props. "size" = šírka; výška sa dopočíta podľa pomeru strán.
+function MaskotIcon({ size = 24, color = "#fff" }) {
   return (
-    <svg viewBox="0 0 100 120" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
-      <rect x="30" y="104" width="40" height="9" rx="2" fill={liftColor} />
-      <circle cx="38" cy="117" r="4" fill={liftColor} />
-      <circle cx="62" cy="117" r="4" fill={liftColor} />
-      <g stroke={liftColor} strokeWidth="5" fill="none" strokeLinecap="round">
-        <line x1="32" y1="104" x2="68" y2="74" />
-        <line x1="68" y1="104" x2="32" y2="74" />
-        <line x1="32" y1="74" x2="68" y2="44" />
-        <line x1="68" y1="74" x2="32" y2="44" />
-        <line x1="32" y1="44" x2="68" y2="18" />
-        <line x1="68" y1="44" x2="32" y2="18" />
+    <svg viewBox="0 0 200 120" width={size} height={size * 0.6} xmlns="http://www.w3.org/2000/svg">
+      <text x="16" y="82" fontSize="52" fontWeight="800" fill={color} textAnchor="middle" fontFamily="Arial, sans-serif">A</text>
+      <g transform="translate(52,0)">
+        <rect x="16" y="98" width="46" height="9" rx="2" fill={color} />
+        <circle cx="25" cy="112" r="4.5" fill={color} />
+        <circle cx="53" cy="112" r="4.5" fill={color} />
+        <g stroke={color} strokeWidth="5.5" fill="none" strokeLinecap="round">
+          <line x1="18" y1="98" x2="60" y2="68" />
+          <line x1="60" y1="98" x2="18" y2="68" />
+          <line x1="18" y1="68" x2="60" y2="38" />
+          <line x1="60" y1="68" x2="18" y2="38" />
+          <line x1="18" y1="38" x2="60" y2="12" />
+          <line x1="60" y1="38" x2="18" y2="12" />
+        </g>
+        <rect x="8" y="2" width="62" height="14" rx="3" fill={color} />
       </g>
-      <rect x="16" y="4" width="4" height="12" fill={liftColor} />
-      <rect x="80" y="4" width="4" height="12" fill={liftColor} />
-      <rect x="16" y="6" width="68" height="16" rx="3" fill={basketFill} />
-      <text x="50" y="19" fontSize="13" fontWeight="800" fill={basketText} textAnchor="middle" fontFamily="Arial, sans-serif">AI</text>
+      <g stroke={color} strokeWidth="9" strokeLinecap="butt">
+        <line x1="181" y1="14" x2="181" y2="102" />
+      </g>
+      <g stroke={color} strokeWidth="9" strokeLinecap="round">
+        <line x1="164" y1="14" x2="198" y2="14" />
+        <line x1="164" y1="102" x2="198" y2="102" />
+      </g>
     </svg>
   );
 }
@@ -7868,7 +7876,7 @@ function MaskotChatWidget({ session }) {
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        <MaskotIcon size={30} />
+        <MaskotIcon size={36} />
       </button>
       {open && (
         <div
