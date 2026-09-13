@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.350";
+const APP_VERSION = "1.0.351";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10055,7 +10055,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       }}
                     >
                       <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                      <div>{Number(iso.slice(8, 10))}</div>
+                      <div>{Number(iso.slice(8, 10))}.{Number(iso.slice(5, 7))}.</div>
                     </div>
                   );
                 })}
@@ -13090,6 +13090,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
               <div style={{ position: "sticky", left: 0, zIndex: 5, background: "var(--panel)" }}></div>
               {allDays.map((iso) => {
                 const d = Number(iso.slice(8, 10));
+                const mo = Number(iso.slice(5, 7));
                 const isToday = iso === today;
                 const dow = new Date(iso + "T00:00:00").getDay();
                 const isWeekend = dow === 0 || dow === 6;
@@ -13112,7 +13113,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     }}
                   >
                     <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                    <div>{d}</div>
+                    <div>{d}.{mo}.</div>
                   </div>
                 );
               })}
