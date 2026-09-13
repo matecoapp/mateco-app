@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.353";
+const APP_VERSION = "1.0.354";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5969,12 +5969,13 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               onClick={onOpenPhoneDirectory}
               style={{
                 fontSize: 13,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
+                color: "var(--accent)",
+                background: "#fff",
                 border: "1px solid rgba(255,255,255,.25)",
                 borderRadius: 4,
                 padding: "3px 9px",
                 cursor: "pointer",
+                fontWeight: 600,
               }}
               title="Telefónny zoznam"
             >
