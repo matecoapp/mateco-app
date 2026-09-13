@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.347";
+const APP_VERSION = "1.0.348";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10191,7 +10191,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                                 // sticky element, ktorý by bol takmer taký široký ako priestor, kde sa má
                                 // "posúvať" pri scrollovaní, sa nemá kam posúvať a sticky by nefungovalo.
                                 // Overené priamo v prehliadači (Chromium/Playwright).
-                                width: Math.min(barWidths[j.id] ? barWidths[j.id] - 12 : 18, 220),
+                                // Šírka labelu sa prispôsobí presne veľkosti textu (nie pevný box) —
+                                // krátke meno tak nenecháva zbytočnú prázdnu farbu okolo seba, a
+                                // orezanie dlhého textu sa deje presne tam, kde treba, nie na hranici
+                                // vopred vyhradeného miesta. Horný strop (260px) je len pre extrémne
+                                // dlhé mená, nech má sticky vždy kam sa "posúvať". Overené v prehliadači.
+                                width: "fit-content",
+                                maxWidth: Math.min(barWidths[j.id] ? barWidths[j.id] - 12 : 18, 260),
                                 overflow: "hidden",
                                 fontSize: 10,
                                 color: "#fff",
@@ -10260,7 +10266,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                               style={{
                                 position: "sticky",
                                 left: "calc(var(--gantt-name-col) + 6px)",
-                                width: Math.min(barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18, 220),
+                                width: "fit-content",
+                                maxWidth: Math.min(barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18, 260),
                                 overflow: "hidden",
                                 fontSize: 10,
                                 color: "#fff",
