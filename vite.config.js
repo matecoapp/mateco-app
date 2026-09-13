@@ -6,4 +6,11 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  // sourcemap: true — appka sa aj naďalej zmenší (minifikuje) rovnako ako doteraz,
+  // toto len pridá súbor navyše (.js.map), vďaka ktorému prehliadač v konzole
+  // (a v tejto chybovej obrazovke) ukáže skutočné mená funkcií a presné miesto
+  // v zdrojovom kóde namiesto zašifrovaných písmeniek — nič iné sa nemení.
+  build: {
+    sourcemap: true,
+  },
 });
