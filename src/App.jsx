@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.342";
+const APP_VERSION = "1.0.344";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -447,18 +447,6 @@ function salespersonColor(name, salespeople) {
   return SALESPEOPLE.find((s) => s.name === name)?.color || null;
 }
 const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-// Zmeria skutočnú šírku textu (v pixeloch) pre daný font, bez toho, aby sa
-// čokoľvek muselo vykresliť do DOM — používa sa na to, aby appka vopred vedela,
-// či sa krátka zákazka s dlhým menom zmestí do stĺpca, alebo či treba ten
-// konkrétny deň v Gantte rozšíriť. Jeden zdieľaný canvas (nie nový pri každom
-// volaní) kvôli výkonu.
-let _measureCanvas = null;
-function measureTextWidth(text, font) {
-  if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
-  const ctx = _measureCanvas.getContext("2d");
-  ctx.font = font;
-  return ctx.measureText(text || "").width;
-}
 const todayISO = () => toLocalISO(new Date());
 
 // meno.priezvisko@matecoslovakia.sk — odstráni diakritiku, zmení na malé písmená
@@ -9707,12 +9695,10 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
   // veci počítať — spoľahlivo funguje bez ohľadu na to.
   const [barWidths, setBarWidths] = useState({});
-  // Dôležité: toto MUSÍ byť jedna stabilná funkcia (nie nová zakaždým cez
-  // "measureBarRef(id) => (el) => ..."), inak React pri KAŽDOM prekreslení
-  // (nielen keď sa blok naozaj zmení) odpojí a znova pripojí meranie na
-  // úplne všetkých blokoch naraz — presne to spôsobovalo nekonečnú slučku pri
-  // prepnutí mesiaca (veľa blokov s inými dátami naraz). ID bloku sa namiesto
-  // zachytávania v uzávere číta z data atribútu priamo na prvku.
+  // Dôležité: toto MUSÍ byť jedna stabilná funkcia (nie nová zakaždým), inak
+  // React pri KAŽDOM prekreslení odpojí a znova pripojí meranie na úplne
+  // všetkých blokoch naraz — to spôsobovalo nekonečnú slučku pri prepnutí
+  // mesiaca. ID bloku sa preto číta z data atribútu priamo na prvku.
   const measureBarRef = useCallback((el) => {
     if (!el) return;
     const id = el.getAttribute("data-bar-id");
@@ -9731,10 +9717,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 
   // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
   // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
-  // koniec (viď handleCalendarScroll nižšie). Rovnaký vzor ako v servisnom Gantte
-  // (TechnicianPlanner) — overený, funkčný, len prenesený sem. Na začiatok len
-  // aktuálny mesiac (nie -1/+1), nech kalendár nezobrazuje zbytočne veľký rozsah
-  // dní naraz — ďalšie mesiace sa pridajú, len keď sa k okraju reálne priblížiš.
+  // koniec. Rovnaký (overený) vzor ako v servisnom Gantte (TechnicianPlanner).
   const [monthWindow, setMonthWindow] = useState({ start: 0, end: 0 });
   useEffect(() => {
     setMonthWindow({ start: 0, end: 0 });
@@ -9831,53 +9814,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     relevantMachines = [...relevantMachines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
   }
 
-  // Aktívne (neukončené) krátke zákazky s dlhým menom firmy môžu potrebovať viac
-  // miesta, než im dáva základná šírka stĺpca — namiesto skrátenia textu appka
-  // v takom prípade radšej rozšíri PRESNE TEN JEDEN DEŇ, a to naprieč celým
-  // kalendárom (všetky riadky použijú ten istý vypočítaný reťazec šírok, takže
-  // ostanú medzi sebou zarovnané, bez nutnosti spájať ich do jednej mriežky).
-  // Po ukončení zákazky sa do tohto výpočtu už nezaráta a stĺpec sa sám vráti
-  // na základnú šírku. Meria sa cez canvas (rýchle, presné, nezávislé od CSS).
-  const BASE_DAY_COL_PX = 34;
-  const MAX_EXTRA_PX = 220; // strop na rozumnú maximálnu šírku stĺpca navyše, aj pri extrémne dlhom texte
-  const dayColumnExtraPx = {};
-  relevantMachines.forEach((m) => {
-    (jobsByMachine[m.id] || []).forEach((j) => {
-      if (j.status === "completed") return;
-      // Ak sa začiatok alebo koniec zákazky "orezáva" na okraj aktuálne načítaného
-      // okna dní (zákazka v skutočnosti siaha ešte pred/za ním), počet dní, čo
-      // appka vidí, by bol skreslený — mohlo by to vyzerať ako krátka zákazka,
-      // hoci v skutočnosti krátka nie je, a zbytočne by to rozšírilo nesprávny
-      // stĺpec. Preto sa taká zákazka do rozširovania vôbec nepočíta.
-      if (j.startDate < windowStartISO) return;
-      if (j.endDate && j.endDate > windowEndISO) return;
-      const startCol = colForDate(j.startDate, true);
-      const noEnd = !j.endDate;
-      const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
-      const dayCount = endCol - startCol + 1;
-      if (dayCount > 3) return; // dlhšie zákazky majú aj tak zvyčajne dosť miesta
-      const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
-      const prefixed = noEnd ? `⚠ ${label}` : label;
-      const needed = measureTextWidth(prefixed, "600 10px Barlow, sans-serif") + 16;
-      const available = dayCount * BASE_DAY_COL_PX;
-      if (needed > available) {
-        const extra = Math.min(MAX_EXTRA_PX, needed - available);
-        if (!dayColumnExtraPx[endCol] || dayColumnExtraPx[endCol] < extra) {
-          dayColumnExtraPx[endCol] = extra;
-        }
-      }
-    });
-  });
-  const gridColumnsTemplate = `var(--gantt-name-col) ${allDays.map((_, i) => {
-    const d = i + 1;
-    const extra = dayColumnExtraPx[d] || 0;
-    // Dôležité: rozšírený stĺpec musí byť PEVNÉ číslo, nie "minmax(X, 1fr)" — keby
-    // bol aj on "1fr" (rovnaký podiel ako ostatné), CSS mriežka by ich všetky
-    // vyrovnala na najväčšiu potrebnú hodnotu spomedzi všetkých stĺpcov s "1fr"
-    // (presne to spôsobovalo, že sa "rozťahovalo všetko"). Overené priamo v
-    // reálnom prehliadači (Chromium cez Playwright), nie len odhadom.
-    return extra > 0 ? `${Math.round(BASE_DAY_COL_PX + extra)}px` : `minmax(var(--gantt-day-col), 1fr)`;
-  }).join(" ")}`;
+  const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-day-col), 1fr))`;
 
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -9905,25 +9842,30 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     prependAnchorRef.current = null;
   }, [allDays]);
 
-  // Nadpis hore sa pri vodorovnom rolovaní priebežne aktualizuje podľa toho,
-  // ktorý deň je práve uprostred viditeľnej oblasti. Zároveň, keď sa priblížiš
-  // k jednému z okrajov, potichu sa pridá ďalší mesiac na ten koniec —
-  // nekonečné rolovanie, kým nestlačíš "Dnes".
-  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam (viď nižšie)
+  // Ak sa aktuálne načítané dni celé zmestia do viditeľnej šírky bez toho, aby
+  // bolo treba scrollovať (typicky na širšej obrazovke, keď je defaultne
+  // načítaný len 1 mesiac), appka to sama nevidí ako "som pri okraji" — a keďže
+  // sa niet ako scrollovať, ani vlastný mechanizmus na rozšírenie sa nespustí.
+  // Toto po každom prekreslení potichu overí, či je obsah aspoň o kúsok širší
+  // než viditeľná plocha, a ak nie, pridá ďalší mesiac na koniec — kým sa
+  // scrollovanie sprístupní (alebo kým sa nedosiahne bezpečný strop).
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (container.scrollWidth <= container.clientWidth && monthWindow.end < 12) {
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+    }
+  }, [allDays, monthWindow]);
+
+  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam
   function handleCalendarScroll() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
-    // Poistka č.1 proti nekonečnej slučke: keď sa (napr. po znížení počiatočného
-    // rozsahu na jeden mesiac) celý obsah zmestí do viditeľnej šírky bez
-    // scrollovania, "scrollLeft" ostáva 0 — čo appka vyhodnotí ako "som pri
-    // okraji" a pridá ďalší mesiac, ten sa tiež hneď zmestí, znova sa vyhodnotí
-    // ako "pri okraji" atď. donekonečna. Ak sa reálne nedá scrollovať vôbec,
-    // netreba nič rozširovať — až prvý skutočný scroll tento mechanizmus zapne.
+    // Poistka č.1: keď sa celý obsah zmestí do viditeľnej šírky bez
+    // scrollovania, "scrollLeft" ostáva 0 — netreba nič rozširovať.
     if (container.scrollWidth <= container.clientWidth) return;
-    // Poistka č.2: aj keby sa vyššie uvedená podmienka z nejakého dôvodu obišla
-    // (napr. rozmery sa menia rýchlejšie, než ich appka stihne prehodnotiť),
-    // toto zamedzí tomu, aby sa rozšírenie spustilo znova skôr, než sa
-    // predchádzajúce stihlo prejaviť vo vykreslení.
+    // Poistka č.2: nedovoľ prekrývajúce sa rozšírenia skôr, než sa predošlé
+    // stihlo prejaviť vo vykreslení.
     if (scrollExpandLockRef.current) return;
     const containerRect = container.getBoundingClientRect();
     const centerX = containerRect.left + containerRect.width / 2;
@@ -9950,8 +9892,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     }
 
     const EDGE_PX = 600;
-    // Poistka č.3: aj keby sa 1 a 2 obišli, toto zaručí, že sa okno nikdy
-    // nerozrastie donekonečna — max. rok dozadu/dopredu od aktuálneho mesiaca.
+    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu.
     const MAX_MONTHS_EITHER_WAY = 12;
     if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
       if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
@@ -10229,15 +10170,10 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             {/* Šírka textu sa NEODHADUJE ani sa nesplieha na CSS — priamo sa odmeria
                                 skutočná vykreslená šírka tohto bloku (ref vyššie) a text sa orežie
                                 presne na ňu. Pred prvým odmeraním (zlomok sekundy) sa použije bezpečný
-                                konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria.
-                                position:sticky — overené priamo v reálnom prehliadači (Chromium/Playwright),
-                                že v kombinácii s pevnou (nie pružnou) šírkou je bezpečné — text sa pri
-                                viacdňovej zákazke drží viditeľnej časti obrazovky pri scrollovaní. */}
+                                konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria. */}
                             <div
                               className="gantt-cell"
                               style={{
-                                position: "sticky",
-                                left: "calc(var(--gantt-name-col) + 6px)",
                                 width: barWidths[j.id] ? barWidths[j.id] - 12 : 18,
                                 overflow: "hidden",
                                 fontSize: 10,
@@ -10306,8 +10242,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             <div
                               className="gantt-cell"
                               style={{
-                                position: "sticky",
-                                left: "calc(var(--gantt-name-col) + 6px)",
                                 width: barWidths["r-" + r.id] ? barWidths["r-" + r.id] - 12 : 18,
                                 overflow: "hidden",
                                 fontSize: 10,
@@ -15497,7 +15431,7 @@ function GlobalStyle() {
         --warn: #854f0b;
         --warn-bg: #faeeda;
         --gantt-name-col: 150px;
-        --gantt-day-col: 34px;
+        --gantt-day-col: 72px;
         --gantt-plan-day-col: 72px;
         --danger: #A32D2D;
         --danger-bg: #fcebeb;
