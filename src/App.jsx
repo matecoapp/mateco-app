@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.340";
+const APP_VERSION = "1.0.341";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9901,16 +9901,22 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // ktorý deň je práve uprostred viditeľnej oblasti. Zároveň, keď sa priblížiš
   // k jednému z okrajov, potichu sa pridá ďalší mesiac na ten koniec —
   // nekonečné rolovanie, kým nestlačíš "Dnes".
+  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam (viď nižšie)
   function handleCalendarScroll() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
-    // Poistka proti nekonečnej slučke: keď sa (napr. po znížení počiatočného
+    // Poistka č.1 proti nekonečnej slučke: keď sa (napr. po znížení počiatočného
     // rozsahu na jeden mesiac) celý obsah zmestí do viditeľnej šírky bez
     // scrollovania, "scrollLeft" ostáva 0 — čo appka vyhodnotí ako "som pri
     // okraji" a pridá ďalší mesiac, ten sa tiež hneď zmestí, znova sa vyhodnotí
     // ako "pri okraji" atď. donekonečna. Ak sa reálne nedá scrollovať vôbec,
     // netreba nič rozširovať — až prvý skutočný scroll tento mechanizmus zapne.
     if (container.scrollWidth <= container.clientWidth) return;
+    // Poistka č.2: aj keby sa vyššie uvedená podmienka z nejakého dôvodu obišla
+    // (napr. rozmery sa menia rýchlejšie, než ich appka stihne prehodnotiť),
+    // toto zamedzí tomu, aby sa rozšírenie spustilo znova skôr, než sa
+    // predchádzajúce stihlo prejaviť vo vykreslení.
+    if (scrollExpandLockRef.current) return;
     const containerRect = container.getBoundingClientRect();
     const centerX = containerRect.left + containerRect.width / 2;
     const headerCells = container.querySelectorAll("[data-day-iso]");
@@ -9936,11 +9942,18 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     }
 
     const EDGE_PX = 600;
-    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current) {
+    // Poistka č.3: aj keby sa 1 a 2 obišli, toto zaručí, že sa okno nikdy
+    // nerozrastie donekonečna — max. rok dozadu/dopredu od aktuálneho mesiaca.
+    const MAX_MONTHS_EITHER_WAY = 12;
+    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
       if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      scrollExpandLockRef.current = true;
       setMonthWindow((w) => ({ ...w, start: w.start - 1 }));
-    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX) {
+      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
+    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
+      scrollExpandLockRef.current = true;
       setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
     }
   }
 
