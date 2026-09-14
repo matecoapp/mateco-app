@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.369";
+const APP_VERSION = "1.0.370";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11947,7 +11947,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 2 }}>{locationLabel}</div>
           )}
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
-            Nahlásené {fmtDate(d.dateReported)}{d.currentJobLabel ? ` · ${d.currentJobLabel}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
+            Nahlásené {fmtDate(d.dateReported)}{(d.currentJobLabel || d.customer) ? ` · ${d.currentJobLabel || d.customer}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
           </div>
           <div style={{ fontSize: 13 }}>{d.popis}</div>
           {!isSimple && d.poznamkaDispecera && (
