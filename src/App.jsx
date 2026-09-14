@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.366";
+const APP_VERSION = "1.0.367";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4702,7 +4702,9 @@ function DispatcherApp() {
       )}
       {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
           Keď sa osvedčí, rozšíriť podmienku na ďalšie role. */}
-      {effectiveUser?.role === "admin" && <MaskotChatWidget session={session} />}
+      {effectiveUser?.role === "admin" && (
+        <MaskotChatWidget session={session} machines={enrichedMachines} onOpenCard={(m) => setMachineCard(m)} />
+      )}
       {showUnknownSerialReport && (
         <UnknownSerialDamageModal
           onClose={() => setShowUnknownSerialReport(false)}
@@ -7566,14 +7568,44 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
 
 // Jednoduché vykreslenie základného markdownu (tabuľky, odrážky, **tučné**) v
 // odpovedi maSKota — appka posiela čistý text, bez tohto by sa znaky "|" a
-// "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka.
-function renderInlineMd(text, keyPrefix) {
-  const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**") ? <strong key={`${keyPrefix}-${i}`}>{p.slice(2, -2)}</strong> : <React.Fragment key={`${keyPrefix}-${i}`}>{p}</React.Fragment>
-  );
+// "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka. Kódy strojov v
+// tvare [[GS-2032]] sa navyše vykreslia ako klikateľné tlačidlo, čo priamo
+// otvorí kartu stroja (ak sa nájde v aktuálne dostupnom zozname).
+function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g);
+  return parts.map((p, i) => {
+    const key = `${keyPrefix}-${i}`;
+    if (p.startsWith("**") && p.endsWith("**")) return <strong key={key}>{p.slice(2, -2)}</strong>;
+    if (p.startsWith("[[") && p.endsWith("]]")) {
+      const code = p.slice(2, -2).trim();
+      const machine = machineByCode?.get(norm(code));
+      if (machine && onOpenCard) {
+        return (
+          <button
+            key={key}
+            onClick={() => onOpenCard(machine)}
+            style={{
+              background: "var(--accent-light, #fdf0f0)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent)",
+              borderRadius: 4,
+              padding: "0 5px",
+              fontSize: "inherit",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {code}
+          </button>
+        );
+      }
+      return <React.Fragment key={key}>{code}</React.Fragment>; // stroj sa nenašiel — ukáž aspoň čistý text
+    }
+    return <React.Fragment key={key}>{p}</React.Fragment>;
+  });
 }
-function MaskotMessageContent({ text }) {
+const norm = (s) => String(s ?? "").toLowerCase();
+function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
   const lines = String(text).split("\n");
   const blocks = [];
   let i = 0;
@@ -7617,7 +7649,7 @@ function MaskotMessageContent({ text }) {
                   <tr>
                     {b.header.map((h, hi) => (
                       <th key={hi} style={{ border: "1px solid rgba(0,0,0,.15)", padding: "3px 6px", textAlign: "left", background: "rgba(0,0,0,.06)", whiteSpace: "nowrap" }}>
-                        {renderInlineMd(h, `h${bi}-${hi}`)}
+                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard)}
                       </th>
                     ))}
                   </tr>
@@ -7627,7 +7659,7 @@ function MaskotMessageContent({ text }) {
                     <tr key={ri}>
                       {r.map((c, ci) => (
                         <td key={ci} style={{ border: "1px solid rgba(0,0,0,.1)", padding: "3px 6px", whiteSpace: "nowrap" }}>
-                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`)}
+                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard)}
                         </td>
                       ))}
                     </tr>
@@ -7641,14 +7673,14 @@ function MaskotMessageContent({ text }) {
           return (
             <ul key={bi} style={{ margin: "4px 0", paddingLeft: 18 }}>
               {b.items.map((it, ii) => (
-                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`)}</li>
+                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard)}</li>
               ))}
             </ul>
           );
         }
         return (
           <div key={bi} style={{ whiteSpace: "pre-wrap" }}>
-            {renderInlineMd(b.text, `p${bi}`)}
+            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard)}
           </div>
         );
       })}
@@ -7656,12 +7688,31 @@ function MaskotMessageContent({ text }) {
   );
 }
 
-function MaskotChatWidget({ session }) {
+function MaskotChatWidget({ session, machines, onOpenCard }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([]); // [{ role: "user"|"assistant", text }]
+  const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
+  // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
+  // viazané na konkrétneho prihláseného, nie zdieľané medzi ľuďmi na tom istom
+  // počítači). Načíta sa len raz, pri prvom vytvorení komponentu.
+  const storageKeyBase = `maskot_${session?.user?.id || "anon"}`;
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKeyBase + "_messages");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }); // [{ role: "user"|"assistant", text }]
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [history, setHistory] = useState([]); // surové kolá konverzácie vo formáte Anthropic API
+  const [history, setHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKeyBase + "_history");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }); // surové kolá konverzácie vo formáte Anthropic API
   const [listening, setListening] = useState(false);
   const [conversationMode, setConversationMode] = useState(false); // "rozhovor" — číta odpovede nahlas a sám počúva ďalej
   const scrollRef = useRef(null);
@@ -7678,6 +7729,21 @@ function MaskotChatWidget({ session }) {
 
   useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
   useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => {
+    try { localStorage.setItem(storageKeyBase + "_messages", JSON.stringify(messages)); } catch {}
+  }, [messages, storageKeyBase]);
+  useEffect(() => {
+    try { localStorage.setItem(storageKeyBase + "_history", JSON.stringify(history)); } catch {}
+  }, [history, storageKeyBase]);
+
+  function clearConversation() {
+    setMessages([]);
+    setHistory([]);
+    try {
+      localStorage.removeItem(storageKeyBase + "_messages");
+      localStorage.removeItem(storageKeyBase + "_history");
+    } catch {}
+  }
 
   // Hlasový vstup — natívne vstavané v prehliadači (Chrome/Edge/Safari), nič
   // sa preň neinštaluje ani neplatí. Firefox to (zatiaľ) nepodporuje — v tom
@@ -7776,12 +7842,33 @@ function MaskotChatWidget({ session }) {
     });
   }
 
+  const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } — fotka pripravená na odoslanie
+  const fileInputRef = useRef(null);
+
+  function handleFileSelected(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // nech sa dá vybrať tá istá fotka znova nabudúce
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(",")[1];
+      setPendingImage({ dataUrl, mediaType: file.type || "image/jpeg", base64 });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function send(voiceText) {
     const text = (voiceText ?? input).trim();
-    if (!text || sending) return;
-    setMessages((m) => [...m, { role: "user", text }]);
+    if ((!text && !pendingImage) || sending) return;
+    const imageForThisSend = pendingImage;
+    setMessages((m) => [...m, { role: "user", text: text || "(fotka)", imagePreview: imageForThisSend?.dataUrl || null }]);
     setInput("");
+    setPendingImage(null);
     setSending(true);
+    // Prázdna "placeholder" správa, čo sa priebežne dopĺňa, ako appka streamuje
+    // text zo servera — presne to dáva ten pocit plynulého "písania naživo".
+    setMessages((m) => [...m, { role: "assistant", text: "" }]);
     try {
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/maskot-agent-v2`, {
         method: "POST",
@@ -7790,26 +7877,71 @@ function MaskotChatWidget({ session }) {
           apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           Authorization: `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ message: text, history: historyRef.current }),
+        body: JSON.stringify({
+          message: text || "Pozri sa prosím na priloženú fotku a pomôž mi s ňou.",
+          history: historyRef.current,
+          image: imageForThisSend ? { mediaType: imageForThisSend.mediaType, base64: imageForThisSend.base64 } : undefined,
+        }),
       });
-      const rawText = await resp.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        // Odpoveď nebola JSON — najčastejšie to znamená chybu ešte pred samotnou
-        // funkciou (napr. brána Supabase niečo odmietla) — ukáž aspoň stav a
-        // začiatok textu, nech je z toho jasnejšie, čo sa deje, než len "zlyhalo".
-        setMessages((m) => [...m, { role: "assistant", text: `⚠️ Neočakávaná odpoveď (HTTP ${resp.status}): ${rawText.slice(0, 200) || "(prázdne telo)"}` }]);
+      if (!resp.ok || !resp.body) {
+        const rawText = await resp.text().catch(() => "");
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", text: `⚠️ Neočakávaná odpoveď (HTTP ${resp.status}): ${rawText.slice(0, 200) || "(prázdne telo)"}` };
+          return copy;
+        });
         return;
       }
-      if (data.error) {
-        setMessages((m) => [...m, { role: "assistant", text: "⚠️ " + data.error }]);
-        if (conversationModeRef.current) speak("Nastala chyba: " + data.error);
+      // Server posiela čistý text priebežne; na konci je oddelovač "\u0000META\u0000"
+      // (alebo "\u0000ERROR\u0000") + JSON s históriou/chybou — nulový znak sa v
+      // bežnom texte nikdy nevyskytne, takže sa dá takto bezpečne oddeliť to, čo
+      // sa má reálne zobraziť, od toho, čo je len technická informácia navyše.
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        const visible = raw.split("\u0000")[0];
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", text: visible };
+          return copy;
+        });
+      }
+
+      let finalText = raw;
+      let errorMsg = null;
+      if (raw.includes("\u0000ERROR\u0000")) {
+        const [before, after] = raw.split("\u0000ERROR\u0000");
+        finalText = before;
+        errorMsg = after;
+      } else if (raw.includes("\u0000META\u0000")) {
+        const [before, metaJson] = raw.split("\u0000META\u0000");
+        finalText = before;
+        try {
+          const meta = JSON.parse(metaJson);
+          setHistory(meta.history || []);
+        } catch {
+          // ak by sa META z nejakého dôvodu nedala rozobrať, aspoň zobrazený text ostáva v poriadku
+        }
+      }
+
+      if (errorMsg) {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", text: "⚠️ " + errorMsg };
+          return copy;
+        });
+        if (conversationModeRef.current) speak("Nastala chyba: " + errorMsg);
       } else {
-        const replyText = data.reply || "(prázdna odpoveď)";
-        setMessages((m) => [...m, { role: "assistant", text: replyText }]);
-        setHistory(data.history || []);
+        const replyText = finalText || "(prázdna odpoveď)";
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", text: replyText };
+          return copy;
+        });
         if (conversationModeRef.current) {
           // Po dohovorení appka sama znova začne počúvať — plynulý rozhovor
           // bez ďalšieho klikania, kým rozhovor niekto ručne nevypne.
@@ -7819,7 +7951,11 @@ function MaskotChatWidget({ session }) {
         }
       }
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", text: "⚠️ Nepodarilo sa spojiť s agentom (" + String(e) + ")." }]);
+      setMessages((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = { role: "assistant", text: "⚠️ Nepodarilo sa spojiť s agentom (" + String(e) + ")." };
+        return copy;
+      });
     } finally {
       setSending(false);
     }
@@ -7876,6 +8012,15 @@ function MaskotChatWidget({ session }) {
               maSKot (beta)
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {messages.length > 0 && (
+                <button
+                  onClick={() => { if (window.confirm("Vymazať celý rozhovor?")) clearConversation(); }}
+                  title="Vymazať rozhovor"
+                  style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 13, opacity: 0.85 }}
+                >
+                  🗑️
+                </button>
+              )}
               {SpeechRecognitionApi && canSpeak && (
                 <button
                   onClick={toggleConversationMode}
@@ -7919,12 +8064,29 @@ function MaskotChatWidget({ session }) {
                   fontSize: 13,
                 }}
               >
-                <MaskotMessageContent text={m.text} />
+                {m.imagePreview && <img src={m.imagePreview} alt="" style={{ maxWidth: "100%", borderRadius: 6, marginBottom: 4, display: "block" }} />}
+                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} />
               </div>
             ))}
             {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
           </div>
+          {pendingImage && (
+            <div style={{ padding: "6px 10px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+              <img src={pendingImage.dataUrl} alt="" style={{ height: 40, borderRadius: 4 }} />
+              <span style={{ fontSize: 11, color: "var(--text-dim)", flex: 1 }}>Fotka pripravená na odoslanie</span>
+              <button onClick={() => setPendingImage(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>✕</button>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid var(--border)" }}>
+            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileSelected} style={{ display: "none" }} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              title="Priložiť fotku"
+              style={{ padding: "4px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--panel-2)", color: "var(--text)", cursor: "pointer" }}
+            >
+              📷
+            </button>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
