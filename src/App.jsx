@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.367";
+const APP_VERSION = "1.0.369";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1348,6 +1348,7 @@ function DispatcherApp() {
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť platformu ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
+  const [showDamageTypePicker, setShowDamageTypePicker] = useState(false); // prvý krok — "náš stroj alebo cudzí?", spoločné pre mobil aj PC
   const [showPhoneDirectory, setShowPhoneDirectory] = useState(false); // telefónny zoznam zamestnancov, z mobilnej lišty
   const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
   const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
@@ -3754,7 +3755,7 @@ function DispatcherApp() {
         onMarkNotificationRead={markNotificationRead}
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
-        onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
+        onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
@@ -4681,6 +4682,19 @@ function DispatcherApp() {
       )}
       {showDamageReport && (
         <DamageReportModal machine={showDamageReport} today={today} onClose={() => { setShowDamageReport(null); goBackCard(); }} onSave={(popis) => reportDamage(showDamageReport, popis)} />
+      )}
+      {showDamageTypePicker && (
+        <DamageReportTypePickerModal
+          onClose={() => setShowDamageTypePicker(false)}
+          onChooseOwn={() => {
+            setShowDamageTypePicker(false);
+            setShowQuickDamagePicker(true);
+          }}
+          onChooseExternal={() => {
+            setShowDamageTypePicker(false);
+            setShowExternalReport(true);
+          }}
+        />
       )}
       {showQuickDamagePicker && (
         <QuickDamagePickerModal
@@ -11249,6 +11263,32 @@ function CardField({ label, value, danger, dotColor }) {
 // Rýchle nahlásenie poškodenia z mobilnej lišty technika — na rozdiel od
 // bežného nahlásenia (z karty stroja) tu nie je čo predvyplniť, technik si
 // najprv sám vyhľadá a vyberie stroj.
+// Prvý, spoločný krok (mobil aj PC) — nech používateľ nemusí pri jednom
+// nahlásení riešiť viacero tlačidiel naraz, len si vyberie jednu z dvoch
+// jasných možností, a podľa toho sa otvorí ten správny formulár.
+function DamageReportTypePickerModal({ onClose, onChooseOwn, onChooseExternal }) {
+  return (
+    <Modal title="Nahlásiť poškodenie / zákazku" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <button
+          className="btn btn-accent"
+          style={{ padding: "16px 14px", fontSize: 15, textAlign: "left" }}
+          onClick={onChooseOwn}
+        >
+          📋 Náš stroj (z požičovne)
+        </button>
+        <button
+          className="btn btn-ghost"
+          style={{ padding: "16px 14px", fontSize: 15, textAlign: "left", border: "1px solid var(--border)" }}
+          onClick={onChooseExternal}
+        >
+          🌍 Cudzí stroj (externá zákazka)
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) {
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -11667,7 +11707,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        {!isSimple && !d.machineId && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign") && (
+        {!isSimple && !d.machineId && !isExterna && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign") && (
           <button className="btn btn-accent" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
             Doplniť sériové číslo →
           </button>
@@ -12315,7 +12355,7 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" />
         ))}
       </div>
     </div>
