@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.370";
+const APP_VERSION = "1.0.371";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3861,6 +3861,7 @@ function DispatcherApp() {
             onOpenJob={(j) => setJobDetail(j)}
             onAddReservation={() => setShowAddReservation({})}
             onOpenReservation={(r) => setReservationCardTarget(r)}
+            onAddJob={(machineId, startDate) => setShowAddJob({ machineId, startDate })}
           />
         )}
 
@@ -4355,6 +4356,7 @@ function DispatcherApp() {
           salespeople={salespeople}
           onSaveCustomer={upsertCustomer}
           prefillMachineId={showAddJob.machineId}
+          prefillStartDate={showAddJob.startDate}
           prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
           onClose={() => { setShowAddJob(null); goBackCard(); }}
@@ -9307,7 +9309,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
+function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
   const [tab, setTab] = useState("zakazka"); // "zakazka" | "preprava"
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
@@ -9319,13 +9321,13 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
   const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
-  const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || todayISO());
+  const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
   const [endDate, setEndDate] = useState(existing?.endDate || prefillReservation?.expectedEnd || "");
   // Skutočný dátum vývozu/zvozu — nezávislý od zmluvného začiatku/konca nájmu
   // vyššie. Predvyplní sa z nich, ale dá sa kedykoľvek prepísať (tu aj neskôr
   // priamo v Prepravách) — napr. pri prednávoze deň vopred, alebo keď sa zvoz
   // spája s iným dňom.
-  const [departureDate, setDepartureDate] = useState(existing?.departureDate || existing?.startDate || prefillReservation?.expectedStart || todayISO());
+  const [departureDate, setDepartureDate] = useState(existing?.departureDate || existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
   const [pickupDate, setPickupDate] = useState(existing?.pickupDate || existing?.endDate || "");
   const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
   const [machineDisplayName, setMachineDisplayName] = useState(existing?.machineDisplayName || "");
@@ -10277,7 +10279,7 @@ function ImportJobsModal({ machines, onClose, onImport }) {
 /* ---------------------------------------------------------
    Calendar / Gantt view
 --------------------------------------------------------- */
-function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onAddReservation, onOpenReservation }) {
+function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onAddReservation, onOpenReservation, onAddJob }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -10690,7 +10692,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       </div>
                     )}
                     <div
-                      onClick={() => onOpenCard(m)}
                       style={{
                         display: "grid",
                         gridTemplateColumns: gridColumnsTemplate,
@@ -10698,13 +10699,16 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                         alignItems: "center",
                         marginBottom: 3,
                         minHeight: rowMinHeight,
-                        cursor: "pointer",
                         background: rowBg,
                         borderRadius: 4,
                         borderBottom: "1px solid var(--border)",
                     }}
                   >
-                    <div style={{ lineHeight: 1.3, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4 }}>
+                    <div
+                      onClick={() => onOpenCard(m)}
+                      title="Otvoriť kartu stroja"
+                      style={{ lineHeight: 1.3, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+                    >
                       <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
                         {m.code}
                       </div>
@@ -10730,6 +10734,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                       return (
                         <div
                           key={`bg-${iso}`}
+                          onClick={onAddJob ? () => onAddJob(m.id, iso) : undefined}
+                          title={onAddJob ? "Vytvoriť zákazku na tento deň" : undefined}
                           style={{
                             gridColumn: i + 2,
                             gridRow: 1,
@@ -10737,6 +10743,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
                             height: "100%",
                             borderRight: "1px solid var(--border)",
                             background: isWeekend ? "var(--warn-bg)" : "transparent",
+                            cursor: onAddJob ? "pointer" : "default",
                           }}
                         />
                       );
