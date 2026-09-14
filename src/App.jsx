@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.377";
+const APP_VERSION = "1.0.383";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -684,11 +684,22 @@ async function loadKey(key, fallback) {
 }
 const _saveQueues = {};
 const _lastValues = {};
+// Akcia na opakovanie pre KAŽDÝ druh uloženia (nie len jednoduché nastavenia
+// cez saveKey, ale aj záznamy v tabuľkách a ich mazanie) — predtým fungovalo
+// tlačidlo "Skúsiť znova" v appke len pre saveKey/_lastValues, čo je len malá
+// časť dát (nastavenia appky) — zvyšok (zákazky, stroje, poškodenia,...) sa
+// pri zlyhaní ukladal ticho, tlačidlo naň nemalo žiadny účinok.
+const _retryActions = {};
 let _saveStatusListener = null;
 function setSaveStatusListener(fn) {
   _saveStatusListener = fn;
 }
 function retrySave(key) {
+  const action = _retryActions[key];
+  if (action) {
+    action();
+    return;
+  }
   if (key in _lastValues) saveKey(key, _lastValues[key]);
 }
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -763,6 +774,11 @@ function saveRecordRow(table, item) {
   const next = prev.then(async () => {
     _saveStatusListener?.("pending", table);
     const ok = await writeRecordRowWithRetry(table, item);
+    if (ok) {
+      delete _retryActions[table];
+    } else {
+      _retryActions[table] = () => saveRecordRow(table, item);
+    }
     _saveStatusListener?.(ok ? "ok" : "error", table);
   });
   _recordSaveQueues[qKey] = next;
@@ -772,15 +788,20 @@ async function deleteRecordRow(table, id, attempt = 1) {
   const qKey = `${table}:${id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const next = prev.then(async () => {
+    _saveStatusListener?.("pending", table);
     try {
       const { error } = await supabase.from(table).delete().eq("id", id);
       if (error) throw error;
+      delete _retryActions[table];
+      _saveStatusListener?.("ok", table);
     } catch (e) {
       if (attempt < 4) {
         await sleep(attempt * 800);
         return deleteRecordRow(table, id, attempt + 1);
       }
       console.error(`deleteRecordRow(${table}) failed after retries`, id, e);
+      _retryActions[table] = () => deleteRecordRow(table, id);
+      _saveStatusListener?.("error", table);
     }
   });
   _recordSaveQueues[qKey] = next;
@@ -809,10 +830,22 @@ async function deleteRecordRowsWithRetry(table, ids, attempt = 1) {
 async function deleteRecordRowsBatch(table, ids) {
   const CHUNK = 200;
   let allOk = true;
+  _saveStatusListener?.("pending", table);
   for (let i = 0; i < ids.length; i += CHUNK) {
     const ok = await deleteRecordRowsWithRetry(table, ids.slice(i, i + CHUNK));
     if (!ok) allOk = false;
   }
+  // Mazanie je nezávislé od poradia (zmazať už zmazaný riadok jednoducho nič
+  // neurobí), takže pri opakovaní sa bezpečne skúsi celý pôvodný zoznam znova
+  // — nie je potrebné si pamätať, ktoré konkrétne bloky prešli a ktoré nie.
+  if (!allOk) {
+    _retryActions[table] = () => deleteRecordRowsBatch(table, ids);
+  } else {
+    delete _retryActions[table];
+  }
+  // Ak čo i len jeden blok zlyhal, appka na to upozorní rovnako ako pri
+  // bežnom ukladaní — predtým sa toto dialo úplne potichu, len do konzoly.
+  _saveStatusListener?.(allOk ? "ok" : "error", table);
   return allOk;
 }
 // Postaví "persist" funkciu pre danú tabuľku — volá sa rovnako ako doteraz
@@ -2346,9 +2379,7 @@ function DispatcherApp() {
         const parsed = JSON.parse(reader.result);
         const data = parsed && parsed.data ? parsed.data : parsed; // support raw {machines:...} too
         if (Array.isArray(data.machines)) persistMachines(data.machines);
-        if (Array.isArray(data.drivers)) persistDrivers(data.drivers);
         if (Array.isArray(data.jobs)) persistJobs(data.jobs);
-        if (Array.isArray(data.technicians)) persistTechnicians(data.technicians);
         if (Array.isArray(data.assignments)) persistAssignments(data.assignments);
         if (Array.isArray(data.damages)) persistDamages(data.damages);
         if (Array.isArray(data.weeklyDuty)) persistWeeklyDuty(data.weeklyDuty);
@@ -2360,7 +2391,21 @@ function DispatcherApp() {
         if (Array.isArray(data.blacklist)) persistBlacklist(data.blacklist);
         if (Array.isArray(data.checkerSubstitutions)) persistCheckerSubstitutions(data.checkerSubstitutions);
         if (Array.isArray(data.reservations)) persistReservations(data.reservations);
-        if (Array.isArray(data.employees)) persistEmployees(data.employees);
+        // Zamestnanci (šoféri/technici/ostatní) — VŽDY jedno volanie persistEmployees
+        // s už úplne zlúčeným zoznamom, nikdy nie samostatné persistDrivers +
+        // persistTechnicians volania za sebou. Tie by pri obnove zálohy počítali
+        // z toho istého (nezmeneného) stavu appky pred obnovou — druhé volanie by
+        // tak nevedelo o tom, čo práve spravilo prvé, a potichu by to prepísalo.
+        if (Array.isArray(data.employees)) {
+          persistEmployees(data.employees);
+        } else if (Array.isArray(data.drivers) || Array.isArray(data.technicians)) {
+          // Záloha zo staršej appky (pred zjednotením zoznamu osôb) — zlúč tu, v
+          // appke, ručne, nech sa nestratí ani jedna zo skupín.
+          let merged = employees.filter((e) => e.role !== "sofer" && e.role !== "technik");
+          if (Array.isArray(data.drivers)) merged = [...merged, ...data.drivers.map((d) => ({ ...d, role: "sofer" }))];
+          if (Array.isArray(data.technicians)) merged = [...merged, ...data.technicians.map((t) => ({ ...t, role: "technik" }))];
+          persistEmployees(merged);
+        }
         if (Array.isArray(data.protocolLogs)) persistProtocolLogs(data.protocolLogs);
         if (Array.isArray(data.handoverProtocols)) persistHandoverProtocols(data.handoverProtocols);
         if (Array.isArray(data.machineModels)) persistMachineModels(data.machineModels);
@@ -2716,6 +2761,17 @@ function DispatcherApp() {
   }
   function updateMachineModel(id, patch) {
     persistMachineModels(machineModels.map((mm) => (mm.id === id ? { ...mm, ...patch } : mm)));
+  }
+  // Rovnaká poistka ako pri zákazníkoch/strojoch — mazanie modelu sa zablokuje,
+  // ak ho ešte používa nejaký (nearchivovaný) stroj. Stroje majú typ uložený
+  // ako text (nie odkaz na ID modelu), takže sa hľadá podľa mena.
+  function getMachineModelBlockingRefs(id) {
+    const model = machineModels.find((mm) => mm.id === id);
+    if (!model) return [];
+    const name = (model.name || "").trim().toLowerCase();
+    if (!name) return [];
+    const using = machines.filter((m) => !m.archived && (m.type || "").trim().toLowerCase() === name);
+    return using.length ? [`${using.length} ${using.length === 1 ? "stroj" : "strojov"} tohto modelu`] : [];
   }
   function deleteMachineModel(id) {
     persistMachineModels(machineModels.filter((mm) => mm.id !== id));
@@ -3334,9 +3390,10 @@ function DispatcherApp() {
         type: "customer",
         id: c.id,
         kindLabel: "Zákazník",
-        title: c.name,
-        subtitle: c.email || "",
-        searchText: `${c.name}`.toLowerCase(),
+        title: c.firma,
+        subtitle: c.email || c.cisloOdberatela || "",
+        // Nájde sa aj podľa mena kontaktnej osoby, nie len podľa firmy.
+        searchText: `${c.firma || ""} ${c.cisloOdberatela || ""} ${c.ico || ""} ${(c.contacts || []).map((k) => k.name).join(" ")}`.toLowerCase(),
       });
     });
     damages.forEach((d) => {
@@ -3374,9 +3431,14 @@ function DispatcherApp() {
       setView("dashboard");
       const m = enrichedMachineById[result.id];
       if (m) setMachineCard(m);
-    } else if (result.type === "job" || result.type === "customer") {
+    } else if (result.type === "job") {
       setModule("poziciovna");
       setView("jobs");
+    } else if (result.type === "customer") {
+      setModule("poziciovna");
+      setView("customers");
+      const c = customers.find((x) => x.id === result.id);
+      if (c) setCustomerCard(c);
     } else if (result.type === "damage") {
       setModule("servis");
       setView("poskodenia");
@@ -3403,7 +3465,7 @@ function DispatcherApp() {
       const q = search.toLowerCase();
       list = list.filter(
         (m) =>
-          m.code.toLowerCase().includes(q) ||
+          (m.code || "").toLowerCase().includes(q) ||
           (m.type || "").toLowerCase().includes(q) ||
           (m.depo || "").toLowerCase().includes(q) ||
           (m.currentJob?.customer || "").toLowerCase().includes(q)
@@ -4403,7 +4465,14 @@ function DispatcherApp() {
           <MachineModelsView
             machineModels={machineModels}
             onUpdate={updateMachineModel}
-            onDelete={(id) => askDelete("tento model zo zoznamu", () => deleteMachineModel(id))}
+            onDelete={(id) => {
+              const blocking = getMachineModelBlockingRefs(id);
+              if (blocking.length > 0) {
+                window.alert(`Tento model sa nedá zmazať — používa ho ${blocking.join(", ")}. Najprv strojom zmeňte typ, alebo model necháte tak.`);
+                return;
+              }
+              askDelete("tento model zo zoznamu", () => deleteMachineModel(id));
+            }}
           />
         )}
         {module === "administrativa" && view === "zamestnanci" && (
@@ -11088,8 +11157,20 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   }
   if (search.trim()) {
     const q = search.toLowerCase();
+    // Zákazník sa hľadá naprieč VŠETKÝMI zákazkami a rezerváciami stroja (nie
+    // len tou aktuálne prebiehajúcou), nech sa dá stroj nájsť aj podľa
+    // budúcej/minulej zákazky pre danú firmu — presne na to je tento kalendár.
+    const machineIdsByCustomer = new Set(
+      [...jobs, ...reservations]
+        .filter((x) => (x.customer || "").toLowerCase().includes(q))
+        .map((x) => x.machineId)
+    );
     relevantMachines = relevantMachines.filter(
-      (m) => m.code.toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q) || (m.depo || "").toLowerCase().includes(q)
+      (m) =>
+        (m.code || "").toLowerCase().includes(q) ||
+        (m.type || "").toLowerCase().includes(q) ||
+        (m.depo || "").toLowerCase().includes(q) ||
+        machineIdsByCustomer.has(m.id)
     );
   }
 
@@ -11293,7 +11374,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
-          <SearchInput placeholder="Hľadať sériové číslo, typ alebo depo…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
