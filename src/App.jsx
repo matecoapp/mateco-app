@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.372";
+const APP_VERSION = "1.0.377";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2073,7 +2073,7 @@ function DispatcherApp() {
   }
 
   // Nájde/založí zákazníka podľa názvu firmy (case-insensitive) a doplní/aktualizuje kontaktné údaje.
-  function upsertCustomer({ firma, cisloOdberatela, kontakt, email, telefon }) {
+  function upsertCustomer({ firma, cisloOdberatela, ico, kontakt, email, telefon }) {
     if (!firma || !firma.trim()) return;
     const name = firma.trim();
     const existing = customers.find((c) => c.firma.toLowerCase() === name.toLowerCase());
@@ -2084,6 +2084,7 @@ function DispatcherApp() {
             ? {
                 ...c,
                 cisloOdberatela: cisloOdberatela || c.cisloOdberatela,
+                ico: ico || c.ico,
                 kontakt: kontakt || c.kontakt,
                 email: email || c.email,
                 telefon: telefon || c.telefon,
@@ -2099,6 +2100,7 @@ function DispatcherApp() {
           id: uid(),
           firma: name,
           cisloOdberatela: cisloOdberatela || "",
+          ico: ico || "",
           kontakt: kontakt || "",
           email: email || "",
           telefon: telefon || "",
@@ -2114,11 +2116,12 @@ function DispatcherApp() {
       const firma = (row.firma || "").trim();
       if (!firma) return;
       const cisloOdberatela = (row.cisloOdberatela || "").trim();
+      const ico = (row.ico || "").trim();
       const idx = next.findIndex((c) => c.firma.toLowerCase() === firma.toLowerCase());
       if (idx >= 0) {
-        next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela };
+        next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela, ico: ico || next[idx].ico };
       } else {
-        next.push({ id: uid(), firma, cisloOdberatela, kontakt: "", email: "", telefon: "", contacts: [], createdAt: new Date().toISOString() });
+        next.push({ id: uid(), firma, cisloOdberatela, ico, kontakt: "", email: "", telefon: "", contacts: [], createdAt: new Date().toISOString() });
       }
     });
     persistCustomers(next);
@@ -2132,6 +2135,7 @@ function DispatcherApp() {
         id: uid(),
         firma: (data.firma || "").trim(),
         cisloOdberatela: data.cisloOdberatela || "",
+        ico: data.ico || "",
         kontakt: data.kontakt || "",
         email: data.email || "",
         telefon: data.telefon || "",
@@ -3486,6 +3490,19 @@ function DispatcherApp() {
   function clearAllJobs() {
     persistJobs([]);
   }
+  // Rovnaká poistka ako pri zákazníkoch — mazanie stroja sa zablokuje, ak naň
+  // ešte niečo aktívne odkazuje (inak by zostali "osirelé" záznamy, čo
+  // odkazujú na neexistujúci stroj).
+  function getMachineBlockingRefs(id) {
+    const blocks = [];
+    const openJobs = jobs.filter((j) => j.machineId === id && j.status !== "completed");
+    if (openJobs.length) blocks.push(`${openJobs.length} neukončených zákaziek`);
+    const openDamages = damages.filter((d) => d.machineId === id && !d.resolved);
+    if (openDamages.length) blocks.push(`${openDamages.length} nevyriešených poškodení/revízií/skúšok`);
+    const openReservations = (reservations || []).filter((r) => r.machineId === id && (r.status === "pending" || r.status === "approved"));
+    if (openReservations.length) blocks.push(`${openReservations.length} aktívnych rezervácií`);
+    return blocks;
+  }
   function deleteMachine(id) {
     persistMachines(machines.filter((m) => m.id !== id));
   }
@@ -3494,8 +3511,29 @@ function DispatcherApp() {
       machines.map((m) =>
         m.id === id
           ? archived
-            ? { ...m, archived: true, archivedReason: reason, archivedNote: note, archivedDate: today, trackRevisions: false, trackRevisionsEZ: false, trackUradnaSkuska: false }
-            : { ...m, archived: false, archivedReason: null, archivedNote: null, archivedDate: null }
+            ? {
+                ...m,
+                archived: true,
+                archivedReason: reason,
+                archivedNote: note,
+                archivedDate: today,
+                // Zapamätá si, čo malo zapnuté PRED archiváciou, nech sa to pri
+                // zrušení archivácie dá presne obnoviť (nie len natvrdo zapnúť
+                // všetko, keby niektoré z toho malo byť zámerne vypnuté už predtým).
+                preArchiveTracking: { trackRevisions: m.trackRevisions, trackRevisionsEZ: m.trackRevisionsEZ, trackUradnaSkuska: m.trackUradnaSkuska },
+                trackRevisions: false,
+                trackRevisionsEZ: false,
+                trackUradnaSkuska: false,
+              }
+            : {
+                ...m,
+                archived: false,
+                archivedReason: null,
+                archivedNote: null,
+                archivedDate: null,
+                ...(m.preArchiveTracking || {}),
+                preArchiveTracking: null,
+              }
           : m
       )
     );
@@ -4096,6 +4134,16 @@ function DispatcherApp() {
                   <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
                 ))}
               </select>
+              {planMode === "gantt" && (
+                <select
+                  value={planDepoFilter || ""}
+                  onChange={(e) => setPlanDepoFilter(e.target.value || null)}
+                  style={{ minWidth: 140, fontSize: 11, padding: "3px 6px" }}
+                >
+                  <option value="">— všetky depá —</option>
+                  {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
               {planMode === "gantt" && can(effectiveUser, "technician_archive") && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
                   <input type="checkbox" checked={planShowArchived} onChange={(e) => setPlanShowArchived(e.target.checked)} />
@@ -4473,11 +4521,12 @@ function DispatcherApp() {
           drivers={drivers}
           technicians={technicians}
           customers={customers}
+          blacklist={blacklist}
           jobs={jobs}
           reservations={reservations}
           salespeople={salespeople}
           onSaveCustomer={upsertCustomer}
-          prefillMachineId={showAddJob.machineId}
+          onAddNewContact={addCustomerContact}
           prefillStartDate={showAddJob.startDate}
           prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
@@ -4494,6 +4543,9 @@ function DispatcherApp() {
           reservations={reservations}
           salespeople={salespeople}
           customers={customers}
+          blacklist={blacklist}
+          onSaveCustomer={upsertCustomer}
+          onAddNewContact={addCustomerContact}
           prefillMachineId={showAddReservation.machineId}
           existing={showAddReservation.existing}
           currentUser={currentUser}
@@ -4845,6 +4897,11 @@ function DispatcherApp() {
           }}
           onDelete={(id) => {
             const m = machineCard;
+            const blocking = getMachineBlockingRefs(id);
+            if (blocking.length > 0) {
+              window.alert(`Stroj ${m?.code || ""} sa nedá zmazať — má naviazané: ${blocking.join(", ")}. Najprv doriešte tieto veci.`);
+              return;
+            }
             askDelete(`stroj ${m?.code || ""}`, () => {
               deleteMachine(id);
               setMachineCard(null);
@@ -4925,14 +4982,16 @@ function DispatcherApp() {
         />
       )}
       {showExternalReport && (
-        <ReportExternalServiceModal today={today} customers={customers} onSaveCustomer={upsertCustomer} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
+        <ReportExternalServiceModal today={today} customers={customers} blacklist={blacklist} onSaveCustomer={upsertCustomer} onAddNewContact={addCustomerContact} onClose={() => setShowExternalReport(false)} onSave={reportExternalService} />
       )}
       {editExternalTarget && (
         <ReportExternalServiceModal
           existing={editExternalTarget}
           today={today}
           customers={customers}
+          blacklist={blacklist}
           onSaveCustomer={upsertCustomer}
+          onAddNewContact={addCustomerContact}
           onClose={() => { setEditExternalTarget(null); goBackCard(); }}
           onSave={(data) => updateExternalService(editExternalTarget.id, data)}
         />
@@ -6146,7 +6205,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
   const administrativaTabs = [
-    { id: "statistiky", label: "Štatistiky" },
+    ...(can(effectiveUser, "statistics_view") ? [{ id: "statistiky", label: "Štatistiky" }] : []),
     { id: "modely", label: "Modely strojov" },
     { id: "zamestnanci", label: "Zamestnanci" },
     { id: "checkeri", label: "Checkeri podľa depa" },
@@ -7810,6 +7869,7 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
           <thead>
             <tr>
               <th>Firma</th>
+              <th>IČO</th>
               <th>Číslo odberateľa</th>
               <th>Kontaktné osoby</th>
               <th>Aktívne zákazky</th>
@@ -7818,11 +7878,12 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zákazníci.</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zákazníci.</td></tr>
             )}
             {visible.map((c) => (
               <tr key={c.id} onClick={() => onOpenCard(c)} style={{ cursor: "pointer" }}>
                 <td style={{ fontWeight: 600 }}>{c.firma}</td>
+                <td className="mono">{c.ico || "—"}</td>
                 <td className="mono">{c.cisloOdberatela || "—"}</td>
                 <td>{(c.contacts || []).length || "—"}</td>
                 <td>{jobCountFor(c) || "—"}</td>
@@ -7842,6 +7903,7 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
 
 function AddCustomerModal({ onClose, onSave }) {
   const [firma, setFirma] = useState("");
+  const [ico, setIco] = useState("");
   const [cisloOdberatela, setCisloOdberatela] = useState("");
   const [email, setEmail] = useState("");
   const [telefon, setTelefon] = useState("");
@@ -7850,6 +7912,9 @@ function AddCustomerModal({ onClose, onSave }) {
     <Modal title="Pridať zákazníka" onClose={onClose}>
       <Field label="Firma *">
         <input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <Field label="IČO">
+        <input value={ico} onChange={(e) => setIco(e.target.value)} style={{ width: "100%" }} />
       </Field>
       <Field label="Číslo odberateľa">
         <input value={cisloOdberatela} onChange={(e) => setCisloOdberatela(e.target.value)} style={{ width: "100%" }} />
@@ -7863,7 +7928,7 @@ function AddCustomerModal({ onClose, onSave }) {
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Kontaktné osoby (meno, funkcia, telefón, e-mail) pridáš po uložení, priamo v karte zákazníka.
       </div>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ firma, cisloOdberatela, email, telefon })}>
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ firma, ico, cisloOdberatela, email, telefon })}>
         Uložiť
       </button>
     </Modal>
@@ -7937,6 +8002,7 @@ function CustomerDetailModal({
 }) {
   const [editingInfo, setEditingInfo] = useState(false);
   const [firma, setFirma] = useState(customer.firma || "");
+  const [ico, setIco] = useState(customer.ico || "");
   const [cisloOdberatela, setCisloOdberatela] = useState(customer.cisloOdberatela || "");
   const [email, setEmail] = useState(customer.email || "");
   const [telefon, setTelefon] = useState(customer.telefon || "");
@@ -7953,6 +8019,7 @@ function CustomerDetailModal({
       {editingInfo ? (
         <>
           <Field label="Firma *"><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="IČO"><input value={ico} onChange={(e) => setIco(e.target.value)} style={{ width: "100%" }} /></Field>
           <Field label="Číslo odberateľa"><input value={cisloOdberatela} onChange={(e) => setCisloOdberatela(e.target.value)} style={{ width: "100%" }} /></Field>
           <Field label="Všeobecný email firmy"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
           <Field label="Všeobecný telefón firmy"><input value={telefon} onChange={(e) => setTelefon(e.target.value)} style={{ width: "100%" }} /></Field>
@@ -7962,7 +8029,7 @@ function CustomerDetailModal({
               className="btn btn-accent"
               disabled={!firma.trim()}
               onClick={() => {
-                onEditInfo({ firma: firma.trim(), cisloOdberatela, email, telefon });
+                onEditInfo({ firma: firma.trim(), ico, cisloOdberatela, email, telefon });
                 setEditingInfo(false);
               }}
             >
@@ -7973,6 +8040,7 @@ function CustomerDetailModal({
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>IČO</div><div style={{ fontWeight: 600 }}>{customer.ico || "—"}</div></div>
             <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>ČÍSLO ODBERATEĽA</div><div style={{ fontWeight: 600 }}>{customer.cisloOdberatela || "—"}</div></div>
             <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>VŠEOBECNÝ EMAIL/TELEFÓN</div><div style={{ fontWeight: 600 }}>{customer.email || "—"} {customer.telefon ? `· ${customer.telefon}` : ""}</div></div>
           </div>
@@ -9600,15 +9668,18 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
    Nezáväzná rezervácia stroja — pre obchodníkov (aj dispečera/vedúceho
    požičovne, ktorí si ju vedia rovno aj sami schváliť).
 --------------------------------------------------------- */
-function AddReservationModal({ machines, jobs, reservations, salespeople, customers, prefillMachineId, existing, currentUser, onClose, onSave }) {
+function AddReservationModal({ machines, jobs, reservations, salespeople, customers, blacklist, onSaveCustomer, onAddNewContact, prefillMachineId, existing, currentUser, onClose, onSave }) {
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || (salespeople.some((s) => s.name === currentUser?.name) ? currentUser.name : ""));
   const [expectedStart, setExpectedStart] = useState(existing?.expectedStart || todayISO());
   const [expectedEnd, setExpectedEnd] = useState(existing?.expectedEnd || "");
   const [notes, setNotes] = useState(existing?.notes || "");
+  const [saveCustomer, setSaveCustomer] = useState(!existing);
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
 
@@ -9659,6 +9730,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             onSelectCustomer={(c) => {
               setCustomer(c.firma);
               setSelectedContacts(c.contacts || []);
+              setSelectedCustomerId(c.id);
             }}
           />
         </Field>
@@ -9669,6 +9741,12 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             setNotes((n) => (n ? n + "\n" + line : line));
           }}
         />
+        <div style={{ gridColumn: "1 / -1" }}>
+          <BlacklistWarning match={blacklistMatch} />
+          {selectedCustomerId && onAddNewContact && (
+            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
+          )}
+        </div>
         <Field label="Obchodník *">
           <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať obchodníka —</option>
@@ -9698,10 +9776,19 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
         </div>
       )}
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
+      {customer.trim() && (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "0 0 12px" }}>
+          <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
+          Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
+        </label>
+      )}
       <button
         className="btn btn-accent"
         disabled={!canSave}
-        onClick={() =>
+        onClick={() => {
+          if (saveCustomer && customer.trim()) {
+            onSaveCustomer?.({ firma: customer.trim() });
+          }
           onSave({
             machineId,
             customer: customer.trim(),
@@ -9710,8 +9797,8 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             expectedStart,
             expectedEnd: expectedEnd || null,
             notes: notes.trim(),
-          })
-        }
+          });
+        }}
       >
         {existing ? "Uložiť zmeny" : "Vytvoriť rezerváciu"}
       </button>
@@ -9785,7 +9872,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, jobs, reservations, salespeople, onSaveCustomer, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
+function AddJobModal({ machines, drivers, technicians, customers, blacklist, jobs, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
   const [tab, setTab] = useState("zakazka"); // "zakazka" | "preprava"
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
@@ -9793,7 +9880,9 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
   const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
   const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
@@ -9891,6 +9980,7 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
                 if (c.email && !customerEmail) setCustomerEmail(c.email);
                 if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
                 setSelectedContacts(c.contacts || []);
+                setSelectedCustomerId(c.id);
               }}
             />
           </Field>
@@ -9901,6 +9991,10 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
               if (k.email) setCustomerEmail(k.email);
             }}
           />
+          <BlacklistWarning match={blacklistMatch} />
+          {selectedCustomerId && onAddNewContact && (
+            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
+          )}
           <Field label="Začiatok *">
             <input
               type="date"
@@ -10031,6 +10125,65 @@ function AddJobModal({ machines, drivers, technicians, customers, jobs, reservat
 --------------------------------------------------------- */
 // Výber KONKRÉTNEJ kontaktnej osoby — zobrazí sa až po výbere zákazníka vyššie,
 // a ponúka LEN kontakty toho jedného zákazníka (nie všetky naprieč appkou).
+// Výrazné upozornenie, keď meno napísané/vybrané v poli zákazníka zodpovedá
+// záznamu v Blackliste — appka zápis nezablokuje (rozhodnutie necháva na
+// človeka), len na to jasne upozorní, s dôvodom, čo je v Blackliste uvedený.
+function BlacklistWarning({ match }) {
+  if (!match) return null;
+  return (
+    <div style={{ background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: 6, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
+      ⚠ Tento zákazník je na BLACKLISTE{match.dovod ? ` — dôvod: ${match.dovod}` : ""}{match.aktualnyStav ? ` (stav: ${match.aktualnyStav})` : ""}.
+    </div>
+  );
+}
+
+// Malý vstavaný formulár na pridanie NOVEJ kontaktnej osoby priamo z miesta,
+// kde sa píše zákazka/rezervácia/externá zákazka — uloží sa hneď (nezávisle od
+// toho, či sa samotná zákazka uloží), rovno do databázy zákazníka. Zobrazuje sa
+// len vtedy, keď je zákazník skutočne vybraný z databázy (má id).
+function NewContactInlineForm({ onSave }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [saved, setSaved] = useState(false);
+  if (saved) {
+    return <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>✓ Kontakt "{name}" pridaný k zákazníkovi.</div>;
+  }
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 10 }} onClick={() => setOpen(true)}>
+        + Nová kontaktná osoba (uloží sa k zákazníkovi)
+      </button>
+    );
+  }
+  return (
+    <div className="panel" style={{ padding: 10, marginBottom: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+        <input placeholder="Meno *" value={name} onChange={(e) => setName(e.target.value)} />
+        <input placeholder="Funkcia" value={role} onChange={(e) => setRole(e.target.value)} />
+        <input placeholder="Telefón" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Zrušiť</button>
+        <button
+          type="button"
+          className="btn btn-accent"
+          disabled={!name.trim()}
+          onClick={() => {
+            onSave({ name: name.trim(), role, phone, email });
+            setSaved(true);
+          }}
+        >
+          Uložiť kontakt k zákazníkovi
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ContactPicker({ contacts, onSelect }) {
   if (!contacts || contacts.length === 0) return null;
   return (
@@ -10086,7 +10239,7 @@ function CustomerAutocomplete({ value, onChange, customers, onSelectCustomer, pl
             >
               <div style={{ fontWeight: 600 }}>{c.firma}</div>
               <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                {[c.cisloOdberatela && `č. odberateľa: ${c.cisloOdberatela}`, c.email].filter(Boolean).join(" · ") || "bez ďalších údajov"}
+                {[c.ico && `IČO: ${c.ico}`, c.cisloOdberatela && `č. odberateľa: ${c.cisloOdberatela}`, c.email].filter(Boolean).join(" · ") || "bez ďalších údajov"}
               </div>
             </div>
           ))}
@@ -10100,6 +10253,7 @@ function ImportCustomersModal({ onClose, onImport }) {
   const [rows, setRows] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [mapFirma, setMapFirma] = useState("");
+  const [mapIco, setMapIco] = useState("");
   const [mapCislo, setMapCislo] = useState("");
   const [fileName, setFileName] = useState("");
 
@@ -10123,6 +10277,7 @@ function ImportCustomersModal({ onClose, onImport }) {
     const parsed = rows
       .map((r) => ({
         firma: (r[mapFirma] || "").toString().trim(),
+        ico: mapIco ? (r[mapIco] || "").toString().trim() : "",
         cisloOdberatela: mapCislo ? (r[mapCislo] || "").toString().trim() : "",
       }))
       .filter((c) => c.firma);
@@ -10145,6 +10300,12 @@ function ImportCustomersModal({ onClose, onImport }) {
           <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <Field label="Stĺpec = Názov firmy *">
               <select value={mapFirma} onChange={(e) => setMapFirma(e.target.value)} style={{ width: "100%" }}>
+                <option value="">—</option>
+                {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </Field>
+            <Field label="Stĺpec = IČO">
+              <select value={mapIco} onChange={(e) => setMapIco(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
@@ -10663,7 +10824,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
   // Párovanie na existujúcich zákazníkov - najprv podľa IČO (spoľahlivejšie,
   // ak je v súbore), inak podľa presného mena firmy.
   const customerByIco = useMemo(
-    () => Object.fromEntries((customers || []).filter((c) => c.cisloOdberatela).map((c) => [c.cisloOdberatela.trim(), c])),
+    () => Object.fromEntries((customers || []).filter((c) => c.ico).map((c) => [c.ico.trim(), c])),
     [customers]
   );
   const customerByName = useMemo(() => Object.fromEntries((customers || []).map((c) => [c.firma.trim().toLowerCase(), c])), [customers]);
@@ -10705,7 +10866,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
         // presne to meno, čo už appka o zákazníkovi eviduje (zjednotí drobné
         // rozdiely v zápise, napr. "s.r.o." vs "spol. s r.o.").
         const matched = (ico && customerByIco[ico]) || customerByName[customerName.toLowerCase()];
-        customerUpserts.push({ firma: matched ? matched.firma : customerName, cisloOdberatela: ico });
+        customerUpserts.push({ firma: matched ? matched.firma : customerName, ico });
       }
       jobs.push({
         id: uid(),
@@ -10756,7 +10917,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = IČO / číslo odberateľa">
+            <Field label="Stĺpec = IČO">
               <select value={mapIco} onChange={(e) => setMapIco(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -12908,9 +13069,11 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
   );
 }
 
-function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer, onClose, onSave }) {
+function ReportExternalServiceModal({ existing, today, customers, blacklist, onSaveCustomer, onAddNewContact, onClose, onSave }) {
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [location, setLocation] = useState(existing?.location || "");
   const [model, setModel] = useState(existing?.model || "");
   const [serialNumber, setSerialNumber] = useState(existing?.serialNumber || "");
@@ -12934,6 +13097,7 @@ function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer
             onSelectCustomer={(c) => {
               setCustomer(c.firma);
               setSelectedContacts(c.contacts || []);
+              setSelectedCustomerId(c.id);
             }}
           />
         </Field>
@@ -12944,6 +13108,12 @@ function ReportExternalServiceModal({ existing, today, customers, onSaveCustomer
             setPopis((p) => (p ? p + "\n" + line : line));
           }}
         />
+        <div style={{ gridColumn: "1 / -1" }}>
+          <BlacklistWarning match={blacklistMatch} />
+          {selectedCustomerId && onAddNewContact && (
+            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
+          )}
+        </div>
         <Field label="Miesto (mesto / adresa) *"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
         <Field label="Model / typ stroja *"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Sériové číslo *"><input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} style={{ width: "100%" }} /></Field>
