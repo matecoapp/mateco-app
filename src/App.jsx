@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.391";
+const APP_VERSION = "1.0.392";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4015,13 +4015,14 @@ function DispatcherApp() {
       )}
 
       {newVersionAvailable && (
-        <div style={{ background: "var(--panel)", borderBottom: "2px solid var(--accent)", color: "var(--text)", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13 }}>
+        <div style={{ background: "var(--warn-bg)", borderBottom: "2px solid var(--warn)", color: "var(--warn)", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
             Je dostupná nová verzia platformy. Obnovte, keď vám to bude vyhovovať — rozrobenú prácu si najprv uložte.
           </span>
           <button
-            className="btn btn-accent"
-            style={{ padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
+            className="btn"
+            style={{ background: "var(--warn)", color: "#fff", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
             onClick={applyNewVersion}
           >
             Obnoviť teraz
