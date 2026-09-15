@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.403";
+const APP_VERSION = "1.0.404";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6244,27 +6244,37 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
 // záložiek. Pod menom modulu sa (len keď je aktívny) ukáže malý štítok s
 // názvom práve otvorenej záložky — presne to isté sa dá vidieť aj bez
 // rozbaľovania, len v skrátenej podobe.
-function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, badgeCount, documentSubTabs, onSelectModule, onSelectView, onPickDocumentsSubView }) {
-  const [open, setOpen] = useState(false);
+function ModuleNavButton({ moduleInfo, isActive, isOpen, onToggleOpen, onCloseOpen, currentTabLabel, tabs, view, badgeCount, documentSubTabs, onSelectModule, onSelectView, onPickDocumentsSubView }) {
   const [docsExpanded, setDocsExpanded] = useState(false);
+  const boxRef = useRef(null);
 
-  function handleClick() {
-    // Klik na modul (aktívny alebo nie) len otvorí/zavrie jeho zoznam
-    // záložiek — samotné prepnutie appky sa deje až pri výbere konkrétnej
-    // záložky nižšie, nikdy len pri otvorení menu (predtým to pôsobilo
-    // "sekavo" — obsah skočil na predvolenú záložku skôr, než si človek
-    // čokoľvek vybral).
-    setOpen((v) => !v);
-  }
   function closeAll() {
-    setOpen(false);
+    onCloseOpen();
     setDocsExpanded(false);
   }
 
+  // Klik mimo tohto tlačidla/panelu ho zavrie — presne ten istý vzor, čo
+  // appka používa pri menu používateľa a globálnom vyhľadávaní, namiesto
+  // neviditeľného prekryvu cez celú obrazovku. Ten by totiž ležal aj nad
+  // SUSEDNÝMI tlačidlami modulov a blokoval by im prvý klik (museli by ste
+  // kliknúť dvakrát — raz na zatvorenie, raz na otvorenie ďalšieho).
+  // "mousedown" (nie "click") zámerne — spustí sa TESNE PRED kliknutím na
+  // iné tlačidlo, takže zatvorenie tohto a otvorenie ďalšieho prebehne v
+  // rovnakom kliku, v správnom poradí.
+  useEffect(() => {
+    if (!isOpen) return;
+    function onDocMouseDown(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) closeAll();
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={boxRef} style={{ position: "relative" }}>
       <button
-        onClick={handleClick}
+        onClick={onToggleOpen}
         className="label-font"
         style={{
           padding: isActive ? "5px 16px 7px" : "7px 16px",
@@ -6291,16 +6301,14 @@ function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, ba
               {badgeCount}
             </span>
           )}
-          <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? "▴" : "▾"}</span>
+          <span style={{ fontSize: 9, opacity: 0.7 }}>{isOpen ? "▴" : "▾"}</span>
         </span>
         {isActive && currentTabLabel && (
           <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.02em", textTransform: "none", opacity: 0.75 }}>{currentTabLabel}</span>
         )}
       </button>
-      {open && (
-        <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={closeAll} />
-          <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 220, zIndex: 201, padding: 6 }}>
+      {isOpen && (
+        <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 220, zIndex: 201, padding: 6 }}>
             {tabs.map((t) =>
               t.dropdown ? (
                 <div key={t.id}>
@@ -6396,7 +6404,6 @@ function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, ba
               )
             )}
           </div>
-        </>
       )}
     </div>
   );
@@ -6728,6 +6735,13 @@ function GlobalSearch({ searchIndex, onNavigate }) {
 }
 
 function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+  // Ktorého modulu zoznam záložiek je práve otvorený — zdieľané medzi
+  // všetkými tromi tlačidlami (nie samostatný stav v každom), nech klik na
+  // INÝ modul, kým je jeden už otvorený, prepne priamo na jeden krát — bez
+  // toho by prvý klik len zavrel starý (jeho vlastný neviditeľný prekryv cez
+  // celú obrazovku "zachytil" klik skôr, než sa dostal k novému tlačidlu), a
+  // až druhý klik otvoril nový.
+  const [openModuleId, setOpenModuleId] = useState(null);
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -6843,6 +6857,9 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               key={m.id}
               moduleInfo={m}
               isActive={module === m.id}
+              isOpen={openModuleId === m.id}
+              onToggleOpen={() => setOpenModuleId((cur) => (cur === m.id ? null : m.id))}
+              onCloseOpen={() => setOpenModuleId(null)}
               currentTabLabel={module === m.id ? m.tabs.find((t) => t.id === view)?.label : null}
               tabs={m.tabs}
               view={view}
