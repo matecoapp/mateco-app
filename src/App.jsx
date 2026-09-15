@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.395";
+const APP_VERSION = "1.0.396";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1903,6 +1903,23 @@ function DispatcherApp() {
       setPushEnabled(true);
     } catch (e) {
       console.error("Zapnutie push notifikácií zlyhalo", e);
+    }
+  }
+  // Skutočné zrušenie odberu v prehliadači (nie len zmazanie záznamu v
+  // appke) — bez tohto appka len zabudne o odbere, čo prehliadač aj tak
+  // stále drží, a nikdy by znova neponúkla skutočné prihlasovacie okno.
+  async function disablePush() {
+    try {
+      if (!("serviceWorker" in navigator)) return;
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) {
+        await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+        await sub.unsubscribe();
+      }
+      setPushEnabled(false);
+    } catch (e) {
+      console.error("Vypnutie push notifikácií zlyhalo", e);
     }
   }
   function dismissPushSoftPrompt() {
@@ -4075,6 +4092,7 @@ function DispatcherApp() {
         onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
         pushEnabled={pushEnabled}
         onEnablePush={enablePush}
+        onDisablePush={disablePush}
         effectiveUser={effectiveUser}
         viewAsRole={viewAsRole}
         onSetViewAsRole={setViewAsRole}
@@ -5674,7 +5692,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
   const isAdmin = isAdminUser(currentUser);
@@ -5813,6 +5831,7 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
           currentUser={currentUser}
           pushEnabled={pushEnabled}
           onEnablePush={onEnablePush}
+          onDisablePush={onDisablePush}
           onSave={onSaveNotificationPrefs}
           onClose={() => setShowPrefs(false)}
         />
@@ -5852,7 +5871,7 @@ const ROLE_NOTIFICATION_KINDS = {
 // push (upozornenie do telefónu/PC, aj keď appku nemá práve otvorenú) — v
 // appke samotnej (zvonček) sa teraz zobrazuje VŽDY všetko, toto nastavenie
 // sa týka len push. Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté).
-function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onSave, onClose }) {
+function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisablePush, onSave, onClose }) {
   const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
   const browserBlocked = typeof Notification !== "undefined" && Notification.permission === "denied";
   function toggle(kind) {
@@ -5871,7 +5890,12 @@ function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onSave
         }}
       >
         {pushEnabled ? (
-          <div style={{ fontSize: 13, color: "var(--ok)" }}>✓ Upozornenia do telefónu/počítača sú na tomto zariadení zapnuté.</div>
+          <>
+            <div style={{ fontSize: 13, color: "var(--ok)", marginBottom: 8 }}>✓ Upozornenia do telefónu/počítača sú na tomto zariadení zapnuté.</div>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onDisablePush}>
+              Vypnúť na tomto zariadení
+            </button>
+          </>
         ) : browserBlocked ? (
           <div style={{ fontSize: 13 }}>
             Upozornenia sú v prehliadači vyslovene zablokované — appka sa vás už znova nespýta, musíte to povoliť ručne
@@ -6439,7 +6463,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -6534,6 +6558,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
                 onSaveNotificationPrefs={onSaveNotificationPrefs}
                 pushEnabled={pushEnabled}
                 onEnablePush={onEnablePush}
+                onDisablePush={onDisablePush}
                 viewAsRole={viewAsRole}
                 onSetViewAsRole={onSetViewAsRole}
                 darkMode={darkMode}
