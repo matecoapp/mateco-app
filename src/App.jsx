@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.399";
+const APP_VERSION = "1.0.401";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4223,6 +4223,7 @@ function DispatcherApp() {
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
         onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
+        onAddReservation={() => setShowAddReservation({})}
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
@@ -4358,7 +4359,6 @@ function DispatcherApp() {
             machineModels={machineModels}
             onOpenCard={(m) => setMachineCard(m)}
             onOpenJob={(j) => setJobDetail(j)}
-            onAddReservation={() => setShowAddReservation({})}
             onOpenReservation={(r) => setReservationCardTarget(r)}
             onAddJob={(machineId, startDate) => setShowAddJob({ machineId, startDate })}
           />
@@ -6248,12 +6248,12 @@ function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, ba
   const [docsExpanded, setDocsExpanded] = useState(false);
 
   function handleClick() {
-    if (!isActive) {
-      onSelectModule(moduleInfo.id);
-      setOpen(true);
-    } else {
-      setOpen((v) => !v);
-    }
+    // Klik na modul (aktívny alebo nie) len otvorí/zavrie jeho zoznam
+    // záložiek — samotné prepnutie appky sa deje až pri výbere konkrétnej
+    // záložky nižšie, nikdy len pri otvorení menu (predtým to pôsobilo
+    // "sekavo" — obsah skočil na predvolenú záložku skôr, než si človek
+    // čokoľvek vybral).
+    setOpen((v) => !v);
   }
   function closeAll() {
     setOpen(false);
@@ -6329,6 +6329,7 @@ function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, ba
                         <button
                           key={st.id}
                           onClick={() => {
+                            onSelectModule(moduleInfo.id);
                             onPickDocumentsSubView(st);
                             closeAll();
                           }}
@@ -6359,6 +6360,7 @@ function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, ba
                 <button
                   key={t.id}
                   onClick={() => {
+                    onSelectModule(moduleInfo.id);
                     onSelectView(t.id);
                     closeAll();
                   }}
@@ -6724,7 +6726,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -6852,7 +6854,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           ))}
         </div>
         {(module === "servis" || module === "poziciovna") &&
-          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report")) && (
+          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
           <div className="header-tech-actions" style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
             {module === "servis" && can(effectiveUser, "protocol_write") && (
               <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
@@ -6862,6 +6864,11 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             {can(effectiveUser, "damage_quick_report") && (
               <button onClick={onOpenQuickDamageReport} className="btn btn-ghost" style={{ fontSize: 12, color: "var(--danger)" }}>
                 ⚠️ Nahlásiť poškodenie
+              </button>
+            )}
+            {module === "poziciovna" && can(effectiveUser, "reservation_add") && (
+              <button onClick={onAddReservation} className="btn btn-ghost" style={{ fontSize: 12 }}>
+                + Nezáväzná rezervácia
               </button>
             )}
             {module === "servis" && can(effectiveUser, "protocol_write") && (
@@ -6889,7 +6896,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           </div>
         )}
       </div>
-      {(can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report")) && (
+      {(can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
         <div className="mobile-tech-actions">
           <button onClick={onOpenPhoneDirectory} className="mobile-tech-action-btn">
             <span className="mobile-tech-action-icon">📞</span>
@@ -6905,6 +6912,12 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             <button onClick={onOpenQuickDamageReport} className="mobile-tech-action-btn">
               <span className="mobile-tech-action-icon">⚠️</span>
               Porucha
+            </button>
+          )}
+          {can(effectiveUser, "reservation_add") && (
+            <button onClick={onAddReservation} className="mobile-tech-action-btn">
+              <span className="mobile-tech-action-icon">📅</span>
+              Rezervácia
             </button>
           )}
           {can(effectiveUser, "protocol_write") && (
@@ -11458,7 +11471,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
 /* ---------------------------------------------------------
    Calendar / Gantt view
 --------------------------------------------------------- */
-function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onAddReservation, onOpenReservation, onAddJob }) {
+function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -11751,19 +11764,6 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
-        {can(user, "reservation_add") ? (
-          <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={() => onAddReservation()}>
-            + Nezáväzná rezervácia
-          </button>
-        ) : <div />}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{ fontSize: 12 }}>
-            <option value="code">Zoradiť: sériové číslo</option>
-            <option value="category">Zoradiť: kategória a výška zdvihu</option>
-          </select>
-        </div>
-      </div>
       <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {depoOptions.map((d) => (
@@ -11785,6 +11785,10 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
           <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+          <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{ fontSize: 12 }}>
+            <option value="code">Zoradiť: sériové číslo</option>
+            <option value="category">Zoradiť: kategória a výška zdvihu</option>
+          </select>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
