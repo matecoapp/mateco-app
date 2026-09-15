@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.407";
+const APP_VERSION = "1.0.408";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12058,6 +12058,32 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       runCalendarScrollCheckRef.current();
     });
   }, []);
+  // --gantt-day-col / --gantt-name-col sú CSS premenné, čo sa počas bežného
+  // scrollovania nemenia (menia sa len pri zmene veľkosti okna) — namiesto
+  // toho, aby sa nanovo čítali (getComputedStyle núti prehliadač prepočítať
+  // rozloženie stránky) pri KAŽDOM kúsku scrollu, appka si ich raz zmeria a
+  // odloží, a znova prečíta len pri skutočnej zmene veľkosti.
+  const columnPxRef = useRef({ dayColPx: 34, nameColPx: 150 });
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const update = () => {
+      const styles = getComputedStyle(container);
+      columnPxRef.current = {
+        dayColPx: parseFloat(styles.getPropertyValue("--gantt-day-col")) || 34,
+        nameColPx: parseFloat(styles.getPropertyValue("--gantt-name-col")) || 150,
+      };
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   function runCalendarScrollCheck() {
     const container = scrollContainerRef.current;
     if (!container || allDays.length === 0) return;
@@ -12073,17 +12099,17 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     // (a najmä pri veľa riadkoch strojov) badateľne pomalé a spôsobovalo
     // sekanie pri scrollovaní. Mierna nepresnosť (o deň-dva) tu nevadí, používa
     // sa len na kozmetický popisok mesiaca a na kotviaci bod pri rozširovaní.
-    const styles = getComputedStyle(container);
-    const dayColPx = parseFloat(styles.getPropertyValue("--gantt-day-col")) || 34;
-    const nameColPx = parseFloat(styles.getPropertyValue("--gantt-name-col")) || 150;
+    const { dayColPx, nameColPx } = columnPxRef.current;
     const stepPx = dayColPx + 2; // +2 = grid gap
     const scrollLeft = container.scrollLeft;
-    const containerLeft = container.getBoundingClientRect().left; // jediné meranie DOM za celý výpočet
     const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
     const leftmostIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor(scrollLeft / stepPx)));
     const closestIso = allDays[centerIdx];
     const leftmostIso = allDays[leftmostIdx];
-    const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
+    // containerLeft (getBoundingClientRect) sa počíta len TU, vnútri vetiev
+    // nižšie, čo naozaj rozširujú okno — nie na každý scroll frame ako
+    // predtým. Zvyšok funkcie (najčastejší prípad — len sa mení popisok
+    // mesiaca) sa už teda zaobíde úplne bez akéhokoľvek merania DOM.
     if (closestIso) {
       const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
       setDisplayedMonthLabel(label);
@@ -12103,7 +12129,11 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     // scroll dokotviť rovnakým mechanizmom, čo appka už používa vyššie.
     const MAX_MONTHS_SPAN = 5;
     if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
-      if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      if (leftmostIso) {
+        const containerLeft = container.getBoundingClientRect().left;
+        const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
+        prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      }
       scrollExpandLockRef.current = true;
       setMonthWindow((w) => {
         const newStart = w.start - 1;
