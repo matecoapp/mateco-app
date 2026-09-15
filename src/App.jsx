@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.387";
+const APP_VERSION = "1.0.388";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -17188,33 +17188,33 @@ function LiftLoader({ label }) {
   const rise = "transform 2.4s cubic-bezier(.2,.7,.3,1)";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <svg width="210" height="240" viewBox="0 0 420 480">
-        <ellipse cx="210" cy="452" rx="140" ry="12" fill="#000" opacity="0.08" />
-        <g style={{ transformOrigin: "210px 400px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise }}>
-          <line x1="115" y1="400" x2="305" y2="295" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="400" x2="115" y2="295" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="295" x2="305" y2="190" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="295" x2="115" y2="190" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="190" x2="305" y2="85" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="190" x2="115" y2="85" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="85" x2="305" y2="-20" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="85" x2="115" y2="-20" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+      <svg width="210" height="280" viewBox="0 0 420 560">
+        <ellipse cx="210" cy="532" rx="140" ry="12" fill="#000" opacity="0.08" />
+        <g style={{ transformOrigin: "210px 480px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise }}>
+          <line x1="115" y1="480" x2="305" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="480" x2="115" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="375" x2="305" y2="270" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="375" x2="115" y2="270" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="270" x2="305" y2="165" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="270" x2="115" y2="165" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="165" x2="305" y2="60" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="165" x2="115" y2="60" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
         </g>
-        <rect x="90" y="392" width="240" height="52" rx="6" fill="#18181a" />
-        <rect x="266" y="382" width="34" height="26" rx="2" fill="#2b2b2b" />
-        <circle cx="283" cy="395" r="4" fill="var(--accent)" />
-        <circle cx="150" cy="446" r="22" fill="#222" />
-        <circle cx="150" cy="446" r="9" fill="#666" />
-        <circle cx="270" cy="446" r="22" fill="#222" />
-        <circle cx="270" cy="446" r="9" fill="#666" />
+        <rect x="90" y="472" width="240" height="52" rx="6" fill="#18181a" />
+        <rect x="266" y="462" width="34" height="26" rx="2" fill="#2b2b2b" />
+        <circle cx="283" cy="475" r="4" fill="var(--accent)" />
+        <circle cx="150" cy="526" r="22" fill="#222" />
+        <circle cx="150" cy="526" r="9" fill="#666" />
+        <circle cx="270" cy="526" r="22" fill="#222" />
+        <circle cx="270" cy="526" r="9" fill="#666" />
         <g style={{ transform: risen ? "translateY(0px)" : "translateY(369.6px)", transition: rise }}>
-          <rect x="90" y="-24" width="240" height="28" rx="4" fill="#18181a" />
-          <rect x="90" y="-70" width="8" height="50" fill="#18181a" />
-          <rect x="322" y="-70" width="8" height="50" fill="#18181a" />
-          <rect x="90" y="-70" width="240" height="8" fill="var(--accent)" />
-          <rect x="90" y="-46" width="240" height="5" fill="var(--accent)" />
-          <rect x="170" y="-70" width="8" height="50" fill="#18181a" />
-          <rect x="242" y="-70" width="8" height="50" fill="#18181a" />
+          <rect x="90" y="56" width="240" height="28" rx="4" fill="#18181a" />
+          <rect x="90" y="10" width="8" height="50" fill="#18181a" />
+          <rect x="322" y="10" width="8" height="50" fill="#18181a" />
+          <rect x="90" y="10" width="240" height="8" fill="var(--accent)" />
+          <rect x="90" y="34" width="240" height="5" fill="var(--accent)" />
+          <rect x="170" y="10" width="8" height="50" fill="#18181a" />
+          <rect x="242" y="10" width="8" height="50" fill="#18181a" />
         </g>
       </svg>
       {label && <div className="label-font" style={{ color: "var(--text-dim)", fontSize: 13 }}>{label}</div>}
