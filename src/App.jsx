@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.398";
+const APP_VERSION = "1.0.399";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -921,6 +921,54 @@ function SearchInput({ value, onChange, placeholder, style }) {
         >
           ×
         </button>
+      )}
+    </div>
+  );
+}
+
+// Znovupoužiteľné tlačidlo "Filtre" — schová rôzne filtre (depo, stav,
+// archivované a pod.) za jedno tlačidlo s odznakom počtu aktívnych, namiesto
+// toho, aby boli trvalo v samostatných riadkoch. activeCount > 0 tlačidlo aj
+// vizuálne zvýrazní, nech nie je ľahké zabudnúť na aktívny filter.
+function FilterPopover({ activeCount, onClear, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        className="btn"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: activeCount > 0 ? "var(--accent-light)" : "transparent",
+          color: activeCount > 0 ? "var(--accent)" : "var(--text)",
+          border: "1px solid " + (activeCount > 0 ? "var(--accent)" : "var(--border)"),
+        }}
+      >
+        Filtre
+        {activeCount > 0 && (
+          <span style={{ background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 6px", fontWeight: 700 }}>
+            {activeCount}
+          </span>
+        )}
+        <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? "▴" : "▾"}</span>
+      </button>
+      {activeCount > 0 && (
+        <button
+          onClick={onClear}
+          style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: 12, marginLeft: 6, cursor: "pointer", textDecoration: "underline" }}
+        >
+          ✕ Zrušiť filtre
+        </button>
+      )}
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 280, zIndex: 201, padding: 14 }}>
+            {children}
+          </div>
+        </>
       )}
     </div>
   );
@@ -5819,6 +5867,21 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               onClick={() => {
+                composeMail({
+                  to: "radoslav.podusel@matecoslovakia.sk",
+                  subject: "Pripomienky k mateco App",
+                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
+                });
+                setOpen(false);
+              }}
+            >
+              💬 Poslať pripomienku
+            </button>
+            <button
+              style={itemStyle}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onClick={() => {
                 try {
                   localStorage.removeItem(MAIL_PREF_KEY);
                 } catch (e) {}
@@ -6174,49 +6237,130 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
   );
 }
 
-/* ---------------------------------------------------------
-   "Dokumenty" — záložka s rozbaľovacím menu podzáložiek
-   (zatiaľ pripravená prázdna, podzáložky sa doplnia neskôr)
---------------------------------------------------------- */
-function DocumentsTabButton({ active, subTabs, onPick }) {
+// Tlačidlo modulu (Požičovňa/Servis/Administratíva) so schovanými záložkami —
+// klik na NEaktívny modul rovno prepne aj otvorí jeho záložky (nech je hneď
+// vidno, čo si vybrať); klik na UŽ aktívny modul len otvorí/zavrie zoznam
+// záložiek. Pod menom modulu sa (len keď je aktívny) ukáže malý štítok s
+// názvom práve otvorenej záložky — presne to isté sa dá vidieť aj bez
+// rozbaľovania, len v skrátenej podobe.
+function ModuleNavButton({ moduleInfo, isActive, currentTabLabel, tabs, view, badgeCount, documentSubTabs, onSelectModule, onSelectView, onPickDocumentsSubView }) {
   const [open, setOpen] = useState(false);
+  const [docsExpanded, setDocsExpanded] = useState(false);
+
+  function handleClick() {
+    if (!isActive) {
+      onSelectModule(moduleInfo.id);
+      setOpen(true);
+    } else {
+      setOpen((v) => !v);
+    }
+  }
+  function closeAll() {
+    setOpen(false);
+    setDocsExpanded(false);
+  }
+
   return (
     <div style={{ position: "relative" }}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleClick}
         className="label-font"
         style={{
-          padding: "7px 12px",
-          borderRadius: "6px 6px 0 0",
+          padding: isActive ? "5px 16px 7px" : "7px 16px",
+          borderRadius: 6,
           fontSize: 13,
+          fontWeight: 700,
           letterSpacing: "0.04em",
-          background: active ? "var(--accent-light)" : "transparent",
-          color: active ? "var(--accent)" : "var(--text-dim)",
-          border: "1px solid transparent",
-          borderBottom: active ? "3px solid var(--accent)" : "3px solid transparent",
-          marginBottom: -2,
+          textTransform: "uppercase",
+          background: isActive ? "#1a1a1a" : "transparent",
+          color: isActive ? "#fff" : "var(--text-dim)",
+          border: "none",
           cursor: "pointer",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1,
         }}
       >
-        Dokumenty ▾
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {moduleInfo.label}
+          {badgeCount > 0 && (
+            <span style={{ background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 5px", fontFamily: "Barlow", fontWeight: 700 }}>
+              {badgeCount}
+            </span>
+          )}
+          <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? "▴" : "▾"}</span>
+        </span>
+        {isActive && currentTabLabel && (
+          <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.02em", textTransform: "none", opacity: 0.75 }}>{currentTabLabel}</span>
+        )}
       </button>
       {open && (
         <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={closeAll} />
           <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 220, zIndex: 201, padding: 6 }}>
-            {subTabs.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "8px 10px" }}>
-                Táto sekcia sa pripravuje.
-              </div>
-            ) : (
-              subTabs.map((st) => (
+            {tabs.map((t) =>
+              t.dropdown ? (
+                <div key={t.id}>
+                  <button
+                    onClick={() => setDocsExpanded((v) => !v)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      width: "100%",
+                      textAlign: "left",
+                      background: view === t.id ? "var(--accent-light)" : "transparent",
+                      border: "none",
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      color: view === t.id ? "var(--accent)" : "var(--text)",
+                      cursor: "pointer",
+                      borderRadius: 5,
+                    }}
+                  >
+                    {t.label} {docsExpanded ? "▴" : "▾"}
+                  </button>
+                  {docsExpanded &&
+                    (documentSubTabs.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "8px 10px 8px 22px" }}>Táto sekcia sa pripravuje.</div>
+                    ) : (
+                      documentSubTabs.map((st) => (
+                        <button
+                          key={st.id}
+                          onClick={() => {
+                            onPickDocumentsSubView(st);
+                            closeAll();
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            width: "100%",
+                            textAlign: "left",
+                            background: "transparent",
+                            border: "none",
+                            padding: "8px 10px 8px 22px",
+                            fontSize: 12.5,
+                            color: "var(--text)",
+                            cursor: "pointer",
+                            borderRadius: 5,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          {st.label}
+                          {st.url && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)" }}>↗</span>}
+                        </button>
+                      ))
+                    ))}
+                </div>
+              ) : (
                 <button
-                  key={st.id}
+                  key={t.id}
                   onClick={() => {
-                    onPick(st);
-                    setOpen(false);
+                    onSelectView(t.id);
+                    closeAll();
                   }}
                   style={{
                     display: "flex",
@@ -6224,21 +6368,29 @@ function DocumentsTabButton({ active, subTabs, onPick }) {
                     gap: 6,
                     width: "100%",
                     textAlign: "left",
-                    background: "transparent",
+                    background: view === t.id ? "var(--accent-light)" : "transparent",
                     border: "none",
                     padding: "8px 10px",
                     fontSize: 13,
-                    color: "var(--text)",
+                    color: view === t.id ? "var(--accent)" : "var(--text)",
                     cursor: "pointer",
                     borderRadius: 5,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseEnter={(e) => {
+                    if (view !== t.id) e.currentTarget.style.background = "var(--panel-2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (view !== t.id) e.currentTarget.style.background = "transparent";
+                  }}
                 >
-                  {st.label}
-                  {st.url && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)" }}>↗</span>}
+                  {t.label}
+                  {t.id === "poskodenia" && badgeCount > 0 && (
+                    <span style={{ marginLeft: "auto", background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 6px", fontFamily: "Barlow", fontWeight: 700 }}>
+                      {badgeCount}
+                    </span>
+                  )}
                 </button>
-              ))
+              )
             )}
           </div>
         </>
@@ -6617,27 +6769,6 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
             <button
-              onClick={() =>
-                composeMail({
-                  to: "radoslav.podusel@matecoslovakia.sk",
-                  subject: "Pripomienky k mateco App",
-                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
-                })
-              }
-              style={{
-                fontSize: 11,
-                color: "#fff",
-                background: "rgba(255,255,255,.12)",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 10px",
-                cursor: "pointer",
-              }}
-              title="Otvorí email s pripomienkami k platforme"
-            >
-              ✉️ Odoslať mail s pripomienkami
-            </button>
-            <button
               onClick={onOpenPhoneDirectory}
               style={{
                 fontSize: 13,
@@ -6699,83 +6830,27 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
       >
         <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", borderRadius: 8, padding: 3 }}>
           {[
-            { id: "poziciovna", label: "Požičovňa" },
-            ...(effectiveUser?.role !== "externy_sofer" ? [{ id: "servis", label: "Servis" }] : []),
-            ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva" }] : []),
+            { id: "poziciovna", label: "Požičovňa", tabs: effectiveUser?.role === "externy_sofer" ? poziciovnaTabs.filter((t) => t.id === "prepravy") : poziciovnaTabs, badge: 0 },
+            ...(effectiveUser?.role !== "externy_sofer"
+              ? [{ id: "servis", label: "Servis", tabs: servisTabs, badge: damageAlertCount }]
+              : []),
+            ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva", tabs: administrativaTabs, badge: 0 }] : []),
           ].map((m) => (
-            <button
+            <ModuleNavButton
               key={m.id}
-              onClick={() => setModule(m.id)}
-              className="label-font"
-              style={{
-                padding: "7px 16px",
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-                background: module === m.id ? "#1a1a1a" : "transparent",
-                color: module === m.id ? "#fff" : "var(--text-dim)",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              {m.label}
-            </button>
+              moduleInfo={m}
+              isActive={module === m.id}
+              currentTabLabel={module === m.id ? m.tabs.find((t) => t.id === view)?.label : null}
+              tabs={m.tabs}
+              view={view}
+              badgeCount={m.badge}
+              documentSubTabs={DOCUMENT_SUBTABS[m.id] || []}
+              onSelectModule={setModule}
+              onSelectView={setView}
+              onPickDocumentsSubView={onPickDocumentsSubView}
+            />
           ))}
         </div>
-        <nav className="tab-strip" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {tabs.map((t) =>
-            t.dropdown ? (
-              <DocumentsTabButton
-                key={t.id}
-                active={view === t.id}
-                subTabs={DOCUMENT_SUBTABS[module] || []}
-                onPick={(st) => onPickDocumentsSubView(st)}
-              />
-            ) : (
-            <button
-              key={t.id}
-              onClick={() => setView(t.id)}
-              className="label-font"
-              style={{
-                padding: "7px 12px",
-                borderRadius: "6px 6px 0 0",
-                fontSize: 13,
-                letterSpacing: "0.04em",
-                background: view === t.id ? "var(--accent-light)" : "transparent",
-                color: view === t.id ? "var(--accent)" : "var(--text-dim)",
-                border: "1px solid transparent",
-                borderBottom: view === t.id ? "3px solid var(--accent)" : "3px solid transparent",
-                marginBottom: -2,
-                cursor: "pointer",
-                position: "relative",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {t.label}
-              {t.id === "poskodenia" && damageAlertCount > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: -6,
-                    right: -6,
-                    background: "var(--accent)",
-                    color: "#fff",
-                    fontSize: 10,
-                    borderRadius: 99,
-                    padding: "1px 5px",
-                    fontFamily: "Barlow",
-                  }}
-                >
-                  {damageAlertCount}
-                </span>
-              )}
-            </button>
-            )
-          )}
-        </nav>
         {(module === "servis" || module === "poziciovna") &&
           (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report")) && (
           <div className="header-tech-actions" style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -7000,6 +7075,12 @@ function Dashboard({
   if (depoFilter) {
     visibleMachines = visibleMachines.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
   }
+  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (depoFilter ? 1 : 0) + (showArchived ? 1 : 0);
+  function clearFilters() {
+    setStatusFilter("all");
+    setDepoFilter(null);
+    setShowArchived(false);
+  }
 
   return (
     <div>
@@ -7010,14 +7091,44 @@ function Dashboard({
         <StatCard label="Po termíne" value={stats.overdue} color="var(--danger)" />
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">Všetky stavy</option>
-          <option value="free">Voľné</option>
-          <option value="active">Na zákazke</option>
-          <option value="overdue">Po termíne</option>
-        </select>
+        <FilterPopover activeCount={activeFilterCount} onClear={clearFilters}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Stav</div>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: "100%" }}>
+              <option value="all">Všetky stavy</option>
+              <option value="free">Voľné</option>
+              <option value="active">Na zákazke</option>
+              <option value="overdue">Po termíne</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {depoOptions.map((d) => (
+                <button
+                  key={d}
+                  className="btn"
+                  onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    background: depoFilter === d ? "var(--accent)" : "transparent",
+                    color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                    border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+                  }}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Zobraziť archivované
+          </label>
+        </FilterPopover>
         <div style={{ flex: 1 }} />
         {can(user, "machine_clear_all") && (
           <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
@@ -7033,29 +7144,6 @@ function Dashboard({
         {can(user, "machine_add") && (
           <button className="btn btn-accent" onClick={onAddMachine}>+ Pridať stroj</button>
         )}
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {d}
-          </button>
-        ))}
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          Zobraziť archivované
-        </label>
       </div>
 
       <div className="panel" style={{ overflowX: "auto" }}>
@@ -13212,6 +13300,27 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
     <div>
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {depoOptions.map((d) => (
+              <button
+                key={d}
+                className="btn"
+                onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+                style={{
+                  padding: "5px 10px",
+                  fontSize: 11,
+                  background: depoFilter === d ? "var(--accent)" : "transparent",
+                  color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                  border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </FilterPopover>
         <div style={{ flex: 1 }} />
         {onOpenSummary && (
           <button className="btn btn-ghost" onClick={onOpenSummary}>
@@ -13229,7 +13338,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
           </button>
         )}
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
           <button
             key={f.id}
@@ -13244,24 +13353,6 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
             }}
           >
             {f.label}
-          </button>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {d}
           </button>
         ))}
       </div>
@@ -13397,7 +13488,33 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+          <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+              {depoOptions.map((d) => (
+                <button
+                  key={d}
+                  className="btn"
+                  onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    background: depoFilter === d ? "var(--accent)" : "transparent",
+                    color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                    border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+                  }}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              Filter podľa depa, ktoré má zákazku na starosti (odkiaľ pôjde technik).
+            </div>
+          </FilterPopover>
+        </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {onOpenSummary && (
             <button className="btn btn-ghost" onClick={onOpenSummary}>
@@ -13417,7 +13534,7 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
           <button
             key={f.id}
@@ -13434,27 +13551,6 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
             {f.label}
           </button>
         ))}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 14 }}>
-        Filter podľa depa, ktoré má zákazku na starosti (odkiaľ pôjde technik).
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.length === 0 && (
@@ -17324,19 +17420,6 @@ function GlobalStyle() {
           width: auto !important;
           max-width: none !important;
         }
-        /* Záložky (Prehľad, Plán servisu...) — na mobile sa vodorovne rolujú
-           namiesto zalamovania do viacerých riadkov, nech sa to nezlieva. */
-        .tab-strip {
-          flex-wrap: nowrap !important;
-          overflow-x: auto !important;
-          overflow-y: hidden !important;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          flex: 1 1 auto;
-          min-width: 0;
-          touch-action: pan-x;
-        }
-        .tab-strip::-webkit-scrollbar { display: none; }
 
         /* Tri tlačidlá pre technikov (Vypísať protokol, VTZ EZ, Odfotiť) — na
            mobile naťahovali hlavičku a zalamovali sa nečitateľne. Namiesto toho
