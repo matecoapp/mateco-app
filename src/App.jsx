@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.401";
+const APP_VERSION = "1.0.402";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6671,9 +6671,9 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie..."
         style={{
           width: "100%",
-          border: "1px solid rgba(255,255,255,.4)",
-          background: "rgba(255,255,255,.15)",
-          color: "#fff",
+          border: "1px solid rgba(0,0,0,.1)",
+          background: "#fff",
+          color: "var(--text)",
           borderRadius: 6,
           padding: "5px 10px",
           fontSize: 13,
@@ -11785,16 +11785,21 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
           <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
-          <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{ fontSize: 12 }}>
-            <option value="code">Zoradiť: sériové číslo</option>
-            <option value="category">Zoradiť: kategória a výška zdvihu</option>
-          </select>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
           )}
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value)}
+            title="Zoradiť stroje podľa"
+            style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
+          >
+            <option value="code">↕ Sériové číslo</option>
+            <option value="category">↕ Kategória a výška</option>
+          </select>
         </div>
         <div />
       </div>
