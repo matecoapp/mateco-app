@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.393";
+const APP_VERSION = "1.0.394";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5849,22 +5849,42 @@ const ROLE_NOTIFICATION_KINDS = {
 // sa týka len push. Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté).
 function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onSave, onClose }) {
   const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
+  const browserBlocked = typeof Notification !== "undefined" && Notification.permission === "denied";
   function toggle(kind) {
     setPrefs((prev) => ({ ...prev, [kind]: prev[kind] === false ? true : false }));
   }
   const relevantKinds = ROLE_NOTIFICATION_KINDS[currentUser.role] || Object.keys(NOTIFICATION_KIND_LABELS);
   return (
     <Modal title="Nastavenie upozornení" onClose={onClose}>
-      {!pushEnabled && (
-        <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6, padding: 12, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, marginBottom: 8 }}>
-            Zatiaľ nemáte zapnuté upozornenia do telefónu/počítača — bez toho vás appka nevie upozorniť, kým ju nemáte práve otvorenú.
+      <div
+        style={{
+          background: pushEnabled ? "var(--ok-bg)" : "var(--accent-light)",
+          border: `1px solid ${pushEnabled ? "var(--ok)" : "var(--accent)"}`,
+          borderRadius: 6,
+          padding: 12,
+          marginBottom: 16,
+        }}
+      >
+        {pushEnabled ? (
+          <div style={{ fontSize: 13, color: "var(--ok)" }}>✓ Upozornenia do telefónu/počítača sú na tomto zariadení zapnuté.</div>
+        ) : browserBlocked ? (
+          <div style={{ fontSize: 13 }}>
+            Upozornenia sú v prehliadači vyslovene zablokované — appka sa vás už znova nespýta, musíte to povoliť ručne
+            v nastaveniach prehliadača (zvyčajne ikonka zámku/"i" vľavo od adresy stránky → Upozornenia/Notifications → Povoliť),
+            a potom toto okno znova otvoriť.
           </div>
-          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={onEnablePush}>
-            Zapnúť upozornenia
-          </button>
-        </div>
-      )}
+        ) : (
+          <>
+            <div style={{ fontSize: 13, marginBottom: 8 }}>
+              Zatiaľ nemáte zapnuté upozornenia do telefónu/počítača na tomto zariadení — bez toho vás appka nevie
+              upozorniť, kým ju nemáte práve otvorenú.
+            </div>
+            <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={onEnablePush}>
+              Zapnúť upozornenia
+            </button>
+          </>
+        )}
+      </div>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Vypnuté kategórie vám neprídu ako upozornenie do telefónu/počítača — v appke (zvonček) uvidíte vždy všetko.
         Zobrazujú sa len kategórie, ktoré sa týkajú vašej role.
