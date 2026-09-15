@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.394";
+const APP_VERSION = "1.0.395";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3976,14 +3976,19 @@ function DispatcherApp() {
     if (!loaded || !authChecked || !session || !currentUser) return;
     const params = new URLSearchParams(window.location.search);
     const notif = params.get("notif");
-    if (!notif) return;
+    const notifId = params.get("notifId");
+    if (!notif && !notifId) return;
     try {
-      const link = JSON.parse(decodeURIComponent(atob(notif)));
-      navigateFromNotification(link);
+      if (notif) {
+        const link = JSON.parse(decodeURIComponent(atob(notif)));
+        navigateFromNotification(link);
+      }
+      if (notifId) markNotificationRead(notifId);
     } catch (e) {
       console.error("Spracovanie odkazu z push notifikácie zlyhalo", e);
     }
     params.delete("notif");
+    params.delete("notifId");
     const rest = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
   }, [loaded, authChecked, session, currentUser]);
