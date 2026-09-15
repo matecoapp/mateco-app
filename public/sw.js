@@ -17,12 +17,22 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  // Podrobný diagnostický výpis — nech vidíme presne, čo service worker
+  // skutočne dostal pri OZAJSTNEJ (nie testovacej z DevTools) push správe.
+  console.log("[sw] push event prijatý, event.data existuje:", !!event.data);
+  if (!event.data) {
+    console.log("[sw] event.data je prázdne — správa prišla bez obsahu.");
+    return;
+  }
   let payload;
   try {
-    payload = event.data.json();
+    const rawText = event.data.text();
+    console.log("[sw] surový text správy (po rozšifrovaní prehliadačom):", rawText);
+    payload = JSON.parse(rawText);
+    console.log("[sw] JSON rozobraný v poriadku:", payload);
   } catch (e) {
-    payload = { title: "mateco", body: event.data.text() };
+    console.error("[sw] rozobratie správy zlyhalo:", e?.message || e);
+    payload = { title: "mateco", body: "Chyba pri čítaní správy — pozri konzolu." };
   }
   const title = payload.title || "mateco";
   const options = {
