@@ -57,11 +57,18 @@ self.addEventListener("notificationclick", (event) => {
   const qs = params.toString();
   const targetUrl = `${self.registration.scope}${qs ? `?${qs}` : ""}`;
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windowClients) => {
       for (const client of windowClients) {
         if (client.url.startsWith(self.registration.scope) && "focus" in client) {
-          client.navigate(targetUrl);
-          return client.focus();
+          // Dôležité poradie — na presmerovanie (navigate) sa musí počkať,
+          // než sa zavolá zaostrenie (focus). Predtým sa focus() volal hneď,
+          // na pôvodnej (ešte nepresmerovanej) karte, takže sa reálne nič
+          // nestalo, keď appku niekto mal ešte otvorenú.
+          const navigated = await client.navigate(targetUrl).catch((e) => {
+            console.error("[sw] presmerovanie existujúcej karty zlyhalo", e);
+            return client;
+          });
+          return (navigated || client).focus();
         }
       }
       return clients.openWindow(targetUrl);
