@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.396";
+const APP_VERSION = "1.0.397";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4009,6 +4009,21 @@ function DispatcherApp() {
     const rest = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
   }, [loaded, authChecked, session, currentUser]);
+
+  // Klik na push notifikáciu, keď appku už niekto má otvorenú — service
+  // worker jej to pošle priamo (postMessage), bez zmeny adresy a bez
+  // akéhokoľvek načítavania odznova. Rovnaké spracovanie ako pri studenom
+  // štarte vyššie, len bez URL medzikroku.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function onMessage(event) {
+      if (!event.data || event.data.type !== "mateco_notification_click") return;
+      if (event.data.link) navigateFromNotification(event.data.link);
+      if (event.data.notificationId) markNotificationRead(event.data.notificationId);
+    }
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
 
   if (showSetNewPassword) {
     return (
