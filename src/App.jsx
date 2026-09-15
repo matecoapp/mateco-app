@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.405";
+const APP_VERSION = "1.0.406";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11747,20 +11747,23 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       scrollExpandLockRef.current = true;
       setMonthWindow((w) => {
         const newStart = w.start - 1;
+        // Zahodenie mesiaca na KONCI je tu zadarmo (nemení polohu ničoho už
+        // vykresleného, keďže je to na opačnej strane, než kam sa práve
+        // scrolluje) — preto sa dá bezpečne robiť pri každom kroku.
         const newEnd = Math.min(w.end, newStart + MAX_MONTHS_SPAN - 1);
         return { start: newStart, end: newEnd };
       });
       setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
     } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
+      // Pri scrollovaní DOPREDU sa zámerne NEZAHADZUJE zo ZAČIATKU okna —
+      // to by (na rozdiel od zahodenia na konci vyššie) vyžadovalo to isté
+      // doladenie scrollu, čo appka robí pri PRIDÁVANÍ mesiaca dozadu, a
+      // keďže dopredu sa scrolluje častejšie, práve toto sa ukázalo ako
+      // citeľné spomalenie (dodatočné meranie polohy pri každom kroku).
+      // Tento smer preto zostáva jednoduché pridávanie, presne ako predtým —
+      // absolútny strop (MAX_MONTHS_EITHER_WAY) ho aj tak nakoniec zastaví.
       scrollExpandLockRef.current = true;
-      setMonthWindow((w) => {
-        const newEnd = w.end + 1;
-        const newStart = Math.max(w.start, newEnd - MAX_MONTHS_SPAN + 1);
-        if (newStart > w.start && leftmostIso) {
-          prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
-        }
-        return { start: newStart, end: newEnd };
-      });
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
       setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
     }
   }
