@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.392";
+const APP_VERSION = "1.0.393";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -662,6 +662,18 @@ function nextJobFor(jobs, machineId, today) {
     .filter((j) => j.startDate > today)
     .sort((a, b) => (a.startDate > b.startDate ? 1 : -1));
   return candidates[0] || null;
+}
+
+// Push notifikácie — verejný VAPID kľúč appky (nie je to tajný údaj, ide o
+// verejnú polovicu páru — presne tak, ako sa má, je vidno priamo v kóde
+// appky). Súkromná polovica je uložená len na strane servera (Edge
+// Function), tá sa nikdy nikam do appky nedostane.
+const VAPID_PUBLIC_KEY = "BD0vdtCBbLTjZ2SIkaSaJKv80p1_49_99Bs5Ww73V6dRjQ8TgYlm3torsjl5PaL7oPz1D1pqkgZ1OvxBKPLsuYA";
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
 /* ---------------------------------------------------------
@@ -1389,6 +1401,7 @@ function DispatcherApp() {
     setDocumentsSubView(subTab.id);
   }
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
+
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
   }
@@ -1827,6 +1840,75 @@ function DispatcherApp() {
     if (!profile) return null;
     return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {} };
   }, [session, profiles]);
+
+  // Push notifikácie — service worker sa zaregistruje hneď pri načítaní appky
+  // (nezávisle od prihlásenia), a appka si zistí, či toto konkrétne
+  // zariadenie má už odber aktívny. Samotné ZAPNUTIE (žiadosť o povolenie)
+  // sa deje až na vyžiadanie (tlačidlo, alebo jemná ponuka nižšie) — nikdy
+  // nie automaticky bez opýtania, prehliadače beztak automatickú žiadosť pri
+  // načítaní stránky bez interakcie často aj tak samé zamietnu.
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [showPushSoftPrompt, setShowPushSoftPrompt] = useState(false);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setPushEnabled(!!sub))
+      .catch(() => {});
+  }, []);
+  // Jemná vlastná ponuka (nie rovno prehliadačový dialóg) — objaví sa raz po
+  // prihlásení, len ak appka ešte nikdy nezistila jasné rozhodnutie
+  // ("default" — človek sa ešte nikdy nerozhodol, ani áno, ani nie). Ak niekto
+  // v prehliadači už raz vyslovene zamietol, appka to znovu nevnucuje —
+  // zostáva len tlačidlo v Nastavení upozornení, kedykoľvek si to rozmyslí.
+  useEffect(() => {
+    if (!currentUser || pushEnabled) return;
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "default") return;
+    const dismissed = sessionStorage.getItem("mateco_push_prompt_dismissed");
+    if (dismissed) return;
+    const t = setTimeout(() => setShowPushSoftPrompt(true), 1500);
+    return () => clearTimeout(t);
+  }, [currentUser, pushEnabled]);
+
+  async function enablePush() {
+    setShowPushSoftPrompt(false);
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        alert("Tento prehliadač bohužiaľ nepodporuje upozornenia do telefónu/počítača.");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return;
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+      const json = sub.toJSON();
+      await supabase.from("push_subscriptions").upsert(
+        {
+          user_id: currentUser.id,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
+          user_agent: navigator.userAgent,
+        },
+        { onConflict: "endpoint" }
+      );
+      setPushEnabled(true);
+    } catch (e) {
+      console.error("Zapnutie push notifikácií zlyhalo", e);
+    }
+  }
+  function dismissPushSoftPrompt() {
+    setShowPushSoftPrompt(false);
+    sessionStorage.setItem("mateco_push_prompt_dismissed", "1");
+  }
 
   // Admin si vie platformu dočasne "prezrieť" ako iná rola (napr. aby nevidel mazacie
   // tlačidlá bežne) — mení sa len to, čo platforma POVOLÍ v tejto session, skutočná
@@ -2303,10 +2385,11 @@ function DispatcherApp() {
   const myNotifications = useMemo(() => {
     if (!currentUser) return [];
     if (isAdminUser(currentUser)) return notifications; // admin vidí všetko, na testovanie aj dohľad
+    // V appke (zvonček) sa teraz zobrazuje VŽDY všetko, čo sa danej role/osoby
+    // týka — nastavenie notifikácií (notificationPrefs) sa odteraz vzťahuje len
+    // na to, čo príde ako push upozornenie do telefónu/PC, nie na toto.
     return notifications.filter(
-      (n) =>
-        ((n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name)) &&
-        (!n.kind || currentUser.notificationPrefs?.[n.kind] !== false)
+      (n) => (n.roles || []).includes(currentUser.role) || (n.userName && n.userName === currentUser.name)
     );
   }, [notifications, currentUser]);
   const unreadNotificationCount = useMemo(
@@ -3884,6 +3967,26 @@ function DispatcherApp() {
   const showDataLoader = useRiseThenReveal(!loaded || !authChecked, 2400);
   const showProfileLoader = useRiseThenReveal(!!session && !currentUser, 2400);
   const { newVersionAvailable, applyNewVersion } = useNewVersionCheck();
+  // Klik na push notifikáciu appku otvorí s "?notif=<zakódovaný odkaz>" v
+  // adrese (aj keď bola appka predtým úplne zavretá — "studený štart"). Toto
+  // počká, kým sú dáta naozaj načítané (inak by appka ešte nemala na čo
+  // odkazovať), doskočí na dané miesto presne tak, ako pri kliknutí na
+  // notifikáciu vnútri appky, a potom si to z adresy samo uprace.
+  useEffect(() => {
+    if (!loaded || !authChecked || !session || !currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const notif = params.get("notif");
+    if (!notif) return;
+    try {
+      const link = JSON.parse(decodeURIComponent(atob(notif)));
+      navigateFromNotification(link);
+    } catch (e) {
+      console.error("Spracovanie odkazu z push notifikácie zlyhalo", e);
+    }
+    params.delete("notif");
+    const rest = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
+  }, [loaded, authChecked, session, currentUser]);
 
   if (showSetNewPassword) {
     return (
@@ -3965,6 +4068,8 @@ function DispatcherApp() {
         onImportBackup={importBackup}
         currentUser={currentUser}
         onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
+        pushEnabled={pushEnabled}
+        onEnablePush={enablePush}
         effectiveUser={effectiveUser}
         viewAsRole={viewAsRole}
         onSetViewAsRole={setViewAsRole}
@@ -4028,6 +4133,19 @@ function DispatcherApp() {
             Obnoviť teraz
           </button>
         </div>
+      )}
+
+      {showPushSoftPrompt && (
+        <Modal title="Chcete dostávať upozornenia?" onClose={dismissPushSoftPrompt}>
+          <div style={{ fontSize: 13, marginBottom: 18 }}>
+            Platforma vám vie posielať upozornenia priamo do telefónu/počítača (napr. nové priradené poškodenie,
+            zmena zákazky) — aj keď appku nemáte práve otvorenú. Dá sa to kedykoľvek vypnúť v Nastavení upozornení.
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn btn-ghost" onClick={dismissPushSoftPrompt}>Teraz nie</button>
+            <button className="btn btn-accent" onClick={enablePush}>Áno, zapnúť</button>
+          </div>
+        </Modal>
       )}
 
       <div
@@ -4706,6 +4824,7 @@ function DispatcherApp() {
               userName: r.obchodnik || null,
               title: "Rezervácia zmazaná",
               message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná. Dôvod: ${reason}`,
+              link: { module: "poziciovna", view: "calendar" },
             });
             deleteReservation(r.id);
             setRejectReservationTarget(null);
@@ -5550,7 +5669,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, onSaveNotificationPrefs, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
   const isAdmin = isAdminUser(currentUser);
@@ -5687,6 +5806,8 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, viewAsRole, onSetViewA
       {showPrefs && (
         <NotificationPrefsModal
           currentUser={currentUser}
+          pushEnabled={pushEnabled}
+          onEnablePush={onEnablePush}
           onSave={onSaveNotificationPrefs}
           onClose={() => setShowPrefs(false)}
         />
@@ -5722,21 +5843,31 @@ const ROLE_NOTIFICATION_KINDS = {
   externy_sofer: ["assignment_transport"],
   nezaradeny: [],
 };
-// Nastavenie, ktoré kategórie notifikácií si používateľ chce nechať zobrazovať —
-// vypnuté sa neobjavia ani v zvončeku, ani sa nepočítajú medzi neprečítané.
-// Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté), aby staršie
-// notifikácie bez "kind" neboli nikdy stratené kvôli tomuto nastaveniu.
-function NotificationPrefsModal({ currentUser, onSave, onClose }) {
+// Nastavenie, ktoré kategórie notifikácií chce používateľ dostávať aj ako
+// push (upozornenie do telefónu/PC, aj keď appku nemá práve otvorenú) — v
+// appke samotnej (zvonček) sa teraz zobrazuje VŽDY všetko, toto nastavenie
+// sa týka len push. Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté).
+function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onSave, onClose }) {
   const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
   function toggle(kind) {
     setPrefs((prev) => ({ ...prev, [kind]: prev[kind] === false ? true : false }));
   }
   const relevantKinds = ROLE_NOTIFICATION_KINDS[currentUser.role] || Object.keys(NOTIFICATION_KIND_LABELS);
   return (
-    <Modal title="Nastavenie notifikácií" onClose={onClose}>
+    <Modal title="Nastavenie upozornení" onClose={onClose}>
+      {!pushEnabled && (
+        <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>
+            Zatiaľ nemáte zapnuté upozornenia do telefónu/počítača — bez toho vás appka nevie upozorniť, kým ju nemáte práve otvorenú.
+          </div>
+          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={onEnablePush}>
+            Zapnúť upozornenia
+          </button>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-        Vypnuté kategórie sa vám nebudú zobrazovať v zvončeku ani počítať medzi neprečítané. Zobrazujú sa len
-        kategórie, ktoré sa týkajú vašej role.
+        Vypnuté kategórie vám neprídu ako upozornenie do telefónu/počítača — v appke (zvonček) uvidíte vždy všetko.
+        Zobrazujú sa len kategórie, ktoré sa týkajú vašej role.
       </div>
       {relevantKinds.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
@@ -6283,7 +6414,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -6376,6 +6507,8 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               <UserMenu
                 currentUser={currentUser}
                 onSaveNotificationPrefs={onSaveNotificationPrefs}
+                pushEnabled={pushEnabled}
+                onEnablePush={onEnablePush}
                 viewAsRole={viewAsRole}
                 onSetViewAsRole={onSetViewAsRole}
                 darkMode={darkMode}
