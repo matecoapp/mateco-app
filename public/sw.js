@@ -57,20 +57,20 @@ self.addEventListener("notificationclick", (event) => {
   const qs = params.toString();
   const targetUrl = `${self.registration.scope}${qs ? `?${qs}` : ""}`;
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windowClients) => {
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         if (client.url.startsWith(self.registration.scope) && "focus" in client) {
-          // Dôležité poradie — na presmerovanie (navigate) sa musí počkať,
-          // než sa zavolá zaostrenie (focus). Predtým sa focus() volal hneď,
-          // na pôvodnej (ešte nepresmerovanej) karte, takže sa reálne nič
-          // nestalo, keď appku niekto mal ešte otvorenú.
-          const navigated = await client.navigate(targetUrl).catch((e) => {
-            console.error("[sw] presmerovanie existujúcej karty zlyhalo", e);
-            return client;
-          });
-          return (navigated || client).focus();
+          // Appka je už otvorená — pošli jej správu priamo (postMessage),
+          // nech si to prepne sama, bez akéhokoľvek načítavania odznova.
+          // Meniť adresu (client.navigate) by síce tiež fungovalo, ale vždy
+          // by to vynútilo celé opätovné načítanie appky, čo tu netreba.
+          client.postMessage({ type: "mateco_notification_click", link: data.link || null, notificationId: data.notificationId || null });
+          return client.focus();
         }
       }
+      // Appka nie je otvorená vôbec — tu sa novému oknu inak niet ako
+      // prihovoriť, kým sa nenačíta, preto ide cez adresu ("?notif=..."),
+      // čo appka spracuje sama hneď po svojom (aj tak nutnom) načítaní.
       return clients.openWindow(targetUrl);
     })
   );
