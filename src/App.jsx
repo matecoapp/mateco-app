@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.406";
+const APP_VERSION = "1.0.407";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11489,373 +11489,36 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
 /* ---------------------------------------------------------
    Calendar / Gantt view
 --------------------------------------------------------- */
-function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob }) {
-  const [monthOffset, setMonthOffset] = useState(0);
-  const [search, setSearch] = useState("");
-  const [depoFilter, setDepoFilter] = useState(null);
-  const [sortMode, setSortMode] = useState("category"); // code | category
-  const depoOptions = DEPO_OPTIONS;
-  // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
-  // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
-  // presné číslo pozná až prehliadač po vykreslení) — preto sa tu rovno odmeria
-  // (ref callback nižšie) a text sa orežie presne na túto nameranú šírku. Toto
-  // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
-  // veci počítať — spoľahlivo funguje bez ohľadu na to.
-  const [barWidths, setBarWidths] = useState({});
-  // Dôležité: ref callback MUSÍ byť jedna stabilná funkcia (nie nová zakaždým), inak
-  // React pri KAŽDOM prekreslení odpojí a znova pripojí meranie na úplne
-  // všetkých blokoch naraz — to spôsobovalo nekonečnú slučku pri prepnutí
-  // mesiaca. Zároveň sa ale nesmie merať len raz pri vytvorení bloku (to viedlo
-  // k inému problému — zastaranej šírke, keď sa mriežka neskôr zúžila/rozšírila,
-  // napr. pridaním ďalších mesiacov pri scrollovaní) — preto sa šírka sleduje
-  // priebežne cez ResizeObserver, nie len pri prvom pripojení. ID bloku sa číta
-  // z data atribútu priamo na prvku.
-  const barObserversRef = useRef(new Map());
-  const measureBarRef = useCallback((el) => {
-    if (!el) return;
-    const id = el.getAttribute("data-bar-id");
-    if (!id) return;
-    const existing = barObserversRef.current.get(id);
-    if (existing) existing.disconnect();
-    const update = () => {
-      const w = el.clientWidth;
-      if (w > 0) {
-        setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
-      }
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    barObserversRef.current.set(id, ro);
-  }, []);
-
-  const base = new Date(today + "T00:00:00");
-  const viewDate = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
-
-  // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
-  // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
-  // koniec. Rovnaký (overený) vzor ako v servisnom Gantte (TechnicianPlanner).
-  const [monthWindow, setMonthWindow] = useState({ start: 0, end: 0 });
-  useEffect(() => {
-    setMonthWindow({ start: 0, end: 0 });
-  }, [monthOffset]);
-
-  const allDays = useMemo(() => {
-    const days = [];
-    for (let mOff = monthWindow.start; mOff <= monthWindow.end; mOff++) {
-      const d = new Date(year, month + mOff, 1);
-      const y = d.getFullYear();
-      const mo = d.getMonth();
-      const count = new Date(y, mo + 1, 0).getDate();
-      for (let day = 1; day <= count; day++) {
-        days.push(`${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-      }
-    }
-    return days;
-  }, [year, month, monthWindow]);
-
-  // Poloha dňa v aktuálne zobrazenom pásme (nie číslo dňa v mesiaci — pri
-  // nekonečnom rolovaní je toto jediný spoľahlivý spôsob, ako umiestniť viacdňovú
-  // zákazku, keďže dni z rôznych mesiacov sedia vedľa seba).
-  const dayColByIso = useMemo(() => {
-    const map = {};
-    allDays.forEach((iso, i) => { map[iso] = i + 1; });
-    return map;
-  }, [allDays]);
-  const windowStartISO = allDays[0];
-  const windowEndISO = allDays[allDays.length - 1];
-  function colForDate(iso, clipToStart) {
-    if (iso < windowStartISO) return 1;
-    if (iso > windowEndISO) return allDays.length;
-    return dayColByIso[iso] ?? (clipToStart ? 1 : allDays.length);
-  }
-
-  const jobsByMachine = useMemo(() => {
-    const map = {};
-    jobs.forEach((j) => {
-      if ((j.endDate && j.endDate < windowStartISO) || j.startDate > windowEndISO) return;
-      (map[j.machineId] = map[j.machineId] || []).push(j);
-    });
-    return map;
-  }, [jobs, windowStartISO, windowEndISO]);
-
-  const reservationsByMachine = useMemo(() => {
-    const map = {};
-    (reservations || []).forEach((r) => {
-      if (r.status !== "approved") return;
-      if ((r.expectedEnd && r.expectedEnd < windowStartISO) || r.expectedStart > windowEndISO) return;
-      (map[r.machineId] = map[r.machineId] || []).push(r);
-    });
-    return map;
-  }, [reservations, windowStartISO, windowEndISO]);
-
-  let relevantMachines = machines;
-  if (depoFilter) {
-    relevantMachines = relevantMachines.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
-  }
-  if (search.trim()) {
-    const q = search.toLowerCase();
-    // Zákazník sa hľadá naprieč VŠETKÝMI zákazkami a rezerváciami stroja (nie
-    // len tou aktuálne prebiehajúcou), nech sa dá stroj nájsť aj podľa
-    // budúcej/minulej zákazky pre danú firmu — presne na to je tento kalendár.
-    const machineIdsByCustomer = new Set(
-      [...jobs, ...reservations]
-        .filter((x) => (x.customer || "").toLowerCase().includes(q))
-        .map((x) => x.machineId)
-    );
-    relevantMachines = relevantMachines.filter(
-      (m) =>
-        (m.code || "").toLowerCase().includes(q) ||
-        (m.type || "").toLowerCase().includes(q) ||
-        (m.depo || "").toLowerCase().includes(q) ||
-        machineIdsByCustomer.has(m.id)
-    );
-  }
-
-  let categoryLabelOf = null;
-  if (sortMode === "category") {
-    const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
-    const CATEGORY_LABELS = [...MACHINE_CATEGORY_OPTIONS, "Príslušenstvo", "Nepriradená kategória"];
-    const catIndex = (m) => {
-      if (m.objekt === "Príslušenstvo") return MACHINE_CATEGORY_OPTIONS.length; // vlastná skupina, pred nepriradenými
-      const mm = modelByName.get((m.type || "").trim().toLowerCase());
-      const idx = mm ? MACHINE_CATEGORY_OPTIONS.indexOf(mm.category) : -1;
-      return idx === -1 ? MACHINE_CATEGORY_OPTIONS.length + 1 : idx; // bez kategórie (aj Externé stroje) → úplne na koniec
-    };
-    categoryLabelOf = (m) => CATEGORY_LABELS[catIndex(m)];
-    const liftHeight = (m) => {
-      const mm = modelByName.get((m.type || "").trim().toLowerCase());
-      const h = mm ? parseFloat(mm.liftHeight) : NaN;
-      return Number.isNaN(h) ? -1 : h;
-    };
-    relevantMachines = [...relevantMachines].sort((a, b) => {
-      const ca = catIndex(a), cb = catIndex(b);
-      if (ca !== cb) return ca - cb;
-      const ha = liftHeight(a), hb = liftHeight(b);
-      if (ha !== hb) return ha - hb; // nižšie hore
-      // Pri rovnakej (alebo chýbajúcej) výške zdvihu drží systém rovnaké
-      // modely pod sebou podľa názvu, nech sa nerozhádžu medzi sebou.
-      const ta = (a.type || "").trim(), tb = (b.type || "").trim();
-      if (ta !== tb) return ta.localeCompare(tb);
-      return (a.code || "").localeCompare(b.code || "");
-    });
-  } else {
-    relevantMachines = [...relevantMachines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
-  }
-
-  const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-day-col), 1fr))`;
-
-  const todayCellRef = useRef(null);
-  const scrollContainerRef = useRef(null);
-  const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
-  const prependAnchorRef = useRef(null); // { iso, left } zachytené tesne pred pridaním mesiaca dozadu
-
-  useEffect(() => {
-    setDisplayedMonthLabel(monthLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset]);
-
-  // Po pridaní mesiaca na začiatok (dozadu) sa obsah predĺži smerom doľava —
-  // bez tejto kompenzácie by to trhlo pohľad. Zakotví sa na konkrétny deň — po
-  // prekreslení sa dohľadá presne ten istý deň a scrollLeft sa doladí tak, aby
-  // ostal na tom istom mieste.
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    const anchor = prependAnchorRef.current;
-    if (!container || !anchor) return;
-    const cell = container.querySelector(`[data-day-iso="${anchor.iso}"]`);
-    if (cell) {
-      const newLeft = cell.getBoundingClientRect().left;
-      container.scrollLeft += newLeft - anchor.left;
-    }
-    prependAnchorRef.current = null;
-  }, [allDays]);
-
-  // Ak sa aktuálne načítané dni celé zmestia do viditeľnej šírky bez toho, aby
-  // bolo treba scrollovať (typicky na širšej obrazovke, keď je defaultne
-  // načítaný len 1 mesiac), appka to sama nevidí ako "som pri okraji" — a keďže
-  // sa niet ako scrollovať, ani vlastný mechanizmus na rozšírenie sa nespustí.
-  // Toto po každom prekreslení potichu overí, či je obsah aspoň o kúsok širší
-  // než viditeľná plocha, a ak nie, pridá ďalší mesiac na koniec — kým sa
-  // scrollovanie sprístupní (alebo kým sa nedosiahne bezpečný strop).
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    if (container.scrollWidth <= container.clientWidth && monthWindow.end < 12) {
-      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
-    }
-  }, [allDays, monthWindow]);
-
-  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam
-  const scrollFrameRef = useRef(null); // nech sa výpočet spustí max. raz za snímku, nie pri každom scroll evente
-  function handleCalendarScroll() {
-    if (scrollFrameRef.current) return; // snímka je už naplánovaná, netreba plánovať ďalšiu
-    scrollFrameRef.current = requestAnimationFrame(() => {
-      scrollFrameRef.current = null;
-      runCalendarScrollCheck();
-    });
-  }
-  function runCalendarScrollCheck() {
-    const container = scrollContainerRef.current;
-    if (!container || allDays.length === 0) return;
-    // Poistka č.1: keď sa celý obsah zmestí do viditeľnej šírky bez
-    // scrollovania, "scrollLeft" ostáva 0 — netreba nič rozširovať.
-    if (container.scrollWidth <= container.clientWidth) return;
-    // Poistka č.2: nedovoľ prekrývajúce sa rozšírenia skôr, než sa predošlé
-    // stihlo prejaviť vo vykreslení.
-    if (scrollExpandLockRef.current) return;
-    // Dôležité pre plynulosť: poloha sa počíta ČISTO ARITMETICKY (šírka stĺpca
-    // dňa + medzera, obe známe vopred z CSS), nie meraním KAŽDEJ bunky v
-    // hlavičke cez getBoundingClientRect — to bolo pri desiatkach/stovkách dní
-    // (a najmä pri veľa riadkoch strojov) badateľne pomalé a spôsobovalo
-    // sekanie pri scrollovaní. Mierna nepresnosť (o deň-dva) tu nevadí, používa
-    // sa len na kozmetický popisok mesiaca a na kotviaci bod pri rozširovaní.
-    const styles = getComputedStyle(container);
-    const dayColPx = parseFloat(styles.getPropertyValue("--gantt-day-col")) || 34;
-    const nameColPx = parseFloat(styles.getPropertyValue("--gantt-name-col")) || 150;
-    const stepPx = dayColPx + 2; // +2 = grid gap
-    const scrollLeft = container.scrollLeft;
-    const containerLeft = container.getBoundingClientRect().left; // jediné meranie DOM za celý výpočet
-    const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
-    const leftmostIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor(scrollLeft / stepPx)));
-    const closestIso = allDays[centerIdx];
-    const leftmostIso = allDays[leftmostIdx];
-    const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
-    if (closestIso) {
-      const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
-      setDisplayedMonthLabel(label);
-    }
-
-    const EDGE_PX = 600;
-    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu (úplný
-    // strop, aby sa dalo scrollovať naozaj ďaleko, keby to niekto potreboval).
-    const MAX_MONTHS_EITHER_WAY = 12;
-    // Koľko mesiacov appka drží VYKRESLENÝCH naraz — nezávisle od toho, ako
-    // ďaleko sa scrolluje. Bez tohto by sa pri dlhšom scrollovaní donekonečna
-    // hromadili staré mesiace (nikdy sa nezahodili), a čím viac zákaziek v
-    // nich je, tým citeľnejšie by to appku spomaľovalo. Pri zahodení mesiaca
-    // na KONCI okna (opačnom, než kam sa práve scrolluje) sa nemusí nič
-    // dokotvovať — nemení to polohu ničoho už vykresleného. Pri zahodení na
-    // ZAČIATKU (rovnaký prípad, ako pri PRIDÁVANÍ naň, len naopak) sa musí
-    // scroll dokotviť rovnakým mechanizmom, čo appka už používa vyššie.
-    const MAX_MONTHS_SPAN = 5;
-    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
-      if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
-      scrollExpandLockRef.current = true;
-      setMonthWindow((w) => {
-        const newStart = w.start - 1;
-        // Zahodenie mesiaca na KONCI je tu zadarmo (nemení polohu ničoho už
-        // vykresleného, keďže je to na opačnej strane, než kam sa práve
-        // scrolluje) — preto sa dá bezpečne robiť pri každom kroku.
-        const newEnd = Math.min(w.end, newStart + MAX_MONTHS_SPAN - 1);
-        return { start: newStart, end: newEnd };
-      });
-      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
-    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
-      // Pri scrollovaní DOPREDU sa zámerne NEZAHADZUJE zo ZAČIATKU okna —
-      // to by (na rozdiel od zahodenia na konci vyššie) vyžadovalo to isté
-      // doladenie scrollu, čo appka robí pri PRIDÁVANÍ mesiaca dozadu, a
-      // keďže dopredu sa scrolluje častejšie, práve toto sa ukázalo ako
-      // citeľné spomalenie (dodatočné meranie polohy pri každom kroku).
-      // Tento smer preto zostáva jednoduché pridávanie, presne ako predtým —
-      // absolútny strop (MAX_MONTHS_EITHER_WAY) ho aj tak nakoniec zastaví.
-      scrollExpandLockRef.current = true;
-      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
-      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
-    }
-  }
-
-  function scrollToToday() {
-    try {
-      const container = scrollContainerRef.current;
-      const cell = todayCellRef.current;
-      if (!container || !cell) return;
-      const containerRect = container.getBoundingClientRect();
-      const cellRect = cell.getBoundingClientRect();
-      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + containerRect.width / 2);
-      container.scrollLeft = container.scrollLeft + delta;
-    } catch (e) {
-      // ignore — purely a convenience scroll
-    }
-  }
-
-  // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa klikli
-  // šípky (monthOffset teda ostáva 0) — preto tu explicitne zresetujeme okno dní
-  // aj pozíciu scrollu, namiesto spoliehania sa na efekt viazaný len na zmenu
-  // monthOffset.
-  function goToToday() {
-    setMonthWindow({ start: 0, end: 0 });
-    setDisplayedMonthLabel(monthLabel);
-    if (monthOffset !== 0) {
-      setMonthOffset(0);
-    } else {
-      const t = setTimeout(scrollToToday, 50);
-      return () => clearTimeout(t);
-    }
-  }
-
-  useEffect(() => {
-    if (monthOffset !== 0) return;
-    const t = setTimeout(scrollToToday, 50);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset]);
-
+// Samotná mriežka kalendára (hlavička s dňami + všetky riadky strojov) —
+// vytiahnutá do vlastnej, React.memo zabalenej komponenty. Predtým bola
+// súčasťou CalendarView priamo, čo znamenalo, že KAŽDÁ zmena stavu v
+// CalendarView (napr. displayedMonthLabel, čo sa mení pri každom kúsku
+// vodorovného scrollu) prekreslila aj túto — najťažšiu — časť, hoci sa na
+// nej nič vizuálne nemenilo. React.memo tomu zabráni, POKIAĽ všetky props
+// nižšie zostanú referenčne rovnaké medzi prekresleniami (o to sa stará
+// zamrazenie cez useMemo/useCallback vyššie v CalendarView).
+const CalendarGrid = React.memo(function CalendarGrid({
+  scrollContainerRef,
+  handleCalendarScroll,
+  gridColumnsTemplate,
+  allDays,
+  today,
+  todayCellRef,
+  relevantMachines,
+  jobsByMachine,
+  categoryLabelOf,
+  onOpenCard,
+  onAddJob,
+  reservationsByMachine,
+  colForDate,
+  measureBarRef,
+  onOpenJob,
+  barWidths,
+  driverById,
+  salespeople,
+  onOpenReservation,
+}) {
   return (
-    <div>
-      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {depoOptions.map((d) => (
-            <button
-              key={d}
-              className="btn"
-              title={d}
-              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-              style={{
-                padding: "5px 9px",
-                fontSize: 11,
-                fontWeight: 700,
-                background: depoFilter === d ? "var(--accent)" : "transparent",
-                color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-              }}
-            >
-              {DEPO_SHORT_LABELS[d] || d}
-            </button>
-          ))}
-          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
-          {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
-          )}
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value)}
-            title="Zoradiť stroje podľa"
-            style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
-          >
-            <option value="code">↕ Sériové číslo</option>
-            <option value="category">↕ Kategória a výška</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="panel" style={{ padding: 16 }}>
-        {relevantMachines.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
-            Žiadne stroje nezodpovedajú filtru.
-          </div>
-        )}
-        {relevantMachines.length > 0 && (
           <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
             <div style={{ width: "100%", minWidth: "max-content" }}>
               <div
@@ -12157,6 +11820,424 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
               })}
             </div>
           </div>
+
+  );
+});
+
+function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [search, setSearch] = useState("");
+  const [depoFilter, setDepoFilter] = useState(null);
+  const [sortMode, setSortMode] = useState("category"); // code | category
+  const depoOptions = DEPO_OPTIONS;
+  // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
+  // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
+  // presné číslo pozná až prehliadač po vykreslení) — preto sa tu rovno odmeria
+  // (ref callback nižšie) a text sa orežie presne na túto nameranú šírku. Toto
+  // je jediný spôsob, čo je nezávislý od toho, ako sa CSS/flex/grid rozhodne
+  // veci počítať — spoľahlivo funguje bez ohľadu na to.
+  const [barWidths, setBarWidths] = useState({});
+  // Dôležité: ref callback MUSÍ byť jedna stabilná funkcia (nie nová zakaždým), inak
+  // React pri KAŽDOM prekreslení odpojí a znova pripojí meranie na úplne
+  // všetkých blokoch naraz — to spôsobovalo nekonečnú slučku pri prepnutí
+  // mesiaca. Zároveň sa ale nesmie merať len raz pri vytvorení bloku (to viedlo
+  // k inému problému — zastaranej šírke, keď sa mriežka neskôr zúžila/rozšírila,
+  // napr. pridaním ďalších mesiacov pri scrollovaní) — preto sa šírka sleduje
+  // priebežne cez ResizeObserver, nie len pri prvom pripojení. ID bloku sa číta
+  // z data atribútu priamo na prvku.
+  const barObserversRef = useRef(new Map());
+  const measureBarRef = useCallback((el) => {
+    if (!el) return;
+    const id = el.getAttribute("data-bar-id");
+    if (!id) return;
+    const existing = barObserversRef.current.get(id);
+    if (existing) existing.disconnect();
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) {
+        setBarWidths((prev) => (prev[id] === w ? prev : { ...prev, [id]: w }));
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    barObserversRef.current.set(id, ro);
+  }, []);
+
+  const base = new Date(today + "T00:00:00");
+  const viewDate = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+
+  // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
+  // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
+  // koniec. Rovnaký (overený) vzor ako v servisnom Gantte (TechnicianPlanner).
+  const [monthWindow, setMonthWindow] = useState({ start: 0, end: 0 });
+  useEffect(() => {
+    setMonthWindow({ start: 0, end: 0 });
+  }, [monthOffset]);
+
+  const allDays = useMemo(() => {
+    const days = [];
+    for (let mOff = monthWindow.start; mOff <= monthWindow.end; mOff++) {
+      const d = new Date(year, month + mOff, 1);
+      const y = d.getFullYear();
+      const mo = d.getMonth();
+      const count = new Date(y, mo + 1, 0).getDate();
+      for (let day = 1; day <= count; day++) {
+        days.push(`${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+      }
+    }
+    return days;
+  }, [year, month, monthWindow]);
+
+  // Poloha dňa v aktuálne zobrazenom pásme (nie číslo dňa v mesiaci — pri
+  // nekonečnom rolovaní je toto jediný spoľahlivý spôsob, ako umiestniť viacdňovú
+  // zákazku, keďže dni z rôznych mesiacov sedia vedľa seba).
+  const dayColByIso = useMemo(() => {
+    const map = {};
+    allDays.forEach((iso, i) => { map[iso] = i + 1; });
+    return map;
+  }, [allDays]);
+  const windowStartISO = allDays[0];
+  const windowEndISO = allDays[allDays.length - 1];
+  const colForDate = useCallback(
+    (iso, clipToStart) => {
+      if (iso < windowStartISO) return 1;
+      if (iso > windowEndISO) return allDays.length;
+      return dayColByIso[iso] ?? (clipToStart ? 1 : allDays.length);
+    },
+    [windowStartISO, windowEndISO, dayColByIso, allDays.length]
+  );
+
+  const jobsByMachine = useMemo(() => {
+    const map = {};
+    jobs.forEach((j) => {
+      if ((j.endDate && j.endDate < windowStartISO) || j.startDate > windowEndISO) return;
+      (map[j.machineId] = map[j.machineId] || []).push(j);
+    });
+    return map;
+  }, [jobs, windowStartISO, windowEndISO]);
+
+  const reservationsByMachine = useMemo(() => {
+    const map = {};
+    (reservations || []).forEach((r) => {
+      if (r.status !== "approved") return;
+      if ((r.expectedEnd && r.expectedEnd < windowStartISO) || r.expectedStart > windowEndISO) return;
+      (map[r.machineId] = map[r.machineId] || []).push(r);
+    });
+    return map;
+  }, [reservations, windowStartISO, windowEndISO]);
+
+  const categoryLabelOf = useMemo(() => {
+    if (sortMode !== "category") return null;
+    const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
+    const CATEGORY_LABELS = [...MACHINE_CATEGORY_OPTIONS, "Príslušenstvo", "Nepriradená kategória"];
+    const catIndex = (m) => {
+      if (m.objekt === "Príslušenstvo") return MACHINE_CATEGORY_OPTIONS.length; // vlastná skupina, pred nepriradenými
+      const mm = modelByName.get((m.type || "").trim().toLowerCase());
+      const idx = mm ? MACHINE_CATEGORY_OPTIONS.indexOf(mm.category) : -1;
+      return idx === -1 ? MACHINE_CATEGORY_OPTIONS.length + 1 : idx; // bez kategórie (aj Externé stroje) → úplne na koniec
+    };
+    return (m) => CATEGORY_LABELS[catIndex(m)];
+  }, [sortMode, machineModels]);
+  // Zoradený/filtrovaný zoznam strojov — DÔLEŽITÉ, že je zamrazený cez useMemo
+  // (nie prepočítaný nanovo pri každom vykreslení): mriežka nižšie (CalendarGrid)
+  // je zabalená v React.memo práve preto, aby sa NEPREKRESĽOVALA len kvôli
+  // zmene popisku mesiaca pri vodorovnom scrollovaní (to spôsobovalo sekanie —
+  // appka predtým prepočítala/prekreslila úplne všetky riadky strojov na
+  // KAŽDÝ kúsok scrollu). Bez tohto zamrazenia by React.memo nemal zmysel —
+  // dostal by nové pole (novú referenciu) pri každom prekreslení aj tak.
+  const relevantMachines = useMemo(() => {
+    let list = machines;
+    if (depoFilter) {
+      list = list.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      // Zákazník sa hľadá naprieč VŠETKÝMI zákazkami a rezerváciami stroja (nie
+      // len tou aktuálne prebiehajúcou), nech sa dá stroj nájsť aj podľa
+      // budúcej/minulej zákazky pre danú firmu — presne na to je tento kalendár.
+      const machineIdsByCustomer = new Set(
+        [...jobs, ...reservations]
+          .filter((x) => (x.customer || "").toLowerCase().includes(q))
+          .map((x) => x.machineId)
+      );
+      list = list.filter(
+        (m) =>
+          (m.code || "").toLowerCase().includes(q) ||
+          (m.type || "").toLowerCase().includes(q) ||
+          (m.depo || "").toLowerCase().includes(q) ||
+          machineIdsByCustomer.has(m.id)
+      );
+    }
+    if (sortMode === "category" && categoryLabelOf) {
+      const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
+      const catIndex = (m) => {
+        if (m.objekt === "Príslušenstvo") return MACHINE_CATEGORY_OPTIONS.length;
+        const mm = modelByName.get((m.type || "").trim().toLowerCase());
+        const idx = mm ? MACHINE_CATEGORY_OPTIONS.indexOf(mm.category) : -1;
+        return idx === -1 ? MACHINE_CATEGORY_OPTIONS.length + 1 : idx;
+      };
+      const liftHeight = (m) => {
+        const mm = modelByName.get((m.type || "").trim().toLowerCase());
+        const h = mm ? parseFloat(mm.liftHeight) : NaN;
+        return Number.isNaN(h) ? -1 : h;
+      };
+      return [...list].sort((a, b) => {
+        const ca = catIndex(a), cb = catIndex(b);
+        if (ca !== cb) return ca - cb;
+        const ha = liftHeight(a), hb = liftHeight(b);
+        if (ha !== hb) return ha - hb; // nižšie hore
+        const ta = (a.type || "").trim(), tb = (b.type || "").trim();
+        if (ta !== tb) return ta.localeCompare(tb);
+        return (a.code || "").localeCompare(b.code || "");
+      });
+    }
+    return [...list].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  }, [machines, depoFilter, search, sortMode, machineModels, jobs, reservations]);
+
+  const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-day-col), 1fr))`;
+
+  const todayCellRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
+  const prependAnchorRef = useRef(null); // { iso, left } zachytené tesne pred pridaním mesiaca dozadu
+
+  useEffect(() => {
+    setDisplayedMonthLabel(monthLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
+  // Po pridaní mesiaca na začiatok (dozadu) sa obsah predĺži smerom doľava —
+  // bez tejto kompenzácie by to trhlo pohľad. Zakotví sa na konkrétny deň — po
+  // prekreslení sa dohľadá presne ten istý deň a scrollLeft sa doladí tak, aby
+  // ostal na tom istom mieste.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const anchor = prependAnchorRef.current;
+    if (!container || !anchor) return;
+    const cell = container.querySelector(`[data-day-iso="${anchor.iso}"]`);
+    if (cell) {
+      const newLeft = cell.getBoundingClientRect().left;
+      container.scrollLeft += newLeft - anchor.left;
+    }
+    prependAnchorRef.current = null;
+  }, [allDays]);
+
+  // Ak sa aktuálne načítané dni celé zmestia do viditeľnej šírky bez toho, aby
+  // bolo treba scrollovať (typicky na širšej obrazovke, keď je defaultne
+  // načítaný len 1 mesiac), appka to sama nevidí ako "som pri okraji" — a keďže
+  // sa niet ako scrollovať, ani vlastný mechanizmus na rozšírenie sa nespustí.
+  // Toto po každom prekreslení potichu overí, či je obsah aspoň o kúsok širší
+  // než viditeľná plocha, a ak nie, pridá ďalší mesiac na koniec — kým sa
+  // scrollovanie sprístupní (alebo kým sa nedosiahne bezpečný strop).
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (container.scrollWidth <= container.clientWidth && monthWindow.end < 12) {
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+    }
+  }, [allDays, monthWindow]);
+
+  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam
+  const scrollFrameRef = useRef(null); // nech sa výpočet spustí max. raz za snímku, nie pri každom scroll evente
+  // handleCalendarScroll musí mať STÁLU identitu (inak by sa CalendarGrid
+  // vyššie prekresľoval pri každej zmene, presne to, čomu sa snažíme
+  // vyhnúť) — ALE runCalendarScrollCheck vnútri potrebuje vždy najčerstvejšie
+  // dáta (allDays, monthWindow,...), nie tie zamrznuté z prvého vykreslenia.
+  // Preto: stála funkcia (useCallback s prázdnymi závislosťami), čo si pri
+  // každom zavolaní vytiahne najnovšiu verziu kontroly cez referenciu, tá sa
+  // aktualizuje nižšie na KAŽDOM prekreslení.
+  const runCalendarScrollCheckRef = useRef(null);
+  const handleCalendarScroll = useCallback(() => {
+    if (scrollFrameRef.current) return; // snímka je už naplánovaná, netreba plánovať ďalšiu
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      runCalendarScrollCheckRef.current();
+    });
+  }, []);
+  function runCalendarScrollCheck() {
+    const container = scrollContainerRef.current;
+    if (!container || allDays.length === 0) return;
+    // Poistka č.1: keď sa celý obsah zmestí do viditeľnej šírky bez
+    // scrollovania, "scrollLeft" ostáva 0 — netreba nič rozširovať.
+    if (container.scrollWidth <= container.clientWidth) return;
+    // Poistka č.2: nedovoľ prekrývajúce sa rozšírenia skôr, než sa predošlé
+    // stihlo prejaviť vo vykreslení.
+    if (scrollExpandLockRef.current) return;
+    // Dôležité pre plynulosť: poloha sa počíta ČISTO ARITMETICKY (šírka stĺpca
+    // dňa + medzera, obe známe vopred z CSS), nie meraním KAŽDEJ bunky v
+    // hlavičke cez getBoundingClientRect — to bolo pri desiatkach/stovkách dní
+    // (a najmä pri veľa riadkoch strojov) badateľne pomalé a spôsobovalo
+    // sekanie pri scrollovaní. Mierna nepresnosť (o deň-dva) tu nevadí, používa
+    // sa len na kozmetický popisok mesiaca a na kotviaci bod pri rozširovaní.
+    const styles = getComputedStyle(container);
+    const dayColPx = parseFloat(styles.getPropertyValue("--gantt-day-col")) || 34;
+    const nameColPx = parseFloat(styles.getPropertyValue("--gantt-name-col")) || 150;
+    const stepPx = dayColPx + 2; // +2 = grid gap
+    const scrollLeft = container.scrollLeft;
+    const containerLeft = container.getBoundingClientRect().left; // jediné meranie DOM za celý výpočet
+    const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
+    const leftmostIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor(scrollLeft / stepPx)));
+    const closestIso = allDays[centerIdx];
+    const leftmostIso = allDays[leftmostIdx];
+    const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
+    if (closestIso) {
+      const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+      setDisplayedMonthLabel(label);
+    }
+
+    const EDGE_PX = 600;
+    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu (úplný
+    // strop, aby sa dalo scrollovať naozaj ďaleko, keby to niekto potreboval).
+    const MAX_MONTHS_EITHER_WAY = 12;
+    // Koľko mesiacov appka drží VYKRESLENÝCH naraz — nezávisle od toho, ako
+    // ďaleko sa scrolluje. Bez tohto by sa pri dlhšom scrollovaní donekonečna
+    // hromadili staré mesiace (nikdy sa nezahodili), a čím viac zákaziek v
+    // nich je, tým citeľnejšie by to appku spomaľovalo. Pri zahodení mesiaca
+    // na KONCI okna (opačnom, než kam sa práve scrolluje) sa nemusí nič
+    // dokotvovať — nemení to polohu ničoho už vykresleného. Pri zahodení na
+    // ZAČIATKU (rovnaký prípad, ako pri PRIDÁVANÍ naň, len naopak) sa musí
+    // scroll dokotviť rovnakým mechanizmom, čo appka už používa vyššie.
+    const MAX_MONTHS_SPAN = 5;
+    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
+      if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+      scrollExpandLockRef.current = true;
+      setMonthWindow((w) => {
+        const newStart = w.start - 1;
+        // Zahodenie mesiaca na KONCI je tu zadarmo (nemení polohu ničoho už
+        // vykresleného, keďže je to na opačnej strane, než kam sa práve
+        // scrolluje) — preto sa dá bezpečne robiť pri každom kroku.
+        const newEnd = Math.min(w.end, newStart + MAX_MONTHS_SPAN - 1);
+        return { start: newStart, end: newEnd };
+      });
+      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
+    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
+      // Pri scrollovaní DOPREDU sa zámerne NEZAHADZUJE zo ZAČIATKU okna —
+      // to by (na rozdiel od zahodenia na konci vyššie) vyžadovalo to isté
+      // doladenie scrollu, čo appka robí pri PRIDÁVANÍ mesiaca dozadu, a
+      // keďže dopredu sa scrolluje častejšie, práve toto sa ukázalo ako
+      // citeľné spomalenie (dodatočné meranie polohy pri každom kroku).
+      // Tento smer preto zostáva jednoduché pridávanie, presne ako predtým —
+      // absolútny strop (MAX_MONTHS_EITHER_WAY) ho aj tak nakoniec zastaví.
+      scrollExpandLockRef.current = true;
+      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
+    }
+  }
+  runCalendarScrollCheckRef.current = runCalendarScrollCheck;
+
+  function scrollToToday() {
+    try {
+      const container = scrollContainerRef.current;
+      const cell = todayCellRef.current;
+      if (!container || !cell) return;
+      const containerRect = container.getBoundingClientRect();
+      const cellRect = cell.getBoundingClientRect();
+      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + containerRect.width / 2);
+      container.scrollLeft = container.scrollLeft + delta;
+    } catch (e) {
+      // ignore — purely a convenience scroll
+    }
+  }
+
+  // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa klikli
+  // šípky (monthOffset teda ostáva 0) — preto tu explicitne zresetujeme okno dní
+  // aj pozíciu scrollu, namiesto spoliehania sa na efekt viazaný len na zmenu
+  // monthOffset.
+  function goToToday() {
+    setMonthWindow({ start: 0, end: 0 });
+    setDisplayedMonthLabel(monthLabel);
+    if (monthOffset !== 0) {
+      setMonthOffset(0);
+    } else {
+      const t = setTimeout(scrollToToday, 50);
+      return () => clearTimeout(t);
+    }
+  }
+
+  useEffect(() => {
+    if (monthOffset !== 0) return;
+    const t = setTimeout(scrollToToday, 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
+  return (
+    <div>
+      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {depoOptions.map((d) => (
+            <button
+              key={d}
+              className="btn"
+              title={d}
+              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+              style={{
+                padding: "5px 9px",
+                fontSize: 11,
+                fontWeight: 700,
+                background: depoFilter === d ? "var(--accent)" : "transparent",
+                color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+              }}
+            >
+              {DEPO_SHORT_LABELS[d] || d}
+            </button>
+          ))}
+          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
+          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
+          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
+          {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
+            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
+          )}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value)}
+            title="Zoradiť stroje podľa"
+            style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
+          >
+            <option value="code">↕ Sériové číslo</option>
+            <option value="category">↕ Kategória a výška</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="panel" style={{ padding: 16 }}>
+        {relevantMachines.length === 0 && (
+          <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
+            Žiadne stroje nezodpovedajú filtru.
+          </div>
+        )}
+        {relevantMachines.length > 0 && (
+          <CalendarGrid
+            scrollContainerRef={scrollContainerRef}
+            handleCalendarScroll={handleCalendarScroll}
+            gridColumnsTemplate={gridColumnsTemplate}
+            allDays={allDays}
+            today={today}
+            todayCellRef={todayCellRef}
+            relevantMachines={relevantMachines}
+            jobsByMachine={jobsByMachine}
+            categoryLabelOf={categoryLabelOf}
+            onOpenCard={onOpenCard}
+            onAddJob={onAddJob}
+            reservationsByMachine={reservationsByMachine}
+            colForDate={colForDate}
+            measureBarRef={measureBarRef}
+            onOpenJob={onOpenJob}
+            barWidths={barWidths}
+            driverById={driverById}
+            salespeople={salespeople}
+            onOpenReservation={onOpenReservation}
+          />
         )}
       </div>
       <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-dim)", marginTop: 12, flexWrap: "wrap" }}>
