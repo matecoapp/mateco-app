@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.386";
+const APP_VERSION = "1.0.387";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3881,8 +3881,8 @@ function DispatcherApp() {
   // vyššie), aj keby sa appka stihla načítať skôr — inak by sa animácia
   // trhla uprostred pohybu. Volané VŽDY, pred akýmkoľvek "return" nižšie —
   // React vyžaduje, aby sa hooky volali v rovnakom poradí na každom vykreslení.
-  const showDataLoader = useHoldUntilCycleEnds(!loaded || !authChecked, 2800);
-  const showProfileLoader = useHoldUntilCycleEnds(!!session && !currentUser, 2800);
+  const showDataLoader = useRiseThenReveal(!loaded || !authChecked, 2400);
+  const showProfileLoader = useRiseThenReveal(!!session && !currentUser, 2400);
 
   if (showSetNewPassword) {
     return (
@@ -17136,36 +17136,19 @@ function GlobalStyle() {
       @media (max-width: 480px) {
         .header-topbar span.label-font { font-size: 17px !important; }
       }
-
-      /* Načítavacia animácia — viacstupňová nožnicová plošina sa dvíha a spúšťa
-         v slučke, od úplne zloženej po plne vystretú. Plošina (lift-platform)
-         je matematicky naviazaná na to isté scaleY, čo nožnice (lift-scissor)
-         — pri s=1 (plne vystretá) je posun 0, pri s=0.3 (zložená) sa plošina
-         posunie presne o toľko nižšie, o koľko sa znížili nožnice, aby na
-         nich vizuálne "sedela" v každom okamihu. animation-play-state sa
-         riadi z JS (LiftLoader), nie čisto CSS, aby vedel dobehnúť do konca
-         aktuálneho zdvihu namiesto trhnutia uprostred pohybu. */
-      .lift-scissor { transform-origin: 100px 280px; animation: liftScissorRise 2.8s ease-in-out infinite; }
-      .lift-platform { animation: liftPlatformRise 2.8s ease-in-out infinite; }
-      @keyframes liftScissorRise {
-        0%, 100% { transform: scaleY(0.3); }
-        50% { transform: scaleY(1); }
-      }
-      @keyframes liftPlatformRise {
-        0%, 100% { transform: translateY(175px); }
-        50% { transform: translateY(0); }
-      }
     `}</style>
   );
 }
 
-// Čaká, kým sa aktuálny zdvih plošiny (jeden plný cyklus animácie) dobehne do
-// konca, než nahlási "už sa dá skryť" — appka sa tak nikdy nezasekne/netrhne
-// uprostred pohybu len preto, že sa dáta stihli načítať skôr, než plošina
-// dobehla hore/dole. cycleMs musí sedieť s dĺžkou CSS animácie vyššie.
-function useHoldUntilCycleEnds(isLoading, cycleMs) {
+// Čaká na jednorazový zdvih plošiny (riseMs) AJ na skutočné načítanie appky —
+// podľa toho, čo trvá dlhšie. Ak sa appka načíta skôr, plošina si pokojne
+// dobehne celý zdvih hore; ak trvá načítanie appky dlhšie, plošina hore
+// jednoducho počká, nedvíha sa a nespúšťa dookola. isLoading musí pri každej
+// novej fáze (napr. "načítavam dáta" → "načítavam profil") prejsť cez false,
+// aby sa pri ďalšom "true" začal počítať nový zdvih od začiatku.
+function useRiseThenReveal(isLoading, riseMs) {
   const [visible, setVisible] = useState(isLoading);
-  const startRef = useRef(null);
+  const startRef = useRef(isLoading ? Date.now() : null);
   useEffect(() => {
     if (isLoading) {
       if (startRef.current === null) startRef.current = Date.now();
@@ -17176,51 +17159,62 @@ function useHoldUntilCycleEnds(isLoading, cycleMs) {
       setVisible(false);
       return;
     }
-    const elapsed = Date.now() - startRef.current;
-    const remaining = cycleMs - (elapsed % cycleMs);
+    const remaining = riseMs - (Date.now() - startRef.current);
+    if (remaining <= 0) {
+      setVisible(false);
+      startRef.current = null;
+      return;
+    }
     const timer = setTimeout(() => {
       setVisible(false);
       startRef.current = null;
     }, remaining);
     return () => clearTimeout(timer);
-  }, [isLoading, cycleMs]);
+  }, [isLoading, riseMs]);
   return visible;
 }
 
-// Nožnicová plošina (4 stupne), čo sa dvíha a spúšťa v slučke — použité
-// namiesto holého textu "Načítavam…" na hlavných načítavacích obrazovkách appky.
+// Nožnicová plošina (4 stupne, v štýle veľkého teleskopického modelu ako
+// GS-5390) — zdvihne sa RAZ, zdola nahor, a hore ostane stáť, kým appka
+// nie je pripravená. Mechanizmus je vykreslený POD podvozkom (v poradí
+// scissor → chassis), nech vyzerá, že nožnice vychádzajú znútra podvozku,
+// nie že sú položené pred ním.
 function LiftLoader({ label }) {
+  const [risen, setRisen] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setRisen(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const rise = "transform 2.4s cubic-bezier(.2,.7,.3,1)";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <svg width="180" height="270" viewBox="0 0 200 300">
-        <ellipse cx="100" cy="292" rx="62" ry="8" fill="#000" opacity="0.08" />
-        <rect x="50" y="280" width="100" height="20" rx="4" fill="#1a1a1a" />
-        <circle cx="66" cy="300" r="9" fill="#333" />
-        <circle cx="134" cy="300" r="9" fill="#333" />
-        <circle cx="66" cy="300" r="4" fill="#666" />
-        <circle cx="134" cy="300" r="4" fill="#666" />
-        <g className="lift-scissor">
-          <line x1="60" y1="280" x2="140" y2="217.5" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-          <line x1="140" y1="280" x2="60" y2="217.5" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-          <circle cx="100" cy="248.75" r="5" fill="#1a1a1a" />
-          <circle cx="100" cy="217.5" r="5" fill="#1a1a1a" />
-          <line x1="60" y1="217.5" x2="140" y2="155" stroke="var(--accent-dark)" strokeWidth="7" strokeLinecap="round" />
-          <line x1="140" y1="217.5" x2="60" y2="155" stroke="var(--accent-dark)" strokeWidth="7" strokeLinecap="round" />
-          <circle cx="100" cy="186.25" r="5" fill="#1a1a1a" />
-          <circle cx="100" cy="155" r="5" fill="#1a1a1a" />
-          <line x1="60" y1="155" x2="140" y2="92.5" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-          <line x1="140" y1="155" x2="60" y2="92.5" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-          <circle cx="100" cy="123.75" r="5" fill="#1a1a1a" />
-          <circle cx="100" cy="92.5" r="5" fill="#1a1a1a" />
-          <line x1="60" y1="92.5" x2="140" y2="30" stroke="var(--accent-dark)" strokeWidth="7" strokeLinecap="round" />
-          <line x1="140" y1="92.5" x2="60" y2="30" stroke="var(--accent-dark)" strokeWidth="7" strokeLinecap="round" />
-          <circle cx="100" cy="61.25" r="5" fill="#1a1a1a" />
+      <svg width="210" height="240" viewBox="0 0 420 480">
+        <ellipse cx="210" cy="452" rx="140" ry="12" fill="#000" opacity="0.08" />
+        <g style={{ transformOrigin: "210px 400px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise }}>
+          <line x1="115" y1="400" x2="305" y2="295" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="400" x2="115" y2="295" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="295" x2="305" y2="190" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="295" x2="115" y2="190" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="190" x2="305" y2="85" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="190" x2="115" y2="85" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="85" x2="305" y2="-20" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="85" x2="115" y2="-20" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
         </g>
-        <g className="lift-platform">
-          <rect x="35" y="14" width="130" height="18" rx="3" fill="#1a1a1a" />
-          <rect x="35" y="0" width="6" height="16" fill="#1a1a1a" />
-          <rect x="159" y="0" width="6" height="16" fill="#1a1a1a" />
-          <rect x="45" y="4" width="110" height="4" rx="2" fill="var(--accent)" />
+        <rect x="90" y="392" width="240" height="52" rx="6" fill="#18181a" />
+        <rect x="266" y="382" width="34" height="26" rx="2" fill="#2b2b2b" />
+        <circle cx="283" cy="395" r="4" fill="var(--accent)" />
+        <circle cx="150" cy="446" r="22" fill="#222" />
+        <circle cx="150" cy="446" r="9" fill="#666" />
+        <circle cx="270" cy="446" r="22" fill="#222" />
+        <circle cx="270" cy="446" r="9" fill="#666" />
+        <g style={{ transform: risen ? "translateY(0px)" : "translateY(369.6px)", transition: rise }}>
+          <rect x="90" y="-24" width="240" height="28" rx="4" fill="#18181a" />
+          <rect x="90" y="-70" width="8" height="50" fill="#18181a" />
+          <rect x="322" y="-70" width="8" height="50" fill="#18181a" />
+          <rect x="90" y="-70" width="240" height="8" fill="var(--accent)" />
+          <rect x="90" y="-46" width="240" height="5" fill="var(--accent)" />
+          <rect x="170" y="-70" width="8" height="50" fill="#18181a" />
+          <rect x="242" y="-70" width="8" height="50" fill="#18181a" />
         </g>
       </svg>
       {label && <div className="label-font" style={{ color: "var(--text-dim)", fontSize: 13 }}>{label}</div>}
