@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.389";
+const APP_VERSION = "1.0.390";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3883,6 +3883,7 @@ function DispatcherApp() {
   // React vyžaduje, aby sa hooky volali v rovnakom poradí na každom vykreslení.
   const showDataLoader = useRiseThenReveal(!loaded || !authChecked, 2400);
   const showProfileLoader = useRiseThenReveal(!!session && !currentUser, 2400);
+  const { newVersionAvailable, applyNewVersion } = useNewVersionCheck();
 
   if (showSetNewPassword) {
     return (
@@ -4009,6 +4010,21 @@ function DispatcherApp() {
             onClick={() => saveErrors.forEach((k) => retrySave(k))}
           >
             Skúsiť znova
+          </button>
+        </div>
+      )}
+
+      {newVersionAvailable && (
+        <div style={{ background: "var(--panel)", borderBottom: "2px solid var(--accent)", color: "var(--text)", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>
+            Je dostupná nová verzia platformy. Obnovte, keď vám to bude vyhovovať — rozrobenú prácu si najprv uložte.
+          </span>
+          <button
+            className="btn btn-accent"
+            style={{ padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
+            onClick={applyNewVersion}
+          >
+            Obnoviť teraz
           </button>
         </div>
       )}
@@ -17172,6 +17188,54 @@ function useRiseThenReveal(isLoading, riseMs) {
     return () => clearTimeout(timer);
   }, [isLoading, riseMs]);
   return visible;
+}
+
+// Kontrola novej verzie appky — na rozdiel od prvej verzie tejto kontroly
+// (čo appku hneď a potichu reštartovala) toto len NAHLÁSI, že je dostupná
+// nová verzia, a nechá človeka rozhodnúť, kedy si to obnoví — nikdy to
+// nespraví samo uprostred rozrobenej práce (napr. rozpísaný protokol).
+// Kontroluje sa raz pri načítaní appky, a potom vždy znova, keď sa appka/karta
+// vráti do popredia (odomknutie telefónu, prepnutie späť na kartu) — presne
+// vtedy je najväčšia šanca, že technik nič práve nevypĺňa.
+function useNewVersionCheck() {
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const pendingVersionRef = useRef(null);
+  useEffect(() => {
+    const STORAGE_KEY = "mateco_app_version";
+    function check() {
+      fetch(`${import.meta.env.BASE_URL}version.json?t=${Date.now()}`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!data || !data.v) return;
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (!stored) {
+            localStorage.setItem(STORAGE_KEY, data.v);
+            return;
+          }
+          if (stored !== data.v) {
+            pendingVersionRef.current = data.v;
+            setNewVersionAvailable(true);
+          }
+        })
+        .catch(() => {
+          // Bez pripojenia alebo iná chyba — skúsi to znova nabudúce.
+        });
+    }
+    check();
+    function onVisible() {
+      if (document.visibilityState === "visible") check();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+  function applyNewVersion() {
+    if (!pendingVersionRef.current) return;
+    localStorage.setItem("mateco_app_version", pendingVersionRef.current);
+    const url = new URL(window.location.href);
+    url.searchParams.set("_v", pendingVersionRef.current);
+    window.location.replace(url.toString());
+  }
+  return { newVersionAvailable, applyNewVersion };
 }
 
 // Nožnicová plošina (4 stupne, v štýle veľkého teleskopického modelu ako
