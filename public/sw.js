@@ -3,6 +3,18 @@
 // 2) keď na ňu niekto klikne, otvorí (alebo prepne na už otvorenú) appku a
 //    pošle jej presne to miesto, kam má doskočiť (appka si to prevezme sama
 //    pri načítaní — cez "?notif=" v URL, appka to sama vyčistí z adresy).
+//
+// skipWaiting/clients.claim — bez tohto by nová verzia service workera (napr.
+// keď sa táto logika niekedy nabudúce upraví) čakala, kým človek úplne
+// zavrie VŠETKY otvorené karty/appku, než by sa vôbec prevzala — dovtedy by
+// ticho bežala tá stará verzia, čo o žiadnych zmenách nevie. Toto zaisťuje,
+// že sa nová verzia ujme hneď.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(clients.claim());
+});
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
@@ -15,21 +27,25 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "mateco";
   const options = {
     body: payload.body || "",
-    icon: "icon-192.png",
-    badge: "icon-192.png",
-    data: { link: payload.link || null },
+    icon: `${self.registration.scope}icon-192.png`,
+    badge: `${self.registration.scope}icon-192.png`,
+    data: { link: payload.link || null, notificationId: payload.notificationId || null },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch((e) => {
+      console.error("[sw] showNotification zlyhalo", e);
+    })
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const link = event.notification.data && event.notification.data.link;
-  let targetUrl = self.registration.scope; // koreň appky, ak niet konkrétneho odkazu
-  if (link) {
-    const encoded = btoa(encodeURIComponent(JSON.stringify(link)));
-    targetUrl = `${self.registration.scope}?notif=${encoded}`;
-  }
+  const data = event.notification.data || {};
+  const params = new URLSearchParams();
+  if (data.link) params.set("notif", btoa(encodeURIComponent(JSON.stringify(data.link))));
+  if (data.notificationId) params.set("notifId", data.notificationId);
+  const qs = params.toString();
+  const targetUrl = `${self.registration.scope}${qs ? `?${qs}` : ""}`;
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
