@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.383";
+const APP_VERSION = "1.0.385";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1778,6 +1778,12 @@ function DispatcherApp() {
   // formulára (iframe) po úspešnom odoslaní do Power Automate.
   useEffect(() => {
     function onMessage(event) {
+      // Bezpečnostná kontrola — správa smie prísť LEN z vlastného pôvodu appky
+      // (tento konkrétny iframe je generovaný priamo appkou cez srcDoc +
+      // allow-same-origin, takže má rovnaký pôvod ako appka samotná). Bez tejto
+      // kontroly by vedela poslať rovnakú správu (aj s falošným menom technika a
+      // fotkou) ktorákoľvek iná otvorená stránka.
+      if (event.origin !== window.location.origin) return;
       if (!event.data) return;
       if (event.data.type === "mateco_protocol_submitted") {
         handleProtocolSubmission(event.data);
@@ -3886,7 +3892,7 @@ function DispatcherApp() {
     return (
       <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400 }}>
         <GlobalStyle />
-        <div className="label-font" style={{ color: "var(--text-dim)" }}>Načítavam dáta…</div>
+        <LiftLoader label="Načítavam dáta…" />
       </div>
     );
   }
@@ -3905,7 +3911,7 @@ function DispatcherApp() {
     return (
       <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400, flexDirection: "column", gap: 14 }}>
         <GlobalStyle />
-        <div className="label-font" style={{ color: "var(--text-dim)" }}>Načítavam profil…</div>
+        <LiftLoader label="Načítavam profil…" />
         <button className="btn btn-ghost" onClick={signOut}>Odhlásiť sa</button>
       </div>
     );
@@ -17123,7 +17129,51 @@ function GlobalStyle() {
       @media (max-width: 480px) {
         .header-topbar span.label-font { font-size: 17px !important; }
       }
+
+      /* Načítavacia animácia — nožnicová plošina sa dvíha a spúšťa v slučke.
+         Plošina (lift-platform) je matematicky naviazaná na to isté scaleY,
+         čo nožnice (lift-scissor) — pri s=1 (plne vystretá) je posun 0, pri
+         s=0.35 (zložená) sa plošina posunie presne o toľko nižšie, o koľko
+         sa znížili nožnice, aby na nich vizuálne "sedela" v každom okamihu. */
+      .lift-scissor { transform-origin: 70px 128px; animation: liftScissorRise 2.2s ease-in-out infinite; }
+      .lift-platform { animation: liftPlatformRise 2.2s ease-in-out infinite; }
+      @keyframes liftScissorRise {
+        0%, 100% { transform: scaleY(0.35); }
+        50% { transform: scaleY(1); }
+      }
+      @keyframes liftPlatformRise {
+        0%, 100% { transform: translateY(71.5px); }
+        50% { transform: translateY(0); }
+      }
     `}</style>
+  );
+}
+
+// Nožnicová plošina, čo sa dvíha a spúšťa v slučke — použité namiesto holého
+// textu "Načítavam…" na hlavných načítavacích obrazovkách appky.
+function LiftLoader({ label }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+      <svg width="120" height="137" viewBox="0 0 140 160">
+        <ellipse cx="70" cy="150" rx="42" ry="6" fill="#000" opacity="0.08" />
+        <rect x="35" y="130" width="70" height="16" rx="3" fill="#1a1a1a" />
+        <circle cx="48" cy="148" r="7" fill="#333" />
+        <circle cx="92" cy="148" r="7" fill="#333" />
+        <circle cx="48" cy="148" r="3" fill="#666" />
+        <circle cx="92" cy="148" r="3" fill="#666" />
+        <g className="lift-scissor">
+          <line x1="45" y1="128" x2="95" y2="18" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <line x1="95" y1="128" x2="45" y2="18" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="70" cy="73" r="4" fill="#1a1a1a" />
+        </g>
+        <g className="lift-platform">
+          <rect x="30" y="8" width="80" height="12" rx="2" fill="#1a1a1a" />
+          <rect x="30" y="0" width="4" height="10" fill="#1a1a1a" />
+          <rect x="106" y="0" width="4" height="10" fill="#1a1a1a" />
+        </g>
+      </svg>
+      {label && <div className="label-font" style={{ color: "var(--text-dim)", fontSize: 13 }}>{label}</div>}
+    </div>
   );
 }
 
