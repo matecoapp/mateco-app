@@ -25,7 +25,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.397";
+const APP_VERSION = "1.0.398";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1562,48 +1562,6 @@ function DispatcherApp() {
     persistReservations(reservations.map((r) => (stale.some((s) => s.id === r.id) ? { ...r, reminderSentAt: new Date().toISOString() } : r)));
   }, [loaded, reservations, today]);
 
-  // Súhrnná denná správa pre vedúcich — jedna kompaktná notifikácia namiesto
-  // rozsypaných jednotlivých. Posiela sa najviac raz za deň, a len vtedy, keď je
-  // prihlásený práve ten vedúci, komu je súhrn určený (nie hocikto iný).
-  useEffect(() => {
-    if (!loaded) return;
-    const alreadySentToday = (role) => notifications.some((n) => n.title === "Denný súhrn" && n.roles?.includes(role) && n.createdAt?.slice(0, 10) === today);
-
-    if (currentUser?.role === "veduci_pozicovne" && !alreadySentToday("veduci_pozicovne")) {
-      const expiringReservations = reservations.filter(
-        (r) => (r.status === "pending" || r.status === "approved") && r.expectedStart && r.expectedStart >= today && r.expectedStart <= addDaysISO(today, 3)
-      );
-      if (expiringReservations.length > 0) {
-        pushNotification({
-          kind: "daily_summary",
-          roles: ["veduci_pozicovne"],
-          title: "Denný súhrn",
-          message: `Dnešný prehľad požičovne: ${expiringReservations.length} nezáväzných rezervácií so začiatkom v najbližších 3 dňoch, ešte nepremenených na zákazku.`,
-          link: { module: "poziciovna", view: "jobs" },
-        });
-      }
-    }
-
-    if (currentUser?.role === "veduci_servisu" && !alreadySentToday("veduci_servisu")) {
-      const newDamagesCount = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId).length;
-      const pendingPartsCount = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length;
-      const overdueRevisionsCount = damages.filter((d) => (d.type === "revizia" || d.type === "uradnaSkuska") && d.overdue && !d.resolved).length;
-      if (newDamagesCount > 0 || pendingPartsCount > 0 || overdueRevisionsCount > 0) {
-        const parts = [];
-        if (newDamagesCount > 0) parts.push(`${newDamagesCount} nových nepridelených poškodení`);
-        if (overdueRevisionsCount > 0) parts.push(`${overdueRevisionsCount} revízií/úradných skúšok po termíne`);
-        if (pendingPartsCount > 0) parts.push(`${pendingPartsCount} požiadaviek na diely čaká na schválenie`);
-        pushNotification({
-          kind: "daily_summary",
-          roles: ["veduci_servisu"],
-          title: "Denný súhrn",
-          message: `Dnešný prehľad servisu: ${parts.join(", ")}.`,
-          link: { module: "servis", view: "poskodenia" },
-        });
-      }
-    }
-  }, [loaded, today]);
-
   useEffect(() => {
     setSaveStatusListener((status, key) => {
       if (status === "error") {
@@ -1949,6 +1907,103 @@ function DispatcherApp() {
   // Vlastný záznam zamestnanca prihláseného človeka (podľa REÁLNEJ identity, nie podľa
   // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
   const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
+
+  // Denný briefing — na mieru podľa role, nahrádza starý "Denný súhrn" (ten bol
+  // len jeden riadok textu v zvončeku, a len pre dvoch vedúcich). Vracia zoznam
+  // položiek {label, count, link} — prázdne/nulové položky sa vynechajú, takže
+  // ak nie je čo hlásiť, briefing sa vôbec nezobrazí (žiadna prázdna obrazovka).
+  const briefingItems = useMemo(() => {
+    if (!currentUser) return [];
+    const items = [];
+    const tomorrow = addDaysISO(today, 1);
+    const role = currentUser.role;
+
+    const addPoziciovnaItems = () => {
+      const expiringReservations = reservations.filter(
+        (r) => (r.status === "pending" || r.status === "approved") && r.expectedStart && r.expectedStart >= today && r.expectedStart <= addDaysISO(today, 3)
+      );
+      if (expiringReservations.length > 0) {
+        items.push({
+          label: `${expiringReservations.length} nezáväzných rezervácií so začiatkom do 3 dní, ešte nepremenených na zákazku`,
+          link: { module: "poziciovna", view: "jobs" },
+        });
+      }
+      const staleReservations = reservations.filter((r) => r.status === "pending" && !r.reminderSentAt);
+      if (staleReservations.length > 0) {
+        items.push({ label: `${staleReservations.length} rezervácií čaká na schválenie`, link: { module: "poziciovna", view: "jobs" } });
+      }
+      const noDriverToday = jobs.filter((j) => (j.departureDate === today || j.departureDate === tomorrow) && !j.driverId && j.status !== "completed");
+      if (noDriverToday.length > 0) {
+        items.push({ label: `${noDriverToday.length} zákaziek na dnes/zajtra bez priradeného šoféra (vývoz)`, link: { module: "poziciovna", view: "prepravy" } });
+      }
+    };
+    const addServisItems = () => {
+      const newDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId && !(d.technicianIds || []).length);
+      if (newDamages.length > 0) {
+        items.push({ label: `${newDamages.length} nových nepridelených poškodení`, link: { module: "servis", view: "poskodenia" } });
+      }
+      const overdueRevisions = damages.filter((d) => (d.type === "revizia" || d.type === "uradnaSkuska") && d.overdue && !d.resolved);
+      if (overdueRevisions.length > 0) {
+        items.push({ label: `${overdueRevisions.length} revízií/úradných skúšok po termíne`, link: { module: "servis", view: "revizie" } });
+      }
+      const pendingParts = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
+      if (pendingParts.length > 0) {
+        items.push({ label: `${pendingParts.length} požiadaviek na náhradné diely čaká na schválenie`, link: { module: "servis", view: "diely" } });
+      }
+    };
+
+    if (role === "admin") {
+      addPoziciovnaItems();
+      addServisItems();
+    } else if (role === "veduci_pozicovne" || role === "dispecer_pozicovne") {
+      addPoziciovnaItems();
+    } else if (role === "veduci_servisu" || role === "dispecer_servisu") {
+      addServisItems();
+    } else if (role === "obchodnik") {
+      const myStale = reservations.filter((r) => r.obchodnik === currentUser.name && r.status === "pending" && !r.reminderSentAt);
+      if (myStale.length > 0) {
+        items.push({ label: `${myStale.length} vašich rezervácií čaká na schválenie`, link: { module: "poziciovna", view: "jobs" } });
+      }
+      const myJobsSoon = jobs.filter((j) => j.obchodnik === currentUser.name && (j.startDate === today || j.startDate === tomorrow) && j.status !== "completed");
+      if (myJobsSoon.length > 0) {
+        items.push({ label: `${myJobsSoon.length} vašich zákaziek začína dnes/zajtra`, link: { module: "poziciovna", view: "jobs" } });
+      }
+    } else if (role === "technik" && myEmployee) {
+      const myOpenDamages = damages.filter((d) => {
+        const ids = d.technicianIds && d.technicianIds.length ? d.technicianIds : d.technicianId ? [d.technicianId] : [];
+        return ids.includes(myEmployee.id) && !d.resolved;
+      });
+      if (myOpenDamages.length > 0) {
+        items.push({ label: `${myOpenDamages.length} vám pridelených úloh čaká na vyriešenie`, link: { module: "servis", view: "poskodenia" } });
+      }
+    } else if ((role === "sofer" || role === "externy_sofer") && myEmployee) {
+      const myTransportsToday = jobs.filter(
+        (j) => (j.departureDate === today && j.driverId === myEmployee.id) || (j.pickupDate === today && j.returnDriverId === myEmployee.id)
+      );
+      if (myTransportsToday.length > 0) {
+        items.push({ label: `${myTransportsToday.length} prepráv na dnes`, link: { module: "poziciovna", view: "prepravy" } });
+      }
+      const myTransportsTomorrow = jobs.filter(
+        (j) => (j.departureDate === tomorrow && j.driverId === myEmployee.id) || (j.pickupDate === tomorrow && j.returnDriverId === myEmployee.id)
+      );
+      if (myTransportsTomorrow.length > 0) {
+        items.push({ label: `${myTransportsTomorrow.length} prepráv na zajtra`, link: { module: "poziciovna", view: "prepravy" } });
+      }
+    }
+    return items;
+  }, [currentUser, myEmployee, reservations, jobs, damages, spareParts, today]);
+
+  // Zobrazí sa raz za deň (nie pri každom prihlásení, ak sa človek prihlási
+  // viackrát v ten istý deň) — a len vtedy, keď je naozaj čo hlásiť.
+  const [showBriefing, setShowBriefing] = useState(false);
+  useEffect(() => {
+    if (!currentUser || !loaded) return;
+    if (briefingItems.length === 0) return;
+    const key = `mateco_briefing_shown_${currentUser.id}_${today}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    setShowBriefing(true);
+  }, [currentUser, loaded, briefingItems, today]);
 
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
   // (napr. vedúci servisu rovno v Servise) — len pri prvom prihlásení v novej
@@ -4186,6 +4241,10 @@ function DispatcherApp() {
         </Modal>
       )}
 
+      {showBriefing && (
+        <DailyBriefingModal items={briefingItems} onNavigate={navigateFromNotification} onClose={() => setShowBriefing(false)} />
+      )}
+
       <div
         className={`app-main${module === "servis" && can(effectiveUser, "protocol_write") ? " has-mobile-tech-bar" : ""}`}
         style={{ padding: "20px 24px", width: "100%", flex: 1, boxSizing: "border-box" }}
@@ -5872,10 +5931,10 @@ const NOTIFICATION_KIND_LABELS = {
 // vyskúšať, ako to vidí iná rola.
 const ROLE_NOTIFICATION_KINDS = {
   admin: Object.keys(NOTIFICATION_KIND_LABELS),
-  veduci_pozicovne: ["reservation", "daily_summary", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport"],
+  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport"],
   dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport"],
   obchodnik: ["reservation", "damage_new", "damage_resolved"],
-  veduci_servisu: ["daily_summary", "damage_new", "damage_resolved", "assignment_service", "spare_parts"],
+  veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts"],
   dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts"],
   technik: ["assignment_service", "spare_parts"],
   sofer: ["assignment_transport"],
@@ -5886,6 +5945,41 @@ const ROLE_NOTIFICATION_KINDS = {
 // push (upozornenie do telefónu/PC, aj keď appku nemá práve otvorenú) — v
 // appke samotnej (zvonček) sa teraz zobrazuje VŽDY všetko, toto nastavenie
 // sa týka len push. Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté).
+// Denný briefing — na mieru podľa role, vyskočí raz denne po prihlásení.
+function DailyBriefingModal({ items, onNavigate, onClose }) {
+  return (
+    <Modal title="Dnešný prehľad" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+        {items.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              onNavigate(item.link);
+              onClose();
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              textAlign: "left",
+              padding: "12px 14px",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--panel-2)",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>→</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+      <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
+    </Modal>
+  );
+}
+
 function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisablePush, onSave, onClose }) {
   const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
   const browserBlocked = typeof Notification !== "undefined" && Notification.permission === "denied";
