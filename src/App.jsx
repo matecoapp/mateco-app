@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.404";
+const APP_VERSION = "1.0.405";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11730,16 +11730,37 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     }
 
     const EDGE_PX = 600;
-    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu.
+    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu (úplný
+    // strop, aby sa dalo scrollovať naozaj ďaleko, keby to niekto potreboval).
     const MAX_MONTHS_EITHER_WAY = 12;
+    // Koľko mesiacov appka drží VYKRESLENÝCH naraz — nezávisle od toho, ako
+    // ďaleko sa scrolluje. Bez tohto by sa pri dlhšom scrollovaní donekonečna
+    // hromadili staré mesiace (nikdy sa nezahodili), a čím viac zákaziek v
+    // nich je, tým citeľnejšie by to appku spomaľovalo. Pri zahodení mesiaca
+    // na KONCI okna (opačnom, než kam sa práve scrolluje) sa nemusí nič
+    // dokotvovať — nemení to polohu ničoho už vykresleného. Pri zahodení na
+    // ZAČIATKU (rovnaký prípad, ako pri PRIDÁVANÍ naň, len naopak) sa musí
+    // scroll dokotviť rovnakým mechanizmom, čo appka už používa vyššie.
+    const MAX_MONTHS_SPAN = 5;
     if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
       if (leftmostIso) prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
       scrollExpandLockRef.current = true;
-      setMonthWindow((w) => ({ ...w, start: w.start - 1 }));
+      setMonthWindow((w) => {
+        const newStart = w.start - 1;
+        const newEnd = Math.min(w.end, newStart + MAX_MONTHS_SPAN - 1);
+        return { start: newStart, end: newEnd };
+      });
       setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
     } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
       scrollExpandLockRef.current = true;
-      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
+      setMonthWindow((w) => {
+        const newEnd = w.end + 1;
+        const newStart = Math.max(w.start, newEnd - MAX_MONTHS_SPAN + 1);
+        if (newStart > w.start && leftmostIso) {
+          prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
+        }
+        return { start: newStart, end: newEnd };
+      });
       setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
     }
   }
