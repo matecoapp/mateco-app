@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.411";
+const APP_VERSION = "1.0.412";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11737,6 +11737,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
   driverById,
   salespeople,
   onOpenReservation,
+  compactMode,
 }) {
   // Len tie dni, čo sú naozaj vo výreze (plus malá rezerva, "overscan") — nie
   // úplne všetky, čo appka pozná. Presne toto appku drží plynulou aj pri
@@ -11861,29 +11862,41 @@ const CalendarGrid = React.memo(function CalendarGrid({
             >
               <div
                 onClick={() => onOpenCard(m)}
-                title="Otvoriť kartu stroja"
+                title={compactMode ? [m.code, m.type, m.depo, m.note].filter(Boolean).join(" · ") : "Otvoriť kartu stroja"}
                 style={{ lineHeight: 1.15, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
               >
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
-                  {m.code}
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {m.type || "—"}
-                  </span>
-                  {m.depo && (
-                    <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                      {m.depo}
-                    </span>
-                  )}
-                </div>
-                {/* Poznámka je teraz VŽDY vo vyhradenom mieste (aj keď je
-                    prázdna) — presne to je dôvod, prečo majú všetky riadky
-                    rovnakú výšku (nutné pre virtualizáciu vyššie), namiesto
-                    toho, aby bol riadok s poznámkou vyšší než ten bez nej. */}
-                <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minHeight: 12 }}>
-                  {m.note || ""}
-                </div>
+                {compactMode ? (
+                  // Kompaktný pohľad — sériové číslo a typ na jednom riadku,
+                  // depo a poznámka len v title (po nabehnutí myšou), nech sa
+                  // na obrazovku zmestí výrazne viac riadkov naraz.
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden", fontSize: 11, lineHeight: `${ROW_HEIGHT}px` }}>
+                    <span className="mono" style={{ fontWeight: 600, color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>{m.code}</span>
+                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-dim)" }}>{m.type || "—"}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
+                      {m.code}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {m.type || "—"}
+                      </span>
+                      {m.depo && (
+                        <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                          {m.depo}
+                        </span>
+                      )}
+                    </div>
+                    {/* Poznámka je teraz VŽDY vo vyhradenom mieste (aj keď je
+                        prázdna) — presne to je dôvod, prečo majú všetky riadky
+                        rovnakú výšku (nutné pre virtualizáciu vyššie), namiesto
+                        toho, aby bol riadok s poznámkou vyšší než ten bez nej. */}
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minHeight: 12 }}>
+                      {m.note || ""}
+                    </div>
+                  </>
+                )}
               </div>
               {visibleDayIdx.map((i) => {
                 const iso = allDays[i];
@@ -12056,6 +12069,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [sortMode, setSortMode] = useState("category"); // code | category
+  // Kompaktný/bežný pohľad — každý si to nastaví sám (uložené v localStorage
+  // v tomto prehliadači, nie za celú appku/účet), zostáva to zapamätané aj po
+  // obnovení stránky.
+  const [compactMode, setCompactMode] = useState(() => localStorage.getItem("mateco_calendar_compact") === "1");
+  useEffect(() => {
+    localStorage.setItem("mateco_calendar_compact", compactMode ? "1" : "0");
+  }, [compactMode]);
   const depoOptions = DEPO_OPTIONS;
   // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
   // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
@@ -12230,8 +12250,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   // vedieť presnú polohu N-tého riadku bez merania, čo ide len pri pevnej
   // výške). Kratší obsah (bez poznámky) sa v riadku len zarovná na stred
   // (grid nižšie má "alignItems: center").
-  const ROW_HEIGHT = 40;
-  const DIVIDER_HEIGHT = 34;
+  const ROW_HEIGHT = compactMode ? 26 : 40;
+  const DIVIDER_HEIGHT = compactMode ? 22 : 34;
   const HEADER_HEIGHT = 40;
 
   // Presné rozloženie zhora nadol — riadky strojov AJ deliace čiary kategórií
@@ -12422,7 +12442,21 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
           )}
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+          <button
+            className="btn"
+            onClick={() => setCompactMode((v) => !v)}
+            title={compactMode ? "Prepnúť na bežný pohľad" : "Prepnúť na kompaktný pohľad (menšie riadky)"}
+            style={{
+              fontSize: 11,
+              padding: "4px 8px",
+              background: compactMode ? "var(--accent)" : "transparent",
+              color: compactMode ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (compactMode ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            ☰ Kompaktný
+          </button>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
@@ -12449,6 +12483,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             allDays={allDays}
             today={today}
             todayCellRef={todayCellRef}
+            compactMode={compactMode}
             layoutItems={layoutItems}
             visibleRowRange={visibleRowRange}
             visibleColRange={visibleColRange}
