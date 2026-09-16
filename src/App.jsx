@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.412";
+const APP_VERSION = "1.0.413";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11862,17 +11862,28 @@ const CalendarGrid = React.memo(function CalendarGrid({
             >
               <div
                 onClick={() => onOpenCard(m)}
-                title={compactMode ? [m.code, m.type, m.depo, m.note].filter(Boolean).join(" · ") : "Otvoriť kartu stroja"}
+                title={compactMode ? undefined : "Otvoriť kartu stroja"}
+                className={compactMode ? "gantt-bar-wrap" : undefined}
                 style={{ lineHeight: 1.15, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
               >
                 {compactMode ? (
                   // Kompaktný pohľad — sériové číslo a typ na jednom riadku,
-                  // depo a poznámka len v title (po nabehnutí myšou), nech sa
-                  // na obrazovku zmestí výrazne viac riadkov naraz.
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden", fontSize: 11, lineHeight: `${ROW_HEIGHT}px` }}>
-                    <span className="mono" style={{ fontWeight: 600, color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>{m.code}</span>
-                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-dim)" }}>{m.type || "—"}</span>
-                  </div>
+                  // depo a poznámka v peknom, okamžitom tooltipe po nabehnutí
+                  // myšou (rovnaký štýl, ako appka už má pri zákazkách) — nie
+                  // v pomalom natívnom title, nech sa na obrazovku zmestí
+                  // výrazne viac riadkov naraz.
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden", fontSize: 11, lineHeight: `${ROW_HEIGHT}px` }}>
+                      <span className="mono" style={{ fontWeight: 600, color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>{m.code}</span>
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-dim)" }}>{m.type || "—"}</span>
+                    </div>
+                    <div className="gantt-tooltip" style={{ bottom: "auto", top: "100%", marginTop: 4, marginBottom: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{m.code}</div>
+                      <div>{m.type || "—"}</div>
+                      {m.depo && <div>Depo: {m.depo}</div>}
+                      {m.note && <div>📝 {m.note}</div>}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
@@ -12272,7 +12283,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       top += ROW_HEIGHT;
     });
     return { items, totalHeight: top };
-  }, [relevantMachines, categoryLabelOf]);
+  }, [relevantMachines, categoryLabelOf, ROW_HEIGHT, DIVIDER_HEIGHT]);
 
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -12443,20 +12454,38 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
           )}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-          <button
-            className="btn"
-            onClick={() => setCompactMode((v) => !v)}
-            title={compactMode ? "Prepnúť na bežný pohľad" : "Prepnúť na kompaktný pohľad (menšie riadky)"}
-            style={{
-              fontSize: 11,
-              padding: "4px 8px",
-              background: compactMode ? "var(--accent)" : "transparent",
-              color: compactMode ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (compactMode ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            ☰ Kompaktný
-          </button>
+          <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
+            <button
+              onClick={() => setCompactMode(false)}
+              style={{
+                fontSize: 11,
+                padding: "3px 10px",
+                borderRadius: 4,
+                border: "none",
+                cursor: "pointer",
+                background: !compactMode ? "var(--panel)" : "transparent",
+                color: !compactMode ? "var(--text)" : "var(--text-dim)",
+                fontWeight: !compactMode ? 600 : 400,
+              }}
+            >
+              Normálny
+            </button>
+            <button
+              onClick={() => setCompactMode(true)}
+              style={{
+                fontSize: 11,
+                padding: "3px 10px",
+                borderRadius: 4,
+                border: "none",
+                cursor: "pointer",
+                background: compactMode ? "var(--panel)" : "transparent",
+                color: compactMode ? "var(--text)" : "var(--text-dim)",
+                fontWeight: compactMode ? 600 : 400,
+              }}
+            >
+              Kompaktný
+            </button>
+          </div>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
