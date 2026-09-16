@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.410";
+const APP_VERSION = "1.0.411";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -139,7 +139,7 @@ const PERM = {
   // Kôš — kto smie vidieť obrazovku "Kôš" vôbec (appka mu vnútri ešte navyše
   // ukáže len tie záznamy, čo patria do jeho vlastného segmentu — viď
   // canSeeTrashEntry nižšie).
-  trash_view: ["veduci_pozicovne", "dispecer_pozicovne", "veduci_servisu", "dispecer_servisu"],
+  trash_view: ["veduci_pozicovne", "veduci_servisu"],
   reservation_add: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"],
   reservation_convert: ["dispecer_pozicovne", "veduci_pozicovne"],
   reservation_delete: ["dispecer_pozicovne", "veduci_pozicovne"],
@@ -6093,12 +6093,12 @@ const TRASH_TYPE_LABELS = {
 function canSeeTrashEntry(entry, user) {
   if (isAdminUser(user)) return true;
   const role = user?.role;
-  if (role === "veduci_pozicovne" || role === "dispecer_pozicovne") {
+  if (role === "veduci_pozicovne") {
     if (["job", "machine", "customer", "reservation", "framovaZmluva", "blacklist", "handoverProtocol"].includes(entry.recordType)) return true;
     if (entry.recordType === "employee" && ["sofer", "externy_sofer"].includes(entry.originalData?.role)) return true;
     return false;
   }
-  if (role === "veduci_servisu" || role === "dispecer_servisu") {
+  if (role === "veduci_servisu") {
     if (entry.recordType === "damage") return true;
     if (entry.recordType === "employee" && entry.originalData?.role === "technik") return true;
     return false;
