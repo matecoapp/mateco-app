@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.418";
+const APP_VERSION = "1.0.419";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11943,6 +11943,14 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       alignSelf: "stretch",
                       height: "100%",
                       borderRight: "1px solid var(--border)",
+                      // Hranica medzi riadkami je zvyčajne na samotnom RADE
+                      // (dole) — pri víkendovom (nepriehľadnom) pozadí by ju to
+                      // prekrylo, takže by víkendové stĺpce vyzerali ako jeden
+                      // súvislý pás bez deliacich čiar medzi strojmi. Táto
+                      // hranica tu je preto navyše, nech je vidno vždy,
+                      // nezávisle od farby pozadia dňa.
+                      borderBottom: "1px solid var(--border)",
+                      boxSizing: "border-box",
                       background: isWeekend ? "var(--warn-bg)" : "transparent",
                       cursor: onAddJob ? "pointer" : "default",
                     }}
