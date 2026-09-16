@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.413";
+const APP_VERSION = "1.0.414";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11862,52 +11862,57 @@ const CalendarGrid = React.memo(function CalendarGrid({
             >
               <div
                 onClick={() => onOpenCard(m)}
-                title={compactMode ? undefined : "Otvoriť kartu stroja"}
-                className={compactMode ? "gantt-bar-wrap" : undefined}
-                style={{ lineHeight: 1.15, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+                className="gantt-bar-wrap"
+                style={{ position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
               >
-                {compactMode ? (
-                  // Kompaktný pohľad — sériové číslo a typ na jednom riadku,
-                  // depo a poznámka v peknom, okamžitom tooltipe po nabehnutí
-                  // myšou (rovnaký štýl, ako appka už má pri zákazkách) — nie
-                  // v pomalom natívnom title, nech sa na obrazovku zmestí
-                  // výrazne viac riadkov naraz.
-                  <>
+                {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
+                    vnútornom obale, nie na tom vonkajšom vyššie — keby bolo na
+                    vonkajšom, orezávalo by aj tooltip nižšie (ten sa má
+                    zobraziť MIMO hraníc riadku), nezávisle od toho, či sa naň
+                    myšou naozaj nabehlo. */}
+                <div style={{ lineHeight: 1.15, overflow: "hidden" }}>
+                  {compactMode ? (
+                    // Kompaktný pohľad — sériové číslo a typ na jednom riadku,
+                    // zvyšok len v tooltipe po nabehnutí myšou, nech sa na
+                    // obrazovku zmestí výrazne viac riadkov naraz.
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden", fontSize: 11, lineHeight: `${ROW_HEIGHT}px` }}>
                       <span className="mono" style={{ fontWeight: 600, color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>{m.code}</span>
                       <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-dim)" }}>{m.type || "—"}</span>
                     </div>
-                    <div className="gantt-tooltip" style={{ bottom: "auto", top: "100%", marginTop: 4, marginBottom: 0 }}>
-                      <div style={{ fontWeight: 600 }}>{m.code}</div>
-                      <div>{m.type || "—"}</div>
-                      {m.depo && <div>Depo: {m.depo}</div>}
-                      {m.note && <div>📝 {m.note}</div>}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
-                      {m.code}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {m.type || "—"}
-                      </span>
-                      {m.depo && (
-                        <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                          {m.depo}
+                  ) : (
+                    <>
+                      <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
+                        {m.code}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {m.type || "—"}
                         </span>
-                      )}
-                    </div>
-                    {/* Poznámka je teraz VŽDY vo vyhradenom mieste (aj keď je
-                        prázdna) — presne to je dôvod, prečo majú všetky riadky
-                        rovnakú výšku (nutné pre virtualizáciu vyššie), namiesto
-                        toho, aby bol riadok s poznámkou vyšší než ten bez nej. */}
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minHeight: 12 }}>
-                      {m.note || ""}
-                    </div>
-                  </>
-                )}
+                        {m.depo && (
+                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {m.depo}
+                          </span>
+                        )}
+                      </div>
+                      {/* Poznámka je teraz VŽDY vo vyhradenom mieste (aj keď je
+                          prázdna) — presne to je dôvod, prečo majú všetky riadky
+                          rovnakú výšku (nutné pre virtualizáciu vyššie), namiesto
+                          toho, aby bol riadok s poznámkou vyšší než ten bez nej. */}
+                      <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minHeight: 12 }}>
+                        {m.note || ""}
+                      </div>
+                    </>
+                  )}
+                </div>
+                {/* Tooltip so všetkými detailmi — funguje v oboch pohľadoch
+                    (nielen kompaktnom), rovnaký okamžitý štýl, ako appka už
+                    má pri zákazkách. */}
+                <div className="gantt-tooltip" style={{ bottom: "auto", top: "100%", marginTop: 4, marginBottom: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{m.code}</div>
+                  <div>{m.type || "—"}</div>
+                  {m.depo && <div>Depo: {m.depo}</div>}
+                  {m.note && <div>📝 {m.note}</div>}
+                </div>
               </div>
               {visibleDayIdx.map((i) => {
                 const iso = allDays[i];
@@ -11967,6 +11972,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         cursor: "pointer",
                         minWidth: 0,
                         maxWidth: "100%",
+                        overflow: "hidden",
                         boxSizing: "border-box",
                       }}
                     >
@@ -11976,7 +11982,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                           position: "sticky",
                           left: "calc(var(--gantt-name-col) + 6px)",
                           width: "fit-content",
-                          maxWidth: Math.min(barWidths[j.id] || 18, 260),
+                          maxWidth: Math.min(barWidths[j.id] || 100, 260),
                           overflow: "hidden",
                           fontSize: 10,
                           color: "#fff",
@@ -12035,6 +12041,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         cursor: "pointer",
                         minWidth: 0,
                         maxWidth: "100%",
+                        overflow: "hidden",
                         boxSizing: "border-box",
                         opacity: 0.85,
                       }}
@@ -12045,7 +12052,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                           position: "sticky",
                           left: "calc(var(--gantt-name-col) + 6px)",
                           width: "fit-content",
-                          maxWidth: Math.min(barWidths["r-" + r.id] || 18, 260),
+                          maxWidth: Math.min(barWidths["r-" + r.id] || 100, 260),
                           overflow: "hidden",
                           fontSize: 10,
                           color: "#fff",
