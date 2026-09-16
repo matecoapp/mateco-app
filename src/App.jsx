@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.414";
+const APP_VERSION = "1.0.415";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11863,7 +11863,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
               <div
                 onClick={() => onOpenCard(m)}
                 className="gantt-bar-wrap"
-                style={{ position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+                style={{ position: "sticky", left: 0, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
               >
                 {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
                     vnútornom obale, nie na tom vonkajšom vyššie — keby bolo na
@@ -11944,7 +11944,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 const st = effectiveStatus(j, today);
                 const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                 const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
-                const showNote = !isDone && j.notes;
+                const showNote = !isDone && j.notes && !compactMode;
                 return (
                   <div
                     key={j.id}
@@ -11986,7 +11986,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                           overflow: "hidden",
                           fontSize: 10,
                           color: "#fff",
-                          padding: "3px 6px",
+                          padding: compactMode ? "1px 6px" : "3px 6px",
                           lineHeight: 1.3,
                         }}
                       >
@@ -17790,7 +17790,11 @@ function GlobalStyle() {
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS. */
-      .gantt-bar-wrap { position: relative; }
+      .gantt-bar-wrap { position: relative; z-index: 2; }
+      /* Pri nabehnutí myšou sa musí dostať NAD susedné riadky (tie majú tiež
+         z-index:2, len neskôr v poradí v HTML, takže by inak vždy vyhrali) —
+         bez tohto by tooltip zostal schovaný za menom nasledujúceho stroja. */
+      .gantt-bar-wrap:hover { z-index: 100; }
       .gantt-tooltip {
         visibility: hidden;
         opacity: 0;
