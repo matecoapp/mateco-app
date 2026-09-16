@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.408";
+const APP_VERSION = "1.0.409";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11504,9 +11504,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
   allDays,
   today,
   todayCellRef,
-  relevantMachines,
+  layoutItems,
+  visibleRowRange,
+  visibleColRange,
+  ROW_HEIGHT,
+  DIVIDER_HEIGHT,
+  HEADER_HEIGHT,
   jobsByMachine,
-  categoryLabelOf,
   onOpenCard,
   onAddJob,
   reservationsByMachine,
@@ -11518,309 +11522,316 @@ const CalendarGrid = React.memo(function CalendarGrid({
   salespeople,
   onOpenReservation,
 }) {
+  // Len tie dni, čo sú naozaj vo výreze (plus malá rezerva, "overscan") — nie
+  // úplne všetky, čo appka pozná. Presne toto appku drží plynulou aj pri
+  // celom roku dní naraz.
+  const visibleDayIdx = [];
+  for (let i = visibleColRange.startIdx; i <= visibleColRange.endIdx; i++) visibleDayIdx.push(i);
+  const visibleItems = visibleRowRange.endIdx >= visibleRowRange.startIdx
+    ? layoutItems.items.slice(visibleRowRange.startIdx, visibleRowRange.endIdx + 1)
+    : [];
+
+  // Zákazka/rezervácia sa vykreslí len vtedy, keď jej rozsah dní ZASAHUJE do
+  // viditeľného výrezu (aspoň čiastočne) — presne rovnaký princíp, ako pri
+  // dňoch vyššie.
+  function intersectsVisible(startCol, endCol) {
+    return endCol - 1 >= visibleColRange.startIdx && startCol - 1 <= visibleColRange.endIdx;
+  }
+
   return (
-          <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
-            <div style={{ width: "100%", minWidth: "max-content" }}>
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
+      <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight }}>
+        {/* Hlavička dní — "sticky" hore, vykresľuje sa z nej len viditeľná časť. */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: gridColumnsTemplate,
+            gap: 2,
+            position: "sticky",
+            top: 0,
+            zIndex: 3,
+            background: "var(--panel)",
+            height: HEADER_HEIGHT,
+          }}
+        >
+          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)" }}></div>
+          {visibleDayIdx.map((i) => {
+            const iso = allDays[i];
+            const isToday = iso === today;
+            const dow = new Date(iso + "T00:00:00").getDay();
+            const isWeekend = dow === 0 || dow === 6;
+            return (
               <div
+                key={iso}
+                ref={isToday ? todayCellRef : null}
+                data-day-iso={iso}
+                className="mono gantt-header-cell"
+                title={iso}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: gridColumnsTemplate,
-                  gap: 2,
-                  marginBottom: 4,
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 3,
-                  background: "var(--panel)",
+                  gridColumn: i + 2,
+                  textAlign: "center",
+                  fontSize: 11,
+                  color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
+                  fontWeight: isToday ? 600 : 400,
+                  whiteSpace: "nowrap",
+                  borderRight: "1px solid var(--border)",
+                  paddingBottom: 4,
+                  background: isWeekend ? "var(--warn-bg)" : "var(--panel)",
                 }}
               >
-                <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)" }}></div>
-                {allDays.map((iso, i) => {
-                  const isToday = iso === today;
-                  const dow = new Date(iso + "T00:00:00").getDay();
-                  const isWeekend = dow === 0 || dow === 6;
-                  return (
-                    <div
-                      key={iso}
-                      ref={isToday ? todayCellRef : null}
-                      data-day-iso={iso}
-                      className="mono gantt-header-cell"
-                      title={iso}
-                      style={{
-                        gridColumn: i + 2,
-                        textAlign: "center",
-                        fontSize: 11,
-                        color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
-                        fontWeight: isToday ? 600 : 400,
-                        whiteSpace: "nowrap",
-                        borderRight: "1px solid var(--border)",
-                        paddingBottom: 4,
-                        background: isWeekend ? "var(--warn-bg)" : "var(--panel)",
-                      }}
-                    >
-                      <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
-                      <div>{Number(iso.slice(8, 10))}.{Number(iso.slice(5, 7))}.</div>
-                    </div>
-                  );
-                })}
+                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
+                <div>{Number(iso.slice(8, 10))}.{Number(iso.slice(5, 7))}.</div>
               </div>
+            );
+          })}
+        </div>
 
-              {relevantMachines.map((m, idx) => {
-                const mJobs = (jobsByMachine[m.id] || []).slice().sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
-                // Riadok tohto stroja je vyšší, len keď má aspoň jedna AKTÍVNA (neukončená)
-                // zákazka poznámku — ukončené poznámku v Gantte už neukazujú (dáta ostávajú,
-                // len sa prestanú počítať do výšky riadku), nech sa kalendár zbytočne
-                // nerozrastá do budúcna.
-                const rowHasNote = mJobs.some((j) => j.notes && j.status !== "completed");
-                const rowMinHeight = rowHasNote ? 46 : 34;
-                const mReservations = reservationsByMachine[m.id] || [];
-                const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
-                const label = categoryLabelOf ? categoryLabelOf(m) : null;
-                const prevLabel = categoryLabelOf && idx > 0 ? categoryLabelOf(relevantMachines[idx - 1]) : null;
-                const showDivider = categoryLabelOf && label !== prevLabel;
+        {/* Riadky strojov a deliace čiary kategórií — len tie vo výreze,
+            umiestnené presne na svoju predpočítanú polohu (position:absolute,
+            "top" z layoutItems vyššie v CalendarView). */}
+        {visibleItems.map((item) => {
+          if (item.type === "divider") {
+            return (
+              <div
+                key={`divider-${item.top}`}
+                style={{
+                  position: "absolute",
+                  top: HEADER_HEIGHT + item.top,
+                  left: 0,
+                  right: 0,
+                  height: item.height,
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                  color: "var(--accent)",
+                  background: "var(--accent-soft, rgba(227,6,19,.10))",
+                  borderLeft: "3px solid var(--accent)",
+                  borderRadius: 4,
+                }}
+              >
+                {item.label}
+              </div>
+            );
+          }
+
+          const m = item.machine;
+          const idx = item.idx;
+          const mJobs = (jobsByMachine[m.id] || []).slice().sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+          const mReservations = reservationsByMachine[m.id] || [];
+          const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
+
+          return (
+            <div
+              key={m.id}
+              style={{
+                position: "absolute",
+                top: HEADER_HEIGHT + item.top,
+                left: 0,
+                right: 0,
+                height: item.height,
+                display: "grid",
+                gridTemplateColumns: gridColumnsTemplate,
+                gap: 2,
+                alignItems: "center",
+                background: rowBg,
+                borderRadius: 4,
+                borderBottom: "1px solid var(--border)",
+                boxSizing: "border-box",
+              }}
+            >
+              <div
+                onClick={() => onOpenCard(m)}
+                title="Otvoriť kartu stroja"
+                style={{ lineHeight: 1.15, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+              >
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
+                  {m.code}
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {m.type || "—"}
+                  </span>
+                  {m.depo && (
+                    <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {m.depo}
+                    </span>
+                  )}
+                </div>
+                {/* Poznámka je teraz VŽDY vo vyhradenom mieste (aj keď je
+                    prázdna) — presne to je dôvod, prečo majú všetky riadky
+                    rovnakú výšku (nutné pre virtualizáciu vyššie), namiesto
+                    toho, aby bol riadok s poznámkou vyšší než ten bez nej. */}
+                <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minHeight: 12 }}>
+                  {m.note || ""}
+                </div>
+              </div>
+              {visibleDayIdx.map((i) => {
+                const iso = allDays[i];
+                const dow = new Date(iso + "T00:00:00").getDay();
+                const isWeekend = dow === 0 || dow === 6;
                 return (
-                  <React.Fragment key={m.id}>
-                    {showDivider && (
-                      <div
-                        style={{
-                          padding: "6px 10px",
-                          margin: "14px 0 6px",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: ".06em",
-                          color: "var(--accent)",
-                          background: "var(--accent-soft, rgba(227,6,19,.10))",
-                          borderLeft: "3px solid var(--accent)",
-                          borderRadius: 4,
-                          position: "sticky",
-                          left: 0,
-                        }}
-                      >
-                        {label}
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: gridColumnsTemplate,
-                        gap: 2,
-                        alignItems: "center",
-                        marginBottom: 3,
-                        minHeight: rowMinHeight,
-                        background: rowBg,
-                        borderRadius: 4,
-                        borderBottom: "1px solid var(--border)",
+                  <div
+                    key={`bg-${iso}`}
+                    onClick={onAddJob ? () => onAddJob(m.id, iso) : undefined}
+                    title={onAddJob ? "Vytvoriť zákazku na tento deň" : undefined}
+                    style={{
+                      gridColumn: i + 2,
+                      gridRow: 1,
+                      alignSelf: "stretch",
+                      height: "100%",
+                      borderRight: "1px solid var(--border)",
+                      background: isWeekend ? "var(--warn-bg)" : "transparent",
+                      cursor: onAddJob ? "pointer" : "default",
                     }}
+                  />
+                );
+              })}
+              {mJobs.map((j) => {
+                const startCol = colForDate(j.startDate, true);
+                const isDone = j.status === "completed";
+                const noEnd = !j.endDate;
+                const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
+                if (!intersectsVisible(startCol, endCol)) return null;
+                const st = effectiveStatus(j, today);
+                const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
+                const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
+                const showNote = !isDone && j.notes;
+                return (
+                  <div
+                    key={j.id}
+                    className="gantt-bar-wrap"
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
                   >
                     <div
-                      onClick={() => onOpenCard(m)}
-                      title="Otvoriť kartu stroja"
-                      style={{ lineHeight: 1.3, overflow: "hidden", position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+                      ref={measureBarRef}
+                      data-bar-id={j.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenJob(j);
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        background: bg,
+                        opacity: isDone ? 0.45 : 1,
+                        outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
+                        outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
+                        borderRadius: 4,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        minWidth: 0,
+                        maxWidth: "100%",
+                        boxSizing: "border-box",
+                      }}
                     >
-                      <div className="mono" style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--accent)" }}>
-                        {m.code}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {m.type || "—"}
-                        </span>
-                        {m.depo && (
-                          <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                            {m.depo}
-                          </span>
+                      <div
+                        className="gantt-cell"
+                        style={{
+                          position: "sticky",
+                          left: "calc(var(--gantt-name-col) + 6px)",
+                          width: "fit-content",
+                          maxWidth: Math.min(barWidths[j.id] || 18, 260),
+                          overflow: "hidden",
+                          fontSize: 10,
+                          color: "#fff",
+                          padding: "3px 6px",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
+                        </div>
+                        {showNote && (
+                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
+                            📝 {j.notes}
+                          </div>
                         )}
                       </div>
-                      {m.note && (
-                        <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {m.note}
-                        </div>
-                      )}
                     </div>
-                    {allDays.map((iso, i) => {
-                      const dow = new Date(iso + "T00:00:00").getDay();
-                      const isWeekend = dow === 0 || dow === 6;
-                      return (
-                        <div
-                          key={`bg-${iso}`}
-                          onClick={onAddJob ? () => onAddJob(m.id, iso) : undefined}
-                          title={onAddJob ? "Vytvoriť zákazku na tento deň" : undefined}
-                          style={{
-                            gridColumn: i + 2,
-                            gridRow: 1,
-                            alignSelf: "stretch",
-                            height: "100%",
-                            borderRight: "1px solid var(--border)",
-                            background: isWeekend ? "var(--warn-bg)" : "transparent",
-                            cursor: onAddJob ? "pointer" : "default",
-                          }}
-                        />
-                      );
-                    })}
-                    {mJobs.map((j) => {
-                      const startCol = colForDate(j.startDate, true);
-                      const isDone = j.status === "completed";
-                      const noEnd = !j.endDate;
-                      const endCol = noEnd ? allDays.length : colForDate(j.endDate, false);
-                      const st = effectiveStatus(j, today);
-                      const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
-                      const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
-                      const showNote = !isDone && j.notes;
-                      return (
-                        <div
-                          key={j.id}
-                          className="gantt-bar-wrap"
-                          style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
-                        >
-                          <div
-                            ref={measureBarRef}
-                            data-bar-id={j.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenJob(j);
-                            }}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              background: bg,
-                              opacity: isDone ? 0.45 : 1,
-                              outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
-                              outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
-                              borderRadius: 4,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              minWidth: 0,
-                              maxWidth: "100%",
-                              // Dôležité: NIE overflow:hidden tu — na priamom rodičovi elementu s
-                              // position:sticky by to sticky úplne vypNULO (overené priamo v
-                              // prehliadači). Orezanie textu rieši samotný label o riadok nižšie,
-                              // ktorý má vlastné overflow:hidden — to stačí, nič nepretečie.
-                              boxSizing: "border-box",
-                            }}
-                          >
-                            {/* Šírka textu sa NEODHADUJE ani sa nesplieha na CSS — priamo sa odmeria
-                                skutočná vykreslená šírka tohto bloku (ref vyššie) a text sa orežie
-                                presne na ňu. Pred prvým odmeraním (zlomok sekundy) sa použije bezpečný
-                                konzervatívny odhad, aby nič nevyskočilo z bloku skôr, než sa to odmeria. */}
-                            <div
-                              className="gantt-cell"
-                              style={{
-                                position: "sticky",
-                                left: "calc(var(--gantt-name-col) + 6px)",
-                                // Šírka labelu je zámerne obmedzená (nie celá nameraná šírka bloku) —
-                                // sticky element, ktorý by bol takmer taký široký ako priestor, kde sa má
-                                // "posúvať" pri scrollovaní, sa nemá kam posúvať a sticky by nefungovalo.
-                                // Overené priamo v prehliadači (Chromium/Playwright).
-                                // Šírka labelu sa prispôsobí presne veľkosti textu (nie pevný box) —
-                                // krátke meno tak nenecháva zbytočnú prázdnu farbu okolo seba, a
-                                // orezanie dlhého textu sa deje presne tam, kde treba, nie na hranici
-                                // vopred vyhradeného miesta. Horný strop (260px) je len pre extrémne
-                                // dlhé mená, nech má sticky vždy kam sa "posúvať". Overené v prehliadači.
-                                width: "fit-content",
-                                // Dôležité: NEODČÍTAVA sa nič na padding — appka má globálne
-                                // box-sizing:border-box, takže padding labelu je už súčasťou jeho
-                                // vlastnej šírky, nie navyše k nej. Odčítanie by len zbytočne
-                                // nechalo kúsok bloku bez textu (overené priamo v prehliadači).
-                                maxWidth: Math.min(barWidths[j.id] || 18, 260),
-                                overflow: "hidden",
-                                fontSize: 10,
-                                color: "#fff",
-                                padding: "3px 6px",
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
-                              </div>
-                              {showNote && (
-                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
-                                  📝 {j.notes}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {/* Okamžitý tooltip (CSS :hover) namiesto pomalého natívneho — celé meno,
-                              dátumy, zákazník aj poznámka, hneď pri prejdení myšou. */}
-                          <div className="gantt-tooltip">
-                            <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
-                            <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
-                            {j.obchodnik && <div>Obchodník: {j.obchodnik}</div>}
-                            {showNote && <div>📝 {j.notes}</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {mReservations.map((r) => {
-                      const startCol = colForDate(r.expectedStart, true);
-                      const noEnd = !r.expectedEnd;
-                      const endCol = noEnd ? allDays.length : colForDate(r.expectedEnd, false);
-                      const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
-                      return (
-                        <div
-                          key={r.id}
-                          className="gantt-bar-wrap"
-                          style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
-                        >
-                          <div
-                            ref={measureBarRef}
-                            data-bar-id={"r-" + r.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenReservation(r);
-                            }}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
-                              outline: "2px dashed var(--text-dim)",
-                              outlineOffset: "-1px",
-                              borderRadius: 4,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              minWidth: 0,
-                              maxWidth: "100%",
-                              boxSizing: "border-box",
-                              opacity: 0.85,
-                            }}
-                          >
-                            <div
-                              className="gantt-cell"
-                              style={{
-                                position: "sticky",
-                                left: "calc(var(--gantt-name-col) + 6px)",
-                                width: "fit-content",
-                                maxWidth: Math.min(barWidths["r-" + r.id] || 18, 260),
-                                overflow: "hidden",
-                                fontSize: 10,
-                                color: "#fff",
-                                textShadow: "0 1px 2px rgba(0,0,0,.6)",
-                                padding: "3px 6px",
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                📋 {r.customer}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="gantt-tooltip">
-                            <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
-                            <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
-                            {r.obchodnik && <div>Obchodník: {r.obchodnik}</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="gantt-tooltip">
+                      <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
+                      <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
+                      {j.obchodnik && <div>Obchodník: {j.obchodnik}</div>}
+                      {showNote && <div>📝 {j.notes}</div>}
                     </div>
-                  </React.Fragment>
+                  </div>
+                );
+              })}
+              {mReservations.map((r) => {
+                const startCol = colForDate(r.expectedStart, true);
+                const noEnd = !r.expectedEnd;
+                const endCol = noEnd ? allDays.length : colForDate(r.expectedEnd, false);
+                if (!intersectsVisible(startCol, endCol)) return null;
+                const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
+                return (
+                  <div
+                    key={r.id}
+                    className="gantt-bar-wrap"
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
+                  >
+                    <div
+                      ref={measureBarRef}
+                      data-bar-id={"r-" + r.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenReservation(r);
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
+                        outline: "2px dashed var(--text-dim)",
+                        outlineOffset: "-1px",
+                        borderRadius: 4,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        minWidth: 0,
+                        maxWidth: "100%",
+                        boxSizing: "border-box",
+                        opacity: 0.85,
+                      }}
+                    >
+                      <div
+                        className="gantt-cell"
+                        style={{
+                          position: "sticky",
+                          left: "calc(var(--gantt-name-col) + 6px)",
+                          width: "fit-content",
+                          maxWidth: Math.min(barWidths["r-" + r.id] || 18, 260),
+                          overflow: "hidden",
+                          fontSize: 10,
+                          color: "#fff",
+                          textShadow: "0 1px 2px rgba(0,0,0,.6)",
+                          padding: "3px 6px",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          📋 {r.customer}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="gantt-tooltip">
+                      <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
+                      <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
+                      {r.obchodnik && <div>Obchodník: {r.obchodnik}</div>}
+                    </div>
+                  </div>
                 );
               })}
             </div>
-          </div>
-
+          );
+        })}
+      </div>
+    </div>
   );
 });
 
@@ -11870,17 +11881,15 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
   const month = viewDate.getMonth();
   const monthLabel = viewDate.toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
 
-  // Nekonečné vodorovné rolovanie — okolo aktuálneho mesiaca sa vykreslí len malý
-  // pás dní; keď sa priblížiš k okraju, potichu sa pridá ďalší mesiac na daný
-  // koniec. Rovnaký (overený) vzor ako v servisnom Gantte (TechnicianPlanner).
-  const [monthWindow, setMonthWindow] = useState({ start: 0, end: 0 });
-  useEffect(() => {
-    setMonthWindow({ start: 0, end: 0 });
-  }, [monthOffset]);
-
+  // Pevný, vopred pripravený rozsah dní (±12 mesiacov okolo zobrazeného mesiaca) —
+  // namiesto skoršieho "nekonečného scrollovania" (pridávanie mesiaca za behu,
+  // s krehkým dokotvovaním scrollu). S virtualizáciou nižšie (vykresľuje sa len
+  // to, čo je naozaj vo výreze obrazovky) je toto len obyčajné pole dátumov,
+  // nie niečo, čo by appku spomaľovalo — pokojne môže byť pripravené vopred v
+  // plnej šírke, appka sa tým vôbec nezaťaží.
   const allDays = useMemo(() => {
     const days = [];
-    for (let mOff = monthWindow.start; mOff <= monthWindow.end; mOff++) {
+    for (let mOff = -12; mOff <= 12; mOff++) {
       const d = new Date(year, month + mOff, 1);
       const y = d.getFullYear();
       const mo = d.getMonth();
@@ -11890,7 +11899,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
       }
     }
     return days;
-  }, [year, month, monthWindow]);
+  }, [year, month]);
 
   // Poloha dňa v aktuálne zobrazenom pásme (nie číslo dňa v mesiaci — pri
   // nekonečnom rolovaní je toto jediný spoľahlivý spôsob, ako umiestniť viacdňovú
@@ -12000,64 +12009,43 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 
   const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-day-col), 1fr))`;
 
+  // Jedna, kompaktná výška pre ÚPLNE VŠETKY riadky (nezávisle od toho, či má
+  // stroj poznámku) — nutná podmienka pre virtualizáciu nižšie (potrebuje
+  // vedieť presnú polohu N-tého riadku bez merania, čo ide len pri pevnej
+  // výške). Kratší obsah (bez poznámky) sa v riadku len zarovná na stred
+  // (grid nižšie má "alignItems: center").
+  const ROW_HEIGHT = 40;
+  const DIVIDER_HEIGHT = 34;
+  const HEADER_HEIGHT = 40;
+
+  // Presné rozloženie zhora nadol — riadky strojov AJ deliace čiary kategórií
+  // (majú inú výšku), každý so svojou kumulatívnou polohou "top". Toto appke
+  // umožňuje vedieť OKAMŽITE (bez merania DOM), čo presne padá do viditeľnej
+  // časti obrazovky pri danom scrollTop — základ virtualizácie nižšie.
+  const layoutItems = useMemo(() => {
+    const items = [];
+    let top = 0;
+    relevantMachines.forEach((m, idx) => {
+      const label = categoryLabelOf ? categoryLabelOf(m) : null;
+      const prevLabel = categoryLabelOf && idx > 0 ? categoryLabelOf(relevantMachines[idx - 1]) : null;
+      if (categoryLabelOf && label !== prevLabel) {
+        items.push({ type: "divider", label, top, height: DIVIDER_HEIGHT });
+        top += DIVIDER_HEIGHT;
+      }
+      items.push({ type: "row", machine: m, idx, top, height: ROW_HEIGHT });
+      top += ROW_HEIGHT;
+    });
+    return { items, totalHeight: top };
+  }, [relevantMachines, categoryLabelOf]);
+
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const [displayedMonthLabel, setDisplayedMonthLabel] = useState(monthLabel);
-  const prependAnchorRef = useRef(null); // { iso, left } zachytené tesne pred pridaním mesiaca dozadu
 
   useEffect(() => {
     setDisplayedMonthLabel(monthLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset]);
+  }, [monthLabel]);
 
-  // Po pridaní mesiaca na začiatok (dozadu) sa obsah predĺži smerom doľava —
-  // bez tejto kompenzácie by to trhlo pohľad. Zakotví sa na konkrétny deň — po
-  // prekreslení sa dohľadá presne ten istý deň a scrollLeft sa doladí tak, aby
-  // ostal na tom istom mieste.
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    const anchor = prependAnchorRef.current;
-    if (!container || !anchor) return;
-    const cell = container.querySelector(`[data-day-iso="${anchor.iso}"]`);
-    if (cell) {
-      const newLeft = cell.getBoundingClientRect().left;
-      container.scrollLeft += newLeft - anchor.left;
-    }
-    prependAnchorRef.current = null;
-  }, [allDays]);
-
-  // Ak sa aktuálne načítané dni celé zmestia do viditeľnej šírky bez toho, aby
-  // bolo treba scrollovať (typicky na širšej obrazovke, keď je defaultne
-  // načítaný len 1 mesiac), appka to sama nevidí ako "som pri okraji" — a keďže
-  // sa niet ako scrollovať, ani vlastný mechanizmus na rozšírenie sa nespustí.
-  // Toto po každom prekreslení potichu overí, či je obsah aspoň o kúsok širší
-  // než viditeľná plocha, a ak nie, pridá ďalší mesiac na koniec — kým sa
-  // scrollovanie sprístupní (alebo kým sa nedosiahne bezpečný strop).
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    if (container.scrollWidth <= container.clientWidth && monthWindow.end < 12) {
-      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
-    }
-  }, [allDays, monthWindow]);
-
-  const scrollExpandLockRef = useRef(false); // poistka proti prekrývajúcim sa rozšíreniam
-  const scrollFrameRef = useRef(null); // nech sa výpočet spustí max. raz za snímku, nie pri každom scroll evente
-  // handleCalendarScroll musí mať STÁLU identitu (inak by sa CalendarGrid
-  // vyššie prekresľoval pri každej zmene, presne to, čomu sa snažíme
-  // vyhnúť) — ALE runCalendarScrollCheck vnútri potrebuje vždy najčerstvejšie
-  // dáta (allDays, monthWindow,...), nie tie zamrznuté z prvého vykreslenia.
-  // Preto: stála funkcia (useCallback s prázdnymi závislosťami), čo si pri
-  // každom zavolaní vytiahne najnovšiu verziu kontroly cez referenciu, tá sa
-  // aktualizuje nižšie na KAŽDOM prekreslení.
-  const runCalendarScrollCheckRef = useRef(null);
-  const handleCalendarScroll = useCallback(() => {
-    if (scrollFrameRef.current) return; // snímka je už naplánovaná, netreba plánovať ďalšiu
-    scrollFrameRef.current = requestAnimationFrame(() => {
-      scrollFrameRef.current = null;
-      runCalendarScrollCheckRef.current();
-    });
-  }, []);
   // --gantt-day-col / --gantt-name-col sú CSS premenné, čo sa počas bežného
   // scrollovania nemenia (menia sa len pri zmene veľkosti okna) — namiesto
   // toho, aby sa nanovo čítali (getComputedStyle núti prehliadač prepočítať
@@ -12084,101 +12072,92 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
     };
   }, []);
 
-  function runCalendarScrollCheck() {
-    const container = scrollContainerRef.current;
-    if (!container || allDays.length === 0) return;
-    // Poistka č.1: keď sa celý obsah zmestí do viditeľnej šírky bez
-    // scrollovania, "scrollLeft" ostáva 0 — netreba nič rozširovať.
-    if (container.scrollWidth <= container.clientWidth) return;
-    // Poistka č.2: nedovoľ prekrývajúce sa rozšírenia skôr, než sa predošlé
-    // stihlo prejaviť vo vykreslení.
-    if (scrollExpandLockRef.current) return;
-    // Dôležité pre plynulosť: poloha sa počíta ČISTO ARITMETICKY (šírka stĺpca
-    // dňa + medzera, obe známe vopred z CSS), nie meraním KAŽDEJ bunky v
-    // hlavičke cez getBoundingClientRect — to bolo pri desiatkach/stovkách dní
-    // (a najmä pri veľa riadkoch strojov) badateľne pomalé a spôsobovalo
-    // sekanie pri scrollovaní. Mierna nepresnosť (o deň-dva) tu nevadí, používa
-    // sa len na kozmetický popisok mesiaca a na kotviaci bod pri rozširovaní.
-    const { dayColPx, nameColPx } = columnPxRef.current;
-    const stepPx = dayColPx + 2; // +2 = grid gap
-    const scrollLeft = container.scrollLeft;
-    const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
-    const leftmostIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor(scrollLeft / stepPx)));
-    const closestIso = allDays[centerIdx];
-    const leftmostIso = allDays[leftmostIdx];
-    // containerLeft (getBoundingClientRect) sa počíta len TU, vnútri vetiev
-    // nižšie, čo naozaj rozširujú okno — nie na každý scroll frame ako
-    // predtým. Zvyšok funkcie (najčastejší prípad — len sa mení popisok
-    // mesiaca) sa už teda zaobíde úplne bez akéhokoľvek merania DOM.
-    if (closestIso) {
-      const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
-      setDisplayedMonthLabel(label);
-    }
-
-    const EDGE_PX = 600;
-    // Poistka č.3: okno sa nikdy nerozrastie viac než rok dozadu/dopredu (úplný
-    // strop, aby sa dalo scrollovať naozaj ďaleko, keby to niekto potreboval).
-    const MAX_MONTHS_EITHER_WAY = 12;
-    // Koľko mesiacov appka drží VYKRESLENÝCH naraz — nezávisle od toho, ako
-    // ďaleko sa scrolluje. Bez tohto by sa pri dlhšom scrollovaní donekonečna
-    // hromadili staré mesiace (nikdy sa nezahodili), a čím viac zákaziek v
-    // nich je, tým citeľnejšie by to appku spomaľovalo. Pri zahodení mesiaca
-    // na KONCI okna (opačnom, než kam sa práve scrolluje) sa nemusí nič
-    // dokotvovať — nemení to polohu ničoho už vykresleného. Pri zahodení na
-    // ZAČIATKU (rovnaký prípad, ako pri PRIDÁVANÍ naň, len naopak) sa musí
-    // scroll dokotviť rovnakým mechanizmom, čo appka už používa vyššie.
-    const MAX_MONTHS_SPAN = 5;
-    if (container.scrollLeft < EDGE_PX && !prependAnchorRef.current && monthWindow.start > -MAX_MONTHS_EITHER_WAY) {
-      if (leftmostIso) {
-        const containerLeft = container.getBoundingClientRect().left;
-        const leftmostLeft = containerLeft + nameColPx + leftmostIdx * stepPx - scrollLeft;
-        prependAnchorRef.current = { iso: leftmostIso, left: leftmostLeft };
-      }
-      scrollExpandLockRef.current = true;
-      setMonthWindow((w) => {
-        const newStart = w.start - 1;
-        // Zahodenie mesiaca na KONCI je tu zadarmo (nemení polohu ničoho už
-        // vykresleného, keďže je to na opačnej strane, než kam sa práve
-        // scrolluje) — preto sa dá bezpečne robiť pri každom kroku.
-        const newEnd = Math.min(w.end, newStart + MAX_MONTHS_SPAN - 1);
-        return { start: newStart, end: newEnd };
+  // Virtualizácia — vykresľuje sa len to, čo je NAOZAJ vo výreze obrazovky
+  // (plus malá rezerva navyše, "overscan", nech nie je vidno prázdno pri
+  // rýchlom scrolle), nezávisle od toho, koľko riadkov/dní appka v skutočnosti
+  // má. To je jediný spôsob, ako toto ostane plynulé aj pri stovkách strojov a
+  // celom roku dní naraz — appka v danej chvíli reálne vykresľuje len pár
+  // desiatok riadkov a pár desiatok dní, nikdy všetko naraz.
+  const OVERSCAN_ROWS_PX = 200;
+  const OVERSCAN_COLS = 8;
+  const [viewport, setViewport] = useState({ scrollTop: 0, scrollLeft: 0, clientWidth: 0, clientHeight: 0 });
+  const scrollFrameRef = useRef(null);
+  const handleCalendarScroll = useCallback(() => {
+    if (scrollFrameRef.current) return; // nech sa výpočet spustí max. raz za snímku
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      setViewport({
+        scrollTop: container.scrollTop,
+        scrollLeft: container.scrollLeft,
+        clientWidth: container.clientWidth,
+        clientHeight: container.clientHeight,
       });
-      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
-    } else if (container.scrollLeft > container.scrollWidth - container.clientWidth - EDGE_PX && monthWindow.end < MAX_MONTHS_EITHER_WAY) {
-      // Pri scrollovaní DOPREDU sa zámerne NEZAHADZUJE zo ZAČIATKU okna —
-      // to by (na rozdiel od zahodenia na konci vyššie) vyžadovalo to isté
-      // doladenie scrollu, čo appka robí pri PRIDÁVANÍ mesiaca dozadu, a
-      // keďže dopredu sa scrolluje častejšie, práve toto sa ukázalo ako
-      // citeľné spomalenie (dodatočné meranie polohy pri každom kroku).
-      // Tento smer preto zostáva jednoduché pridávanie, presne ako predtým —
-      // absolútny strop (MAX_MONTHS_EITHER_WAY) ho aj tak nakoniec zastaví.
-      scrollExpandLockRef.current = true;
-      setMonthWindow((w) => ({ ...w, end: w.end + 1 }));
-      setTimeout(() => { scrollExpandLockRef.current = false; }, 300);
+      const { dayColPx, nameColPx } = columnPxRef.current;
+      const stepPx = dayColPx + 2; // +2 = grid gap
+      const centerIdx = Math.max(0, Math.min(allDays.length - 1, Math.round((container.scrollLeft + container.clientWidth / 2 - nameColPx) / stepPx)));
+      const closestIso = allDays[centerIdx];
+      if (closestIso) {
+        const label = new Date(closestIso + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
+        setDisplayedMonthLabel(label);
+      }
+    });
+  }, [allDays]);
+  // Appka si po zmene veľkosti okna/obsahu (napr. iný filter) tiež musí
+  // prepočítať výrez nanovo, nielen pri samotnom scrolle.
+  useLayoutEffect(() => {
+    handleCalendarScroll();
+  }, [handleCalendarScroll, layoutItems.totalHeight, gridColumnsTemplate]);
+
+  const visibleRowRange = useMemo(() => {
+    const items = layoutItems.items;
+    if (items.length === 0) return { startIdx: 0, endIdx: -1 };
+    const top = viewport.scrollTop - OVERSCAN_ROWS_PX;
+    const bottom = viewport.scrollTop + viewport.clientHeight + OVERSCAN_ROWS_PX;
+    let startIdx = items.findIndex((it) => it.top + it.height >= top);
+    if (startIdx === -1) startIdx = 0;
+    let endIdx = items.length - 1;
+    for (let i = startIdx; i < items.length; i++) {
+      if (items[i].top > bottom) { endIdx = i - 1; break; }
     }
-  }
-  runCalendarScrollCheckRef.current = runCalendarScrollCheck;
+    return { startIdx, endIdx };
+  }, [layoutItems, viewport.scrollTop, viewport.clientHeight]);
+
+  const visibleColRange = useMemo(() => {
+    if (allDays.length === 0) return { startIdx: 0, endIdx: -1 };
+    const { dayColPx, nameColPx } = columnPxRef.current;
+    const stepPx = dayColPx + 2;
+    // Oba konce oklieštené na platný rozsah [0, allDays.length-1] — bez toho
+    // by pri nezvyčajnej hodnote scrollLeft (napr. tesne po zmene veľkosti
+    // okna, skôr než appka stihne domerať skutočné rozmery) mohol vzniknúť
+    // startIdx nad platným rozsahom, čo by znamenalo prázdny, nič nezobrazený
+    // kalendár namiesto len o kúsok nepresného výrezu.
+    const startIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((viewport.scrollLeft - nameColPx) / stepPx) - OVERSCAN_COLS));
+    const endIdx = Math.max(0, Math.min(allDays.length - 1, Math.ceil((viewport.scrollLeft + viewport.clientWidth - nameColPx) / stepPx) + OVERSCAN_COLS));
+    return { startIdx, endIdx };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allDays.length, viewport.scrollLeft, viewport.clientWidth]);
 
   function scrollToToday() {
     try {
       const container = scrollContainerRef.current;
-      const cell = todayCellRef.current;
-      if (!container || !cell) return;
-      const containerRect = container.getBoundingClientRect();
-      const cellRect = cell.getBoundingClientRect();
-      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + containerRect.width / 2);
-      container.scrollLeft = container.scrollLeft + delta;
+      if (!container) return;
+      const todayIdx = dayColByIso[today];
+      if (todayIdx === undefined) return;
+      const { dayColPx, nameColPx } = columnPxRef.current;
+      const stepPx = dayColPx + 2;
+      const todayLeft = nameColPx + (todayIdx - 1) * stepPx;
+      container.scrollLeft = todayLeft - container.clientWidth / 2 + dayColPx / 2;
+      handleCalendarScroll();
     } catch (e) {
       // ignore — purely a convenience scroll
     }
   }
 
   // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa klikli
-  // šípky (monthOffset teda ostáva 0) — preto tu explicitne zresetujeme okno dní
-  // aj pozíciu scrollu, namiesto spoliehania sa na efekt viazaný len na zmenu
-  // monthOffset.
+  // šípky (monthOffset teda ostáva 0).
   function goToToday() {
-    setMonthWindow({ start: 0, end: 0 });
     setDisplayedMonthLabel(monthLabel);
     if (monthOffset !== 0) {
       setMonthOffset(0);
@@ -12254,9 +12233,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             allDays={allDays}
             today={today}
             todayCellRef={todayCellRef}
-            relevantMachines={relevantMachines}
+            layoutItems={layoutItems}
+            visibleRowRange={visibleRowRange}
+            visibleColRange={visibleColRange}
+            ROW_HEIGHT={ROW_HEIGHT}
+            DIVIDER_HEIGHT={DIVIDER_HEIGHT}
+            HEADER_HEIGHT={HEADER_HEIGHT}
             jobsByMachine={jobsByMachine}
-            categoryLabelOf={categoryLabelOf}
             onOpenCard={onOpenCard}
             onAddJob={onAddJob}
             reservationsByMachine={reservationsByMachine}
