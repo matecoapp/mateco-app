@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.415";
+const APP_VERSION = "1.0.416";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11862,7 +11862,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
             >
               <div
                 onClick={() => onOpenCard(m)}
-                className="gantt-bar-wrap"
+                className="gantt-name-wrap"
                 style={{ position: "sticky", left: 0, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
               >
                 {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
@@ -11944,7 +11944,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 const st = effectiveStatus(j, today);
                 const bg = salespersonColor(j.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                 const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
-                const showNote = !isDone && j.notes && !compactMode;
+                const hasNote = !isDone && j.notes;
+                const showNote = hasNote && !compactMode; // v riadku samotnom (nie v tooltipe nižšie) sa v kompaktnom režime schová, nie je tam dosť miesta
                 return (
                   <div
                     key={j.id}
@@ -11991,6 +11992,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         }}
                       >
                         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {compactMode && hasNote ? "📝 " : ""}
                           {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                         </div>
                         {showNote && (
@@ -11998,13 +12000,20 @@ const CalendarGrid = React.memo(function CalendarGrid({
                             📝 {j.notes}
                           </div>
                         )}
+                        {/* Tooltip je zámerne TU (vnútri "lepiaceho" popisku), nie
+                            ako súrodenec celého bloku zákazky — takto sleduje
+                            viditeľnú časť pri scrollovaní presne tak, ako aj
+                            samotný popisok. Predtým bol viazaný na ZAČIATOK
+                            zákazky, takže pri dlhšej zákazke posunutej mimo
+                            obrazovku nebolo vidieť tooltip vôbec, aj keď bola
+                            jej viditeľná časť priamo pod myšou. */}
+                        <div className="gantt-tooltip">
+                          <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
+                          <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
+                          {j.obchodnik && <div>Obchodník: {j.obchodnik}</div>}
+                          {hasNote && <div>📝 {j.notes}</div>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="gantt-tooltip">
-                      <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
-                      <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
-                      {j.obchodnik && <div>Obchodník: {j.obchodnik}</div>}
-                      {showNote && <div>📝 {j.notes}</div>}
                     </div>
                   </div>
                 );
@@ -12064,12 +12073,12 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           📋 {r.customer}
                         </div>
+                        <div className="gantt-tooltip">
+                          <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
+                          <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
+                          {r.obchodnik && <div>Obchodník: {r.obchodnik}</div>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="gantt-tooltip">
-                      <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
-                      <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
-                      {r.obchodnik && <div>Obchodník: {r.obchodnik}</div>}
                     </div>
                   </div>
                 );
@@ -17789,12 +17798,16 @@ function GlobalStyle() {
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
-         natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS. */
-      .gantt-bar-wrap { position: relative; z-index: 2; }
-      /* Pri nabehnutí myšou sa musí dostať NAD susedné riadky (tie majú tiež
-         z-index:2, len neskôr v poradí v HTML, takže by inak vždy vyhrali) —
-         bez tohto by tooltip zostal schovaný za menom nasledujúceho stroja. */
+         natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
+         Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja) — inak by zákazky pri
+         scrollovaní prekrývali a schovávali mená strojov (nedalo by sa na ne
+         kliknúť ani vidieť ich vlastný tooltip). */
+      .gantt-bar-wrap { position: relative; z-index: 1; }
       .gantt-bar-wrap:hover { z-index: 100; }
+      /* Meno stroja (prvý stĺpec) — musí byť VŽDY nad zákazkami (nie len pri
+         nabehnutí myšou), inak ho pri scrollovaní prekryjú a schovajú. */
+      .gantt-name-wrap { position: relative; z-index: 3; }
+      .gantt-name-wrap:hover { z-index: 101; }
       .gantt-tooltip {
         visibility: hidden;
         opacity: 0;
@@ -17814,7 +17827,7 @@ function GlobalStyle() {
         z-index: 50;
         pointer-events: none;
       }
-      .gantt-bar-wrap:hover .gantt-tooltip { visibility: visible; opacity: 1; }
+      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip { visibility: visible; opacity: 1; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
