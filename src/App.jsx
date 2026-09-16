@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.409";
+const APP_VERSION = "1.0.410";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -136,6 +136,10 @@ const PERM = {
   customer_add: ["obchodnik", "dispecer_pozicovne", "dispecer_servisu", "veduci_pozicovne", "veduci_servisu"],
   customer_edit: ["obchodnik", "dispecer_pozicovne", "dispecer_servisu", "veduci_pozicovne", "veduci_servisu"],
   customer_delete: [], // len admin — can() adminovi povoľuje všetko automaticky, netreba sem nikoho pridávať
+  // Kôš — kto smie vidieť obrazovku "Kôš" vôbec (appka mu vnútri ešte navyše
+  // ukáže len tie záznamy, čo patria do jeho vlastného segmentu — viď
+  // canSeeTrashEntry nižšie).
+  trash_view: ["veduci_pozicovne", "dispecer_pozicovne", "veduci_servisu", "dispecer_servisu"],
   reservation_add: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"],
   reservation_convert: ["dispecer_pozicovne", "veduci_pozicovne"],
   reservation_delete: ["dispecer_pozicovne", "veduci_pozicovne"],
@@ -1480,6 +1484,11 @@ function DispatcherApp() {
   const [handoverProtocols, setHandoverProtocols] = useState([]); // protokoly o odovzdaní/prevzatí stroja zákazníkovi (Požičovňa)
   const [machineModels, setMachineModels] = useState([]); // knižnica modelov strojov — kategória + parametre, len Požičovňové stroje
   const [spareParts, setSpareParts] = useState([]); // náhradné diely na objednanie — technik zadá, vedúci/dispečer servisu schváli a objedná
+  // Kôš — namiesto tvrdého mazania (viď persistDamages a pod.) appka záznam
+  // najprv sem skopíruje, a až potom ho naozaj odstráni. Appka pôvodné
+  // zoznamy (damages, jobs, ...) vôbec nemení — kôš je celkom samostatné
+  // miesto bokom, nikde inde sa netreba starať o filtrovanie zmazaného.
+  const [trash, setTrash] = useState([]);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
@@ -1669,11 +1678,12 @@ function DispatcherApp() {
       setReservations([]); setProtocolLogs([]); setHandoverProtocols([]);
       setMachineModels([]);
       setSpareParts([]);
+      setTrash([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh] = await Promise.all([
         loadRecordTable("machines"),
         loadRecordTable("jobs"),
         loadRecordTable("assignments"),
@@ -1692,6 +1702,7 @@ function DispatcherApp() {
         loadRecordTable("handoverProtocols"),
         loadRecordTable("machineModels"),
         loadRecordTable("spareParts"),
+        loadRecordTable("trash"),
       ]);
       setMachines(m);
       setJobs(jobsTable);
@@ -1710,6 +1721,7 @@ function DispatcherApp() {
       setHandoverProtocols(hprot);
       setMachineModels(mmodels);
       setSpareParts(sprts);
+      setTrash(trsh);
 
       setEmployees(emp);
       setLoaded(true);
@@ -1761,6 +1773,7 @@ function DispatcherApp() {
       ["handoverProtocols", setHandoverProtocols],
       ["machineModels", setMachineModels],
       ["spareParts", setSpareParts],
+      ["trash", setTrash],
     ];
     const channels = tables.map(([table, setState]) =>
       supabase
@@ -2181,6 +2194,7 @@ function DispatcherApp() {
   }
   function deleteEmployee(id) {
     const emp = employees.find((e) => e.id === id);
+    moveToTrash("employee", "employees", emp, emp?.name);
     persistEmployees(employees.filter((e) => e.id !== id));
     // Zmazanie zamestnanca (odteraz jediné miesto, kde sa to dá spraviť —
     // z kariet technika/šoféra bolo tlačidlo zámerne odstránené) musí zároveň
@@ -2256,6 +2270,60 @@ function DispatcherApp() {
   }
   const persistAssignments = useCallback(makeRecordPersist("assignments", setAssignments), []);
   const persistDamages = useCallback(makeRecordPersist("damages", setDamages), []);
+  const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
+  // Presunie záznam do koša (namiesto toho, aby zmizol bez stopy) — appka ho
+  // sem skopíruje TESNE PRED tým, než ho naozaj odstráni z jeho pôvodného
+  // zoznamu. "record" je celý pôvodný objekt (nie len ID), nech sa dá neskôr
+  // v koši naozaj obnoviť so všetkými pôvodnými údajmi.
+  function moveToTrash(recordType, originalTable, record, label) {
+    if (!record) return;
+    persistTrash([
+      ...trash,
+      {
+        id: crypto.randomUUID(),
+        recordType,
+        originalTable,
+        originalId: record.id,
+        originalData: record,
+        label: label || record.code || record.name || record.nazovZakaznika || record.customer || record.id,
+        deletedAt: new Date().toISOString(),
+        deletedByName: currentUser?.name || null,
+        deletedByRole: currentUser?.role || null,
+      },
+    ]);
+  }
+  // Vráti záznam z koša späť do jeho pôvodného zoznamu (podľa "originalTable"),
+  // a vymaže ho z koša. Appka pri obnove NEKONTROLUJE, či ešte existujú veci,
+  // na ktoré sa záznam odkazuje (napr. stroj pri poškodení) — ak nie, zostane
+  // to len ako "osirelý" odkaz, presne tak, ako keby taká situácia vznikla aj
+  // inak (appka to už dnes vie zobraziť, bez pádu).
+  // Dôležité: tento zoznam je zámerne VNÚTRI funkcie (nie mimo nej) — viaceré
+  // z týchto "persist*" funkcií sú deklarované až NIŽŠIE v komponente, takže
+  // odkaz na ne mimo funkcie (vyhodnotený hneď pri každom vykreslení) by
+  // appku hneď zhodil. Takto sa vyhodnotí až pri skutočnom volaní (klik na
+  // "Obnoviť"), kedy už majú všetky svoju hodnotu.
+  function restoreFromTrash(trashEntry) {
+    const RESTORE_SETTERS = {
+      jobs: [jobs, persistJobs],
+      machines: [machines, persistMachines],
+      customers: [customers, persistCustomers],
+      reservations: [reservations, persistReservations],
+      damages: [damages, persistDamages],
+      employees: [employees, persistEmployees],
+      machineModels: [machineModels, persistMachineModels],
+      framoveZmluvy: [framoveZmluvy, persistFramoveZmluvy],
+      blacklist: [blacklist, persistBlacklist],
+      handoverProtocols: [handoverProtocols, persistHandoverProtocols],
+    };
+    const target = RESTORE_SETTERS[trashEntry.originalTable];
+    if (!target) return;
+    const [list, persistFn] = target;
+    persistFn([...list, trashEntry.originalData]);
+    persistTrash(trash.filter((t) => t.id !== trashEntry.id));
+  }
+  function permanentlyDeleteFromTrash(trashEntryId) {
+    persistTrash(trash.filter((t) => t.id !== trashEntryId));
+  }
 
   const persistNotifications = useCallback(makeRecordPersist("notifications", setNotifications), []);
 
@@ -2300,6 +2368,8 @@ function DispatcherApp() {
     persistFramoveZmluvy([...framoveZmluvy, ...rows.map((r) => ({ id: uid(), ...r }))]);
   }
   function deleteFramovaZmluva(id) {
+    const record = framoveZmluvy.find((r) => r.id === id);
+    moveToTrash("framovaZmluva", "framoveZmluvy", record, record?.customer || record?.nazov);
     persistFramoveZmluvy(framoveZmluvy.filter((r) => r.id !== id));
   }
 
@@ -2311,6 +2381,8 @@ function DispatcherApp() {
     persistBlacklist([...blacklist, ...rows.map((r) => ({ id: uid(), ...r }))]);
   }
   function deleteBlacklistEntry(id) {
+    const record = blacklist.find((r) => r.id === id);
+    moveToTrash("blacklist", "blacklist", record, record?.nazovZakaznika);
     persistBlacklist(blacklist.filter((r) => r.id !== id));
   }
 
@@ -2427,6 +2499,8 @@ function DispatcherApp() {
     return blocks;
   }
   function deleteCustomer(customerId) {
+    const record = customers.find((c) => c.id === customerId);
+    moveToTrash("customer", "customers", record, record?.nazovZakaznika);
     persistCustomers(customers.filter((c) => c.id !== customerId));
   }
 
@@ -2833,6 +2907,8 @@ function DispatcherApp() {
     }
   }
   function deleteReservation(id) {
+    const record = reservations.find((r) => r.id === id);
+    moveToTrash("reservation", "reservations", record, record?.customer);
     persistReservations(reservations.filter((r) => r.id !== id));
   }
   function updateReservation(id, data) {
@@ -2984,6 +3060,8 @@ function DispatcherApp() {
     return using.length ? [`${using.length} ${using.length === 1 ? "stroj" : "strojov"} tohto modelu`] : [];
   }
   function deleteMachineModel(id) {
+    const record = machineModels.find((mm) => mm.id === id);
+    moveToTrash("machineModel", "machineModels", record, record?.name);
     persistMachineModels(machineModels.filter((mm) => mm.id !== id));
   }
   // Vytvorí alebo upraví protokol o odovzdaní/prevzatí stroja pre danú zákazku —
@@ -3038,6 +3116,8 @@ function DispatcherApp() {
     return { id: recordId, publicToken };
   }
   function deleteHandoverProtocol(id) {
+    const record = handoverProtocols.find((h) => h.id === id);
+    moveToTrash("handoverProtocol", "handoverProtocols", record);
     persistHandoverProtocols(handoverProtocols.filter((h) => h.id !== id));
   }
   // Obchodník sám nič nemení — len "pošle podnet" dispečerovi/vedúcemu požičovne,
@@ -3212,6 +3292,8 @@ function DispatcherApp() {
     if (newAssignments && newAssignments.length > 0) persistAssignments([...assignments, ...newAssignments]);
   }
   function deleteDamage(id) {
+    const record = damages.find((d) => d.id === id);
+    moveToTrash("damage", "damages", record, record?.code);
     persistDamages(damages.filter((d) => d.id !== id));
   }
   function setDamageNote(id, note) {
@@ -3776,6 +3858,8 @@ function DispatcherApp() {
     return blocks;
   }
   function deleteMachine(id) {
+    const record = machines.find((m) => m.id === id);
+    moveToTrash("machine", "machines", record, record?.code);
     persistMachines(machines.filter((m) => m.id !== id));
   }
   function setMachineArchived(id, archived, reason, note) {
@@ -3987,6 +4071,8 @@ function DispatcherApp() {
   function deleteJob(id) {
     const departed = handoverProtocols.find((h) => h.jobId === id)?.handoverDone;
     if (departed) return;
+    const record = jobs.find((j) => j.id === id);
+    moveToTrash("job", "jobs", record, record?.customer);
     persistJobs(jobs.filter((j) => j.id !== id));
     setShowAddJob(null);
     setCardHistory([]);
@@ -4802,6 +4888,15 @@ function DispatcherApp() {
               askDelete(`náhradu checkera${s?.depo ? ` (${s.depo})` : ""}`, () => deleteCheckerSubstitution(id));
             }}
             onSave={persistDepoCheckers}
+          />
+        )}
+        {module === "administrativa" && view === "kos" && can(effectiveUser, "trash_view") && (
+          <TrashView
+            trash={trash}
+            currentUser={effectiveUser}
+            onRestore={restoreFromTrash}
+            onPermanentDelete={permanentlyDeleteFromTrash}
+            askDelete={askDelete}
           />
         )}
         {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
@@ -5978,6 +6073,39 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
   );
 }
 
+// Kôš — popisky typov záznamov a pravidlo, kto (podľa role) smie ktorý typ v
+// koši vidieť. Admin vidí úplne všetko (rovnaká výnimka ako inde v appke).
+// Zamestnanci sú špeciálny prípad — v koši sa ešte navyše delia podľa role,
+// akú mal ZMAZANÝ zamestnanec (vedúci servisu vidí zmazaných technikov,
+// vedúci požičovne zmazaných šoférov), nie podľa jedného spoločného typu.
+const TRASH_TYPE_LABELS = {
+  job: "Zákazka",
+  machine: "Stroj",
+  customer: "Zákazník",
+  reservation: "Rezervácia",
+  damage: "Poškodenie / externá zákazka",
+  employee: "Zamestnanec",
+  machineModel: "Model stroja",
+  framovaZmluva: "Rámcová zmluva",
+  blacklist: "Blacklist",
+  handoverProtocol: "Odovzdávací protokol",
+};
+function canSeeTrashEntry(entry, user) {
+  if (isAdminUser(user)) return true;
+  const role = user?.role;
+  if (role === "veduci_pozicovne" || role === "dispecer_pozicovne") {
+    if (["job", "machine", "customer", "reservation", "framovaZmluva", "blacklist", "handoverProtocol"].includes(entry.recordType)) return true;
+    if (entry.recordType === "employee" && ["sofer", "externy_sofer"].includes(entry.originalData?.role)) return true;
+    return false;
+  }
+  if (role === "veduci_servisu" || role === "dispecer_servisu") {
+    if (entry.recordType === "damage") return true;
+    if (entry.recordType === "employee" && entry.originalData?.role === "technik") return true;
+    return false;
+  }
+  return false;
+}
+
 const NOTIFICATION_KIND_LABELS = {
   reservation: "Nezáväzné rezervácie",
   daily_summary: "Denný súhrn",
@@ -6524,6 +6652,93 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
   );
 }
 
+// Kôš — zoznam zmazaného, obmedzený podľa segmentu role (viď
+// canSeeTrashEntry vyššie), s tým, kedy sa to samé natrvalo zmaže (30 dní).
+function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete }) {
+  const [typeFilter, setTypeFilter] = useState("all");
+  const visible = useMemo(() => {
+    return trash
+      .filter((t) => canSeeTrashEntry(t, currentUser))
+      .filter((t) => typeFilter === "all" || t.recordType === typeFilter)
+      .sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1)); // najnovšie hore
+  }, [trash, currentUser, typeFilter]);
+
+  const availableTypes = useMemo(() => {
+    const set = new Set(trash.filter((t) => canSeeTrashEntry(t, currentUser)).map((t) => t.recordType));
+    return [...set];
+  }, [trash, currentUser]);
+
+  function daysLeft(deletedAt) {
+    const deleted = new Date(deletedAt).getTime();
+    const purgeAt = deleted + 30 * 24 * 60 * 60 * 1000;
+    const daysRemaining = Math.max(0, Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000)));
+    return daysRemaining;
+  }
+
+  if (visible.length === 0 && typeFilter === "all") {
+    return (
+      <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
+        Kôš je prázdny.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <option value="all">Všetky typy</option>
+          {availableTypes.map((t) => (
+            <option key={t} value={t}>{TRASH_TYPE_LABELS[t] || t}</option>
+          ))}
+        </select>
+        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.
+        </div>
+      </div>
+      <div className="panel" style={{ overflowX: "auto" }}>
+        <table className="mono" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+              <th style={{ padding: 10 }}>Typ</th>
+              <th style={{ padding: 10 }}>Záznam</th>
+              <th style={{ padding: 10 }}>Kto zmazal</th>
+              <th style={{ padding: 10 }}>Kedy</th>
+              <th style={{ padding: 10 }}>Zostáva</th>
+              <th style={{ padding: 10 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((t) => (
+              <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ padding: 10, color: "var(--text-dim)" }}>{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
+                <td style={{ padding: 10, fontWeight: 600 }}>{t.label || "—"}</td>
+                <td style={{ padding: 10 }}>{t.deletedByName || "—"}</td>
+                <td style={{ padding: 10 }}>{fmtDate(t.deletedAt.slice(0, 10))}</td>
+                <td style={{ padding: 10, color: daysLeft(t.deletedAt) <= 3 ? "var(--danger)" : "var(--text-dim)" }}>
+                  {daysLeft(t.deletedAt)} {daysLeft(t.deletedAt) === 1 ? "deň" : daysLeft(t.deletedAt) < 5 ? "dni" : "dní"}
+                </td>
+                <td style={{ padding: 10, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => onRestore(t)}>
+                    Obnoviť
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12, color: "var(--danger)" }}
+                    onClick={() => askDelete(`natrvalo "${t.label}" z koša (toto sa už NEDÁ vrátiť späť)`, () => onPermanentDelete(t.id))}
+                  >
+                    Vymazať natrvalo
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, canEdit, recordLabel, customers, customerNameKey }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -6766,6 +6981,7 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     { id: "modely", label: "Modely strojov" },
     { id: "zamestnanci", label: "Zamestnanci" },
     { id: "checkeri", label: "Checkeri podľa depa" },
+    ...(can(effectiveUser, "trash_view") ? [{ id: "kos", label: "Kôš" }] : []),
     ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }] : []),
   ];
   const rawTabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
