@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.417";
+const APP_VERSION = "1.0.418";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11964,67 +11964,61 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   <div
                     key={j.id}
                     className="gantt-bar-wrap"
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
+                    onClick={() => onOpenJob(j)}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: "pointer" }}
                   >
+                    {/* Farebné pozadie zákazky — samostatne, vyplňuje presne
+                        šírku dní, čo zákazka trvá (overflow:hidden tu bráni
+                        len TOMUTO pozadiu vizuálne presahovať do susednej
+                        bunky). */}
                     <div
                       ref={measureBarRef}
                       data-bar-id={j.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenJob(j);
-                      }}
                       style={{
-                        width: "100%",
-                        height: "100%",
-                        display: "flex",
-                        alignItems: "center",
+                        position: "absolute",
+                        inset: 0,
                         background: bg,
                         opacity: isDone ? 0.45 : 1,
                         outline: isDone ? "none" : st === "overdue" ? "2px solid var(--danger)" : noEnd ? "2px dashed var(--warn)" : "none",
                         outlineOffset: !isDone && (st === "overdue" || noEnd) ? "-1px" : 0,
                         borderRadius: 4,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        minWidth: 0,
-                        maxWidth: "100%",
                         overflow: "hidden",
                         boxSizing: "border-box",
                       }}
+                    />
+                    {/* Popisok aj tooltip sú zámerne MIMO farebného pozadia
+                        vyššie (to má overflow:hidden) — keby boli vnútri,
+                        "lepenie" (position:sticky) by sa obmedzilo len na
+                        úzke hranice SAMOTNEJ zákazky (nie na celú viditeľnú
+                        obrazovku), takže by popisok pri scrollovaní "odišiel"
+                        za okraj skôr, než mal — presne to sa predtým dialo.
+                        Klik naň funguje aj tak, appka ho zachytí na CELOM
+                        obale vyššie (React udalosti "probublávajú" hore). */}
+                    <div
+                      className="gantt-cell"
+                      style={{
+                        position: "sticky",
+                        left: "calc(var(--gantt-name-col) + 6px)",
+                        width: "fit-content",
+                        fontSize: 10,
+                        color: "#fff",
+                        fontWeight: 600,
+                        pointerEvents: "none",
+                      }}
                     >
-                      <div
-                        className="gantt-cell"
-                        style={{
-                          position: "sticky",
-                          left: "calc(var(--gantt-name-col) + 6px)",
-                          width: "fit-content",
-                          fontSize: 10,
-                          color: "#fff",
-                        }}
-                      >
-                        {/* Orezanie textu (overflow:hidden) je na TOMTO vnútornom
-                            obale, nie na tom "lepiacom" (.gantt-cell) vyššie. */}
-                        <div style={{ maxWidth: Math.min(barWidths[j.id] || 100, 260), overflow: "hidden", padding: compactMode ? "1px 6px" : "3px 6px", lineHeight: 1.3 }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {compactMode && hasNote ? "📝 " : ""}
-                            {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
-                          </div>
-                          {showNote && (
-                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
-                              📝 {j.notes}
-                            </div>
-                          )}
+                      <div style={{ maxWidth: Math.min(barWidths[j.id] || 100, 260), overflow: "hidden", padding: compactMode ? "1px 6px" : "3px 6px", lineHeight: 1.3 }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {compactMode && hasNote ? "📝 " : ""}
+                          {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                         </div>
+                        {showNote && (
+                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 400, opacity: 0.85, fontSize: 9 }}>
+                            📝 {j.notes}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {/* Tooltip je zámerne MIMO obidvoch predošlých obalov (oba
-                        majú overflow:hidden — jeden kvôli tomu, aby zákazka
-                        nepresahovala do susednej bunky, druhý kvôli orezaniu
-                        textu), inak by ho to orezalo skôr, než by sa vôbec
-                        stihol ukázať. Vlastný "lepiaci" kotviaci bod (nulovej
-                        veľkosti) na tej istej polohe ako popisok zaisťuje, že
-                        aj tak sleduje viditeľnú časť pri scrollovaní — nie je
-                        viazaný na začiatok zákazky. */}
-                    <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible" }}>
+                    <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible", pointerEvents: "none" }}>
                       <div className="gantt-tooltip">
                         <div style={{ fontWeight: 600 }}>{isDone ? "UKONČENÁ · " : ""}{j.customer || "—"}</div>
                         <div>{fmtDate(j.startDate)} – {noEnd ? "bez určeného konca" : fmtDate(j.endDate)}</div>
@@ -12045,52 +12039,44 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   <div
                     key={r.id}
                     className="gantt-bar-wrap"
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch" }}
+                    onClick={() => onOpenReservation(r)}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: "pointer" }}
                   >
                     <div
                       ref={measureBarRef}
                       data-bar-id={"r-" + r.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenReservation(r);
-                      }}
                       style={{
-                        width: "100%",
-                        height: "100%",
-                        display: "flex",
-                        alignItems: "center",
+                        position: "absolute",
+                        inset: 0,
                         background: `repeating-linear-gradient(45deg, ${bg}, ${bg} 6px, rgba(0,0,0,.35) 6px, rgba(0,0,0,.35) 12px)`,
                         outline: "2px dashed var(--text-dim)",
                         outlineOffset: "-1px",
                         borderRadius: 4,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        minWidth: 0,
-                        maxWidth: "100%",
                         overflow: "hidden",
                         boxSizing: "border-box",
                         opacity: 0.85,
                       }}
+                    />
+                    <div
+                      className="gantt-cell"
+                      style={{
+                        position: "sticky",
+                        left: "calc(var(--gantt-name-col) + 6px)",
+                        width: "fit-content",
+                        fontSize: 10,
+                        color: "#fff",
+                        fontWeight: 600,
+                        textShadow: "0 1px 2px rgba(0,0,0,.6)",
+                        pointerEvents: "none",
+                      }}
                     >
-                      <div
-                        className="gantt-cell"
-                        style={{
-                          position: "sticky",
-                          left: "calc(var(--gantt-name-col) + 6px)",
-                          width: "fit-content",
-                          fontSize: 10,
-                          color: "#fff",
-                          textShadow: "0 1px 2px rgba(0,0,0,.6)",
-                        }}
-                      >
-                        <div style={{ maxWidth: Math.min(barWidths["r-" + r.id] || 100, 260), overflow: "hidden", padding: "3px 6px", lineHeight: 1.3 }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            📋 {r.customer}
-                          </div>
+                      <div style={{ maxWidth: Math.min(barWidths["r-" + r.id] || 100, 260), overflow: "hidden", padding: "3px 6px", lineHeight: 1.3 }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          📋 {r.customer}
                         </div>
                       </div>
                     </div>
-                    <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible" }}>
+                    <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible", pointerEvents: "none" }}>
                       <div className="gantt-tooltip">
                         <div style={{ fontWeight: 600 }}>REZERVÁCIA (nezáväzná) · {r.customer}</div>
                         <div>{fmtDate(r.expectedStart)} – {noEnd ? "?" : fmtDate(r.expectedEnd)}</div>
