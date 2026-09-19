@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.433";
+const APP_VERSION = "1.0.435";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2636,8 +2636,10 @@ function DispatcherApp() {
     }
     if (link.machineId) {
       const m = enrichedMachineById[link.machineId];
-      if (m) setMachineCard(m);
-      if (link.checklistAssignmentId) setMachineCardChecklistTarget(link.checklistAssignmentId);
+      if (m) {
+        setMachineCard(m);
+        if (link.checklistAssignmentId) setMachineCardChecklistTarget(link.checklistAssignmentId);
+      }
     }
     if (link.reservationId) {
       const r = reservations.find((x) => x.id === link.reservationId);
@@ -3250,7 +3252,9 @@ function DispatcherApp() {
       model: [machine.manufacturer, machine.type].filter(Boolean).join(" ") || machine.type || "—",
       serialNumber: machine.code || "",
       currentJobLabel: machine.currentJob ? (machine.currentJob.customer || machine.currentJob.toLocation || "") : "",
-      customerContact: kontakt !== undefined ? kontakt : (machine.currentJob?.customerEmail || ""),
+      // Kontakt pri nahlásení: zákazka najprv ukladá meno kontaktnej osoby a
+      // telefón (to servis pri poškodení potrebuje najviac), mail je len doplnok.
+      customerContact: kontakt !== undefined ? kontakt : ([machine.currentJob?.customerContactName, machine.currentJob?.customerPhone].filter(Boolean).join(" · ") || machine.currentJob?.customerEmail || ""),
       location: machine.currentJob?.toLocation || machine.depo || "",
       customer: machine.currentJob?.customer || "",
       obchodnik: machine.currentJob?.obchodnik || "", // uložené hneď teraz, nech sa dá spárovať aj keď sa zákazka medzitým zmení/skončí
@@ -11062,6 +11066,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
       ))}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Zákazník" value={job.customer} />
+        <CardField label="Kontaktná osoba" value={job.customerContactName} />
         <CardField
           label="Telefón zákazníka"
           value={job.customerPhone ? <a href={`tel:${job.customerPhone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerPhone}</a> : null}
@@ -11174,7 +11179,9 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+  );
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || (salespeople.some((s) => s.name === currentUser?.name) ? currentUser.name : ""));
@@ -11382,7 +11389,12 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
   const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  // Pri úprave existujúcej zákazky treba selectedCustomerId dopočítať hneď
+  // (podľa mena) — inak appka nevie, že zadané meno je už existujúci zákazník
+  // v databáze, a nová kontaktná osoba by sa k nemu neuložila.
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+  );
   const [selectedContacts, setSelectedContacts] = useState([]);
   // Kontakty pridané cez "+ Nová kontaktná osoba" pre ÚPLNE NOVÉHO zákazníka
   // (ešte nemá selectedCustomerId, takže sa nedajú uložiť rovno k nemu) — uložia
@@ -11391,6 +11403,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
   const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
+  const [customerContactName, setCustomerContactName] = useState(existing?.customerContactName || "");
   const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
   const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
   const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
@@ -11500,6 +11513,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
             onSelect={(k) => {
               if (k.phone) setCustomerPhone(k.phone);
               if (k.email) setCustomerEmail(k.email);
+              if (k.name) setCustomerContactName(k.name);
             }}
           />
           <BlacklistWarning match={blacklistMatch} />
@@ -11515,12 +11529,13 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
                 setSelectedContacts((prev) => [...prev, withId]);
                 if (contact.email) setCustomerEmail(contact.email);
                 if (contact.phone) setCustomerPhone(contact.phone);
+                if (contact.name) setCustomerContactName(contact.name);
               }}
             />
           )}
-          {(customerEmail || customerPhone) && (
+          {(customerContactName || customerPhone || customerEmail) && (
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-              Kontakt na zákazke: {customerEmail || "—"} · {customerPhone || "—"}
+              Kontakt na zákazke: {customerContactName || "—"} · {customerPhone || "—"}{customerEmail ? ` · ${customerEmail}` : ""}
             </div>
           )}
           <Field label="Začiatok *">
@@ -11623,6 +11638,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               customer: customer.trim(),
               customerEmail: customerEmail.trim(),
               customerPhone: customerPhone.trim(),
+              customerContactName: customerContactName.trim(),
               obchodnik: obchodnik || null,
               cisloZmluvy: cisloZmluvy.trim(),
               startDate,
@@ -14988,7 +15004,9 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
 function ReportExternalServiceModal({ existing, today, customers, blacklist, onSaveCustomer, onAddNewContact, onClose, onSave }) {
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+  );
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [location, setLocation] = useState(existing?.location || "");
   const [model, setModel] = useState(existing?.model || "");
