@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.432";
+const APP_VERSION = "1.0.433";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4319,12 +4319,21 @@ function DispatcherApp() {
       const changed = WATCHED_FIELDS.filter((f) => patch[f] !== undefined && patch[f] !== before[f]);
       if (changed.length > 0) {
         // Nepribaľuj sem notifikáciu niekomu, koho sme práve teraz (v tomto istom
-        // patchi) prvýkrát priradili — ten už dostal svoju vlastnú správu vyššie.
-        if (before.driverId && before.driverId !== patch.driverId) {
-          notifyDriver(before.driverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+        // patchi) prvýkrát priradili (na vývoz ALEBO zvoz) — ten už dostal svoju
+        // vlastnú správu vyššie. Predtým sa kontrolovalo len patch.driverId, takže
+        // šofér priradený v tom istom patchi na ZVOZ (napr. pri "Ukončiť zákazku",
+        // čo mení naraz aj returnDriverId aj endDate/returnDepo) dostal zbytočne
+        // obe správy naraz.
+        const justAssignedIds = new Set();
+        if (patch.driverId && patch.driverId !== before.driverId) justAssignedIds.add(patch.driverId);
+        if (patch.returnDriverId && patch.returnDriverId !== before.returnDriverId) justAssignedIds.add(patch.returnDriverId);
+        const finalDriverId = patch.driverId !== undefined ? patch.driverId : before.driverId;
+        const finalReturnDriverId = patch.returnDriverId !== undefined ? patch.returnDriverId : before.returnDriverId;
+        if (finalDriverId && !justAssignedIds.has(finalDriverId)) {
+          notifyDriver(finalDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
         }
-        if (before.returnDriverId && before.returnDriverId !== before.driverId && before.returnDriverId !== patch.returnDriverId) {
-          notifyDriver(before.returnDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+        if (finalReturnDriverId && finalReturnDriverId !== finalDriverId && !justAssignedIds.has(finalReturnDriverId)) {
+          notifyDriver(finalReturnDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
         }
       }
     }
