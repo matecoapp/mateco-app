@@ -76,9 +76,136 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
   );
 }
 
+const PORTAL_REQUEST_STATUS_LABEL = {
+  pending: { label: "Čaká na vybavenie", color: "#b07e00", bg: "#fff8e1" },
+  in_progress: { label: "V riešení", color: "#b07e00", bg: "#fff8e1" },
+  approved: { label: "Schválené", color: "#27500A", bg: "#eaf3de" },
+  resolved: { label: "Vyriešené", color: "#27500A", bg: "#eaf3de" },
+  rejected: { label: "Zamietnuté", color: "#c62828", bg: "#fdecea" },
+};
+
+function RequestForm({ type, jobLocked, onSubmit }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (jobLocked) {
+    return (
+      <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "8px 0" }}>
+        {type === "problem" ? "Problém je už nahlásený, čaká na vybavenie." : "Žiadosť o predĺženie už čaká na vybavenie."}
+      </div>
+    );
+  }
+
+  async function handleSubmit() {
+    setSending(true);
+    setError(null);
+    const ok = await onSubmit(type === "problem" ? message.trim() : null, type === "extension" ? endDate : null);
+    setSending(false);
+    if (ok) {
+      setOpen(false);
+      setMessage("");
+      setEndDate("");
+    } else {
+      setError("Nepodarilo sa odoslať. Skúste to prosím neskôr.");
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{ width: "100%", padding: "9px 12px", borderRadius: 6, border: "1px solid #B3131D", background: "#fff", color: "#B3131D", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+      >
+        {type === "problem" ? "Nahlásiť problém so strojom" : "Požiadať o predĺženie"}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: 10 }}>
+      {type === "problem" ? (
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          rows={3}
+          placeholder="Čo presne sa deje…"
+          style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
+        />
+      ) : (
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
+        />
+      )}
+      {error && <div style={{ fontSize: 12, color: "#c62828", marginBottom: 8 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={handleSubmit}
+          disabled={sending || (type === "problem" ? !message.trim() : !endDate)}
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "none", background: "#B3131D", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: sending ? 0.6 : 1 }}
+        >
+          {sending ? "Odosielam…" : "Odoslať"}
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", color: "#3d3d3d", fontSize: 13, cursor: "pointer" }}
+        >
+          Zrušiť
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RequestHistory({ requests }) {
+  if (!requests || requests.length === 0) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 6 }}>Vaše žiadosti</div>
+      {requests.map((r, i) => {
+        const st = PORTAL_REQUEST_STATUS_LABEL[r.status] || PORTAL_REQUEST_STATUS_LABEL.pending;
+        return (
+          <div key={i} style={{ border: "1px solid #eee", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o predĺženie do ${fmtDate(r.requestedEndDate)}`}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
+            </div>
+            {r.type === "problem" && <div style={{ fontSize: 12, color: "#6b6b6b", marginTop: 2 }}>{r.message}</div>}
+            {r.responseNote && <div style={{ fontSize: 12, color: "#6b6b6b", marginTop: 2 }}>{r.responseNote}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CustomerPortal({ token }) {
   const [state, setState] = useState("loading"); // loading | ok | invalid | error
   const [data, setData] = useState(null);
+
+  async function submitRequest(message, requestedEndDate) {
+    const type = requestedEndDate ? "extension" : "problem";
+    const { data: result, error } = await supabase.rpc("submit_portal_request", {
+      p_token: token,
+      p_type: type,
+      p_message: message,
+      p_requested_end_date: requestedEndDate || null,
+    });
+    if (error || !result?.ok) {
+      console.error("submit_portal_request zlyhalo", error, result);
+      return false;
+    }
+    const { data: fresh } = await supabase.rpc("get_portal_job", { p_token: token });
+    if (fresh) setData(fresh);
+    return true;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -164,6 +291,21 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
+              {!data.returnDone && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                  <RequestForm
+                    type="problem"
+                    jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
+                    onSubmit={submitRequest}
+                  />
+                  <RequestForm
+                    type="extension"
+                    jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
+                    onSubmit={submitRequest}
+                  />
+                </div>
+              )}
+
               <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Kontakty</div>
               {data.salespersonName && (
                 <div style={{ marginBottom: 10 }}>
@@ -215,6 +357,7 @@ export default function CustomerPortal({ token }) {
                   driverSig={data.returnDriverSignature}
                 />
               )}
+              <RequestHistory requests={data.requests} />
             </div>
           </div>
         )}
