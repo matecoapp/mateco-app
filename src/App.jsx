@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.425";
+const APP_VERSION = "1.0.426";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5538,6 +5538,7 @@ function DispatcherApp() {
           history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
           jobs={jobs}
           handoverProtocols={handoverProtocols}
+          assignments={assignments}
           protocolLogs={protocolLogs}
           myEmployee={myEmployee}
           user={effectiveUser}
@@ -6164,23 +6165,23 @@ function DispatcherApp() {
       {checkerInspectionTarget && (() => {
         const job = jobs.find((j) => j.id === checkerInspectionTarget.jobId);
         const machine = job ? enrichedMachineById[job.machineId] : null;
-        const existingProtocol = job ? handoverProtocols.find((h) => h.jobId === job.id) : null;
+        // Pozor: kontrola checkera sa NESMIE ukladať do handoverProtocols — tá
+        // tabuľka je pre appku signál "odovzdanie/vrátenie už prebehlo" (viaceré
+        // miesta v appke berú existenciu záznamu ako hotové prevzatie). Kontrola
+        // prebieha PRED vývozom, teda skôr než čokoľvek z toho — žije preto priamo
+        // na assignments zázname (checklist/checkerPhotos/checkerBy/checkerDate).
+        const handoverForJob = job ? handoverProtocols.find((h) => h.jobId === job.id) : null;
         return (
           <CheckerInspectionModal
             assignment={checkerInspectionTarget}
             job={job}
             machine={machine}
-            existing={existingProtocol}
+            handoverDone={!!handoverForJob?.handoverDone}
             myEmployee={myEmployee}
             user={effectiveUser}
             onClose={() => setCheckerInspectionTarget(null)}
             onSave={(patch) => {
-              if (existingProtocol) {
-                persistHandoverProtocols(handoverProtocols.map((h) => (h.id === existingProtocol.id ? { ...h, ...patch } : h)));
-              } else if (job) {
-                persistHandoverProtocols([...handoverProtocols, { id: uid(), jobId: job.id, machineId: job.machineId, createdAt: new Date().toISOString(), ...patch }]);
-              }
-              persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, resolved: true } : a)));
+              persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, resolved: true } : a)));
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
               if (hasProblem && job) {
                 pushNotification({
@@ -10800,22 +10801,23 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
 // Kontrola stroja checkerom v depe, PRED vývozom k zákazníkovi — samostatný krok
 // pred šoférovým "prevzatím" (HandoverProtocolModal). Ukladá fotky a kontrolný
-// zoznam do TOHO ISTÉHO záznamu v handoverProtocols (checker* polia), aby sa dal
-// neskôr porovnať so stavom pri zvoze (returnPhotos vo fáze "vrátenie").
-function CheckerInspectionModal({ assignment, job, machine, existing, myEmployee, user, onClose, onSave }) {
+// zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
+// v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
+// skôr než čokoľvek z toho).
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmployee, user, onClose, onSave }) {
   const [checklist, setChecklist] = useState(() =>
-    existing?.checklist
-      ? existing.checklist.map((it) => ({ ...it, checkerStatus: it.checkerStatus ?? null, checkerNote: it.checkerNote ?? "" }))
-      : HANDOVER_CHECKLIST_ITEMS.map(() => ({ handoverStatus: null, handoverNote: "", returnStatus: null, returnNote: "", checkerStatus: null, checkerNote: "" }))
+    assignment.checklist
+      ? assignment.checklist.map((it) => ({ ...it, checkerStatus: it.checkerStatus ?? null, checkerNote: it.checkerNote ?? "" }))
+      : HANDOVER_CHECKLIST_ITEMS.map(() => ({ checkerStatus: null, checkerNote: "" }))
   );
-  const [photos, setPhotos] = useState(existing?.checkerPhotos || []);
+  const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
   // Upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi (prevzatie v
   // odovzdávacom protokole) — dovtedy si checker vie kontrolu kedykoľvek
   // doplniť/opraviť, aj keď ju už raz odoslal (assignment.resolved je len
   // vizuálna fajočka v pláne, neuzamyká to).
-  const readOnly = !!existing?.handoverDone;
+  const readOnly = !!handoverDone;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -10847,7 +10849,7 @@ function CheckerInspectionModal({ assignment, job, machine, existing, myEmployee
       checklist,
       checkerPhotos: photos,
       checkerBy: myEmployee?.name || user?.name || "",
-      checkerDate: existing?.checkerDate || todayISO(),
+      checkerDate: assignment.checkerDate || todayISO(),
     });
   }
 
@@ -13342,7 +13344,7 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, assignments, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "kontroly"
   const [expandedChecklistId, setExpandedChecklistId] = useState(null); // id kontroly, ktorej checklist je práve rozbalený
@@ -13355,15 +13357,15 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
-  // Kontroly stroja (checker pred vývozom + fotky šoféra pri vrátení) — žijú na
-  // handoverProtocols zázname zákazky, tu ich len dohľadáme podľa machineId zákazky.
-  const machineInspections = (handoverProtocols || [])
-    .filter((h) => {
-      const j = (jobs || []).find((x) => x.id === h.jobId);
-      const hasChecklist = (h.checklist || []).some((it) => it.checkerStatus);
-      return j && j.machineId === m.id && (hasChecklist || (h.checkerPhotos && h.checkerPhotos.length) || (h.returnPhotos && h.returnPhotos.length));
+  // Kontroly stroja: checklist + fotky pred vývozom žijú na assignments zázname
+  // (kind: "kontrolaStroja"), fotky po vrátení na handoverProtocols zázname tej
+  // istej zákazky — spojíme ich cez jobId.
+  const machineInspections = (assignments || [])
+    .filter((a) => a.kind === "kontrolaStroja" && a.machineId === m.id && (a.checklist || a.checkerPhotos))
+    .map((a) => {
+      const hp = (handoverProtocols || []).find((h) => h.jobId === a.jobId);
+      return { ...a, returnPhotos: hp?.returnPhotos || [], job: (jobs || []).find((x) => x.id === a.jobId) };
     })
-    .map((h) => ({ ...h, job: (jobs || []).find((x) => x.id === h.jobId) }))
     .sort((a, b) => ((a.checkerDate || "") < (b.checkerDate || "") ? 1 : -1));
   const matchedModel = isStroj
     ? (machineModels || []).find((mm) => (mm.name || "").trim().toLowerCase() === (m.type || "").trim().toLowerCase())
