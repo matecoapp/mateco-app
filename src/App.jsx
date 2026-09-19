@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.424";
+const APP_VERSION = "1.0.425";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3395,6 +3395,9 @@ function DispatcherApp() {
   function setDamageNote(id, note) {
     persistDamages(damages.map((d) => (d.id === id ? { ...d, poznamkaDispecera: note } : d)));
   }
+  function setDamageContact(id, customerContact) {
+    persistDamages(damages.map((d) => (d.id === id ? { ...d, customerContact } : d)));
+  }
   function setDamageResolved(id, resolved) {
     persistDamages(damages.map((d) => (d.id === id ? { ...d, resolved } : d)));
   }
@@ -5790,6 +5793,10 @@ function DispatcherApp() {
             setDamageNote(id, note);
             setServiceEventDetail((prev) => (prev ? { ...prev, poznamkaDispecera: note } : prev));
           }}
+          onSaveContact={(id, contact) => {
+            setDamageContact(id, contact);
+            setServiceEventDetail((prev) => (prev ? { ...prev, customerContact: contact } : prev));
+          }}
         />
       )}
       {damagesSummaryOpen && (
@@ -6174,6 +6181,16 @@ function DispatcherApp() {
                 persistHandoverProtocols([...handoverProtocols, { id: uid(), jobId: job.id, machineId: job.machineId, createdAt: new Date().toISOString(), ...patch }]);
               }
               persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, resolved: true } : a)));
+              const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
+              if (hasProblem && job) {
+                pushNotification({
+                  kind: "damage_new",
+                  roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"],
+                  title: "Checker našiel problém pri kontrole pred vývozom",
+                  message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola pred vývozom zaznamenala problém, skontrolujte pred odovzdaním.`,
+                  link: { module: "poziciovna", view: "jobs", jobId: job.id },
+                });
+              }
               setCheckerInspectionTarget(null);
             }}
           />
@@ -10747,7 +10764,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
               </div>
             ))}
           </div>
-          <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => { handleReturnPhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
+          <input type="file" accept="image/*" multiple onChange={(e) => { handleReturnPhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
           <div style={{ marginBottom: 14 }} />
@@ -10923,7 +10940,7 @@ function CheckerInspectionModal({ assignment, job, machine, existing, myEmployee
       </div>
       {!readOnly && (
         <>
-          <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
+          <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
         </>
@@ -11383,7 +11400,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   // nie len upozornenie.
   const pendingPrep = machineId ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
 
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && startDate && !conflict && !pendingPrep;
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && obchodnik && startDate && !conflict && !pendingPrep;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -11483,7 +11500,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
             />
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
           </Field>
-          <Field label="Obchodník">
+          <Field label="Obchodník *">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {obchodnik && (
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
@@ -13327,7 +13344,8 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
 --------------------------------------------------------- */
 function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
   const m = machine;
-  const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom"
+  const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "kontroly"
+  const [expandedChecklistId, setExpandedChecklistId] = useState(null); // id kontroly, ktorej checklist je práve rozbalený
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol z "Ostatné protokoly", ktorý sa práve prideľuje ku zákazke
   const notTracked = m.trackRevisions === false;
@@ -13342,7 +13360,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const machineInspections = (handoverProtocols || [])
     .filter((h) => {
       const j = (jobs || []).find((x) => x.id === h.jobId);
-      return j && j.machineId === m.id && ((h.checkerPhotos && h.checkerPhotos.length) || (h.returnPhotos && h.returnPhotos.length));
+      const hasChecklist = (h.checklist || []).some((it) => it.checkerStatus);
+      return j && j.machineId === m.id && (hasChecklist || (h.checkerPhotos && h.checkerPhotos.length) || (h.returnPhotos && h.returnPhotos.length));
     })
     .map((h) => ({ ...h, job: (jobs || []).find((x) => x.id === h.jobId) }))
     .sort((a, b) => ((a.checkerDate || "") < (b.checkerDate || "") ? 1 : -1));
@@ -13539,6 +13558,23 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
                 {h.job?.customer || "—"} · {h.job?.startDate ? fmtDate(h.job.startDate) : "—"}
               </div>
+              {(h.checklist || []).some((it) => it.checkerStatus) && (
+                <div style={{ marginBottom: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: "3px 8px" }}
+                    onClick={() => setExpandedChecklistId(expandedChecklistId === h.id ? null : h.id)}
+                  >
+                    {expandedChecklistId === h.id ? "Skryť checklist" : "Zobraziť checklist"}
+                  </button>
+                  {expandedChecklistId === h.id && (
+                    <div style={{ marginTop: 8 }}>
+                      <HandoverProtocolChecklistRecap checklist={h.checklist || []} statusKey="checkerStatus" noteKey="checkerNote" />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
@@ -13993,7 +14029,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
+function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -14012,8 +14048,11 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     : "Poškodenie stroja požičovne";
   const [noteDraft, setNoteDraft] = useState(d.poznamkaDispecera || "");
   const [noteEditing, setNoteEditing] = useState(false);
+  const [contactDraft, setContactDraft] = useState(d.customerContact || "");
+  const [contactEditing, setContactEditing] = useState(false);
   const [showAssignProtocolPicker, setShowAssignProtocolPicker] = useState(false);
   const canEditNote = !isSimple && onSaveNote && (can(user, "damage_status") || can(user, "external_status"));
+  const canEditContact = !isSimple && onSaveContact && (can(user, "damage_status") || can(user, "external_status"));
   const unassignedProtocolsForMachine = d.machineId
     ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && !p.damageId && !p.assignmentId)
     : [];
@@ -14087,6 +14126,40 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Čo sa zistilo / vykonalo ({d.opravaDatum ? fmtDate(d.opravaDatum) : "—"})</div>
           <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.opravaKomentar || "—"}</div>
         </>
+      )}
+      {!isSimple && (
+        <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "var(--panel-2)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Kontakt na zákazníka</div>
+            {canEditContact && !contactEditing && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => { setContactDraft(d.customerContact || ""); setContactEditing(true); }}>
+                {d.customerContact ? "Upraviť" : "+ Pridať kontakt"}
+              </button>
+            )}
+          </div>
+          {contactEditing ? (
+            <>
+              <input
+                value={contactDraft}
+                onChange={(e) => setContactDraft(e.target.value)}
+                placeholder="Meno, telefón alebo email kontaktnej osoby"
+                style={{ width: "100%" }}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button
+                  className="btn btn-accent"
+                  onClick={() => { onSaveContact(d.id, contactDraft.trim()); setContactEditing(false); }}
+                >
+                  Uložiť
+                </button>
+                <button className="btn btn-ghost" onClick={() => setContactEditing(false)}>Zrušiť</button>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13 }}>{d.customerContact || "—"}</div>
+          )}
+        </div>
       )}
       {!isSimple && (
         <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "var(--panel-2)" }}>
