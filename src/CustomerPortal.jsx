@@ -214,25 +214,44 @@ export default function CustomerPortal({ token }) {
     return true;
   }
 
+  // Statická stránka bez prihlásenia nemá prístup k Supabase Realtime (tabuľky
+  // jobs/portal_requests majú RLS len pre prihlásených zamestnancov) — dispečerova
+  // zmena (schválenie predĺženia, odpoveď na hlásenie) by sa tu inak objavila až
+  // po manuálnom obnovení stránky. Namiesto toho stránka periodicky dočíta stav
+  // znova (a aj hneď po návrate na kartu, keby ju mal zákazník dlho otvorenú
+  // v inej záložke).
   useEffect(() => {
     let cancelled = false;
-    supabase
-      .rpc("get_portal_job", { p_token: token })
-      .then(({ data: result, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("get_portal_job zlyhalo", error);
-          setState("error");
-          return;
-        }
-        if (!result) {
-          setState("invalid");
-          return;
-        }
-        setData(result);
-        setState("ok");
-      });
-    return () => { cancelled = true; };
+    function refetch(showLoading) {
+      if (showLoading) setState("loading");
+      supabase
+        .rpc("get_portal_job", { p_token: token })
+        .then(({ data: result, error }) => {
+          if (cancelled) return;
+          if (error) {
+            console.error("get_portal_job zlyhalo", error);
+            if (showLoading) setState("error");
+            return;
+          }
+          if (!result) {
+            if (showLoading) setState("invalid");
+            return;
+          }
+          setData(result);
+          setState("ok");
+        });
+    }
+    refetch(true);
+    const interval = setInterval(() => refetch(false), 20000);
+    function onVisible() {
+      if (document.visibilityState === "visible") refetch(false);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [token]);
 
   return (
