@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.422";
+const APP_VERSION = "1.0.423";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2471,7 +2471,10 @@ function DispatcherApp() {
   }
 
   // Nájde/založí zákazníka podľa názvu firmy (case-insensitive) a doplní/aktualizuje kontaktné údaje.
-  function upsertCustomer({ firma, cisloOdberatela, ico, kontakt, email, telefon }) {
+  // contacts: voliteľné, len pre kontaktné osoby pridané cez "+ Nová kontaktná
+  // osoba" ešte predtým, než mal zákazník vlastné ID (nový zákazník na zákazke) —
+  // pre už existujúceho zákazníka sa dopĺňajú (nie prepíšu) k tým, čo už má.
+  function upsertCustomer({ firma, cisloOdberatela, ico, kontakt, email, telefon, contacts }) {
     if (!firma || !firma.trim()) return;
     const name = firma.trim();
     const existing = customers.find((c) => c.firma.toLowerCase() === name.toLowerCase());
@@ -2486,6 +2489,7 @@ function DispatcherApp() {
                 kontakt: kontakt || c.kontakt,
                 email: email || c.email,
                 telefon: telefon || c.telefon,
+                contacts: contacts && contacts.length ? [...(c.contacts || []), ...contacts] : c.contacts,
                 updatedAt: new Date().toISOString(),
               }
             : c
@@ -2502,6 +2506,7 @@ function DispatcherApp() {
           kontakt: kontakt || "",
           email: email || "",
           telefon: telefon || "",
+          contacts: contacts || [],
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -3975,6 +3980,13 @@ function DispatcherApp() {
         prepCheck: true,
       };
       persistDamages([...damages, record]);
+      pushNotification({
+        kind: "damage_new",
+        roles: ["dispecer_servisu", "veduci_servisu"],
+        title: "Nový stroj čaká na prípravu do požičovne",
+        message: `Stroj ${machine.code}${machine.type ? " (" + machine.type + ")" : ""} treba pripraviť do požičovne, kým to nebude hotové, nedá sa naň založiť zákazka.`,
+        link: { module: "servis", view: "poskodenia", damageId: record.id },
+      });
     }
     setShowAddMachine(null);
   }
@@ -5263,6 +5275,7 @@ function DispatcherApp() {
           salespeople={salespeople}
           onSaveCustomer={upsertCustomer}
           onAddNewContact={addCustomerContact}
+          prefillMachineId={showAddJob.machineId}
           prefillStartDate={showAddJob.startDate}
           prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
@@ -11301,6 +11314,10 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedContacts, setSelectedContacts] = useState([]);
+  // Kontakty pridané cez "+ Nová kontaktná osoba" pre ÚPLNE NOVÉHO zákazníka
+  // (ešte nemá selectedCustomerId, takže sa nedajú uložiť rovno k nemu) — uložia
+  // sa až pri vytvorení zákazky, spolu so samotným zákazníkom (onSaveCustomer).
+  const [pendingContacts, setPendingContacts] = useState([]);
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
   const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
@@ -11416,8 +11433,25 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
             }}
           />
           <BlacklistWarning match={blacklistMatch} />
-          {selectedCustomerId && onAddNewContact && (
-            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
+          {customer.trim() && (
+            <NewContactInlineForm
+              onSave={(contact) => {
+                const withId = { id: uid(), ...contact };
+                if (selectedCustomerId && onAddNewContact) {
+                  onAddNewContact(selectedCustomerId, contact);
+                } else {
+                  setPendingContacts((prev) => [...prev, withId]);
+                }
+                setSelectedContacts((prev) => [...prev, withId]);
+                if (contact.email) setCustomerEmail(contact.email);
+                if (contact.phone) setCustomerPhone(contact.phone);
+              }}
+            />
+          )}
+          {(customerEmail || customerPhone) && (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+              Kontakt na zákazke: {customerEmail || "—"} · {customerPhone || "—"}
+            </div>
           )}
           <Field label="Začiatok *">
             <input
@@ -11436,8 +11470,6 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
             />
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
           </Field>
-          <Field label="Email zákazníka"><input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-          <Field label="Telefón zákazníka"><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: "100%" }} /></Field>
           <Field label="Obchodník">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {obchodnik && (
@@ -11510,7 +11542,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
           disabled={!canSave}
           onClick={() => {
             if (saveCustomer && customer.trim()) {
-              onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim(), telefon: customerPhone.trim() });
+              onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim(), telefon: customerPhone.trim(), contacts: pendingContacts });
             }
             onSave({
               machineId,
