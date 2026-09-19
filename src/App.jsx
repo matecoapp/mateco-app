@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.423";
+const APP_VERSION = "1.0.424";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10794,7 +10794,11 @@ function CheckerInspectionModal({ assignment, job, machine, existing, myEmployee
   const [photos, setPhotos] = useState(existing?.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
-  const readOnly = !!assignment.resolved;
+  // Upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi (prevzatie v
+  // odovzdávacom protokole) — dovtedy si checker vie kontrolu kedykoľvek
+  // doplniť/opraviť, aj keď ju už raz odoslal (assignment.resolved je len
+  // vizuálna fajočka v pláne, neuzamyká to).
+  const readOnly = !!existing?.handoverDone;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -10925,6 +10929,11 @@ function CheckerInspectionModal({ assignment, job, machine, existing, myEmployee
         </>
       )}
 
+      {readOnly && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
+          Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať.
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
         {readOnly ? (
           <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
@@ -10999,6 +11008,10 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <CardField
           label="Telefón zákazníka"
           value={job.customerPhone ? <a href={`tel:${job.customerPhone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerPhone}</a> : null}
+        />
+        <CardField
+          label="Email zákazníka"
+          value={job.customerEmail ? <a href={`mailto:${job.customerEmail}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerEmail}</a> : null}
         />
         <CardField label="Stav" value={{ overdue: "Po termíne", active: "Na zákazke", planned: "Naplánovaná", completed: "Ukončená" }[st]} danger={st === "overdue"} />
         <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
@@ -13324,6 +13337,15 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
+  // Kontroly stroja (checker pred vývozom + fotky šoféra pri vrátení) — žijú na
+  // handoverProtocols zázname zákazky, tu ich len dohľadáme podľa machineId zákazky.
+  const machineInspections = (handoverProtocols || [])
+    .filter((h) => {
+      const j = (jobs || []).find((x) => x.id === h.jobId);
+      return j && j.machineId === m.id && ((h.checkerPhotos && h.checkerPhotos.length) || (h.returnPhotos && h.returnPhotos.length));
+    })
+    .map((h) => ({ ...h, job: (jobs || []).find((x) => x.id === h.jobId) }))
+    .sort((a, b) => ((a.checkerDate || "") < (b.checkerDate || "") ? 1 : -1));
   const matchedModel = isStroj
     ? (machineModels || []).find((mm) => (mm.name || "").trim().toLowerCase() === (m.type || "").trim().toLowerCase())
     : null;
@@ -13495,7 +13517,66 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             História požičania ({jobs.filter((j) => j.machineId === m.id).length})
           </button>
         )}
+        {machineInspections.length > 0 && (
+          <button
+            className="btn"
+            onClick={() => setExpandedSection(expandedSection === "kontroly" ? null : "kontroly")}
+            style={{
+              background: expandedSection === "kontroly" ? "var(--accent)" : "transparent",
+              color: expandedSection === "kontroly" ? "#fff" : "var(--text)",
+              border: "1px solid " + (expandedSection === "kontroly" ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            Kontroly stroja ({machineInspections.length})
+          </button>
+        )}
       </div>
+
+      {expandedSection === "kontroly" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {machineInspections.map((h) => (
+            <div key={h.id} className="panel" style={{ padding: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+                {h.job?.customer || "—"} · {h.job?.startDate ? fmtDate(h.job.startDate) : "—"}
+              </div>
+              <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+                    Pred vývozom{h.checkerBy ? ` — ${h.checkerBy}` : ""}
+                  </div>
+                  {h.checkerPhotos && h.checkerPhotos.length > 0 ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {h.checkerPhotos.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt="Foto pred vývozom" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+                    Po vrátení
+                  </div>
+                  {h.returnPhotos && h.returnPhotos.length > 0 ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {h.returnPhotos.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt="Foto po vrátení" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {expandedSection === "servis" && (
         <div>
@@ -15854,8 +15935,8 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
               <div key={a.id} style={{ fontSize: 12, paddingLeft: 8, borderLeft: "2px solid var(--border)" }}>
                 <span className="mono" style={{ fontWeight: 600 }}>{fmtDate(a.date)}</span>
                 {" · "}
-                <span style={{ fontWeight: 600 }}>{a.kind === "kontrolaStroja" ? "Kontrola stroja" : (machine?.code || a.stroj || "— stroj neurčený —")}</span>
-                <span style={{ color: "var(--text-dim)" }}>{(machineCurrentLocation(machine) || a.umiestnenie) ? " · " + (machineCurrentLocation(machine) || a.umiestnenie) : ""}{a.firma ? " · " + a.firma : ""}</span>
+                <span style={{ fontWeight: 600 }}>{a.kind === "kontrolaStroja" ? `Kontrola stroja${machine?.code ? " — " + machine.code : ""}` : (machine?.code || a.stroj || "— stroj neurčený —")}</span>
+                <span style={{ color: "var(--text-dim)" }}>{a.kind === "kontrolaStroja" && machine?.type ? " · " + machine.type : (machineCurrentLocation(machine) || a.umiestnenie) ? " · " + (machineCurrentLocation(machine) || a.umiestnenie) : ""}{a.firma ? " · " + a.firma : ""}</span>
               </div>
             );
           })}
@@ -16261,11 +16342,11 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
                           const isCheckerInspection = a.kind === "kontrolaStroja";
                           const bg = quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
-                          const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? (a.resolved ? "✓ Kontrola stroja" : "Kontrola stroja") : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
+                          const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = a.kind === "udalost"
                             ? (a.poznamka || "Udalosť")
                             : isCheckerInspection
-                            ? (a.resolved ? "✓ Kontrola stroja" : "Kontrola stroja")
+                            ? `Kontrola stroja pred vývozom — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
                             : quickKind
                             ? quickKind.label
                             : `${machine?.code || a.stroj || "—"} · ${machineCurrentLocation(machine) || a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}`;
