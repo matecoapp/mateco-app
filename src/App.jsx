@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.430";
+const APP_VERSION = "1.0.431";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3465,7 +3465,11 @@ function DispatcherApp() {
   // po jeho vyriešení (pozri resolveDamage vyššie) vrátiť stav naspäť zákazníkovi.
   function convertPortalRequestToDamage(request) {
     const machine = enrichedMachineById[request.machineId];
-    if (!machine) return;
+    if (!machine) {
+      console.error("convertPortalRequestToDamage: stroj sa nenašiel", request);
+      alert("Stroj z tejto žiadosti sa nenašiel (možno bol medzitým zmazaný). Skontrolujte konzolu.");
+      return;
+    }
     const damageRecord = {
       id: uid(),
       type: "poskodenie",
@@ -3489,6 +3493,14 @@ function DispatcherApp() {
     persistPortalRequests(
       portalRequests.map((r) => (r.id === request.id ? { ...r, status: "in_progress", linkedDamageId: damageRecord.id } : r))
     );
+    pushNotification({
+      kind: "damage_new",
+      roles: ["dispecer_servisu", "veduci_servisu"],
+      userName: damageRecord.obchodnik || null,
+      title: "Nové poškodenie (z portálu)",
+      message: `Založené z hlásenia zákazníka: stroj ${machine.code}${damageRecord.customer ? " u zákazníka " + damageRecord.customer : ""} — „${request.message}“.`,
+      link: { module: "servis", view: "poskodenia", damageId: damageRecord.id },
+    });
   }
   function rejectPortalRequest(request, note) {
     persistPortalRequests(

@@ -298,6 +298,8 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
+              <RequestHistory requests={data.requests} />
+
               {!data.returnDone && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
                   <RequestForm
@@ -364,7 +366,6 @@ export default function CustomerPortal({ token }) {
                   driverSig={data.returnDriverSignature}
                 />
               )}
-              <RequestHistory requests={data.requests} />
             </div>
           </div>
         )}
