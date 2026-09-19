@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.435";
+const APP_VERSION = "1.0.436";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -14070,7 +14070,9 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
 
 function DamageReportModal({ machine, today, onClose, onSave }) {
   const [popis, setPopis] = useState("");
-  const [kontakt, setKontakt] = useState(machine.currentJob?.customerEmail || "");
+  const [kontakt, setKontakt] = useState(
+    () => [machine.currentJob?.customerContactName, machine.currentJob?.customerPhone].filter(Boolean).join(" · ") || machine.currentJob?.customerEmail || ""
+  );
   const model = [machine.manufacturer, machine.type].filter(Boolean).join(" ") || machine.type || "—";
   const zakazka = machine.currentJob ? (machine.currentJob.customer || machine.currentJob.toLocation || "—") : "— voľný —";
   const existing = machine.hasOpenDamage ? machine.openDamage : null;
