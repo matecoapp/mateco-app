@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.428";
+const APP_VERSION = "1.0.429";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10434,7 +10434,6 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Fotky stavu stroja pri zvoze od zákazníka (len fáza "vrátenie") — porovnanie
   // s fotkami checkera z vývozu (kontrola stroja pred vývozom).
   const [returnPhotos, setReturnPhotos] = useState(existing?.returnPhotos || []);
-  const [showReturnCamera, setShowReturnCamera] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
   async function handleReturnPhotoFiles(files) {
@@ -10770,18 +10769,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-            <button type="button" className="btn btn-ghost" onClick={() => setShowReturnCamera(true)}>📷 Fotiť</button>
-            <input type="file" accept="image/*" multiple onChange={(e) => { handleReturnPhotoFiles(e.target.files); e.target.value = ""; }} />
-          </div>
+          <input type="file" accept="image/*" multiple onChange={(e) => { handleReturnPhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
-          {showReturnCamera && (
-            <InlineCameraCapture
-              onCapture={(blob) => handleReturnPhotoFiles([blob])}
-              onClose={() => setShowReturnCamera(false)}
-            />
-          )}
           <div style={{ marginBottom: 14 }} />
         </>
       )}
@@ -10813,59 +10803,6 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   );
 }
 
-// Fotoaparát priamo v stránke (getUserMedia) — na rozdiel od <input capture>
-// zostáva otvorený medzi zábermi, takže sa dá odfotiť viac fotiek za sebou bez
-// opakovaného otvárania/zatvárania natívneho foťáka.
-function InlineCameraCapture({ onCapture, onClose }) {
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const [error, setError] = useState("");
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    navigator.mediaDevices
-      ?.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then((stream) => {
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      })
-      .catch(() => setError("Nepodarilo sa spustiť fotoaparát. Skúste vybrať fotky z galérie."));
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-  function shoot() {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (blob) { onCapture(blob); setCount((n) => n + 1); }
-    }, "image/jpeg", 0.9);
-  }
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 4000, display: "flex", flexDirection: "column" }}>
-      {error ? (
-        <div style={{ color: "#fff", padding: 20, fontSize: 14 }}>{error}</div>
-      ) : (
-        <video ref={videoRef} autoPlay playsInline muted style={{ flex: 1, width: "100%", objectFit: "cover" }} />
-      )}
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 20, padding: 16, background: "#000" }}>
-        <button type="button" className="btn" onClick={onClose} style={{ color: "#fff", borderColor: "#666" }}>
-          Hotovo{count > 0 ? ` (${count})` : ""}
-        </button>
-        {!error && (
-          <button type="button" onClick={shoot} aria-label="Odfotiť" style={{ width: 64, height: 64, borderRadius: "50%", background: "#fff", border: "4px solid #999", cursor: "pointer" }} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Kontrola stroja checkerom v depe, PRED vývozom k zákazníkovi — samostatný krok
 // pred šoférovým "prevzatím" (HandoverProtocolModal). Ukladá fotky a kontrolný
 // zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
@@ -10880,7 +10817,6 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
-  const [showCamera, setShowCamera] = useState(false);
   // Upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi (prevzatie v
   // odovzdávacom protokole) — dovtedy si checker vie kontrolu kedykoľvek
   // doplniť/opraviť, aj keď ju už raz odoslal (assignment.resolved je len
@@ -11010,18 +10946,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       </div>
       {!readOnly && (
         <>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-            <button type="button" className="btn btn-ghost" onClick={() => setShowCamera(true)}>📷 Fotiť</button>
-            <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} />
-          </div>
+          <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
-          {showCamera && (
-            <InlineCameraCapture
-              onCapture={(blob) => handlePhotoFiles([blob])}
-              onClose={() => setShowCamera(false)}
-            />
-          )}
         </>
       )}
 
@@ -13425,6 +13352,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "kontroly"
   const [expandedChecklistId, setExpandedChecklistId] = useState(null); // id kontroly, ktorej checklist je práve rozbalený
+  const [expandedReturnChecklistId, setExpandedReturnChecklistId] = useState(null); // id kontroly, ktorej checklist "po vrátení" je práve rozbalený
   useEffect(() => {
     if (!initialChecklistId) return;
     setExpandedSection("kontroly");
@@ -13447,7 +13375,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
     .filter((a) => a.kind === "kontrolaStroja" && a.machineId === m.id && (a.checklist || a.checkerPhotos))
     .map((a) => {
       const hp = (handoverProtocols || []).find((h) => h.jobId === a.jobId);
-      return { ...a, returnPhotos: hp?.returnPhotos || [], job: (jobs || []).find((x) => x.id === a.jobId) };
+      return { ...a, returnPhotos: hp?.returnPhotos || [], returnChecklist: hp?.checklist || [], job: (jobs || []).find((x) => x.id === a.jobId) };
     })
     .sort((a, b) => ((a.checkerDate || "") < (b.checkerDate || "") ? 1 : -1));
   const matchedModel = isStroj
@@ -13694,6 +13622,23 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   )}
                 </div>
               </div>
+              {(h.returnChecklist || []).some((it) => it.returnStatus) && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: "3px 8px" }}
+                    onClick={() => setExpandedReturnChecklistId(expandedReturnChecklistId === h.id ? null : h.id)}
+                  >
+                    {expandedReturnChecklistId === h.id ? "Skryť checklist po vrátení" : "Zobraziť checklist po vrátení"}
+                  </button>
+                  {expandedReturnChecklistId === h.id && (
+                    <div style={{ marginTop: 8 }}>
+                      <HandoverProtocolChecklistRecap checklist={h.returnChecklist || []} statusKey="returnStatus" noteKey="returnNote" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
