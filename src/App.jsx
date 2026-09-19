@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.431";
+const APP_VERSION = "1.0.432";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4139,7 +4139,15 @@ function DispatcherApp() {
   function setVehicleDate(id, field, date) {
     const snoozeField = field === "stk" ? "stkSnoozeUntil" : "ekSnoozeUntil";
     const notifiedField = field === "stk" ? "stkNotifiedDate" : "ekNotifiedDate";
-    updateVehicle(id, { [field === "stk" ? "stkDate" : "ekDate"]: date, [snoozeField]: null, [notifiedField]: null });
+    const changedField = field === "stk" ? "stkChangedAt" : "ekChangedAt";
+    const changedByField = field === "stk" ? "stkChangedBy" : "ekChangedBy";
+    updateVehicle(id, {
+      [field === "stk" ? "stkDate" : "ekDate"]: date,
+      [snoozeField]: null,
+      [notifiedField]: null,
+      [changedField]: new Date().toISOString(),
+      [changedByField]: myEmployee?.name || effectiveUser?.name || "",
+    });
   }
   function snoozeVehicleReminder(id, field, days) {
     const snoozeField = field === "stk" ? "stkSnoozeUntil" : "ekSnoozeUntil";
@@ -5240,7 +5248,7 @@ function DispatcherApp() {
       )}
       {vehicleCardTarget && (
         <VehicleCardModal
-          vehicle={vehicleCardTarget}
+          vehicle={vehicles.find((v) => v.id === vehicleCardTarget.id) || vehicleCardTarget}
           employees={employees}
           today={today}
           onClose={() => setVehicleCardTarget(null)}
@@ -10114,9 +10122,14 @@ function VehicleCardModal({ vehicle, employees, today, onClose, onSetDate, onSno
     return (
       <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 12 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
-        <div style={{ color: status.color, background: status.bg, display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 13, marginBottom: 10 }}>
+        <div style={{ color: status.color, background: status.bg, display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 13, marginBottom: 4 }}>
           {date ? `${fmtDate(date)}${status.label ? " · " + status.label : ""}` : "— nezadané —"}
         </div>
+        {vehicle[`${field}ChangedAt`] && (
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>
+            Naposledy zmenené {fmtDate(vehicle[`${field}ChangedAt`].slice(0, 10))}{vehicle[`${field}ChangedBy`] ? ` · ${vehicle[`${field}ChangedBy`]}` : ""}
+          </div>
+        )}
         {editingField === field ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
