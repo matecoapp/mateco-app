@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.436";
+const APP_VERSION = "1.0.437";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1547,6 +1547,7 @@ function DispatcherApp() {
   const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo sa prepne
   const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
   const [plannerTargetDate, setPlannerTargetDate] = useState(null); // ISO dátum, na ktorý sa má Plán servisu odscrollovať (odkaz z notifikácie)
+  const [highlightTransportId, setHighlightTransportId] = useState(null); // "<jobId>-vyvoz"/"-zvoz" — zvýraznená preprava po kliknutí na notifikáciu
   const [machineCardChecklistTarget, setMachineCardChecklistTarget] = useState(null); // assignment id kontroly stroja, ktorú má karta stroja hneď rozbaliť (odkaz z notifikácie)
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
@@ -1648,7 +1649,7 @@ function DispatcherApp() {
           userName: r.obchodnik,
           title: "Nezáväzná rezervácia dlho nevybavená",
           message: `Rezervácia stroja ${machine?.code || "—"} pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Over, či je ešte aktuálna.`,
-          link: { module: "poziciovna", view: "jobs" },
+          link: { module: "poziciovna", view: "calendar", reservationId: r.id },
         });
       }
     });
@@ -2657,6 +2658,7 @@ function DispatcherApp() {
       if (v) setVehicleCardTarget(v);
     }
     if (link.plannerDate) setPlannerTargetDate(link.plannerDate);
+    if (link.transportId) setHighlightTransportId(link.transportId);
   }
   function dismissHighlight() {
     setHighlightDamageId(null);
@@ -3242,6 +3244,16 @@ function DispatcherApp() {
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
     });
   }
+  function requestReservationReminder(r) {
+    const machine = machineById[r.machineId];
+    pushNotification({
+      kind: "reservation",
+      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
+      title: "Pripomienka: nevybavená rezervácia",
+      message: `${currentUser?.name || "Obchodník"} pripomína rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — čaká na vybavenie.`,
+      link: { module: "poziciovna", view: "calendar", reservationId: r.id },
+    });
+  }
 
   function reportDamage(machine, popis, kontakt) {
     const record = {
@@ -3702,7 +3714,7 @@ function DispatcherApp() {
           userName: tech.name,
           title: "Pridelená pohotovosť",
           message: `Máte pridelenú pohotovosť na ${fmtDate(date)}.`,
-          link: { module: "servis", view: "plan" },
+          link: { module: "servis", view: "plan", plannerDate: date },
         });
       }
     }
@@ -3741,7 +3753,7 @@ function DispatcherApp() {
         userName: tech.name,
         title: "Dovolenka zapísaná",
         message: `Máte zapísanú dovolenku od ${fmtDate(startDate)} do ${fmtDate(endDate)}.`,
-        link: { module: "servis", view: "plan" },
+        link: { module: "servis", view: "plan", plannerDate: startDate },
       });
     }
     if (substituteId) {
@@ -3753,7 +3765,7 @@ function DispatcherApp() {
           userName: substitute.name,
           title: "Ste náhradný checker",
           message: `Od ${fmtDate(startDate)} do ${fmtDate(endDate)} zastupujete ${tech?.name || "kolegu"} ako checker (${depos.join(", ") || "—"}).`,
-          link: { module: "servis", view: "plan" },
+          link: { module: "servis", view: "plan", plannerDate: startDate },
         });
       }
     }
@@ -3775,7 +3787,7 @@ function DispatcherApp() {
           userName: tech.name,
           title: "Pridelená pohotovosť",
           message: `Máte pridelenú týždennú pohotovosť (${fmtDate(weekStart)} – ${fmtDate(weekEnd)}).`,
-          link: { module: "servis", view: "plan" },
+          link: { module: "servis", view: "plan", plannerDate: weekStart },
         });
       }
     }
@@ -4276,7 +4288,7 @@ function DispatcherApp() {
           userName: driver.name,
           title: "Pridelený vývoz stroja",
           message: `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${record.customer || "—"} — ${fmtDate(record.startDate)}.`,
-          link: { module: "poziciovna", view: "jobs", jobId: record.id },
+          link: { module: "poziciovna", view: "prepravy", transportId: `${record.id}-vyvoz` },
         });
       }
     }
@@ -4289,7 +4301,7 @@ function DispatcherApp() {
           userName: driver.name,
           title: "Pridelený zvoz stroja",
           message: `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${record.customer || "—"}${record.endDate ? ` — ${fmtDate(record.endDate)}` : ""}.`,
-          link: { module: "poziciovna", view: "jobs", jobId: record.id },
+          link: { module: "poziciovna", view: "prepravy", transportId: `${record.id}-zvoz` },
         });
       }
     }
@@ -4303,19 +4315,19 @@ function DispatcherApp() {
         ensureCheckerAssignment({ ...before, ...patch });
       }
       const machine = machineById[before.machineId];
-      const notifyDriver = (driverId, title, message) => {
+      const notifyDriver = (driverId, title, message, transportType) => {
         const driver = driverById[driverId];
         if (!driver) return;
-        pushNotification({ roles: [], userName: driver.name, title, message, kind: "assignment_transport", link: { module: "poziciovna", view: "jobs", jobId: id } });
+        pushNotification({ roles: [], userName: driver.name, title, message, kind: "assignment_transport", link: { module: "poziciovna", view: "prepravy", transportId: `${id}-${transportType}` } });
       };
       // Nové pridelenie šoféra na vývoz/zvoz — funguje bez ohľadu na to, či sa
       // zákazka mení cez formulár "Upraviť zákazku" alebo priamo z Preprav.
       if (patch.driverId !== undefined && patch.driverId && patch.driverId !== before.driverId) {
-        notifyDriver(patch.driverId, "Pridelený vývoz stroja", `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${before.customer || "—"} — ${fmtDate(patch.startDate || before.startDate)}.`);
+        notifyDriver(patch.driverId, "Pridelený vývoz stroja", `Boli ste pridelení na vývoz stroja ${machine?.code || "—"} pre ${before.customer || "—"} — ${fmtDate(patch.startDate || before.startDate)}.`, "vyvoz");
       }
       if (patch.returnDriverId !== undefined && patch.returnDriverId && patch.returnDriverId !== before.returnDriverId) {
         const endDate = patch.endDate || before.endDate;
-        notifyDriver(patch.returnDriverId, "Pridelený zvoz stroja", `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${before.customer || "—"}${endDate ? ` — ${fmtDate(endDate)}` : ""}.`);
+        notifyDriver(patch.returnDriverId, "Pridelený zvoz stroja", `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${before.customer || "—"}${endDate ? ` — ${fmtDate(endDate)}` : ""}.`, "zvoz");
       }
       // Ak je na zákazke už priradený šofér (vývoz alebo zvoz) a zmenil sa dátum
       // alebo depo, nech to nezistí až na mieste — pošli mu krátke upozornenie.
@@ -4334,10 +4346,10 @@ function DispatcherApp() {
         const finalDriverId = patch.driverId !== undefined ? patch.driverId : before.driverId;
         const finalReturnDriverId = patch.returnDriverId !== undefined ? patch.returnDriverId : before.returnDriverId;
         if (finalDriverId && !justAssignedIds.has(finalDriverId)) {
-          notifyDriver(finalDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+          notifyDriver(finalDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`, "vyvoz");
         }
         if (finalReturnDriverId && finalReturnDriverId !== finalDriverId && !justAssignedIds.has(finalReturnDriverId)) {
-          notifyDriver(finalReturnDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`);
+          notifyDriver(finalReturnDriverId, "Zmena na zákazke, kde vozíte stroj", `Zákazka (stroj ${machine?.code || "—"}, ${before.customer || "—"}) bola upravená — skontrolujte prosím nový termín/depo.`, "zvoz");
         }
       }
     }
@@ -4770,6 +4782,8 @@ function DispatcherApp() {
             }}
             getTransportSendStatus={getTransportSendStatus}
             recordTransportSend={recordTransportSend}
+            highlightTransportId={highlightTransportId}
+            onDismissTransportHighlight={() => setHighlightTransportId(null)}
           />
         )}
 
@@ -5380,6 +5394,11 @@ function DispatcherApp() {
             setReservationCardTarget(null);
             alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o zmazanie rezervácie.");
           }}
+          onRequestReminder={() => {
+            requestReservationReminder(reservationCardTarget);
+            setReservationCardTarget(null);
+            alert("Dispečerovi a vedúcemu požičovne bola odoslaná pripomienka.");
+          }}
         />
       )}
       {rejectReservationTarget && (
@@ -5394,7 +5413,6 @@ function DispatcherApp() {
               userName: r.obchodnik || null,
               title: "Rezervácia zmazaná",
               message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná. Dôvod: ${reason}`,
-              link: { module: "poziciovna", view: "calendar" },
             });
             deleteReservation(r.id);
             setRejectReservationTarget(null);
@@ -8230,8 +8248,12 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand, highlightTransportId, onDismissTransportHighlight }) {
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    if (!highlightTransportId) return;
+    document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightTransportId]);
   const [depoFilter, setDepoFilter] = useState(null);
   const isMyselfSofer = user?.role === "sofer" && myEmployee?.role === "sofer";
   // Externý šofér má toto NAVYŠE natvrdo uzamknuté — na rozdiel od bežného šoféra
@@ -8365,14 +8387,22 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   function transportLine(t) {
     const machine = machineById[t.machineId];
     const isVyvoz = t.type === "vyvoz";
+    const highlighted = t.id === highlightTransportId;
     return (
       <div
         key={t.id}
-        onClick={() => onOpenJob && onOpenJob(t.jobId)}
+        id={`transport-${t.id}`}
+        onClick={() => {
+          if (highlighted) onDismissTransportHighlight?.();
+          onOpenJob && onOpenJob(t.jobId);
+        }}
         style={{
           padding: "8px 0",
           borderTop: t.overdue ? "1px solid var(--danger)" : "1px solid var(--border)",
           cursor: onOpenJob ? "pointer" : "default",
+          outline: highlighted ? "2px solid var(--accent)" : "none",
+          boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "none",
+          transition: "box-shadow .3s, outline .3s",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
@@ -11320,7 +11350,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
    Karta nezáväznej rezervácie — obchodník si len pozrie,
    dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
 --------------------------------------------------------- */
-function ReservationCardModal({ reservation, machine, salespeople, user, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete }) {
+function ReservationCardModal({ reservation, machine, salespeople, user, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete, onRequestReminder }) {
   const r = reservation;
   const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
   const isPending = r.status === "pending";
@@ -11374,6 +11404,11 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
             <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onRequestDelete}>
               📣 Nahlásiť na zmazanie
             </button>
+            {onRequestReminder && (
+              <button className="btn btn-ghost" onClick={onRequestReminder}>
+                🔔 Pripomenúť dispečerovi
+              </button>
+            )}
           </>
         )}
       </div>
