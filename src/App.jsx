@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.429";
+const APP_VERSION = "1.0.430";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6193,7 +6193,7 @@ function DispatcherApp() {
                   roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"],
                   title: "Checker našiel problém pri kontrole pred vývozom",
                   message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola pred vývozom zaznamenala problém, skontrolujte pred odovzdaním.`,
-                  link: { module: "poziciovna", view: "jobs", jobId: job.id, machineId: machine?.id, checklistAssignmentId: checkerInspectionTarget.id },
+                  link: { module: "poziciovna", view: "jobs", machineId: machine?.id, checklistAssignmentId: checkerInspectionTarget.id },
                 });
               }
               setCheckerInspectionTarget(null);
@@ -13569,7 +13569,14 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           {machineInspections.map((h) => (
             <div key={h.id} className="panel" style={{ padding: 10 }}>
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-                {h.job?.customer || "—"} · {h.job?.startDate ? fmtDate(h.job.startDate) : "—"}
+                {h.job && onOpenJob ? (
+                  <span onClick={() => onOpenJob(h.job)} style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}>
+                    {h.job.customer || "—"}
+                  </span>
+                ) : (
+                  h.job?.customer || "—"
+                )}{" "}
+                · {h.job?.startDate ? fmtDate(h.job.startDate) : "—"}
               </div>
               {(h.checklist || []).some((it) => it.checkerStatus) && (
                 <div style={{ marginBottom: 10 }}>
