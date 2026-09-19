@@ -99,17 +99,24 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     );
   }
 
+  const REASON_LABEL = {
+    already_open: "Už máte odoslanú žiadosť, ktorá čaká na vybavenie.",
+    missing_message: "Popíšte, prosím, čo sa deje.",
+    missing_date: "Zvoľte, prosím, dátum.",
+    invalid_token: "Tento odkaz už nie je platný.",
+  };
+
   async function handleSubmit() {
     setSending(true);
     setError(null);
-    const ok = await onSubmit(type === "problem" ? message.trim() : null, type === "extension" ? endDate : null);
+    const reason = await onSubmit(type === "problem" ? message.trim() : null, type === "extension" ? endDate : null);
     setSending(false);
-    if (ok) {
+    if (reason === true) {
       setOpen(false);
       setMessage("");
       setEndDate("");
     } else {
-      setError("Nepodarilo sa odoslať. Skúste to prosím neskôr.");
+      setError(REASON_LABEL[reason] || "Nepodarilo sa odoslať. Skúste to prosím neskôr.");
     }
   }
 
@@ -200,7 +207,7 @@ export default function CustomerPortal({ token }) {
     });
     if (error || !result?.ok) {
       console.error("submit_portal_request zlyhalo", error, result);
-      return false;
+      return result?.reason || "error";
     }
     const { data: fresh } = await supabase.rpc("get_portal_job", { p_token: token });
     if (fresh) setData(fresh);
