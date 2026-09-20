@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.449";
+const APP_VERSION = "1.0.450";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12889,8 +12889,16 @@ const CalendarGrid = React.memo(function CalendarGrid({
     }
   }
 
+  // Mobile: WebkitOverflowScrolling — pri rýchlom švihnutí prstom vedeli "sticky"
+  // prvky (hlavička dní, stĺpec s menom stroja) na iOS Safari počas zotrvačného
+  // posúvania na chvíľu zmiznúť/nevykresliť sa správne — appka to nestihla
+  // prekresliť; toto si vynúti vlastnú GPU vrstvu pre scroll kontajner.
+  // overscrollBehaviorX "contain" — bez toho vie švihnutie, keď dôjde na okraj
+  // vnútorného scrollu (Gantt vs. .panel okolo neho má tiež overflow-x:auto
+  // kvôli tabuľkám), "prebublať" von a posunúť celú stránku vrátane
+  // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
       <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight }}>
         {/* Hlavička dní — "sticky" hore, vykresľuje sa z nej len viditeľná časť. */}
         <div
@@ -16788,7 +16796,17 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         ))}
       </div>
       <div className="panel" style={{ padding: 16 }}>
-        <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh" }}>
+        {/* WebkitOverflowScrolling: pri rýchlom švihnutí prstom na mobile (najmä
+        iOS Safari) vedeli "sticky" prvky (hlavička dní, stĺpec s menom stroja)
+        počas zotrvačného posúvania na chvíľu zmiznúť/nevykresliť sa správne —
+        appka to len nestihla prekresliť. Táto vlastnosť si vynúti vlastnú GPU
+        vrstvu pre scroll kontajner, čím sa to prekresľovanie zrýchli/opraví. */}
+    {/* overscrollBehaviorX "contain": bez toho vie na mobile rýchle švihnutie
+        prstom, keď dôjde na okraj vnútorného scrollu (Gantt vs. .panel okolo
+        neho má tiež overflow-x:auto kvôli tabuľkám), "prebublať" von — posunie
+        sa celá stránka vrátane hlavičky/tlačidiel nad kalendárom, nielen
+        samotný Gantt. Toto to zastaví presne na hranici Gantt kontajnera. */}
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
           <div style={{ width: "100%", minWidth: "max-content" }}>
             <div
               style={{
