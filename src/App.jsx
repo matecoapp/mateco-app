@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.450";
+const APP_VERSION = "1.0.451";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19413,7 +19413,14 @@ function GlobalStyle() {
           padding: 4px 6px !important;
         }
         .panel { padding: 12px !important; }
-        .quick-filters { flex-wrap: wrap !important; }
+        /* display:flex tu MUSÍ byť tiež !important — kalendár požičovne má
+           túto lištu nastavenú inline ako display:"grid" (3 stĺpce vedľa
+           seba), čo sa nikdy nezalomí na užšom telefóne bez ohľadu na
+           flex-wrap (tá vlastnosť na grid kontajner nemá vôbec žiaden efekt).
+           Preto v portraite miznú/orezávajú sa tlačidlá napravo (→, Dnes,
+           Normálny/Kompaktný) — grid stĺpce sa len stlačia/pretečú, nezalomí
+           sa to na ďalší riadok tak ako pri flexboxe. */
+        .quick-filters { display: flex !important; flex-wrap: wrap !important; }
 
         /* Info-grid karty (Karta stroja, zákazky, šoféra, technika…) — jeden stĺpec pod sebou */
         .resp-grid { grid-template-columns: 1fr !important; }
