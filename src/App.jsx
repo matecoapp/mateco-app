@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.442";
+const APP_VERSION = "1.0.443";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19271,6 +19271,13 @@ function GlobalStyle() {
       /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
          vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
       .gantt-transport-icon { display: flex; align-items: center; justify-content: center; font-size: 11px; pointer-events: none; z-index: 2; line-height: 1; }
+      /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
+         zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
+         bez "fill" geometrie, si to niektoré prehliadače spočítajú s nulovým
+         rozmerom a ruka potom zmizne — bez neho sa origin berie z vlastných
+         súradníc SVG, presne ako pri zdvíhaní nožníc vyššie). */
+      @keyframes mascot-wave { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
+      .mascot-wave-arm { transform-origin: 382px 496px; animation: mascot-wave 1s ease-in-out infinite; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
@@ -19521,11 +19528,23 @@ function LiftLoader({ label }) {
     return () => cancelAnimationFrame(raf);
   }, []);
   const rise = "transform 2.4s cubic-bezier(.2,.7,.3,1)";
+  // Zložený (scaleY 0.12) mechanizmus je len tesne stlačený, nie skutočne
+  // "zložený" — kým sa nerozťahuje aspoň trochu, jeho stlačený cik-cak vie na
+  // zlomok sekundy presvitať cez medzeru medzi košom a podvozkom (za tenkými
+  // časťami zábradlia koša). Riešenie: mechanizmus je na začiatku priehľadný a
+  // zjaví sa, až keď je rozťahovanie citeľne rozbehnuté — dovtedy nie je vidno
+  // nič poškodené, len prázdne miesto medzi podvozkom a košom.
+  const scissorStyle = {
+    transformOrigin: "210px 480px",
+    transform: risen ? "scaleY(1)" : "scaleY(0.12)",
+    opacity: risen ? 1 : 0,
+    transition: `${rise}, opacity .5s ease .35s`,
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
       <svg width="210" height="280" viewBox="0 0 420 560">
         <ellipse cx="210" cy="532" rx="140" ry="12" fill="#000" opacity="0.08" />
-        <g style={{ transformOrigin: "210px 480px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise }}>
+        <g style={scissorStyle}>
           <line x1="115" y1="480" x2="305" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
           <line x1="305" y1="480" x2="115" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
           <line x1="115" y1="375" x2="305" y2="270" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
@@ -19550,6 +19569,24 @@ function LiftLoader({ label }) {
           <rect x="90" y="34" width="240" height="5" fill="var(--accent)" />
           <rect x="170" y="10" width="8" height="50" fill="#18181a" />
           <rect x="242" y="10" width="8" height="50" fill="#18181a" />
+        </g>
+        {/* Obsluha stroja — malý pozdrav pri načítavaní appky, stojí bokom a
+            kýva jednou rukou (nezávisle od zdvihu, len sa tu spolu s ním
+            zjaví). */}
+        <g>
+          <line x1="369" y1="522" x2="365" y2="552" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
+          <line x1="377" y1="522" x2="383" y2="552" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
+          <line x1="365" y1="496" x2="357" y2="514" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
+          <rect x="364" y="493" width="18" height="30" rx="5" fill="#18181a" />
+          <rect x="363" y="516" width="20" height="5" fill="var(--accent)" />
+          <line x1="366" y1="494" x2="382" y2="521" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
+          <line x1="382" y1="494" x2="366" y2="521" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="373" cy="482" r="12" fill="#18181a" />
+          <path d="M357 480 A 16 17 0 0 1 389 480 Z" fill="var(--accent)" />
+          <g className="mascot-wave-arm">
+            <line x1="382" y1="496" x2="400" y2="472" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
+            <circle cx="400" cy="472" r="4" fill="#18181a" />
+          </g>
         </g>
       </svg>
       {label && <div className="label-font" style={{ color: "var(--text-dim)", fontSize: 13 }}>{label}</div>}
