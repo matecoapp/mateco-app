@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.460";
+const APP_VERSION = "1.0.461";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19437,12 +19437,11 @@ function GlobalStyle() {
 
         :root {
           --gantt-name-col: 92px;
-          /* 78px — na užšom mobile (~331px na dni po odčítaní stĺpca s menom)
-             vidno naraz cca 3 dni (dnešok +/- 1), s malým náhľadom na ďalší.
-             Na širšom mobile/tablete v tomto istom breakpointe to logicky
-             ukáže viac dní naraz, lebo je tam viac miesta — rovnaká šírka
-             bunky, len viac sa ich zmestí. */
-          --gantt-day-col: 78px;
+          /* 53px — na užšom mobile (~331px na dni po odčítaní stĺpca s menom)
+             vidno naraz cca 4,5 dňa. Na širšom mobile/tablete v tomto istom
+             breakpointe to logicky ukáže viac dní naraz, lebo je tam viac
+             miesta — rovnaká šírka bunky, len viac sa ich zmestí. */
+          --gantt-day-col: 53px;
           --gantt-plan-day-col: 46px;
         }
         .app-main { padding: 10px !important; }
