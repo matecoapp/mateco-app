@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.478";
+const APP_VERSION = "1.0.479";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7486,13 +7486,30 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
     if (module === m.id) {
       m.tabs.forEach((t) => {
-        railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}`, active: !t.dropdown && view === t.id });
+        railRows.push({
+          kind: "dot",
+          key: `dot-${m.id}-${t.id}`,
+          label: t.label,
+          active: !t.dropdown && view === t.id,
+          onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(m.id); onSelectView(t.id); },
+        });
         // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
         // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
-        // pod nimi posunie hore oproti textu.
+        // pod nimi posunie hore oproti textu. Klikateľné rovnako ako v menu.
         if (t.dropdown && docsExpanded) {
-          const subCount = (DOCUMENT_SUBTABS[m.id] || []).length || 1;
-          for (let i = 0; i < subCount; i++) railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}-sub-${i}` });
+          const subs = DOCUMENT_SUBTABS[m.id] || [];
+          if (subs.length === 0) {
+            railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}-sub-0`, label: "Táto sekcia sa pripravuje." });
+          } else {
+            subs.forEach((st) => {
+              railRows.push({
+                kind: "dot",
+                key: `dot-${m.id}-${t.id}-sub-${st.id}`,
+                label: st.label,
+                onClick: () => { onSelectModule(m.id); onPickDocumentsSubView(st); },
+              });
+            });
+          }
         }
       });
       const quickActions = quickActionsByModule[m.id] || [];
@@ -7523,9 +7540,9 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           }
           if (r.kind === "dot") {
             return (
-              <div key={r.key} className="rail-row">
+              <button key={r.key} className="rail-row" title={r.label} onClick={r.onClick} disabled={!r.onClick}>
                 <span className={`rail-tick${r.active ? " active" : ""}`} />
-              </div>
+              </button>
             );
           }
           return (
@@ -19227,8 +19244,11 @@ function GlobalStyle() {
          už robí), klik na záložku v OTVORENOM module len prepne pohľad. */
       .app-body-row { display: flex; flex: 1; min-height: 0; position: relative; }
       .sidebar-nav { width: 152px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
-      .sidebar-module { border-bottom: 1px solid var(--border); }
-      .sidebar-module:last-child { border-bottom: none; }
+      /* box-shadow namiesto border-bottom — čiarka sa vykreslí, ale NEPRIDÁ
+         výšku navyše (border by pridal 1px, čo by sa v páse muselo naviac
+         niečím vykompenzovať — takto netreba). */
+      .sidebar-module { box-shadow: 0 1px 0 var(--border); }
+      .sidebar-module:last-child { box-shadow: none; }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
@@ -19254,9 +19274,9 @@ function GlobalStyle() {
       /* Rýchle akcie (nahlásiť poškodenie/rezervácia/protokol/VTZ EZ) — posledné
          položky v zozname záložiek Požičovne/Servisu, len v IconRail flyoute
          (quickActionsByModule sa do mobilnej zásuvky neposiela). */
-      /* Len tenká čiarka, žiadny margin/padding navyše — inak by to pridalo
-         výšku navyše, čo pás (žiadna medzera pred rýchlymi akciami) nemá. */
-      .sidebar-quick { border-top: 1px dashed var(--border); }
+      /* Len tenká čiarka (box-shadow, nie border — ten by pridal 1px výšky
+         navyše, čo pás nemá čím vykompenzovať). */
+      .sidebar-quick { box-shadow: inset 0 1px 0 var(--border); }
       /* 34px riadok (nie 29 ako bežná .sidebar-item) — presne ako 34px
          ikonka rýchlej akcie v IconRail páse. */
       .sidebar-item.quick { height: 34px; color: var(--accent); font-weight: 600; }
@@ -19290,7 +19310,12 @@ function GlobalStyle() {
       /* Jeden riadok = jeden riadok vo flyoute (záložka = bodka, rýchla akcia
          = červená ikona) — 29px, presne ako .sidebar-item tam (zdieľaná
          konštanta, viď komentár pri .sidebar-item). */
-      .rail-row { width: 34px; height: 29px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .rail-row {
+        width: 34px; height: 29px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer;
+      }
+      .rail-row:disabled { cursor: default; }
+      .rail-row:hover:not(:disabled) { background: var(--panel-2); }
       .rail-row-quick { height: 34px; }
       /* Rovnako veľké ako ikony modulov (34px), nech sú dobre vidno. */
       .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--accent); }
