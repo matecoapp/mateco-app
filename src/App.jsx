@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.437";
+const APP_VERSION = "1.0.440";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -78,8 +78,22 @@ const ROLES = [
   { id: "externy_sofer", label: "Externý šofér", desc: "Vidí len svoje pridelené prepravy a vypĺňa odovzdávacie protokoly — nič iné." },
   { id: "dispecer_servisu", label: "Dispečer servisu", desc: "" },
   { id: "technik", label: "Technik", desc: "" },
+  {
+    id: "veduci_technik_ba",
+    label: "Vedúci technik BA",
+    desc: "Technik, ktorý má navyše na starosti technikov z BA a NR — smie im prideľovať poškodenia/externé zákazky/revízie/úradné skúšky, objednávať diely a zapisovať rýchle vstupy do plánu (dovolenka, PN a pod.) len pre tieto dve depá.",
+  },
   { id: "nezaradeny", label: "Nezaradený (čaká na rolu)", desc: "Nevidí žiadne dáta platformy, kým nedostane pridelenú rolu." },
 ];
+// Ktoré depá smie daná "vedúci technik" rola vidieť/prideľovať — kľúč = rola.
+// Pre ďalší región sa táto rola skopíruje (nové id + label vyššie) s iným
+// zoznamom depí tu; undefined/chýbajúci kľúč = bez obmedzenia (napr. dispečer).
+const LEAD_TECHNICIAN_DEPOS = {
+  veduci_technik_ba: ["Bratislava", "Nitra"],
+};
+function myAssignableDepos(user) {
+  return LEAD_TECHNICIAN_DEPOS[user?.role] || null;
+}
 // Ktorý modul sa má otvoriť ako prvý hneď po prihlásení, podľa role.
 const ROLE_DEFAULT_MODULE = {
   admin: "poziciovna",
@@ -91,6 +105,7 @@ const ROLE_DEFAULT_MODULE = {
   veduci_servisu: "servis",
   dispecer_servisu: "servis",
   technik: "servis",
+  veduci_technik_ba: "servis",
 };
 function roleLabel(roleId) {
   return ROLES.find((r) => r.id === roleId)?.label || roleId;
@@ -104,7 +119,7 @@ function isAdminUser(user) {
 function assignableRolesFor(user) {
   if (isAdminUser(user)) return ROLES.filter((r) => r.id !== "nezaradeny");
   if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "externy_sofer", "dispecer_pozicovne"].includes(r.id));
-  if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu"].includes(r.id));
+  if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu", "veduci_technik_ba"].includes(r.id));
   return [];
 }
 // Ktoré role smie daný človek v Administratíve vôbec VIDIEŤ/spravovať (pridávať,
@@ -127,7 +142,7 @@ const PERM = {
   machine_archive: ["veduci_pozicovne"],
   machine_delete: [],
   machine_track_toggle: ["veduci_pozicovne", "dispecer_pozicovne"],
-  machine_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik"], // všetci
+  machine_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik", "veduci_technik_ba"], // všetci
 
   // Požičovňa — zákazky
   job_add: ["veduci_pozicovne", "dispecer_pozicovne"],
@@ -146,7 +161,7 @@ const PERM = {
   job_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_complete: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_email: ["veduci_pozicovne", "dispecer_pozicovne"],
-  job_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik"], // všetci
+  job_report_damage: ["veduci_pozicovne", "veduci_servisu", "obchodnik", "dispecer_pozicovne", "sofer", "dispecer_servisu", "technik", "veduci_technik_ba"], // všetci
 
   // Požičovňa — prepravy / šoféri
   transport_assign_driver: ["veduci_pozicovne", "dispecer_pozicovne"],
@@ -156,37 +171,37 @@ const PERM = {
   driver_delete: [],
 
   // Servis — poškodenia / externé zákazky
-  damage_assign: ["veduci_servisu", "dispecer_servisu"],
+  damage_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   damage_status: ["veduci_servisu", "dispecer_servisu"],
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
   damage_clear_all: [], // len administrátor
   damage_import_csv: ["veduci_servisu", "dispecer_servisu"],
-  damage_quick_report: ["technik", "sofer", "externy_sofer", "obchodnik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
+  damage_quick_report: ["technik", "sofer", "externy_sofer", "obchodnik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne", "veduci_technik_ba"],
   external_add: ["veduci_servisu", "dispecer_servisu"],
-  external_assign: ["veduci_servisu", "dispecer_servisu"],
+  external_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
   external_delete: ["veduci_servisu", "dispecer_servisu"],
   external_clear_all: [], // len administrátor
   external_import_csv: ["veduci_servisu", "dispecer_servisu"],
 
   // Servis — revízie / úradné skúšky
-  revision_assign: ["veduci_servisu", "dispecer_servisu"],
+  revision_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   revision_complete: ["veduci_servisu", "dispecer_servisu"],
   revision_clear_all: [], // len administrátor
-  uradnaskuska_assign: ["veduci_servisu", "dispecer_servisu"],
+  uradnaskuska_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   uradnaskuska_complete: ["veduci_servisu", "dispecer_servisu"],
   uradnaskuska_clear_all: [], // len administrátor
 
   // Servis — plán servisu / technici
   plan_assign: ["veduci_servisu", "dispecer_servisu"],
-  plan_quick_events: ["veduci_servisu", "dispecer_servisu"],
+  plan_quick_events: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   technician_add: ["veduci_servisu"],
   technician_edit: ["veduci_servisu"],
   technician_archive: ["veduci_servisu"],
   technician_delete: [],
 
   // Protokol
-  protocol_write: ["technik"],
+  protocol_write: ["technik", "veduci_technik_ba"],
 
   // Spoločné
   backup_export: [],
@@ -211,7 +226,7 @@ const PERM = {
   // Náhradné diely — technik zadáva požiadavky (len na svoje depo), vedúci/dispečer
   // servisu schvaľuje, zadáva priamo a rieši samotné objednanie.
   sparepart_request: ["technik"],
-  sparepart_manage: ["veduci_servisu", "dispecer_servisu"],
+  sparepart_manage: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
 };
 
 function can(user, key) {
@@ -653,13 +668,18 @@ function canFillHandoverPhase(job, myEmployee, phase) {
   if (!job || !myEmployee || (myEmployee.role !== "sofer" && myEmployee.role !== "externy_sofer")) return false;
   const today = todayISO();
   if (phase === "prevzatie") {
-    return job.driverId === myEmployee.id && job.startDate === today;
+    // Skutočný deň vývozu je departureDate (dá sa prepísať nezávisle od
+    // zmluvného startDate, napr. pri odloženom vývoze) — ak nie je zadaný,
+    // spadá sa na startDate.
+    return job.driverId === myEmployee.id && (job.departureDate || job.startDate) === today;
   }
   // Vrátenie stroja dáva zmysel riešiť len na reálne ukončenej zákazke — inak by
   // šofér mohol dokončiť protokol o vrátení aj na aktívnej zákazke, napr. keď
   // dispečer ukončenie predtým zrušil a zákazka sa vrátila do aktívneho stavu.
   if (job.status !== "completed") return false;
-  const dateOk = !job.endDate || job.endDate === today;
+  // Rovnako pickupDate (skutočný deň zvozu) namiesto zmluvného endDate.
+  const effectiveEndDate = job.pickupDate || job.endDate;
+  const dateOk = !effectiveEndDate || effectiveEndDate === today;
   return job.returnDriverId === myEmployee.id && dateOk;
 }
 function nextJobFor(jobs, machineId, today) {
@@ -810,6 +830,25 @@ async function writeRecordRowWithRetry(table, item, attempt = 1) {
       return writeRecordRowWithRetry(table, item, attempt + 1);
     }
     console.error(`Row save failed after retries (${table})`, item.id, e);
+    return false;
+  }
+}
+// Atomický "zápis s poistkou" pre automatické pripomienky (stará rezervácia,
+// STK/EK auta) — ak by mal ten istý deň nastaviť to isté pole súčasne viac
+// otvorených relácií, len jedna z nich "vyhrá" pretek (podmienka sa overuje
+// priamo v databáze, nie v lokálnom stave) a upozornenie sa pošle len raz.
+// guardField = pole, ktoré indikuje "už odoslané"; ak je today zadané, zápis
+// prejde aj keď pole nie je null, ale zatiaľ nie je rovné dnešku (opakovaná
+// pripomienka na ďalší deň); bez today prejde len prvý zápis (pole je null).
+async function claimReminder(table, item, patch, guardField, today) {
+  try {
+    let q = supabase.from(table).update({ data: { ...item, ...patch }, updated_at: new Date().toISOString() }).eq("id", item.id);
+    q = today ? q.or(`data->>${guardField}.is.null,data->>${guardField}.neq.${today}`) : q.is(`data->>${guardField}`, null);
+    const { data, error } = await q.select("id");
+    if (error) throw error;
+    return (data || []).length > 0;
+  } catch (e) {
+    console.error(`claimReminder(${table}) failed`, item.id, e);
     return false;
   }
 }
@@ -1318,7 +1357,8 @@ function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 10 }}>
-            Zákazka {job.code ? `${job.code} ` : ""}sa vráti medzi aktívne — prestane byť "ukončená".
+            Zákazka {job.code ? `${job.code} ` : ""}sa vráti medzi aktívne — prestane byť "ukončená". Dátum a depo
+            konca sa zmažú (bude ich treba pri opätovnom ukončení zadať znova).
           </div>
           <div style={{ fontSize: 13, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 18 }}>
             <div style={{ marginBottom: 4 }}>
@@ -1640,20 +1680,28 @@ function DispatcherApp() {
       return ageDays >= RESERVATION_STALE_DAYS;
     });
     if (stale.length === 0) return;
-    stale.forEach((r) => {
-      const machine = machineById[r.machineId];
-      if (r.obchodnik) {
-        pushNotification({
-          kind: "reservation",
-          roles: [],
-          userName: r.obchodnik,
-          title: "Nezáväzná rezervácia dlho nevybavená",
-          message: `Rezervácia stroja ${machine?.code || "—"} pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Over, či je ešte aktuálna.`,
-          link: { module: "poziciovna", view: "calendar", reservationId: r.id },
-        });
+    (async () => {
+      const sentAt = new Date().toISOString();
+      const won = [];
+      for (const r of stale) {
+        if (await claimReminder("reservations", r, { reminderSentAt: sentAt }, "reminderSentAt")) won.push(r.id);
       }
-    });
-    persistReservations(reservations.map((r) => (stale.some((s) => s.id === r.id) ? { ...r, reminderSentAt: new Date().toISOString() } : r)));
+      if (won.length === 0) return;
+      stale.filter((r) => won.includes(r.id)).forEach((r) => {
+        const machine = machineById[r.machineId];
+        if (r.obchodnik) {
+          pushNotification({
+            kind: "reservation",
+            roles: [],
+            userName: r.obchodnik,
+            title: "Nezáväzná rezervácia dlho nevybavená",
+            message: `Rezervácia stroja ${machine?.code || "—"} pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Over, či je ešte aktuálna.`,
+            link: { module: "poziciovna", view: "calendar", reservationId: r.id },
+          });
+        }
+      });
+      setReservations((prev) => prev.map((r) => (won.includes(r.id) ? { ...r, reminderSentAt: sentAt } : r)));
+    })();
   }, [loaded, reservations, today]);
 
   // Pripomienka STK/EK áut — rovnaký vzor ako pripomienka pri rezerváciách vyššie:
@@ -1662,40 +1710,37 @@ function DispatcherApp() {
   const VEHICLE_REMINDER_DAYS = 30;
   useEffect(() => {
     if (!loaded || vehicles.length === 0) return;
-    const patches = [];
-    vehicles.forEach((v) => {
-      if (!v.assignedEmployeeId) return;
-      const employee = employees.find((e) => e.id === v.assignedEmployeeId);
-      if (!employee) return;
-      [
-        { field: "stk", date: v.stkDate, snoozeUntil: v.stkSnoozeUntil, notifiedDate: v.stkNotifiedDate, label: "STK" },
-        { field: "ek", date: v.ekDate, snoozeUntil: v.ekSnoozeUntil, notifiedDate: v.ekNotifiedDate, label: "emisnú kontrolu (EK)" },
-      ].forEach(({ field, date, snoozeUntil, notifiedDate, label }) => {
-        if (!date) return;
-        if (notifiedDate === today) return; // dnes už bolo poslané
-        if (snoozeUntil && today < snoozeUntil) return; // odložené
-        const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-        if (daysLeft > VEHICLE_REMINDER_DAYS) return;
-        pushNotification({
-          kind: "vehicle_stk_ek",
-          roles: [],
-          userName: employee.name,
-          title: daysLeft < 0 ? `${label} auta po termíne` : `Blíži sa ${label} auta`,
-          message: `${v.spz || "Auto"}${v.znacka ? " (" + v.znacka + ")" : ""} — ${label} ${daysLeft < 0 ? "bola splatná" : "je splatná"} ${fmtDate(date)}.`,
-          link: { module: "administrativa", view: "auta", vehicleId: v.id },
-        });
-        patches.push({ id: v.id, field: field === "stk" ? "stkNotifiedDate" : "ekNotifiedDate", value: today });
-      });
-    });
-    if (patches.length > 0) {
-      persistVehicles(vehicles.map((v) => {
-        const patch = patches.filter((p) => p.id === v.id);
-        if (patch.length === 0) return v;
-        const upd = { ...v };
-        patch.forEach((p) => { upd[p.field] = p.value; });
-        return upd;
-      }));
-    }
+    (async () => {
+      for (const v of vehicles) {
+        if (!v.assignedEmployeeId) continue;
+        const employee = employees.find((e) => e.id === v.assignedEmployeeId);
+        if (!employee) continue;
+        let base = v;
+        for (const { field, date, snoozeUntil, notifiedDate, label } of [
+          { field: "stk", date: v.stkDate, snoozeUntil: v.stkSnoozeUntil, notifiedDate: v.stkNotifiedDate, label: "STK" },
+          { field: "ek", date: v.ekDate, snoozeUntil: v.ekSnoozeUntil, notifiedDate: v.ekNotifiedDate, label: "emisnú kontrolu (EK)" },
+        ]) {
+          if (!date) continue;
+          if (notifiedDate === today) continue; // dnes už bolo poslané
+          if (snoozeUntil && today < snoozeUntil) continue; // odložené
+          const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+          if (daysLeft > VEHICLE_REMINDER_DAYS) continue;
+          const notifiedField = field === "stk" ? "stkNotifiedDate" : "ekNotifiedDate";
+          const won = await claimReminder("vehicles", base, { [notifiedField]: today }, notifiedField, today);
+          if (!won) continue;
+          base = { ...base, [notifiedField]: today };
+          setVehicles((prev) => prev.map((vv) => (vv.id === v.id ? { ...vv, [notifiedField]: today } : vv)));
+          pushNotification({
+            kind: "vehicle_stk_ek",
+            roles: [],
+            userName: employee.name,
+            title: daysLeft < 0 ? `${label} auta po termíne` : `Blíži sa ${label} auta`,
+            message: `${v.spz || "Auto"}${v.znacka ? " (" + v.znacka + ")" : ""} — ${label} ${daysLeft < 0 ? "bola splatná" : "je splatná"} ${fmtDate(date)}.`,
+            link: { module: "administrativa", view: "auta", vehicleId: v.id },
+          });
+        }
+      }
+    })();
   }, [loaded, vehicles, employees, today]);
 
   useEffect(() => {
@@ -2400,6 +2445,7 @@ function DispatcherApp() {
       framoveZmluvy: [framoveZmluvy, persistFramoveZmluvy],
       blacklist: [blacklist, persistBlacklist],
       handoverProtocols: [handoverProtocols, persistHandoverProtocols],
+      vehicles: [vehicles, persistVehicles],
     };
     const target = RESTORE_SETTERS[trashEntry.originalTable];
     if (!target) return;
@@ -2455,7 +2501,7 @@ function DispatcherApp() {
   }
   function deleteFramovaZmluva(id) {
     const record = framoveZmluvy.find((r) => r.id === id);
-    moveToTrash("framovaZmluva", "framoveZmluvy", record, record?.customer || record?.nazov);
+    moveToTrash("framovaZmluva", "framoveZmluvy", record, record?.najomca);
     persistFramoveZmluvy(framoveZmluvy.filter((r) => r.id !== id));
   }
 
@@ -2591,7 +2637,7 @@ function DispatcherApp() {
   }
   function deleteCustomer(customerId) {
     const record = customers.find((c) => c.id === customerId);
-    moveToTrash("customer", "customers", record, record?.nazovZakaznika);
+    moveToTrash("customer", "customers", record, record?.firma);
     persistCustomers(customers.filter((c) => c.id !== customerId));
   }
 
@@ -4148,6 +4194,8 @@ function DispatcherApp() {
     setShowAddVehicle(null);
   }
   function deleteVehicle(id) {
+    const record = vehicles.find((v) => v.id === id);
+    moveToTrash("vehicle", "vehicles", record, record?.spz);
     persistVehicles(vehicles.filter((v) => v.id !== id));
   }
   // Zadanie nového dátumu STK/EK — zruší aj prípadné odloženie a "už upozornené
@@ -4417,7 +4465,11 @@ function DispatcherApp() {
     setCompleteJobTarget(null);
   }
   function uncompleteJob(jobId) {
-    updateJob(jobId, { status: "planned" });
+    // Zákazka sa vracia do aktívneho stavu — musí sa jej zmazať aj dátum/depo
+    // konca, inak by kontrola prekrývania termínov (rangesOverlap) videla stroj
+    // ako voľný od tohto (už neplatného) endDate, a dal by sa naň omylom
+    // založiť duplicitný zápis.
+    updateJob(jobId, { status: "planned", endDate: null, returnDepo: null, returnDriverId: null, pickupDate: null });
   }
   // Skutočný dátum vývozu/zvozu — nezávislý od oficiálneho začiatku/konca nájmu
   // (startDate/endDate). Dispečer ho mení priamo v Prepravách, keď sa reálny
@@ -4746,6 +4798,7 @@ function DispatcherApp() {
             machines={enrichedMachines}
             jobs={jobs}
             reservations={reservations}
+            damages={damages}
             salespeople={salespeople}
             today={today}
             driverById={driverById}
@@ -4755,6 +4808,8 @@ function DispatcherApp() {
             onOpenJob={(j) => setJobDetail(j)}
             onOpenReservation={(r) => setReservationCardTarget(r)}
             onAddJob={(machineId, startDate) => setShowAddJob({ machineId, startDate })}
+            onUpdateJob={updateJob}
+            onUpdateReservation={updateReservation}
           />
         )}
 
@@ -5005,13 +5060,20 @@ function DispatcherApp() {
             onTargetDepoConsumed={() => setSparePartsTargetDepo(null)}
             onAdd={(items) => {
               const canManage = can(effectiveUser, "sparepart_manage");
-              const depo = items[0]?.depo || "";
+              const allowedDepos = myAssignableDepos(effectiveUser);
+              // Technik smie žiadať len na svoje depo, "vedúci technik" len na
+              // svoje depá — vynútené aj tu, nie len vo formulári, nech to
+              // nejde obísť priamym API voľaním.
+              const forcedDepo = !canManage ? myEmployee?.depo : null;
+              const depo = forcedDepo || items[0]?.depo || "";
+              if (allowedDepos && !allowedDepos.includes(depo)) return;
               const nowIso = new Date().toISOString();
               persistSpareParts([
                 ...spareParts,
                 ...items.map((data) => ({
                   id: uid(),
                   ...data,
+                  ...(forcedDepo ? { depo: forcedDepo } : null),
                   stav: canManage ? SPAREPART_STAV.CAKA_NA_OBJEDNANIE : SPAREPART_STAV.CAKA_NA_SCHVALENIE,
                   datumObjednania: "",
                   nakupnaObjednavka: "",
@@ -5138,7 +5200,7 @@ function DispatcherApp() {
           <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
         )}
 
-        {module === "administrativa" && view === "statistiky" && (
+        {module === "administrativa" && view === "statistiky" && can(effectiveUser, "statistics_view") && (
           <StatistikyView
             user={effectiveUser}
             machines={machines}
@@ -5153,7 +5215,7 @@ function DispatcherApp() {
             onUpdateEmployee={updateEmployee}
           />
         )}
-        {module === "administrativa" && view === "modely" && (
+        {module === "administrativa" && view === "modely" && can(effectiveUser, "employee_manage") && (
           <MachineModelsView
             machineModels={machineModels}
             onUpdate={updateMachineModel}
@@ -5167,7 +5229,7 @@ function DispatcherApp() {
             }}
           />
         )}
-        {module === "administrativa" && view === "zamestnanci" && (
+        {module === "administrativa" && view === "zamestnanci" && can(effectiveUser, "employee_manage") && (
           <AdministrativaView
             employees={employees}
             profiles={profiles}
@@ -5190,7 +5252,7 @@ function DispatcherApp() {
             onLinkAccount={(e) => setLinkAccountTarget(e)}
           />
         )}
-        {module === "administrativa" && view === "checkeri" && (
+        {module === "administrativa" && view === "checkeri" && can(effectiveUser, "employee_manage") && (
           <DepoCheckerSettingsView
             depoCheckers={depoCheckers}
             technicians={technicians}
@@ -5278,6 +5340,8 @@ function DispatcherApp() {
           vehicle={vehicles.find((v) => v.id === vehicleCardTarget.id) || vehicleCardTarget}
           employees={employees}
           today={today}
+          user={effectiveUser}
+          myEmployee={myEmployee}
           onClose={() => setVehicleCardTarget(null)}
           onSetDate={setVehicleDate}
           onSnooze={snoozeVehicleReminder}
@@ -5288,7 +5352,7 @@ function DispatcherApp() {
       )}
       {driverCard && (
         <DriverCardModal
-          driver={driverCard}
+          driver={drivers.find((d) => d.id === driverCard.id) || driverCard}
           jobs={jobs}
           today={today}
           user={effectiveUser}
@@ -5304,13 +5368,11 @@ function DispatcherApp() {
               reasons: ["Ukončenie pracovného pomeru", "Odchod do dôchodku", "Dlhodobá PN", "Iné"],
               onConfirm: (reason, note) => {
                 setDriverArchived(driverCard.id, true, reason, note);
-                setDriverCard((prev) => (prev ? { ...prev, archived: true, archivedReason: reason, archivedNote: note } : prev));
               },
             });
           }}
           onUnarchive={() => {
             setDriverArchived(driverCard.id, false);
-            setDriverCard((prev) => (prev ? { ...prev, archived: false } : prev));
           }}
         />
       )}
@@ -5586,7 +5648,7 @@ function DispatcherApp() {
       )}
       {machineCard && (
         <MachineCardModal
-          machine={machineCard}
+          machine={machines.find((m) => m.id === machineCard.id) || machineCard}
           machineModels={machineModels}
           history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
           jobs={jobs}
@@ -5807,7 +5869,7 @@ function DispatcherApp() {
       )}
       {serviceEventDetail && (
         <ServiceEventDetailModal
-          d={serviceEventDetail}
+          d={damages.find((dd) => dd.id === serviceEventDetail.id) || serviceEventDetail}
           technicianById={technicianByIdTop}
           machineById={enrichedMachineById}
           protocolLogs={protocolLogs}
@@ -5879,6 +5941,7 @@ function DispatcherApp() {
         <DamageAssignModal
           damage={damageAssignTarget}
           technicians={technicians}
+          user={effectiveUser}
           assignments={assignments}
           today={today}
           onClose={() => { setDamageAssignTarget(null); setCardHistory([]); }}
@@ -6057,7 +6120,7 @@ function DispatcherApp() {
       )}
       {jobDetail && (
         <JobDetailModal
-          job={jobDetail}
+          job={jobs.find((j) => j.id === jobDetail.id) || jobDetail}
           machine={machineById[jobDetail.machineId]}
           driverById={driverById}
           technicianById={technicianByIdTop}
@@ -10155,10 +10218,14 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
 }
 // Karta jedného auta — otvára sa buď zo zoznamu v Administratíve, alebo priamo
 // z notifikácie (klik na upozornenie), a to aj bez prístupu do Administratívy.
-function VehicleCardModal({ vehicle, employees, today, onClose, onSetDate, onSnooze }) {
+function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose, onSetDate, onSnooze }) {
   const [editingField, setEditingField] = useState(null); // "stk" | "ek" | null
   const [newDate, setNewDate] = useState("");
   const employee = employees.find((e) => e.id === vehicle.assignedEmployeeId);
+  // Karta sa dá otvoriť aj priamo odkazom z notifikácie (aj cez URL pri studenom
+  // štarte) — bez tejto poistky by na zápis dosiahol ktokoľvek, kto sa k
+  // takémuto odkazu dostane, nielen ten, komu je auto naozaj pridelené.
+  const canEdit = can(user, "vehicle_manage") || (myEmployee && myEmployee.id === vehicle.assignedEmployeeId);
 
   function renderField(field, label, date) {
     const status = vehicleDateStatus(date, today);
@@ -10173,7 +10240,9 @@ function VehicleCardModal({ vehicle, employees, today, onClose, onSetDate, onSno
             Naposledy zmenené {fmtDate(vehicle[`${field}ChangedAt`].slice(0, 10))}{vehicle[`${field}ChangedBy`] ? ` · ${vehicle[`${field}ChangedBy`]}` : ""}
           </div>
         )}
-        {editingField === field ? (
+        {!canEdit ? (
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Len na čítanie — zadať nový dátum smie priradený zamestnanec alebo vedúci.</div>
+        ) : editingField === field ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
             <button className="btn btn-accent" disabled={!newDate} onClick={() => { onSetDate(vehicle.id, field, newDate); setEditingField(null); setNewDate(""); }}>Uložiť</button>
@@ -11263,7 +11332,11 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
         <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
-            onChange={setCustomer}
+            onChange={(v) => {
+              setCustomer(v);
+              setSelectedCustomerId(null);
+              setSelectedContacts([]);
+            }}
             customers={customers || []}
             placeholder="Názov firmy…"
             onSelectCustomer={(c) => {
@@ -11376,7 +11449,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
         </>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {can(user, "reservation_add") && (
+        {canActDirectly && (
           <button className="btn btn-ghost" onClick={onEdit}>
             Upraviť
           </button>
@@ -11531,7 +11604,11 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
           <Field label="Zákazník *">
             <CustomerAutocomplete
               value={customer}
-              onChange={setCustomer}
+              onChange={(v) => {
+                setCustomer(v);
+                setSelectedCustomerId(null);
+                setSelectedContacts([]);
+              }}
               customers={customers || []}
               placeholder="Názov firmy…"
               onSelectCustomer={(c) => {
@@ -12569,6 +12646,55 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
 // nej nič vizuálne nemenilo. React.memo tomu zabráni, POKIAĽ všetky props
 // nižšie zostanú referenčne rovnaké medzi prekresleniami (o to sa stará
 // zamrazenie cez useMemo/useCallback vyššie v CalendarView).
+// Potvrdzovacie okno po pustení ťahanej zákazky/rezervácie v Gantte — nič sa
+// neuloží skôr, než človek klikne "Potvrdiť" (Zrušiť vráti blok na pôvodné
+// miesto, žiadny React stav sa nezmenil). Pri zákazke sa navyše dá hneď
+// upraviť aj skutočný dátum vývozu/zvozu (nezávislý od zmluvného začiatku/
+// konca) — rovnaký princíp, ako vo formulári "Upraviť zákazku".
+function GanttDragConfirmModal({ pending, onConfirm, onCancel }) {
+  const isJob = pending.kind === "job";
+  const item = pending.item;
+  const oldStart = isJob ? item.startDate : item.expectedStart;
+  const oldEnd = isJob ? item.endDate : item.expectedEnd;
+  const label = item.customer || item.toLocation || (isJob ? "zákazka" : "rezervácia");
+  const [departureDate, setDepartureDate] = useState(pending.defaultDeparture || "");
+  const [pickupDate, setPickupDate] = useState(pending.defaultPickup || "");
+  return (
+    <Modal title={isJob ? "Presunúť zákazku?" : "Presunúť rezerváciu?"} onClose={onCancel}>
+      <div style={{ fontSize: 14, marginBottom: 16 }}>
+        {isJob ? "Presunúť zákazku" : "Presunúť rezerváciu"} <strong>{label}</strong> z{" "}
+        {fmtDate(oldStart)}–{oldEnd ? fmtDate(oldEnd) : "bez konca"} na{" "}
+        {fmtDate(pending.newStartIso)}–{pending.newEndIso ? fmtDate(pending.newEndIso) : "bez konca"}?
+      </div>
+      {isJob && (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 6 }}>
+          <Field label="Dátum vývozu">
+            <input type="date" value={departureDate} onChange={(e) => setDepartureDate(e.target.value)} style={{ width: "100%" }} />
+          </Field>
+          <Field label="Dátum zvozu">
+            <input type="date" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
+          </Field>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
+        <button
+          className="btn btn-accent"
+          onClick={() =>
+            onConfirm(
+              isJob
+                ? { startDate: pending.newStartIso, endDate: pending.newEndIso, departureDate: departureDate || pending.newStartIso, pickupDate: pickupDate || null }
+                : { expectedStart: pending.newStartIso, expectedEnd: pending.newEndIso }
+            )
+          }
+        >
+          Potvrdiť
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 const CalendarGrid = React.memo(function CalendarGrid({
   scrollContainerRef,
   handleCalendarScroll,
@@ -12594,6 +12720,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
   salespeople,
   onOpenReservation,
   compactMode,
+  user,
+  jobs,
+  reservations,
+  damages,
+  onUpdateJob,
+  onUpdateReservation,
+  columnPxRef,
 }) {
   // Len tie dni, čo sú naozaj vo výreze (plus malá rezerva, "overscan") — nie
   // úplne všetky, čo appka pozná. Presne toto appku drží plynulou aj pri
@@ -12609,6 +12742,161 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // dňoch vyššie.
   function intersectsVisible(startCol, endCol) {
     return endCol - 1 >= visibleColRange.startIdx && startCol - 1 <= visibleColRange.endIdx;
+  }
+
+  // Ťahanie zákazky/rezervácie myšou (presun aj zmena termínu ťahaním za
+  // okraj) — kto smie, sa rozhoduje TU raz (nie pri každom vykreslení bloku).
+  // Zákazky: len job_edit (dispečer/vedúci požičovne). Rezervácie: rovnaká
+  // podmienka ako pri tlačidle "Upraviť" v karte rezervácie (canActDirectly)
+  // — obchodník (len "podnet" flow) ťahať nesmie.
+  const canDragJobs = can(user, "job_edit");
+  const canDragReservations = can(user, "reservation_convert");
+
+  // Aktívne ťahanie (počas pohybu myšou) — v REF, nie v Reacte, presne preto,
+  // aby pohyb myšou nespôsoboval prekreslenie celej (ťažkej, virtualizovanej)
+  // mriežky. Vizuálny náhľad sa počas ťahania mení priamym zápisom do
+  // style.gridColumn ťahaného bloku (rovnaký princíp ako meranie šírky vyššie
+  // cez measureBarRef — priamy prístup k DOM, mimo Reactu).
+  const dragRef = useRef(null);
+  // Po pustení tlačidla nasleduje natívny "click" na tom istom prvku — ak sa
+  // blok počas ťahania skutočne pohol, tento klik sa NESMIE prejaviť ako
+  // otvorenie karty zákazky/rezervácie (used by onClick handlers nižšie).
+  const suppressClickRef = useRef(false);
+  // Potvrdzovacie okno po pustení — až tu sa (prípadne) skutočne uloží.
+  const [pendingDrag, setPendingDrag] = useState(null);
+
+  function resetDragVisual(d) {
+    if (d?.wrapEl) d.wrapEl.style.gridColumn = d.origGridColumn;
+  }
+
+  function startBarDrag(e, mode, kind, item, startCol, endCol, isOpenEnded) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.stopPropagation();
+    const wrap = e.currentTarget.closest(".gantt-bar-wrap");
+    if (!wrap) return;
+    const origGridColumn = wrap.style.gridColumn || `${startCol + 1} / ${endCol + 2}`;
+    const drag = {
+      kind, item, mode, wrapEl: wrap, pointerId: e.pointerId,
+      startClientX: e.clientX,
+      origStartCol: startCol, origEndCol: endCol, isOpenEnded, origGridColumn,
+      previewStartCol: startCol, previewEndCol: endCol,
+      lastDayDelta: 0, moved: false,
+    };
+    dragRef.current = drag;
+    try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* ignore — niektoré prehliadače/dotykové vstupy to nevyžadujú */ }
+
+    const onMove = (ev) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = ev.clientX - d.startClientX;
+      const { dayColPx } = columnPxRef.current;
+      const stepPx = dayColPx + 2; // +2 = medzera medzi stĺpcami mriežky (gap)
+      const dayDelta = Math.round(dx / stepPx);
+      if (dayDelta === d.lastDayDelta) return; // nič sa vizuálne nezmenilo, neplytvaj zápisom do DOM
+      d.lastDayDelta = dayDelta;
+      d.moved = dayDelta !== 0;
+      let newStartCol = d.origStartCol;
+      let newEndCol = d.origEndCol;
+      if (d.mode === "move") {
+        newStartCol = d.origStartCol + dayDelta;
+        // Bez určeného konca sa "koniec" len vizuálne naťahuje po okraj
+        // viditeľných dní (nemá skutočný dátum) — pri presune sa teda
+        // neposúva spolu so začiatkom, ostáva otvorený.
+        newEndCol = d.isOpenEnded ? d.origEndCol : d.origEndCol + dayDelta;
+      } else if (d.mode === "resize-start") {
+        newStartCol = Math.min(d.origStartCol + dayDelta, d.isOpenEnded ? Infinity : d.origEndCol);
+      } else {
+        newEndCol = Math.max(d.origEndCol + dayDelta, d.origStartCol);
+      }
+      newStartCol = Math.max(1, Math.min(allDays.length, newStartCol));
+      newEndCol = Math.max(1, Math.min(allDays.length, newEndCol));
+      d.previewStartCol = newStartCol;
+      d.previewEndCol = newEndCol;
+      d.wrapEl.style.gridColumn = `${newStartCol + 1} / ${newEndCol + 2}`;
+    };
+
+    const finish = (ev, commit) => {
+      const d = dragRef.current;
+      if (!d) return;
+      wrap.removeEventListener("pointermove", onMove);
+      wrap.removeEventListener("pointerup", onUp);
+      wrap.removeEventListener("pointercancel", onCancel);
+      try { wrap.releasePointerCapture(ev.pointerId); } catch (err) { /* ignore */ }
+      dragRef.current = null;
+      if (d.moved) {
+        suppressClickRef.current = true;
+        if (commit) {
+          handleBarDrop(d);
+        } else {
+          resetDragVisual(d);
+        }
+      }
+    };
+    const onUp = (ev) => finish(ev, true);
+    const onCancel = (ev) => finish(ev, false);
+    wrap.addEventListener("pointermove", onMove);
+    wrap.addEventListener("pointerup", onUp);
+    wrap.addEventListener("pointercancel", onCancel);
+  }
+
+  // Zavolané až PO pustení tlačidla — jediné miesto, kde sa počas celého
+  // ťahania siaha na React stav (kontrola konfliktov + otvorenie potvrdenia).
+  function handleBarDrop(d) {
+    const newStartIso = allDays[d.previewStartCol - 1];
+    const newEndIso = d.isOpenEnded ? null : allDays[d.previewEndCol - 1];
+    if (d.kind === "job") {
+      const job = d.item;
+      const otherJob = (jobs || []).find(
+        (j) => j.machineId === job.machineId && j.id !== job.id && rangesOverlap(newStartIso, newEndIso, j.startDate, j.endDate)
+      );
+      if (otherJob) {
+        resetDragVisual(d);
+        alert(`⚠ Stroj na tento termín nie je voľný — má už inú zákazku (${otherJob.customer || otherJob.toLocation || "zákazka"}). Presun sa nevykonal.`);
+        return;
+      }
+      const otherReservation = (reservations || []).find(
+        (r) => r.machineId === job.machineId && r.status === "approved" && rangesOverlap(newStartIso, newEndIso, r.expectedStart, r.expectedEnd)
+      );
+      if (otherReservation) {
+        resetDragVisual(d);
+        alert(`⚠ Stroj na tento termín nie je voľný — má schválenú nezáväznú rezerváciu (${otherReservation.customer || "nezáväzná rezervácia"}). Presun sa nevykonal.`);
+        return;
+      }
+      const pendingPrep = (damages || []).find((dm) => dm.machineId === job.machineId && dm.prepCheck && !dm.resolved);
+      if (pendingPrep) {
+        resetDragVisual(d);
+        alert(`⚠ Stroj ešte nemá dokončenú „Prípravu do požičovne" — kým sa toto poškodenie neoznačí ako vyriešené, presun sa nevykoná.`);
+        return;
+      }
+      // Rovnaká pravidlo predvyplnenia vývozu/zvozu ako v AddJobModal: dátum
+      // vývozu/zvozu sa posunie iba tak, ak bol doteraz PRESNE zosynchronizovaný
+      // so zmluvným začiatkom/koncom — inak (bol nastavený samostatne) sa ho
+      // ťahanie po kalendári nedotkne.
+      let defaultDeparture = job.departureDate;
+      if (newStartIso !== job.startDate && job.departureDate === job.startDate) defaultDeparture = newStartIso;
+      let defaultPickup = job.pickupDate;
+      if (newEndIso !== job.endDate && job.pickupDate === job.endDate) defaultPickup = newEndIso;
+      setPendingDrag({ kind: "job", item: job, wrapEl: d.wrapEl, origGridColumn: d.origGridColumn, newStartIso, newEndIso, defaultDeparture, defaultPickup });
+    } else {
+      const r = d.item;
+      const otherJob = (jobs || []).find(
+        (j) => j.machineId === r.machineId && rangesOverlap(newStartIso, newEndIso, j.startDate, j.endDate)
+      );
+      if (otherJob) {
+        resetDragVisual(d);
+        alert(`⚠ Stroj na tento termín nie je voľný — má zákazku (${otherJob.customer || otherJob.toLocation || "zákazka"}). Presun sa nevykonal.`);
+        return;
+      }
+      const otherReservation = (reservations || []).find(
+        (rr) => rr.machineId === r.machineId && rr.id !== r.id && rr.status === "approved" && rangesOverlap(newStartIso, newEndIso, rr.expectedStart, rr.expectedEnd)
+      );
+      if (otherReservation) {
+        resetDragVisual(d);
+        alert(`⚠ Stroj na tento termín nie je voľný — má inú rezerváciu (${otherReservation.customer || "iná rezervácia"}). Presun sa nevykonal.`);
+        return;
+      }
+      setPendingDrag({ kind: "reservation", item: r, wrapEl: d.wrapEl, origGridColumn: d.origGridColumn, newStartIso, newEndIso });
+    }
   }
 
   return (
@@ -12824,13 +13112,35 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 const label = j.customer || j.toLocation || driverById[j.driverId]?.name || "";
                 const hasNote = !isDone && j.notes;
                 const showNote = hasNote && !compactMode; // v riadku samotnom (nie v tooltipe nižšie) sa v kompaktnom režime schová, nie je tam dosť miesta
+                // Ťahanie je dovolené len s právom job_edit a len pri neukončenej
+                // zákazke (ukončená zostáva len na prehliadanie, nič sa na nej
+                // už nemení).
+                const draggable = canDragJobs && !isDone;
                 return (
                   <div
                     key={j.id}
-                    className="gantt-bar-wrap"
-                    onClick={() => onOpenJob(j)}
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: "pointer" }}
+                    className={draggable ? "gantt-bar-wrap draggable" : "gantt-bar-wrap"}
+                    onClick={() => {
+                      if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+                      onOpenJob(j);
+                    }}
+                    onPointerDown={draggable ? (e) => startBarDrag(e, "move", "job", j, startCol, endCol, noEnd) : undefined}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable ? "grab" : "pointer" }}
                   >
+                    {draggable && (
+                      <div
+                        className="gantt-drag-handle start"
+                        title="Ťahaním zmeníte začiatok"
+                        onPointerDown={(e) => startBarDrag(e, "resize-start", "job", j, startCol, endCol, noEnd)}
+                      />
+                    )}
+                    {draggable && !noEnd && (
+                      <div
+                        className="gantt-drag-handle end"
+                        title="Ťahaním zmeníte koniec"
+                        onPointerDown={(e) => startBarDrag(e, "resize-end", "job", j, startCol, endCol, noEnd)}
+                      />
+                    )}
                     {/* Farebné pozadie zákazky — samostatne, vyplňuje presne
                         šírku dní, čo zákazka trvá (overflow:hidden tu bráni
                         len TOMUTO pozadiu vizuálne presahovať do susednej
@@ -12893,19 +13203,77 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   </div>
                 );
               })}
+              {/* Ikonky skutočného vývozu/zvozu — čisto vizuálne (bez ťahania),
+                  zobrazia sa len keď sa skutočný dátum LÍŠI od zmluvného. Smer
+                  šípky je pevne daný TYPOM udalosti (vývoz=vpravo, zvoz=vľavo),
+                  nezávisle od toho, či je skutočný dátum skorší alebo neskorší
+                  než zmluvný — presne tak to bolo dohodnuté. */}
+              {mJobs.flatMap((j) => {
+                const icons = [];
+                if (j.departureDate && j.departureDate !== j.startDate) {
+                  const depCol = colForDate(j.departureDate, true);
+                  if (depCol - 1 >= visibleColRange.startIdx && depCol - 1 <= visibleColRange.endIdx) {
+                    icons.push(
+                      <div
+                        key={`dep-${j.id}`}
+                        className="gantt-transport-icon"
+                        title={`Zmluva: ${fmtDate(j.startDate)} · Skutočný vývoz: ${fmtDate(j.departureDate)}`}
+                        style={{ gridColumn: depCol + 1, gridRow: 1 }}
+                      >
+                        🚚▶
+                      </div>
+                    );
+                  }
+                }
+                if (j.pickupDate && j.pickupDate !== j.endDate) {
+                  const pickCol = colForDate(j.pickupDate, true);
+                  if (pickCol - 1 >= visibleColRange.startIdx && pickCol - 1 <= visibleColRange.endIdx) {
+                    icons.push(
+                      <div
+                        key={`pick-${j.id}`}
+                        className="gantt-transport-icon"
+                        title={`Zmluva: ${j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · Skutočný zvoz: ${fmtDate(j.pickupDate)}`}
+                        style={{ gridColumn: pickCol + 1, gridRow: 1 }}
+                      >
+                        🚚◀
+                      </div>
+                    );
+                  }
+                }
+                return icons;
+              })}
               {mReservations.map((r) => {
                 const startCol = colForDate(r.expectedStart, true);
                 const noEnd = !r.expectedEnd;
                 const endCol = noEnd ? allDays.length : colForDate(r.expectedEnd, false);
                 if (!intersectsVisible(startCol, endCol)) return null;
                 const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
+                const draggable = canDragReservations;
                 return (
                   <div
                     key={r.id}
-                    className="gantt-bar-wrap"
-                    onClick={() => onOpenReservation(r)}
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: "pointer" }}
+                    className={draggable ? "gantt-bar-wrap draggable" : "gantt-bar-wrap"}
+                    onClick={() => {
+                      if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+                      onOpenReservation(r);
+                    }}
+                    onPointerDown={draggable ? (e) => startBarDrag(e, "move", "reservation", r, startCol, endCol, noEnd) : undefined}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable ? "grab" : "pointer" }}
                   >
+                    {draggable && (
+                      <div
+                        className="gantt-drag-handle start"
+                        title="Ťahaním zmeníte začiatok"
+                        onPointerDown={(e) => startBarDrag(e, "resize-start", "reservation", r, startCol, endCol, noEnd)}
+                      />
+                    )}
+                    {draggable && !noEnd && (
+                      <div
+                        className="gantt-drag-handle end"
+                        title="Ťahaním zmeníte koniec"
+                        onPointerDown={(e) => startBarDrag(e, "resize-end", "reservation", r, startCol, endCol, noEnd)}
+                      />
+                    )}
                     <div
                       ref={measureBarRef}
                       data-bar-id={"r-" + r.id}
@@ -12954,11 +13322,25 @@ const CalendarGrid = React.memo(function CalendarGrid({
           );
         })}
       </div>
+      {pendingDrag && (
+        <GanttDragConfirmModal
+          pending={pendingDrag}
+          onCancel={() => {
+            resetDragVisual(pendingDrag);
+            setPendingDrag(null);
+          }}
+          onConfirm={(patch) => {
+            if (pendingDrag.kind === "job") onUpdateJob(pendingDrag.item.id, patch);
+            else onUpdateReservation(pendingDrag.item.id, patch);
+            setPendingDrag(null);
+          }}
+        />
+      )}
     </div>
   );
 });
 
-function CalendarView({ machines, jobs, reservations, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob }) {
+function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -13413,6 +13795,13 @@ function CalendarView({ machines, jobs, reservations, salespeople, today, driver
             driverById={driverById}
             salespeople={salespeople}
             onOpenReservation={onOpenReservation}
+            user={user}
+            jobs={jobs}
+            reservations={reservations}
+            damages={damages}
+            onUpdateJob={onUpdateJob}
+            onUpdateReservation={onUpdateReservation}
+            columnPxRef={columnPxRef}
           />
         )}
       </div>
@@ -15062,7 +15451,11 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
         <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
-            onChange={setCustomer}
+            onChange={(v) => {
+              setCustomer(v);
+              setSelectedCustomerId(null);
+              setSelectedContacts([]);
+            }}
             customers={customers || []}
             placeholder="Názov firmy…"
             onSelectCustomer={(c) => {
@@ -15449,7 +15842,10 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 /* ---------------------------------------------------------
    Damage assign modal (assign a damage report to a technician/day)
 --------------------------------------------------------- */
-function DamageAssignModal({ damage, technicians, assignments, today, onClose, onSave, onBack }) {
+function DamageAssignModal({ damage, technicians, user, assignments, today, onClose, onSave, onBack }) {
+  // "Vedúci technik" role smie prideľovať len technikom z vlastných depí.
+  const allowedDepos = myAssignableDepos(user);
+  const assignableTechnicians = allowedDepos ? technicians.filter((t) => allowedDepos.includes(t.depo)) : technicians;
   const [technicianIds, setTechnicianIds] = useState(damage.technicianIds || (damage.technicianId ? [damage.technicianId] : []));
   const [date, setDate] = useState(damage.assignedDate || today);
   const canSave = technicianIds.length > 0 && date;
@@ -15479,7 +15875,7 @@ function DamageAssignModal({ damage, technicians, assignments, today, onClose, o
     <Modal title={`Prideliť · ${damage.code}`} onClose={onClose} onBack={onBack}>
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
-          {technicians.filter((t) => !t.archived).map((t) => {
+          {assignableTechnicians.filter((t) => !t.archived).map((t) => {
             const absence = absenceOn(t.id);
             const workload = workloadOn(t.id);
             return (
@@ -17585,7 +17981,7 @@ function blankSparePartRow() {
   return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "", urcenieStrojText: "" };
 }
 
-function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }) {
+function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onClose, onSave }) {
   const [depo, setDepo] = useState(defaultDepo || "");
   const [rows, setRows] = useState([blankSparePartRow(), blankSparePartRow(), blankSparePartRow()]);
 
@@ -17645,7 +18041,7 @@ function AddSparePartModal({ canManage, defaultDepo, machines, onClose, onSave }
         <Field label="Depo *">
           <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: 240 }}>
             <option value="">— vybrať depo —</option>
-            {DEPO_OPTIONS.filter((d) => d !== "Externé").map((d) => <option key={d} value={d}>{d}</option>)}
+            {(depoOptions || DEPO_OPTIONS.filter((d) => d !== "Externé")).map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </Field>
       ) : (
@@ -18006,7 +18402,10 @@ function exportSparePartsCSV(rows, filename) {
 function SparePartsView({ spareParts, machines, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
-  const depoOptions = DEPO_OPTIONS.filter((d) => d !== "Externé");
+  // "Vedúci technik" role vidí/objednáva len na svoje depá (napr. BA + NR),
+  // ostatní s právom sparepart_manage (dispečer/vedúci servisu) na všetky.
+  const allowedDepos = myAssignableDepos(user);
+  const depoOptions = allowedDepos || DEPO_OPTIONS.filter((d) => d !== "Externé");
   const [activeDepo, setActiveDepo] = useState(canManage ? depoOptions[0] : myDepo);
   const [dodavatelFilter, setDodavatelFilter] = useState(null); // null = všetko zaškrtnuté (predvolené)
   const [periodMode, setPeriodMode] = useState("month"); // month | all | custom
@@ -18410,6 +18809,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         <AddSparePartModal
           canManage={canManage}
           defaultDepo={depo}
+          depoOptions={depoOptions}
           machines={machines}
           onClose={() => setShowAdd(false)}
           onSave={(data) => {
@@ -18872,6 +19272,19 @@ function GlobalStyle() {
         pointer-events: none;
       }
       .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip { visibility: visible; opacity: 1; }
+      /* Ťahanie zákazky/rezervácie v Gantte (presun/zmena termínu) — stredná
+         časť bloku = kurzor "uchopiť" (presun), tenké 8px pruhy na okrajoch =
+         kurzor na zmenu šírky (zmena len začiatku/konca). Samotné ťahanie
+         nižšie priamo mutuje DOM (style.gridColumn), nie React stav — tieto
+         handle prvky sú len vizuálna/klikacia vrstva nad tým. */
+      .gantt-bar-wrap.draggable { cursor: grab; }
+      .gantt-bar-wrap.draggable:active { cursor: grabbing; }
+      .gantt-drag-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 5; }
+      .gantt-drag-handle.start { left: 0; }
+      .gantt-drag-handle.end { right: 0; }
+      /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
+         vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
+      .gantt-transport-icon { display: flex; align-items: center; justify-content: center; font-size: 11px; pointer-events: none; z-index: 2; line-height: 1; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
