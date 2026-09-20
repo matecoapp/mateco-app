@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.465";
+const APP_VERSION = "1.0.466";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4777,7 +4777,7 @@ function DispatcherApp() {
             ? " has-mobile-tech-bar"
             : ""
         }`}
-        style={{ padding: "12px 24px 20px", width: "100%", flex: 1, boxSizing: "border-box" }}
+        style={{ padding: "12px 24px 20px", flex: 1, minWidth: 0, boxSizing: "border-box" }}
       >
         {module === "poziciovna" && view === "dashboard" && (
           <Dashboard
@@ -19053,7 +19053,7 @@ function GlobalStyle() {
          iný modul rovno prepne aj na jeho prvú záložku (setModule to už
          robí), klik na záložku v OTVORENOM module len prepne pohľad. */
       .app-body-row { display: flex; flex: 1; min-height: 0; }
-      .sidebar-nav { width: 190px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
+      .sidebar-nav { width: 152px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
       .sidebar-module { border-bottom: 1px solid var(--border); }
       .sidebar-module:last-child { border-bottom: none; }
       .sidebar-group {
