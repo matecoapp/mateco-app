@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.451";
+const APP_VERSION = "1.0.452";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13649,20 +13649,23 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allDays.length, viewport.scrollLeft, viewport.clientWidth]);
 
-  function scrollToToday() {
+  function scrollToDate(iso) {
     try {
       const container = scrollContainerRef.current;
       if (!container) return;
-      const todayIdx = dayColByIso[today];
-      if (todayIdx === undefined) return;
+      const idx = dayColByIso[iso];
+      if (idx === undefined) return;
       const { dayColPx, nameColPx } = columnPxRef.current;
       const stepPx = dayColPx + 2;
-      const todayLeft = nameColPx + (todayIdx - 1) * stepPx;
-      container.scrollLeft = todayLeft - container.clientWidth / 2 + dayColPx / 2;
+      const left = nameColPx + (idx - 1) * stepPx;
+      container.scrollLeft = left - container.clientWidth / 2 + dayColPx / 2;
       handleCalendarScroll();
     } catch (e) {
       // ignore — purely a convenience scroll
     }
+  }
+  function scrollToToday() {
+    scrollToDate(today);
   }
 
   // "Dnes" musí fungovať aj keď sa odscrolluje ďaleko bez toho, aby sa klikli
@@ -13677,9 +13680,24 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     }
   }
 
+  // Šípky ← → menia monthOffset, čo prestavia CELÉ pole allDays nanovo
+  // (vždy ±12 mesiacov okolo novo zvoleného mesiaca — pozri vyššie) — ale bez
+  // tohto efektu sa scrollLeft kontajnera nikdy neposunul, ostal fyzicky tam,
+  // kde bol predtým. Keďže sa pole dní prestavalo pod ním, na tom istom
+  // scrollLeft (teda na tých istých indexoch v poli) sa zrazu ukazovali úplne
+  // iné, "nadrifitované" dni než tie, čo hovoril nadpis mesiaca — pri
+  // opakovanom klikaní na → sa to vedelo posunúť aj mimo rozumný rozsah a
+  // pôsobiť ako prázdny/nevykreslený kalendár. Teraz sa pri KAŽDEJ zmene
+  // mesiaca (nielen pri návrate na "Dnes") kontajner explicitne odscrolluje
+  // na 1. deň nanovo zvoleného mesiaca.
   useEffect(() => {
-    if (monthOffset !== 0) return;
-    const t = setTimeout(scrollToToday, 50);
+    const t = setTimeout(() => {
+      if (monthOffset === 0) {
+        scrollToToday();
+        return;
+      }
+      scrollToDate(`${year}-${String(month + 1).padStart(2, "0")}-01`);
+    }, 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset]);
