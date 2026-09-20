@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.443";
+const APP_VERSION = "1.0.446";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1144,7 +1144,11 @@ function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra }) {
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,.55)",
-        zIndex: 100,
+        // Nad mobilnou spodnou lištou (z-index 150) — inak ňou boli na mobile
+        // prekryté tlačidlá na spodku otvorenej karty/formulára a nedali sa
+        // použiť. Pod dropdown menu a notifikáciami (200+), tie majú ostať
+        // dostupné aj cez otvorené okno.
+        zIndex: 160,
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
@@ -6055,6 +6059,7 @@ function DispatcherApp() {
         const away = !(module === highlightLocation?.module && view === highlightLocation?.view);
         return (
           <div
+            className="damage-toast-fab"
             style={{
               position: "fixed",
               bottom: 20,
@@ -9686,6 +9691,7 @@ function MaskotChatWidget({ session, machines, onOpenCard }) {
   return (
     <>
       <button
+        className="maskot-fab"
         onClick={() => setOpen((v) => !v)}
         title="maSKot — AI asistent (beta verzia)"
         style={{
@@ -9708,6 +9714,7 @@ function MaskotChatWidget({ session, machines, onOpenCard }) {
       </button>
       {open && (
         <div
+          className="maskot-panel"
           style={{
             position: "fixed",
             right: 20,
@@ -19277,7 +19284,7 @@ function GlobalStyle() {
          rozmerom a ruka potom zmizne — bez neho sa origin berie z vlastných
          súradníc SVG, presne ako pri zdvíhaní nožníc vyššie). */
       @keyframes mascot-wave { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
-      .mascot-wave-arm { transform-origin: 382px 496px; animation: mascot-wave 1s ease-in-out infinite; }
+      .mascot-wave-arm { transform-origin: 387px 462px; animation: mascot-wave 1s ease-in-out infinite; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
@@ -19366,6 +19373,16 @@ function GlobalStyle() {
         .mobile-tech-action-icon { font-size: 18px; line-height: 1; }
         .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
 
+        /* maSKot bublina — na mobile by inak sedela presne v spodnej lište
+           s tlačidlami pre technikov (keby mal daný účet aj tie práva) a
+           prekrývala by ich. Posunutá vyššie vždy, nech je to jednoduché a
+           spoľahlivé aj keď lišta zrovna nie je zobrazená. */
+        .maskot-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
+        .maskot-panel { bottom: calc(82px + 76px + env(safe-area-inset-bottom)) !important; }
+
+        /* To isté pre bublinu "čaká na zobrazenie" (skok na zvýraznené poškodenie). */
+        .damage-toast-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
+
         :root {
           --gantt-name-col: 92px;
           --gantt-day-col: 26px;
@@ -19388,7 +19405,7 @@ function GlobalStyle() {
 
         /* Modálne okná — takmer celá obrazovka, menší padding */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
         .modal-header h3 { font-size: 15px !important; }
 
         /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
@@ -19574,18 +19591,18 @@ function LiftLoader({ label }) {
             kýva jednou rukou (nezávisle od zdvihu, len sa tu spolu s ním
             zjaví). */}
         <g>
-          <line x1="369" y1="522" x2="365" y2="552" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
-          <line x1="377" y1="522" x2="383" y2="552" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
-          <line x1="365" y1="496" x2="357" y2="514" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
-          <rect x="364" y="493" width="18" height="30" rx="5" fill="#18181a" />
-          <rect x="363" y="516" width="20" height="5" fill="var(--accent)" />
-          <line x1="366" y1="494" x2="382" y2="521" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
-          <line x1="382" y1="494" x2="366" y2="521" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="373" cy="482" r="12" fill="#18181a" />
-          <path d="M357 480 A 16 17 0 0 1 389 480 Z" fill="var(--accent)" />
+          <line x1="366" y1="504" x2="360" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <line x1="379" y1="504" x2="388" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <line x1="360" y1="462" x2="347" y2="491" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <rect x="358" y="458" width="29" height="48" rx="8" fill="#18181a" />
+          <rect x="356" y="494" width="32" height="8" fill="var(--accent)" />
+          <line x1="361" y1="459" x2="387" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <line x1="387" y1="459" x2="361" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="372" cy="440" r="19" fill="#18181a" />
+          <path d="M347 437 A 26 27 0 0 1 398 437 Z" fill="var(--accent)" />
           <g className="mascot-wave-arm">
-            <line x1="382" y1="496" x2="400" y2="472" stroke="#18181a" strokeWidth="6" strokeLinecap="round" />
-            <circle cx="400" cy="472" r="4" fill="#18181a" />
+            <line x1="387" y1="462" x2="416" y2="424" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+            <circle cx="416" cy="424" r="6" fill="#18181a" />
           </g>
         </g>
       </svg>
