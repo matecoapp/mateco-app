@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.473";
+const APP_VERSION = "1.0.475";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7281,8 +7281,14 @@ function buildNavModules(effectiveUser, damageAlertCount) {
 // presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
 // na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
 // záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className }) {
-  const [docsExpanded, setDocsExpanded] = useState(false);
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
+  const [docsExpandedState, setDocsExpandedState] = useState(false);
+  // V mobilnej zásuvke si tento stav drží sama (nikto ho nekontroluje zvonku).
+  // V IconRail flyoute ho kontroluje IconRail (onToggleDocsExpanded je daný),
+  // lebo aj pás potrebuje vedieť, či sú podzáložky Dokumentov rozbalené, nech
+  // pridá/uberie im zodpovedajúce bodky.
+  const docsExpanded = onToggleDocsExpanded ? docsExpandedProp : docsExpandedState;
+  const toggleDocsExpanded = onToggleDocsExpanded || (() => setDocsExpandedState((v) => !v));
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
   return (
@@ -7302,7 +7308,7 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
                 {m.tabs.map((t) =>
                   t.dropdown ? (
                     <div key={t.id}>
-                      <button className="sidebar-item" onClick={() => setDocsExpanded((v) => !v)}>
+                      <button className="sidebar-item" onClick={toggleDocsExpanded}>
                         {t.label} {docsExpanded ? "▴" : "▾"}
                       </button>
                       {docsExpanded &&
@@ -7437,6 +7443,7 @@ const RAIL_ICON_RULER = (
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
 function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation }) {
   const [railHover, setRailHover] = useState(false);
+  const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
@@ -7478,7 +7485,16 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   modules.forEach((m) => {
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
     if (module === m.id) {
-      m.tabs.forEach((t) => railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}` }));
+      m.tabs.forEach((t) => {
+        railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}` });
+        // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
+        // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
+        // pod nimi posunie hore oproti textu.
+        if (t.dropdown && docsExpanded) {
+          const subCount = (DOCUMENT_SUBTABS[m.id] || []).length || 1;
+          for (let i = 0; i < subCount; i++) railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}-sub-${i}` });
+        }
+      });
       const quickActions = quickActionsByModule[m.id] || [];
       if (quickActions.length > 0) {
         railRows.push({ kind: "quick-gap", key: `qgap-${m.id}` });
@@ -7528,6 +7544,8 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             onSelectView={onSelectView}
             onPickDocumentsSubView={onPickDocumentsSubView}
             quickActionsByModule={quickActionsByModule}
+            docsExpanded={docsExpanded}
+            onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
           />
         </div>
       )}
@@ -19201,8 +19219,8 @@ function GlobalStyle() {
       .sidebar-module { border-bottom: 1px solid var(--border); }
       .sidebar-module:last-child { border-bottom: none; }
       .sidebar-group {
-        display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
-        padding: 10px 14px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; box-sizing: border-box;
+        padding: 10px 14px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; line-height: 14px;
         color: var(--text); background: transparent; border: none; cursor: pointer;
       }
       .sidebar-module.open .sidebar-group { color: var(--accent); }
@@ -19212,8 +19230,8 @@ function GlobalStyle() {
       .sidebar-module.open .sidebar-group .sidebar-badge { background: #fff; color: var(--accent); }
       .sidebar-tabs { padding-bottom: 6px; }
       .sidebar-item {
-        display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
-        padding: 7px 14px 7px 28px; font-family: 'Barlow', sans-serif; font-size: 12.5px;
+        display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; box-sizing: border-box;
+        padding: 7px 14px 7px 28px; font-family: 'Barlow', sans-serif; font-size: 12.5px; line-height: 15px;
         color: var(--text-dim); background: transparent; border: none; cursor: pointer; border-radius: 0;
       }
       .sidebar-item:hover { background: var(--panel-2); }
@@ -19262,7 +19280,11 @@ function GlobalStyle() {
         padding: 0 3px; display: flex; align-items: center; justify-content: center; line-height: 1;
       }
       .rail-flyout {
-        position: absolute; top: 0; left: 52px; width: 205px; height: 100%; background: var(--panel);
+        /* 260px, nie 205 — pri 205 sa "Poškodenia strojov požičovne" a "Záznam
+           z merania VTZ EZ" zalamovali na 2 riadky, čo posúvalo všetko pod
+           nimi o riadok nižšie oproti bodkám/ikonám v páse (tie počítajú s
+           jedným riadkom na položku). */
+        position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
         border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
       }
       .rail-flyout-nav { width: 100%; padding: 8px 0; }
