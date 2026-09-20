@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.457";
+const APP_VERSION = "1.0.460";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13796,12 +13796,6 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
       </div>
 
-      {/* DOČASNÝ debug riadok — pomáha nájsť príčinu "kalendár sa nevykresľuje
-          dopredu" bez toho, aby som to musel ďalej hádať zo slepého čítania
-          kódu. Odstrániť, keď je chyba nájdená a opravená. */}
-      <div style={{ fontSize: 10, fontFamily: "monospace", color: "#a00", background: "#fff3f3", padding: "4px 8px", marginBottom: 6, border: "1px dashed #a00" }}>
-        DEBUG monthOffset={monthOffset} allDays={allDays.length} col=[{visibleColRange.startIdx},{visibleColRange.endIdx}] scrollLeft={Math.round(viewport.scrollLeft)} clientWidth={viewport.clientWidth} dayColPx={columnPxRef.current.dayColPx} nameColPx={columnPxRef.current.nameColPx} | row=[{visibleRowRange.startIdx},{visibleRowRange.endIdx}] items={layoutItems.items.length} totalHeight={Math.round(layoutItems.totalHeight)} scrollTop={Math.round(viewport.scrollTop)} clientHeight={viewport.clientHeight}
-      </div>
       <div className="panel" style={{ padding: 16 }}>
         {relevantMachines.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
@@ -19443,7 +19437,12 @@ function GlobalStyle() {
 
         :root {
           --gantt-name-col: 92px;
-          --gantt-day-col: 26px;
+          /* 78px — na užšom mobile (~331px na dni po odčítaní stĺpca s menom)
+             vidno naraz cca 3 dni (dnešok +/- 1), s malým náhľadom na ďalší.
+             Na širšom mobile/tablete v tomto istom breakpointe to logicky
+             ukáže viac dní naraz, lebo je tam viac miesta — rovnaká šírka
+             bunky, len viac sa ich zmestí. */
+          --gantt-day-col: 78px;
           --gantt-plan-day-col: 46px;
         }
         .app-main { padding: 10px !important; }
@@ -19512,6 +19511,7 @@ function GlobalStyle() {
       @media (max-width: 480px) {
         .header-topbar span.label-font { font-size: 17px !important; }
       }
+
     `}</style>
   );
 }
