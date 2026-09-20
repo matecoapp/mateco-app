@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.456";
+const APP_VERSION = "1.0.457";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13527,7 +13527,14 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     return [...list].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
   }, [machines, depoFilter, search, sortMode, machineModels, jobs, reservations]);
 
-  const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-day-col), 1fr))`;
+  // Pevná šírka stĺpca (nie minmax(...,1fr)) — mobilný Safari vedel pri
+  // stovkách "1fr" stĺpcov naraz (rozdeľovací algoritmus cez CELÚ mriežku,
+  // nielen viditeľnú časť) prestať vykresľovať bunky niekde v strede
+  // rozsahu (presne to, čo sa dialo — dni okolo indexu ~390 z 760 zmizli,
+  // hoci meno stroja aj deliaca čiara kategórie, ktoré s touto mriežkou
+  // nesúvisia, boli v poriadku). "1fr" tu aj tak nikdy nič nerobí navyše,
+  // lebo obal má width:max-content — stĺpec je vždy presne dayColPx.
+  const gridColumnsTemplate = `var(--gantt-name-col) repeat(${allDays.length}, var(--gantt-day-col))`;
 
   // Jedna, kompaktná výška pre ÚPLNE VŠETKY riadky (nezávisle od toho, či má
   // stroj poznámku) — nutná podmienka pre virtualizáciu nižšie (potrebuje
@@ -16845,7 +16852,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-plan-day-col), 1fr))`,
+                gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, var(--gantt-plan-day-col))`,
                 gap: 2,
                 position: "sticky",
                 top: 0,
@@ -16891,7 +16898,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 key={t.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, minmax(var(--gantt-plan-day-col), 1fr))`,
+                  gridTemplateColumns: `var(--gantt-name-col) repeat(${allDays.length}, var(--gantt-plan-day-col))`,
                   gap: 2,
                   marginBottom: 3,
                   paddingBottom: 3,
