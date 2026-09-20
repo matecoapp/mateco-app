@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.468";
+const APP_VERSION = "1.0.470";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7281,7 +7281,7 @@ function buildNavModules(effectiveUser, damageAlertCount) {
 // presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
 // na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
 // záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, tabsRef, className }) {
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className }) {
   const [docsExpanded, setDocsExpanded] = useState(false);
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
@@ -7293,13 +7293,12 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
         return (
           <div key={m.id} className={`sidebar-module${isOpen ? " open" : ""}`}>
             <button className="sidebar-group" onClick={() => onSelectModule(m.id)}>
-              {RAIL_ICONS[m.id] && <span className="sidebar-ic">{RAIL_ICONS[m.id]}</span>}
               <span>{m.label}</span>
               {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
               <span className="chev">▸</span>
             </button>
             {isOpen && (
-              <div className="sidebar-tabs" ref={tabsRef ? (el) => { tabsRef.current[m.id] = el; } : undefined}>
+              <div className="sidebar-tabs">
                 {m.tabs.map((t) =>
                   t.dropdown ? (
                     <div key={t.id}>
@@ -7344,12 +7343,10 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
                     {quickActions.map((qa) =>
                       qa.href ? (
                         <a key={qa.key} className="sidebar-item quick" href={qa.href} target="_blank" rel="noopener noreferrer">
-                          <span className="sidebar-ic">{qa.icon}</span>
                           {qa.label}
                         </a>
                       ) : (
                         <button key={qa.key} className="sidebar-item quick" onClick={qa.onClick}>
-                          <span className="sidebar-ic">{qa.icon}</span>
                           {qa.label}
                         </button>
                       )
@@ -7440,9 +7437,7 @@ const RAIL_ICON_RULER = (
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
 function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation }) {
   const [railHover, setRailHover] = useState(false);
-  const [fillHeight, setFillHeight] = useState(0);
   const hideTimer = useRef(null);
-  const tabsRefs = useRef({});
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
   function cancelHide() {
@@ -7473,13 +7468,6 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     ].filter(Boolean),
   };
 
-  // Medzera pod ikonou práve otvoreného modulu narastie presne o výšku jeho
-  // rozbalených záložiek (rail-fill nižšie) — nasledujúca ikona sa tak posunie
-  // dole a zostane zhruba vo výške, kde sa jej nadpis "vysunie" vo flyoute.
-  useLayoutEffect(() => {
-    setFillHeight(tabsRefs.current[module]?.scrollHeight || 0);
-  }, [module, view, railHover]);
-
   return (
     <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
@@ -7488,17 +7476,21 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             <button
               className={`rail-icon${module === m.id ? " active" : ""}`}
               title={m.label}
-              onClick={() => { onSelectModule(m.id); setRailHover(false); }}
+              onClick={() => onSelectModule(m.id)}
             >
               {RAIL_ICONS[m.id]}
               {m.badge > 0 && <span className="rail-badge">{m.badge}</span>}
             </button>
-            {module === m.id && fillHeight > 0 && (
-              <div className="rail-fill" style={{ height: fillHeight }}>
-                {Array.from({ length: Math.max(1, Math.round(fillHeight / 26)) }).map((_, i) => (
-                  <span key={i} className="rail-tick" />
-                ))}
-              </div>
+            {(quickActionsByModule[m.id] || []).map((qa) =>
+              qa.href ? (
+                <a key={qa.key} className="rail-icon quick" title={qa.label} href={qa.href} target="_blank" rel="noopener noreferrer">
+                  {qa.icon}
+                </a>
+              ) : (
+                <button key={qa.key} className="rail-icon quick" title={qa.label} onClick={qa.onClick}>
+                  {qa.icon}
+                </button>
+              )
             )}
           </React.Fragment>
         ))}
@@ -7512,10 +7504,9 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             effectiveUser={effectiveUser}
             damageAlertCount={damageAlertCount}
             onSelectModule={onSelectModule}
-            onSelectView={(v) => { onSelectView(v); setRailHover(false); }}
-            onPickDocumentsSubView={(st) => { onPickDocumentsSubView(st); setRailHover(false); }}
+            onSelectView={onSelectView}
+            onPickDocumentsSubView={onPickDocumentsSubView}
             quickActionsByModule={quickActionsByModule}
-            tabsRef={tabsRefs}
           />
         </div>
       )}
@@ -19208,9 +19199,6 @@ function GlobalStyle() {
       .sidebar-item.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
       .sidebar-subitem { padding-left: 40px; font-size: 12px; }
       .sidebar-subnote { padding: 6px 14px 6px 40px; font-size: 11px; color: var(--text-dim); }
-      .sidebar-ic { width: 14px; height: 14px; flex-shrink: 0; }
-      .sidebar-ic svg { width: 100%; height: 100%; display: block; }
-      .sidebar-group .sidebar-ic { width: 15px; height: 15px; }
       /* Rýchle akcie (nahlásiť poškodenie/rezervácia/protokol/VTZ EZ) — posledné
          položky v zozname záložiek Požičovne/Servisu, len v IconRail flyoute
          (quickActionsByModule sa do mobilnej zásuvky neposiela). */
@@ -19224,7 +19212,7 @@ function GlobalStyle() {
          plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      .icon-rail-wrap { position: relative; flex-shrink: 0; z-index: 5; }
+      .icon-rail-wrap { position: relative; flex-shrink: 0; z-index: 50; isolation: isolate; }
       .icon-rail { width: 52px; height: 100%; background: #22262b; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
@@ -19233,19 +19221,20 @@ function GlobalStyle() {
       .rail-icon:hover { color: rgba(255,255,255,.85); }
       .rail-icon.active { color: #fff; }
       .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
+      /* Rýchle akcie (poškodenie/rezervácia/protokol/VTZ EZ) — medzi ikonami
+         modulov, čo predtým vyplňali len dekoratívne bodky. Červené, menšie,
+         vždy viditeľné (netreba na ne najazdiť myšou). */
+      .rail-icon.quick { width: 22px; height: 22px; border-radius: 50%; color: var(--accent); }
+      .rail-icon.quick svg { width: 13px; height: 13px; }
+      .rail-icon.quick:hover { background: rgba(227,6,19,.18); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
         padding: 0 3px; display: flex; align-items: center; justify-content: center; line-height: 1;
       }
-      /* Medzera pod ikonou otvoreného modulu — vyplnená bodkami, presúva
-         nasledujúce ikony dole nadol zhruba na výšku, kde sa vo flyoute
-         vysunie ich nadpis (viď fillHeight v IconRail). Čisto dekoratívne. */
-      .rail-fill { width: 34px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; overflow: hidden; }
-      .rail-tick { width: 4px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.22); flex-shrink: 0; }
       .rail-flyout {
         position: absolute; top: 0; left: 52px; width: 205px; height: 100%; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 6;
+        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
       }
       .rail-flyout-nav { width: 100%; padding: 8px 0; }
 
