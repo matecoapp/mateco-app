@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.446";
+const APP_VERSION = "1.0.447";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7603,26 +7603,15 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
             </button>
           )}
           {can(effectiveUser, "protocol_write") && (
-            <>
-              <a
-                href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mobile-tech-action-btn"
-              >
-                <span className="mobile-tech-action-icon">📏</span>
-                VTZ EZ
-              </a>
-              <a
-                href="https://matecoapp.netlify.app/fotky"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mobile-tech-action-btn"
-              >
-                <span className="mobile-tech-action-icon">📷</span>
-                Odfotiť
-              </a>
-            </>
+            <a
+              href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mobile-tech-action-btn"
+            >
+              <span className="mobile-tech-action-icon">📏</span>
+              VTZ EZ
+            </a>
           )}
         </div>
       )}
@@ -19330,9 +19319,9 @@ function GlobalStyle() {
           max-width: none !important;
         }
 
-        /* Tri tlačidlá pre technikov (Vypísať protokol, VTZ EZ, Odfotiť) — na
-           mobile naťahovali hlavičku a zalamovali sa nečitateľne. Namiesto toho
-           sa tam schovajú a zobrazí sa pevný pásik dole na obrazovke. */
+        /* Tlačidlá pre technikov (Vypísať protokol, VTZ EZ...) — na mobile
+           naťahovali hlavičku a zalamovali sa nečitateľne. Namiesto toho sa
+           tam schovajú a zobrazí sa pevný pásik dole na obrazovke. */
         .header-tech-actions { display: none !important; }
         .mobile-tech-actions {
           display: flex !important;
@@ -19545,31 +19534,33 @@ function LiftLoader({ label }) {
     return () => cancelAnimationFrame(raf);
   }, []);
   const rise = "transform 2.4s cubic-bezier(.2,.7,.3,1)";
-  // Zložený (scaleY 0.12) mechanizmus je len tesne stlačený, nie skutočne
-  // "zložený" — kým sa nerozťahuje aspoň trochu, jeho stlačený cik-cak vie na
-  // zlomok sekundy presvitať cez medzeru medzi košom a podvozkom (za tenkými
-  // časťami zábradlia koša). Riešenie: mechanizmus je na začiatku priehľadný a
-  // zjaví sa, až keď je rozťahovanie citeľne rozbehnuté — dovtedy nie je vidno
-  // nič poškodené, len prázdne miesto medzi podvozkom a košom.
+  // Skutočná príčina prestrekávania: vrch cik-caku (pôvodne y=60) bol podľa
+  // pevných súradníc o 24px VYŠŠIE než spodný okraj koša v pokojovej polohe
+  // (y=84) — nezávisle od animácie, trvalo, aj v pokoji. Prepočítané tak, aby
+  // vrch cik-caku (teraz y=84, rovnomerne rozostúpené kroky po 99px namiesto
+  // 105px) presne sadol na spodný okraj koša pri každom snímku animácie
+  // (zloženého aj rozťiahnutého stavu) — koeficient stlačenia (1/15 namiesto
+  // pôvodných 0.12) je dopočítaný z rovnakej rovnice, takže sa cik-cak a kôš
+  // hýbu presne súhlasne, bez medzery aj bez prekrytia. Vďaka tomu už netreba
+  // mechanizmus na začiatku schovávať priehľadnosťou — je vidno hneď od štartu.
   const scissorStyle = {
     transformOrigin: "210px 480px",
-    transform: risen ? "scaleY(1)" : "scaleY(0.12)",
-    opacity: risen ? 1 : 0,
-    transition: `${rise}, opacity .5s ease .35s`,
+    transform: risen ? "scaleY(1)" : "scaleY(0.0667)",
+    transition: rise,
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
       <svg width="210" height="280" viewBox="0 0 420 560">
         <ellipse cx="210" cy="532" rx="140" ry="12" fill="#000" opacity="0.08" />
         <g style={scissorStyle}>
-          <line x1="115" y1="480" x2="305" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="480" x2="115" y2="375" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="375" x2="305" y2="270" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="375" x2="115" y2="270" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="270" x2="305" y2="165" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="270" x2="115" y2="165" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="165" x2="305" y2="60" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="165" x2="115" y2="60" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="480" x2="305" y2="381" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="480" x2="115" y2="381" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="381" x2="305" y2="282" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="381" x2="115" y2="282" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="282" x2="305" y2="183" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="282" x2="115" y2="183" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="183" x2="305" y2="84" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="183" x2="115" y2="84" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
         </g>
         <rect x="90" y="472" width="240" height="52" rx="6" fill="#18181a" />
         <rect x="266" y="462" width="34" height="26" rx="2" fill="#2b2b2b" />
