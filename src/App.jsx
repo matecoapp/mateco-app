@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.441";
+const APP_VERSION = "1.0.442";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4722,7 +4722,12 @@ function DispatcherApp() {
       )}
 
       <div
-        className={`app-main${module === "servis" && can(effectiveUser, "protocol_write") ? " has-mobile-tech-bar" : ""}`}
+        className={`app-main${
+          (module === "servis" || module === "poziciovna") &&
+          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add"))
+            ? " has-mobile-tech-bar"
+            : ""
+        }`}
         style={{ padding: "12px 24px 20px", width: "100%", flex: 1, boxSizing: "border-box" }}
       >
         {module === "poziciovna" && view === "dashboard" && (
