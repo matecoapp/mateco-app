@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.448";
+const APP_VERSION = "1.0.449";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -727,6 +727,14 @@ async function compressImageToBlob(file) {
   canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
   return blob;
+}
+
+// Priečinková štruktúra fotiek v Storage bucket-e "inspections": stroj/zákazka_dátum/ —
+// nech sa dajú fotky ľahko nájsť aj mimo appky (napr. pri budúcom exporte do iného
+// úložiska sa táto štruktúra súborov jednoducho skopíruje 1:1, bez prekladania).
+function photoFolder(machine, job) {
+  const clean = (s) => String(s || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `${clean(machine?.code || machine?.id || "neznamy-stroj")}/${clean(job?.code || "bez-zakazky")}_${todayISO()}`;
 }
 
 /* ---------------------------------------------------------
@@ -10561,7 +10569,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       setUploadingPhotos((n) => n + 1);
       try {
         const blob = await compressImageToBlob(file);
-        const path = `${machine?.id || job?.machineId}/${uid()}.jpg`;
+        const path = `${photoFolder(machine, job)}/${uid()}.jpg`;
         const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
         const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
@@ -10954,7 +10962,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       setUploadingPhotos((n) => n + 1);
       try {
         const blob = await compressImageToBlob(file);
-        const path = `${machine?.id || job?.machineId}/${uid()}.jpg`;
+        const path = `${photoFolder(machine, job)}/${uid()}.jpg`;
         const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
         const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
