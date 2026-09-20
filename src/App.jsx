@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.461";
+const APP_VERSION = "1.0.462";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1491,6 +1491,16 @@ function DispatcherApp() {
   const [employees, setEmployees] = useState([]); // zjednotený zoznam osôb (technici, šoféri, obchodníci, dispečeri...)
   const technicians = useMemo(() => employees.filter((e) => e.role === "technik"), [employees]);
   const drivers = useMemo(() => employees.filter((e) => e.role === "sofer" || e.role === "externy_sofer"), [employees]);
+  // Auto (ŠPZ) sa už nezadáva ručne na technikovi/šoférovi — ťahá sa z
+  // Administratívy → Autá, podľa toho, komu je tam auto priradené
+  // (vehicle.assignedEmployeeId). Jeden zdroj pravdy namiesto ručne
+  // prepisovaného textu na dvoch-troch miestach naraz. Zámerne NEJDE o pole
+  // priamo na technicians/drivers vyššie — to by sa pri uložení (persist)
+  // zapísalo aj do samotného záznamu zamestnanca, kde by časom mohlo zostarnúť.
+  const vehicleByEmployeeId = useMemo(
+    () => Object.fromEntries(vehicles.filter((v) => v.assignedEmployeeId).map((v) => [v.assignedEmployeeId, v])),
+    [vehicles]
+  );
   const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
   const [module, setModuleRaw] = useState(() => localStorage.getItem("mateco_last_module") || "poziciovna");
@@ -1502,7 +1512,6 @@ function DispatcherApp() {
   const [showAddMachine, setShowAddMachine] = useState(null); // null | {} | { existing: machine }
   const [showAddVehicle, setShowAddVehicle] = useState(null); // null | {} | { existing: vehicle }
   const [vehicleCardTarget, setVehicleCardTarget] = useState(null); // auto otvorené priamo (napr. z notifikácie)
-  const [showAddDriver, setShowAddDriver] = useState(null); // null | {} | { existing: driver }
   const [driverCard, setDriverCard] = useState(null);
   const [showAddJob, setShowAddJob] = useState(null); // machineId prefill or true
   const [showAddReservation, setShowAddReservation] = useState(null); // null | { machineId? }
@@ -2402,11 +2411,10 @@ function DispatcherApp() {
       if (emp) updateProfileInfo(userId, { role: emp.role });
     }
   }
-  // Spätne kompatibilné "persist" funkcie pre šoférov/technikov — teraz zapisujú
+  // Spätne kompatibilná "persist" funkcia pre technikov — teraz zapisuje
   // do jednotného zoznamu osôb (employees), zvyšok platformy sa nemusí meniť.
-  function persistDrivers(list) {
-    persistEmployees([...employees.filter((e) => e.role !== "sofer"), ...list.map((d) => ({ ...d, role: "sofer" }))]);
-  }
+  // (Šoféri sa už rovnakou cestou needitujú — úprava/archivácia šoféra ide
+  // len cez Administratívu → Zamestnanci, teda priamo cez persistEmployees.)
   const persistJobs = useCallback(makeRecordPersist("jobs", setJobs), []);
   function persistTechnicians(list) {
     persistEmployees([...employees.filter((e) => e.role !== "technik"), ...list.map((t) => ({ ...t, role: "technik" }))]);
@@ -4264,33 +4272,6 @@ function DispatcherApp() {
       persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "uradnaSkuska" && !d.resolved)));
     }
   }
-  function addDriver(data) {
-    persistDrivers([...drivers, { id: uid(), ...data }]);
-    setShowAddDriver(null);
-  }
-  function updateDriver(id, patch) {
-    persistDrivers(drivers.map((d) => (d.id === id ? { ...d, ...patch } : d)));
-  }
-  function saveDriverModal(data) {
-    if (showAddDriver?.existing) {
-      updateDriver(showAddDriver.existing.id, data);
-      setShowAddDriver(null);
-    } else {
-      addDriver(data);
-    }
-    goBackCard();
-  }
-  function setDriverArchived(id, archived, reason, note) {
-    persistDrivers(
-      drivers.map((d) =>
-        d.id === id
-          ? archived
-            ? { ...d, archived: true, archivedReason: reason, archivedNote: note, archivedDate: today }
-            : { ...d, archived: false, archivedReason: null, archivedNote: null, archivedDate: null }
-          : d
-      )
-    );
-  }
   function setTechnicianArchived(id, archived, reason, note) {
     persistTechnicians(
       technicians.map((t) =>
@@ -4845,8 +4826,7 @@ function DispatcherApp() {
             drivers={drivers}
             jobs={jobs}
             today={today}
-            user={effectiveUser}
-            onAdd={() => setShowAddDriver({})}
+            vehicleByEmployeeId={vehicleByEmployeeId}
             onOpenCard={(d) => setDriverCard(d)}
           />
         )}
@@ -4990,6 +4970,7 @@ function DispatcherApp() {
                 damages={damages}
                 weeklyDuty={weeklyDuty}
                 today={today}
+                vehicleByEmployeeId={vehicleByEmployeeId}
                 technicianFilter={planTechnicianFilter}
                 setTechnicianFilter={setPlanTechnicianFilter}
                 depoFilter={planDepoFilter}
@@ -5345,33 +5326,13 @@ function DispatcherApp() {
           onSnooze={snoozeVehicleReminder}
         />
       )}
-      {showAddDriver && (
-        <AddDriverModal existing={showAddDriver.existing} onClose={() => { setShowAddDriver(null); goBackCard(); }} onSave={saveDriverModal} />
-      )}
       {driverCard && (
         <DriverCardModal
           driver={drivers.find((d) => d.id === driverCard.id) || driverCard}
           jobs={jobs}
           today={today}
-          user={effectiveUser}
+          vehicleSpz={vehicleByEmployeeId[driverCard.id]?.spz}
           onClose={() => { setDriverCard(null); setCardHistory([]); }}
-          onEdit={() => {
-            pushCard("driver", driverCard);
-            setShowAddDriver({ existing: driverCard });
-            setDriverCard(null);
-          }}
-          onArchive={() => {
-            setArchiveTarget({
-              label: `šoféra ${driverCard.name}`,
-              reasons: ["Ukončenie pracovného pomeru", "Odchod do dôchodku", "Dlhodobá PN", "Iné"],
-              onConfirm: (reason, note) => {
-                setDriverArchived(driverCard.id, true, reason, note);
-              },
-            });
-          }}
-          onUnarchive={() => {
-            setDriverArchived(driverCard.id, false);
-          }}
         />
       )}
       {showAddJob && (
@@ -6241,6 +6202,7 @@ function DispatcherApp() {
           machines={enrichedMachines}
           today={today}
           user={effectiveUser}
+          vehicleSpz={vehicleByEmployeeId[technicianCard.id]?.spz}
           onClose={() => { setTechnicianCard(null); setCardHistory([]); }}
           onEdit={() => {
             pushCard("technician", technicianCard);
@@ -8866,7 +8828,6 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
   const [phone, setPhone] = useState(existing?.phone || "");
   const [email, setEmail] = useState(existing?.email || "");
   const [skratka, setSkratka] = useState(existing?.skratka || "");
-  const [spz, setSpz] = useState(existing?.spz || "");
   const [alsoObchodnik, setAlsoObchodnik] = useState(existing?.alsoObchodnik || false);
   const [color, setColor] = useState(existing?.color || "#2563EB");
 
@@ -8888,10 +8849,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
         </select>
       </Field>
       {role === "technik" && (
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Skratka"><input value={skratka} onChange={(e) => setSkratka(e.target.value)} style={{ width: "100%" }} /></Field>
-          <Field label="ŠPZ"><input value={spz} onChange={(e) => setSpz(e.target.value)} style={{ width: "100%" }} /></Field>
-        </div>
+        <Field label="Skratka"><input value={skratka} onChange={(e) => setSkratka(e.target.value)} style={{ width: "100%" }} /></Field>
       )}
       {role !== "obchodnik" && (
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
@@ -8920,7 +8878,6 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
             phone: phone.trim(),
             email: email.trim(),
             skratka: skratka.trim(),
-            spz: spz.trim(),
             alsoObchodnik: role === "obchodnik" ? false : alsoObchodnik,
             color: isSalesperson ? color : (existing?.color || undefined),
           })
@@ -8970,7 +8927,7 @@ function LinkAccountModal({ employee, profiles, employees, onClose, onLink }) {
   );
 }
 
-function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
+function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) {
   const [showArchived, setShowArchived] = useState(false);
   const visible = drivers.filter((d) => (showArchived ? true : !d.archived));
   return (
@@ -8989,13 +8946,14 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
               <th>Telefón</th>
               <th>Email</th>
               <th>Depo</th>
+              <th>Auto</th>
               <th>Dnes</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
             )}
             {visible.map((d) => {
               const activeJob = jobs.find((j) => j.driverId === d.id && j.status !== "completed" && j.startDate <= today && (!j.endDate || j.endDate >= today));
@@ -9005,6 +8963,7 @@ function DriversView({ drivers, jobs, today, user, onAdd, onOpenCard }) {
                   <td className="mono">{d.phone || "—"}</td>
                   <td className="mono">{d.email || "—"}</td>
                   <td>{d.depo || "—"}</td>
+                  <td className="mono">{vehicleByEmployeeId[d.id]?.spz || "—"}</td>
                   <td>{activeJob ? <StatusBadge status="active" /> : <StatusBadge status="free" />}</td>
                   <td></td>
                 </tr>
@@ -9878,7 +9837,7 @@ function PhoneDirectoryModal({ employees, onClose }) {
   );
 }
 
-function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive, onUnarchive }) {
+function DriverCardModal({ driver, jobs, today, onClose, vehicleSpz }) {
   const d = driver;
   const upcoming = jobs
     .filter((j) => j.driverId === d.id && j.status !== "completed" && (!j.endDate || j.endDate >= today))
@@ -9891,6 +9850,7 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
         <CardField label="Telefón" value={d.phone} />
         <CardField label="Email" value={d.email} />
         <CardField label="Depo" value={d.depo} />
+        <CardField label="Auto" value={vehicleSpz} />
       </div>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
         Nadchádzajúce zákazky
@@ -9909,13 +9869,8 @@ function DriverCardModal({ driver, jobs, today, user, onClose, onEdit, onArchive
           ))}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {can(user, "driver_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>}
-        {can(user, "driver_archive") && (
-          <button className="btn btn-ghost" onClick={() => (d.archived ? onUnarchive() : onArchive())}>
-            {d.archived ? "Vrátiť z archívu" : "Archivovať"}
-          </button>
-        )}
+      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+        Úprava údajov a archivácia sa robí v Administratíve → Zamestnanci.
       </div>
     </Modal>
   );
@@ -10263,29 +10218,6 @@ function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose
 /* ---------------------------------------------------------
    Add Driver Modal
 --------------------------------------------------------- */
-function AddDriverModal({ existing, onClose, onSave }) {
-  const [name, setName] = useState(existing?.name || "");
-  const [phone, setPhone] = useState(existing?.phone || "");
-  const [email, setEmail] = useState(existing?.email || "");
-  const [depo, setDepo] = useState(existing?.depo || "");
-  return (
-    <Modal title={existing ? "Upraviť šoféra" : "Pridať šoféra"} onClose={onClose}>
-      <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Depo *">
-        <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— vybrať depo —</option>
-          {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Field>
-      <button className="btn btn-accent" disabled={!name.trim() || !depo.trim()} onClick={() => onSave({ name: name.trim(), phone: phone.trim(), email: email.trim(), depo })}>
-        {existing ? "Uložiť zmeny" : "Uložiť"}
-      </button>
-    </Modal>
-  );
-}
-
 /* ---------------------------------------------------------
    Add Job Modal
 --------------------------------------------------------- */
@@ -16204,17 +16136,13 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
 function AddTechnicianModal({ existing, onClose, onSave }) {
   const [name, setName] = useState(existing?.name || "");
   const [skratka, setSkratka] = useState(existing?.skratka || "");
-  const [spz, setSpz] = useState(existing?.spz || "");
   const [depo, setDepo] = useState(existing?.depo || "");
   const [phone, setPhone] = useState(existing?.phone || "");
   const [email, setEmail] = useState(existing?.email || "");
   return (
     <Modal title={existing ? "Upraviť technika" : "Pridať technika"} onClose={onClose}>
       <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Skratka (ERP)"><input value={skratka} onChange={(e) => setSkratka(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
-        <Field label="ŠPZ servisného auta"><input value={spz} onChange={(e) => setSpz(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
-      </div>
+      <Field label="Skratka (ERP)"><input value={skratka} onChange={(e) => setSkratka(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
       <Field label="Depo *">
         <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
@@ -16226,7 +16154,7 @@ function AddTechnicianModal({ existing, onClose, onSave }) {
       <button
         className="btn btn-accent"
         disabled={!name.trim() || !depo.trim()}
-        onClick={() => onSave({ name: name.trim(), skratka: skratka.trim(), spz: spz.trim(), depo: depo.trim(), phone: phone.trim(), email: email.trim() })}
+        onClick={() => onSave({ name: name.trim(), skratka: skratka.trim(), depo: depo.trim(), phone: phone.trim(), email: email.trim() })}
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
       </button>
@@ -16391,7 +16319,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
   );
 }
 
-function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, onOpenAssignment, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter }) {
+function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, vehicleByEmployeeId, onOpenAssignment, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter }) {
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const damageById = useMemo(() => Object.fromEntries((damages || []).map((d) => [d.id, d])), [damages]);
   const depoOptions = DEPO_OPTIONS;
@@ -16486,15 +16414,16 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
         )}
         {visibleTechnicians.map((t) => {
           const techDays = daysForTechnician(t);
+          const tSpz = vehicleByEmployeeId[t.id]?.spz;
           return (
           <div key={t.id} className="panel" style={{ overflow: "hidden" }}>
             <div style={{ background: "#1a1a1a", color: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", gap: 10 }}>
               <span className="label-font" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase" }}>
                 {t.skratka ? `${t.skratka} · ${t.name}` : t.name}
               </span>
-              {(t.depo || t.spz) && (
+              {(t.depo || tSpz) && (
                 <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,.7)" }}>
-                  {[t.depo, t.spz].filter(Boolean).join(" · ")}
+                  {[t.depo, tSpz].filter(Boolean).join(" · ")}
                 </span>
               )}
             </div>
@@ -16533,7 +16462,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
 /* ---------------------------------------------------------
    Technician card modal (karta technika)
 --------------------------------------------------------- */
-function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive }) {
+function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive, vehicleSpz }) {
   const t = technician;
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const upcoming = assignments
@@ -16545,7 +16474,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
     <Modal title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Skratka (ERP)" value={t.skratka} />
-        <CardField label="ŠPZ servisného auta" value={t.spz} />
+        <CardField label="ŠPZ servisného auta" value={vehicleSpz} />
         <CardField label="Depo" value={t.depo} />
         <CardField label="Telefón" value={t.phone} />
         <CardField label="Email" value={t.email} />
