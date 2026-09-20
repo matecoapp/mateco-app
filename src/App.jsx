@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.452";
+const APP_VERSION = "1.0.453";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13779,6 +13779,12 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
       </div>
 
+      {/* DOČASNÝ debug riadok — pomáha nájsť príčinu "kalendár sa nevykresľuje
+          dopredu" bez toho, aby som to musel ďalej hádať zo slepého čítania
+          kódu. Odstrániť, keď je chyba nájdená a opravená. */}
+      <div style={{ fontSize: 10, fontFamily: "monospace", color: "#a00", background: "#fff3f3", padding: "4px 8px", marginBottom: 6, border: "1px dashed #a00" }}>
+        DEBUG monthOffset={monthOffset} allDays={allDays.length} startIdx={visibleColRange.startIdx} endIdx={visibleColRange.endIdx} scrollLeft={Math.round(viewport.scrollLeft)} clientWidth={viewport.clientWidth} dayColPx={columnPxRef.current.dayColPx} nameColPx={columnPxRef.current.nameColPx}
+      </div>
       <div className="panel" style={{ padding: 16 }}>
         {relevantMachines.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
