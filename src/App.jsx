@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.467";
+const APP_VERSION = "1.0.468";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7281,23 +7281,25 @@ function buildNavModules(effectiveUser, damageAlertCount) {
 // presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
 // na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
 // záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView }) {
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, tabsRef, className }) {
   const [docsExpanded, setDocsExpanded] = useState(false);
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
   return (
-    <nav className="sidebar-nav">
+    <nav className={className || "sidebar-nav"}>
       {modules.map((m) => {
         const isOpen = module === m.id;
+        const quickActions = quickActionsByModule?.[m.id];
         return (
           <div key={m.id} className={`sidebar-module${isOpen ? " open" : ""}`}>
             <button className="sidebar-group" onClick={() => onSelectModule(m.id)}>
+              {RAIL_ICONS[m.id] && <span className="sidebar-ic">{RAIL_ICONS[m.id]}</span>}
               <span>{m.label}</span>
               {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
               <span className="chev">▸</span>
             </button>
             {isOpen && (
-              <div className="sidebar-tabs">
+              <div className="sidebar-tabs" ref={tabsRef ? (el) => { tabsRef.current[m.id] = el; } : undefined}>
                 {m.tabs.map((t) =>
                   t.dropdown ? (
                     <div key={t.id}>
@@ -7336,6 +7338,23 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
                       {t.id === "poskodenia" && m.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{m.badge}</span>}
                     </button>
                   )
+                )}
+                {quickActions?.length > 0 && (
+                  <div className="sidebar-quick">
+                    {quickActions.map((qa) =>
+                      qa.href ? (
+                        <a key={qa.key} className="sidebar-item quick" href={qa.href} target="_blank" rel="noopener noreferrer">
+                          <span className="sidebar-ic">{qa.icon}</span>
+                          {qa.label}
+                        </a>
+                      ) : (
+                        <button key={qa.key} className="sidebar-item quick" onClick={qa.onClick}>
+                          <span className="sidebar-ic">{qa.icon}</span>
+                          {qa.label}
+                        </button>
+                      )
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -7420,103 +7439,84 @@ const RAIL_ICON_RULER = (
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
 function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation }) {
-  const [hoverMod, setHoverMod] = useState(null);
-  const [docsExpanded, setDocsExpanded] = useState(false);
+  const [railHover, setRailHover] = useState(false);
+  const [fillHeight, setFillHeight] = useState(0);
   const hideTimer = useRef(null);
+  const tabsRefs = useRef({});
   const modules = buildNavModules(effectiveUser, damageAlertCount);
-  const openMod = modules.find((m) => m.id === hoverMod);
 
   function cancelHide() {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }
   function scheduleHide() {
     cancelHide();
-    hideTimer.current = setTimeout(() => setHoverMod(null), 180);
+    hideTimer.current = setTimeout(() => setRailHover(false), 180);
   }
 
   const canProtocol = can(effectiveUser, "protocol_write");
   const canDamage = can(effectiveUser, "damage_quick_report");
   const canReservation = can(effectiveUser, "reservation_add");
-  const showQuickActions = (module === "servis" || module === "poziciovna") && (canProtocol || canDamage || canReservation);
+  const quickActionsByModule = {
+    poziciovna: [
+      canReservation && { key: "rezervacia", label: "Nezáväzná rezervácia", icon: RAIL_ICON_RESERVATION, onClick: onAddReservation },
+      canDamage && { key: "poskodenie1", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
+    ].filter(Boolean),
+    servis: [
+      canProtocol && { key: "protokol", label: "Vypísať protokol", icon: RAIL_ICON_PROTOCOL, onClick: () => openProtocol({}) },
+      canProtocol && {
+        key: "vtz",
+        label: "Záznam z merania VTZ EZ",
+        icon: RAIL_ICON_RULER,
+        href: "https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl",
+      },
+      canDamage && { key: "poskodenie2", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
+    ].filter(Boolean),
+  };
+
+  // Medzera pod ikonou práve otvoreného modulu narastie presne o výšku jeho
+  // rozbalených záložiek (rail-fill nižšie) — nasledujúca ikona sa tak posunie
+  // dole a zostane zhruba vo výške, kde sa jej nadpis "vysunie" vo flyoute.
+  useLayoutEffect(() => {
+    setFillHeight(tabsRefs.current[module]?.scrollHeight || 0);
+  }, [module, view, railHover]);
 
   return (
-    <div className="icon-rail-wrap" onMouseLeave={scheduleHide}>
+    <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
         {modules.map((m) => (
-          <button
-            key={m.id}
-            className={`rail-icon${module === m.id ? " active" : ""}`}
-            title={m.label}
-            onMouseEnter={() => { cancelHide(); setHoverMod(m.id); }}
-            onClick={() => { onSelectModule(m.id); setHoverMod(null); }}
-          >
-            {RAIL_ICONS[m.id]}
-            {m.badge > 0 && <span className="rail-badge">{m.badge}</span>}
-          </button>
-        ))}
-        {showQuickActions && (
-          <>
-            <div className="rail-spacer" />
-            <div className="rail-divider" />
-            {canDamage && (
-              <button className="rail-icon quick" title="Nahlásiť poškodenie" onClick={onOpenQuickDamageReport}>{RAIL_ICON_WARN}</button>
-            )}
-            {module === "poziciovna" && canReservation && (
-              <button className="rail-icon quick" title="Nezáväzná rezervácia" onClick={onAddReservation}>{RAIL_ICON_RESERVATION}</button>
-            )}
-            {module === "servis" && canProtocol && (
-              <button className="rail-icon quick" title="Vypísať protokol" onClick={() => openProtocol({})}>{RAIL_ICON_PROTOCOL}</button>
-            )}
-            {module === "servis" && canProtocol && (
-              <a
-                className="rail-icon quick"
-                title="Záznam z merania VTZ EZ"
-                href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {RAIL_ICON_RULER}
-              </a>
-            )}
-          </>
-        )}
-      </div>
-      {openMod && (
-        <div className="rail-flyout" onMouseEnter={cancelHide} onMouseLeave={scheduleHide}>
-          <div className="flyout-title">{openMod.label}</div>
-          {openMod.tabs.map((t) =>
-            t.dropdown ? (
-              <div key={t.id}>
-                <button className="flyout-tab" onClick={() => setDocsExpanded((v) => !v)}>
-                  {t.label} {docsExpanded ? "▴" : "▾"}
-                </button>
-                {docsExpanded &&
-                  ((DOCUMENT_SUBTABS[openMod.id] || []).length === 0 ? (
-                    <div className="sidebar-subnote">Táto sekcia sa pripravuje.</div>
-                  ) : (
-                    (DOCUMENT_SUBTABS[openMod.id] || []).map((st) => (
-                      <button
-                        key={st.id}
-                        className="flyout-tab flyout-subtab"
-                        onClick={() => { onSelectModule(openMod.id); onPickDocumentsSubView(st); setHoverMod(null); }}
-                      >
-                        {st.label}
-                        {st.url && <span style={{ marginLeft: "auto", fontSize: 11 }}>↗</span>}
-                      </button>
-                    ))
-                  ))}
+          <React.Fragment key={m.id}>
+            <button
+              className={`rail-icon${module === m.id ? " active" : ""}`}
+              title={m.label}
+              onClick={() => { onSelectModule(m.id); setRailHover(false); }}
+            >
+              {RAIL_ICONS[m.id]}
+              {m.badge > 0 && <span className="rail-badge">{m.badge}</span>}
+            </button>
+            {module === m.id && fillHeight > 0 && (
+              <div className="rail-fill" style={{ height: fillHeight }}>
+                {Array.from({ length: Math.max(1, Math.round(fillHeight / 26)) }).map((_, i) => (
+                  <span key={i} className="rail-tick" />
+                ))}
               </div>
-            ) : (
-              <button
-                key={t.id}
-                className={`flyout-tab${module === openMod.id && view === t.id ? " active" : ""}`}
-                onClick={() => { onSelectModule(openMod.id); onSelectView(t.id); setHoverMod(null); }}
-              >
-                {t.label}
-                {t.id === "poskodenia" && openMod.badge > 0 && <span className="rail-badge" style={{ marginLeft: "auto" }}>{openMod.badge}</span>}
-              </button>
-            )
-          )}
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      {railHover && (
+        <div className="rail-flyout" onMouseEnter={cancelHide} onMouseLeave={scheduleHide}>
+          <SidebarNav
+            className="rail-flyout-nav"
+            module={module}
+            view={view}
+            effectiveUser={effectiveUser}
+            damageAlertCount={damageAlertCount}
+            onSelectModule={onSelectModule}
+            onSelectView={(v) => { onSelectView(v); setRailHover(false); }}
+            onPickDocumentsSubView={(st) => { onPickDocumentsSubView(st); setRailHover(false); }}
+            quickActionsByModule={quickActionsByModule}
+            tabsRef={tabsRefs}
+          />
         </div>
       )}
     </div>
@@ -19208,6 +19208,14 @@ function GlobalStyle() {
       .sidebar-item.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
       .sidebar-subitem { padding-left: 40px; font-size: 12px; }
       .sidebar-subnote { padding: 6px 14px 6px 40px; font-size: 11px; color: var(--text-dim); }
+      .sidebar-ic { width: 14px; height: 14px; flex-shrink: 0; }
+      .sidebar-ic svg { width: 100%; height: 100%; display: block; }
+      .sidebar-group .sidebar-ic { width: 15px; height: 15px; }
+      /* Rýchle akcie (nahlásiť poškodenie/rezervácia/protokol/VTZ EZ) — posledné
+         položky v zozname záložiek Požičovne/Servisu, len v IconRail flyoute
+         (quickActionsByModule sa do mobilnej zásuvky neposiela). */
+      .sidebar-quick { border-top: 1px dashed var(--border); margin: 6px 6px 4px; padding-top: 6px; }
+      .sidebar-item.quick { color: var(--accent); font-weight: 600; }
 
       /* IconRail — úzky pás ikon na webe namiesto trvalo roztiahnutého
          bočného menu (nezaberá šírku plochy). Farba záhlavia, nech je hneď
@@ -19217,35 +19225,29 @@ function GlobalStyle() {
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
       .icon-rail-wrap { position: relative; flex-shrink: 0; z-index: 5; }
-      .icon-rail { width: 52px; height: 100%; background: var(--accent); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 3px; }
+      .icon-rail { width: 52px; height: 100%; background: #22262b; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px; }
       .rail-icon {
-        width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
-        color: rgba(255,255,255,.85); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
+        width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        color: rgba(255,255,255,.55); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
       }
-      .rail-icon:hover { background: rgba(255,255,255,.14); }
-      .rail-icon.active { background: rgba(255,255,255,.22); color: #fff; }
-      .rail-spacer { flex: 1; }
-      .rail-divider { width: 22px; height: 1px; background: rgba(255,255,255,.3); margin: 6px 0 8px; flex-shrink: 0; }
-      .rail-icon.quick { width: 27px; height: 27px; border-radius: 50%; color: rgba(255,255,255,.6); }
-      .rail-icon.quick:hover { background: rgba(255,255,255,.16); color: #fff; }
+      .rail-icon:hover { color: rgba(255,255,255,.85); }
+      .rail-icon.active { color: #fff; }
+      .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
         padding: 0 3px; display: flex; align-items: center; justify-content: center; line-height: 1;
       }
+      /* Medzera pod ikonou otvoreného modulu — vyplnená bodkami, presúva
+         nasledujúce ikony dole nadol zhruba na výšku, kde sa vo flyoute
+         vysunie ich nadpis (viď fillHeight v IconRail). Čisto dekoratívne. */
+      .rail-fill { width: 34px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; overflow: hidden; }
+      .rail-tick { width: 4px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.22); flex-shrink: 0; }
       .rail-flyout {
-        position: absolute; top: 0; left: 52px; width: 190px; max-height: 100%; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 6px 0 18px rgba(0,0,0,.14); padding: 12px 0; overflow-y: auto; z-index: 6;
+        position: absolute; top: 0; left: 52px; width: 205px; height: 100%; background: var(--panel);
+        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 6;
       }
-      .flyout-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; color: var(--accent); padding: 2px 14px 10px; text-transform: uppercase; letter-spacing: .04em; }
-      .flyout-tab {
-        display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
-        padding: 7px 14px; font-family: 'Barlow', sans-serif; font-size: 12.5px;
-        color: var(--text-dim); background: transparent; border: none; cursor: pointer;
-      }
-      .flyout-tab:hover { background: var(--panel-2); }
-      .flyout-tab.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
-      .flyout-subtab { padding-left: 26px; font-size: 12px; }
+      .rail-flyout-nav { width: 100%; padding: 8px 0; }
 
       /* Tabuľka (.table-cards) sa na mobile prekreslí na kartičky — každý
          riadok = jedna karta, buňky pod sebou ako "label: hodnota" (label z
