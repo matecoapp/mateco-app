@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.472";
+const APP_VERSION = "1.0.473";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7479,7 +7479,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
     if (module === m.id) {
       m.tabs.forEach((t) => railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}` }));
-      (quickActionsByModule[m.id] || []).forEach((qa) => railRows.push({ kind: "quick", ...qa }));
+      const quickActions = quickActionsByModule[m.id] || [];
+      if (quickActions.length > 0) {
+        railRows.push({ kind: "quick-gap", key: `qgap-${m.id}` });
+        quickActions.forEach((qa) => railRows.push({ kind: "quick", ...qa }));
+      }
     }
   });
 
@@ -7495,20 +7499,25 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
               </button>
             );
           }
-          if (r.kind === "dot") return <span key={r.key} className="rail-tick" />;
-          return r.href ? (
-            <a key={r.key} className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
-              {r.icon}
-            </a>
-          ) : (
-            <button key={r.key} className="rail-icon quick" title={r.label} onClick={r.onClick}>
-              {r.icon}
-            </button>
+          if (r.kind === "dot") return <div key={r.key} className="rail-row"><span className="rail-tick" /></div>;
+          if (r.kind === "quick-gap") return <div key={r.key} className="rail-quick-gap" />;
+          return (
+            <div key={r.key} className="rail-row">
+              {r.href ? (
+                <a className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
+                  {r.icon}
+                </a>
+              ) : (
+                <button className="rail-icon quick" title={r.label} onClick={r.onClick}>
+                  {r.icon}
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
       {railHover && (
-        <div className="rail-flyout" onMouseEnter={cancelHide} onMouseLeave={scheduleHide}>
+        <div className="rail-flyout">
           <SidebarNav
             className="rail-flyout-nav"
             module={module}
@@ -19225,7 +19234,13 @@ function GlobalStyle() {
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
       .icon-rail-wrap { position: relative; flex-shrink: 0; z-index: 50; isolation: isolate; }
-      .icon-rail { width: 52px; height: 100%; background: #22262b; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px; }
+      /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
+         nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
+         medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
+         34px) zodpovedá skutočnej výške riadku vo flyoute (.sidebar-group
+         ~34px, .sidebar-item ~29px), nech si sedia 1:1 aj vizuálne, nielen
+         počtom. Padding hore 8px = to isté, čo .rail-flyout-nav. */
+      .icon-rail { width: 52px; height: 100%; background: #22262b; display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
         color: rgba(255,255,255,.55); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
@@ -19233,9 +19248,10 @@ function GlobalStyle() {
       .rail-icon:hover { color: rgba(255,255,255,.85); }
       .rail-icon.active { color: #fff; }
       .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
-      /* Rýchle akcie (poškodenie/rezervácia/protokol/VTZ EZ) — medzi ikonami
-         modulov, čo predtým vyplňali len dekoratívne bodky. Červené, menšie,
-         vždy viditeľné (netreba na ne najazdiť myšou). */
+      /* Jeden riadok = jeden riadok vo flyoute (záložka = bodka, rýchla akcia
+         = červená ikona), rovnaká výška 29px ako .sidebar-item tam. */
+      .rail-row { width: 34px; height: 29px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .rail-quick-gap { height: 13px; flex-shrink: 0; }
       .rail-icon.quick { width: 22px; height: 22px; border-radius: 50%; color: var(--accent); }
       .rail-icon.quick svg { width: 13px; height: 13px; }
       .rail-icon.quick:hover { background: rgba(227,6,19,.18); }
