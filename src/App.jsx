@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.470";
+const APP_VERSION = "1.0.471";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7491,6 +7491,16 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
                   {qa.icon}
                 </button>
               )
+            )}
+            {/* Kým je tento modul otvorený (jeho záložky vidno vo flyoute),
+                bodky tu vyplnia rovnaký kus miesta, nech ikona ďalšieho
+                modulu klesne dole zhruba na výšku, kde sa jeho nadpis vysunie
+                v texte. Počet bodiek = počet jeho záložiek (dané dátami, nie
+                meraním DOM), takže je to vidno stále, aj bez prejdenia myšou. */}
+            {module === m.id && (
+              <div className="rail-fill" style={{ height: m.tabs.length * 26 }}>
+                {m.tabs.map((t) => <span key={t.id} className="rail-tick" />)}
+              </div>
             )}
           </React.Fragment>
         ))}
@@ -19227,6 +19237,8 @@ function GlobalStyle() {
       .rail-icon.quick { width: 22px; height: 22px; border-radius: 50%; color: var(--accent); }
       .rail-icon.quick svg { width: 13px; height: 13px; }
       .rail-icon.quick:hover { background: rgba(227,6,19,.18); }
+      .rail-fill { width: 34px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; overflow: hidden; }
+      .rail-tick { width: 4px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.22); flex-shrink: 0; }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
