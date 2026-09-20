@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.471";
+const APP_VERSION = "1.0.472";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7468,42 +7468,44 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     ].filter(Boolean),
   };
 
+  // 1:1 s textovým menu (SidebarNav): pre každý riadok, čo sa tam zobrazí,
+  // je tu presne jeden riadok v páse — nadpis modulu = ikona modulu, jeho
+  // záložka = bodka, jeho rýchla akcia = červená ikona. Záložky/akcie modulu
+  // sa objavia/schovajú v páse presne vtedy, keď sa otvorí/zavrie v menu
+  // (module === m.id), rovnaký poradie ako v SidebarNav (najprv záložky,
+  // rýchle akcie za nimi).
+  const railRows = [];
+  modules.forEach((m) => {
+    railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
+    if (module === m.id) {
+      m.tabs.forEach((t) => railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}` }));
+      (quickActionsByModule[m.id] || []).forEach((qa) => railRows.push({ kind: "quick", ...qa }));
+    }
+  });
+
   return (
     <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
-        {modules.map((m) => (
-          <React.Fragment key={m.id}>
-            <button
-              className={`rail-icon${module === m.id ? " active" : ""}`}
-              title={m.label}
-              onClick={() => onSelectModule(m.id)}
-            >
-              {RAIL_ICONS[m.id]}
-              {m.badge > 0 && <span className="rail-badge">{m.badge}</span>}
+        {railRows.map((r) => {
+          if (r.kind === "module") {
+            return (
+              <button key={r.id} className={`rail-icon${r.active ? " active" : ""}`} title={r.label} onClick={() => onSelectModule(r.id)}>
+                {r.icon}
+                {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
+              </button>
+            );
+          }
+          if (r.kind === "dot") return <span key={r.key} className="rail-tick" />;
+          return r.href ? (
+            <a key={r.key} className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
+              {r.icon}
+            </a>
+          ) : (
+            <button key={r.key} className="rail-icon quick" title={r.label} onClick={r.onClick}>
+              {r.icon}
             </button>
-            {(quickActionsByModule[m.id] || []).map((qa) =>
-              qa.href ? (
-                <a key={qa.key} className="rail-icon quick" title={qa.label} href={qa.href} target="_blank" rel="noopener noreferrer">
-                  {qa.icon}
-                </a>
-              ) : (
-                <button key={qa.key} className="rail-icon quick" title={qa.label} onClick={qa.onClick}>
-                  {qa.icon}
-                </button>
-              )
-            )}
-            {/* Kým je tento modul otvorený (jeho záložky vidno vo flyoute),
-                bodky tu vyplnia rovnaký kus miesta, nech ikona ďalšieho
-                modulu klesne dole zhruba na výšku, kde sa jeho nadpis vysunie
-                v texte. Počet bodiek = počet jeho záložiek (dané dátami, nie
-                meraním DOM), takže je to vidno stále, aj bez prejdenia myšou. */}
-            {module === m.id && (
-              <div className="rail-fill" style={{ height: m.tabs.length * 26 }}>
-                {m.tabs.map((t) => <span key={t.id} className="rail-tick" />)}
-              </div>
-            )}
-          </React.Fragment>
-        ))}
+          );
+        })}
       </div>
       {railHover && (
         <div className="rail-flyout" onMouseEnter={cancelHide} onMouseLeave={scheduleHide}>
@@ -19237,8 +19239,7 @@ function GlobalStyle() {
       .rail-icon.quick { width: 22px; height: 22px; border-radius: 50%; color: var(--accent); }
       .rail-icon.quick svg { width: 13px; height: 13px; }
       .rail-icon.quick:hover { background: rgba(227,6,19,.18); }
-      .rail-fill { width: 34px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; overflow: hidden; }
-      .rail-tick { width: 4px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.22); flex-shrink: 0; }
+      .rail-tick { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,.28); flex-shrink: 0; }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
