@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.447";
+const APP_VERSION = "1.0.448";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19273,7 +19273,7 @@ function GlobalStyle() {
          rozmerom a ruka potom zmizne — bez neho sa origin berie z vlastných
          súradníc SVG, presne ako pri zdvíhaní nožníc vyššie). */
       @keyframes mascot-wave { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
-      .mascot-wave-arm { transform-origin: 387px 462px; animation: mascot-wave 1s ease-in-out infinite; }
+      .mascot-wave-arm { transform-origin: 371px 462px; animation: mascot-wave 1s ease-in-out infinite; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
@@ -19582,18 +19582,23 @@ function LiftLoader({ label }) {
             kýva jednou rukou (nezávisle od zdvihu, len sa tu spolu s ním
             zjaví). */}
         <g>
-          <line x1="366" y1="504" x2="360" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
-          <line x1="379" y1="504" x2="388" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
-          <line x1="360" y1="462" x2="347" y2="491" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
-          <rect x="358" y="458" width="29" height="48" rx="8" fill="#18181a" />
-          <rect x="356" y="494" width="32" height="8" fill="var(--accent)" />
-          <line x1="361" y1="459" x2="387" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
-          <line x1="387" y1="459" x2="361" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
-          <circle cx="372" cy="440" r="19" fill="#18181a" />
-          <path d="M347 437 A 26 27 0 0 1 398 437 Z" fill="var(--accent)" />
+          <line x1="350" y1="504" x2="344" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <line x1="363" y1="504" x2="372" y2="552" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <line x1="344" y1="462" x2="331" y2="491" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+          <rect x="342" y="458" width="29" height="48" rx="8" fill="#18181a" />
+          <rect x="340" y="494" width="32" height="8" fill="var(--accent)" />
+          <line x1="345" y1="459" x2="371" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <line x1="371" y1="459" x2="345" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="356" cy="440" r="19" fill="#18181a" />
+          <path d="M331 437 A 26 27 0 0 1 382 437 Z" fill="var(--accent)" />
+          {/* Ruka (mascot-wave-arm) je posunutá o 16px doľava oproti pôvodnej
+              polohe — pri kývaní ±16° sa špička ruky vychyľuje až ~44px od
+              ramena, a pri pôvodnej polohe (pivot pri x=387) to pri výkyve
+              vpravo prestrelilo cez pravý okraj viewBoxu (0 0 420 560) a
+              appka ruku odrezala. Tu už má rezervu. */}
           <g className="mascot-wave-arm">
-            <line x1="387" y1="462" x2="416" y2="424" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
-            <circle cx="416" cy="424" r="6" fill="#18181a" />
+            <line x1="371" y1="462" x2="400" y2="424" stroke="#18181a" strokeWidth="9" strokeLinecap="round" />
+            <circle cx="400" cy="424" r="6" fill="#18181a" />
           </g>
         </g>
       </svg>
