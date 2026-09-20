@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.479";
+const APP_VERSION = "1.0.480";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7482,7 +7482,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   // (module === m.id), rovnaký poradie ako v SidebarNav (najprv záložky,
   // rýchle akcie za nimi).
   const railRows = [];
-  modules.forEach((m) => {
+  modules.forEach((m, mi) => {
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
     if (module === m.id) {
       m.tabs.forEach((t) => {
@@ -7513,7 +7513,15 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
         }
       });
       const quickActions = quickActionsByModule[m.id] || [];
-      quickActions.forEach((qa) => railRows.push({ kind: "quick", ...qa }));
+      quickActions.forEach((qa, qi) => {
+        railRows.push({ kind: "quick", ...qa, dividerBefore: qi === 0 });
+      });
+    }
+    // Rovnaké deliace čiary ako vo flyoute (.sidebar-module box-shadow medzi
+    // modulmi, .sidebar-quick box-shadow nad rýchlymi akciami) — box-shadow
+    // nezaberá výšku, takže sa tým nič neposunie oproti textovému menu.
+    if (mi < modules.length - 1) {
+      railRows[railRows.length - 1].dividerAfter = true;
     }
   });
 
@@ -7525,11 +7533,12 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
         {railRows.map((r) => {
+          const dividerCls = `${r.dividerAfter ? " rail-divider-after" : ""}${r.dividerBefore ? " rail-divider-before" : ""}`;
           if (r.kind === "module") {
             return (
               <button
                 key={r.id}
-                className={`rail-icon${r.active ? " active" : ""}`}
+                className={`rail-icon${r.active ? " active" : ""}${dividerCls}`}
                 title={r.label}
                 onClick={() => onSelectModule(r.id)}
               >
@@ -7540,13 +7549,13 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           }
           if (r.kind === "dot") {
             return (
-              <button key={r.key} className="rail-row" title={r.label} onClick={r.onClick} disabled={!r.onClick}>
+              <button key={r.key} className={`rail-row${dividerCls}`} title={r.label} onClick={r.onClick} disabled={!r.onClick}>
                 <span className={`rail-tick${r.active ? " active" : ""}`} />
               </button>
             );
           }
           return (
-            <div key={r.key} className="rail-row rail-row-quick">
+            <div key={r.key} className={`rail-row rail-row-quick${dividerCls}`}>
               {r.href ? (
                 <a className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
                   {r.icon}
@@ -19323,6 +19332,10 @@ function GlobalStyle() {
       .rail-icon.quick:hover { background: var(--accent-light); }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
+      /* rovnaké deliace čiary ako vo flyoute (.sidebar-module/.sidebar-quick),
+         tiež box-shadow → nezaberá výšku, nerozhodí zarovnanie s textom */
+      .rail-divider-after { box-shadow: 0 1px 0 var(--border); }
+      .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
