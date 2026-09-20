@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.463";
+const APP_VERSION = "1.0.465";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -453,6 +453,15 @@ function damageLabel(d) {
   if (s === "nove") return "Nové";
   if (s === "pridelene") return "Pridelené";
   return DAMAGE_STAV_META[s]?.label || s;
+}
+// Rovnaké stavy ako damageColor/damageLabel, len ako .badge-* class (jednotný
+// vzhľad štítkov stavu v celej appke namiesto ručne skladaného background/color).
+function damageBadgeCls(d) {
+  const s = damageDisplayStav(d);
+  if (s === "nove") return "badge-danger";
+  if (s === "pridelene") return "badge-info";
+  if (s === "opravene") return "badge-ok";
+  return "badge-warn";
 }
 const SALESPEOPLE = [
   { name: "Miroslav Gondáš", color: "#1B5E20" },
@@ -1141,6 +1150,59 @@ function StatusBadge({ status }) {
   return <span className={`badge ${m.cls}`}>{m.label}</span>;
 }
 
+// Kebab menu (⋮) pre riadky s viacerými akciami — namiesto radu tlačidiel v
+// riadku tabuľky/karty. actions: [{ label, onClick, href?, danger? }, ...] —
+// falsy položky (napr. akcia skrytá podľa práv) sa preskočia.
+function KebabMenu({ actions }) {
+  const [open, setOpen] = useState(false);
+  const items = actions.filter(Boolean);
+  if (items.length === 0) return null;
+  return (
+    <div style={{ position: "relative", display: "inline-block" }} onClick={(e) => e.stopPropagation()}>
+      <button
+        className="btn btn-ghost"
+        style={{ fontSize: 15, padding: "4px 9px", lineHeight: 1 }}
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Akcie"
+        title="Akcie"
+      >
+        ⋮
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div className="panel dropdown-panel" style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 190, zIndex: 201, padding: 6 }}>
+            {items.map((a, i) =>
+              a.href ? (
+                <a
+                  key={i}
+                  href={a.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="kebab-item"
+                  style={{ color: a.danger ? "var(--danger)" : "var(--text)" }}
+                  onClick={() => setOpen(false)}
+                >
+                  {a.label}
+                </a>
+              ) : (
+                <button
+                  key={i}
+                  className="kebab-item"
+                  style={{ color: a.danger ? "var(--danger)" : "var(--text)" }}
+                  onClick={() => { setOpen(false); a.onClick(); }}
+                >
+                  {a.label}
+                </button>
+              )
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
@@ -1547,6 +1609,7 @@ function DispatcherApp() {
     setDocumentsSubView(subTab.id);
   }
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
@@ -4603,7 +4666,6 @@ function DispatcherApp() {
         onSetViewAsRole={setViewAsRole}
         onLogout={signOut}
         onOpenUserAdmin={() => setShowUserAdmin(true)}
-        onPickDocumentsSubView={pickDocumentsSubView}
         myNotifications={myNotifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationRead={markNotificationRead}
@@ -4614,6 +4676,7 @@ function DispatcherApp() {
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
+        onToggleMobileNav={() => setMobileNavOpen((v) => !v)}
       />
 
       {showUserAdmin && (
@@ -4681,6 +4744,32 @@ function DispatcherApp() {
         <DailyBriefingModal items={briefingItems} onNavigate={navigateFromNotification} onClose={() => setShowBriefing(false)} />
       )}
 
+      <div className="app-body-row">
+        <SidebarNav
+          module={module}
+          view={view}
+          effectiveUser={effectiveUser}
+          damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+          onSelectModule={setModule}
+          onSelectView={setView}
+          onPickDocumentsSubView={pickDocumentsSubView}
+        />
+        {mobileNavOpen && (
+          <div className="mobile-nav-overlay">
+            <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
+            <div className="mobile-nav-drawer">
+              <SidebarNav
+                module={module}
+                view={view}
+                effectiveUser={effectiveUser}
+                damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+                onSelectModule={(m) => { setModule(m); setMobileNavOpen(false); }}
+                onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
+                onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
+              />
+            </div>
+          </div>
+        )}
       <div
         className={`app-main${
           (module === "servis" || module === "poziciovna") &&
@@ -5232,6 +5321,7 @@ function DispatcherApp() {
         {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
           <AuditLogView profiles={profiles} />
         )}
+      </div>
       </div>
 
       {showAddEmployee && (
@@ -6726,176 +6816,6 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
   );
 }
 
-// Tlačidlo modulu (Požičovňa/Servis/Administratíva) so schovanými záložkami —
-// klik na NEaktívny modul rovno prepne aj otvorí jeho záložky (nech je hneď
-// vidno, čo si vybrať); klik na UŽ aktívny modul len otvorí/zavrie zoznam
-// záložiek. Pod menom modulu sa (len keď je aktívny) ukáže malý štítok s
-// názvom práve otvorenej záložky — presne to isté sa dá vidieť aj bez
-// rozbaľovania, len v skrátenej podobe.
-function ModuleNavButton({ moduleInfo, isActive, isOpen, onToggleOpen, onCloseOpen, currentTabLabel, tabs, view, badgeCount, documentSubTabs, onSelectModule, onSelectView, onPickDocumentsSubView }) {
-  const [docsExpanded, setDocsExpanded] = useState(false);
-  const boxRef = useRef(null);
-
-  function closeAll() {
-    onCloseOpen();
-    setDocsExpanded(false);
-  }
-
-  // Klik mimo tohto tlačidla/panelu ho zavrie — presne ten istý vzor, čo
-  // appka používa pri menu používateľa a globálnom vyhľadávaní, namiesto
-  // neviditeľného prekryvu cez celú obrazovku. Ten by totiž ležal aj nad
-  // SUSEDNÝMI tlačidlami modulov a blokoval by im prvý klik (museli by ste
-  // kliknúť dvakrát — raz na zatvorenie, raz na otvorenie ďalšieho).
-  // "mousedown" (nie "click") zámerne — spustí sa TESNE PRED kliknutím na
-  // iné tlačidlo, takže zatvorenie tohto a otvorenie ďalšieho prebehne v
-  // rovnakom kliku, v správnom poradí.
-  useEffect(() => {
-    if (!isOpen) return;
-    function onDocMouseDown(e) {
-      if (boxRef.current && !boxRef.current.contains(e.target)) closeAll();
-    }
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  return (
-    <div ref={boxRef} style={{ position: "relative" }}>
-      <button
-        onClick={onToggleOpen}
-        className="label-font"
-        style={{
-          padding: isActive ? "5px 16px 7px" : "7px 16px",
-          borderRadius: 6,
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          background: isActive ? "#1a1a1a" : "transparent",
-          color: isActive ? "#fff" : "var(--text-dim)",
-          border: "none",
-          cursor: "pointer",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          {moduleInfo.label}
-          {badgeCount > 0 && (
-            <span style={{ background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 5px", fontFamily: "Barlow", fontWeight: 700 }}>
-              {badgeCount}
-            </span>
-          )}
-          <span style={{ fontSize: 9, opacity: 0.7 }}>{isOpen ? "▴" : "▾"}</span>
-        </span>
-        {isActive && currentTabLabel && (
-          <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.02em", textTransform: "none", opacity: 0.75 }}>{currentTabLabel}</span>
-        )}
-      </button>
-      {isOpen && (
-        <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 220, zIndex: 201, padding: 6 }}>
-            {tabs.map((t) =>
-              t.dropdown ? (
-                <div key={t.id}>
-                  <button
-                    onClick={() => setDocsExpanded((v) => !v)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      width: "100%",
-                      textAlign: "left",
-                      background: view === t.id ? "var(--accent-light)" : "transparent",
-                      border: "none",
-                      padding: "8px 10px",
-                      fontSize: 13,
-                      color: view === t.id ? "var(--accent)" : "var(--text)",
-                      cursor: "pointer",
-                      borderRadius: 5,
-                    }}
-                  >
-                    {t.label} {docsExpanded ? "▴" : "▾"}
-                  </button>
-                  {docsExpanded &&
-                    (documentSubTabs.length === 0 ? (
-                      <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "8px 10px 8px 22px" }}>Táto sekcia sa pripravuje.</div>
-                    ) : (
-                      documentSubTabs.map((st) => (
-                        <button
-                          key={st.id}
-                          onClick={() => {
-                            onSelectModule(moduleInfo.id);
-                            onPickDocumentsSubView(st);
-                            closeAll();
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            width: "100%",
-                            textAlign: "left",
-                            background: "transparent",
-                            border: "none",
-                            padding: "8px 10px 8px 22px",
-                            fontSize: 12.5,
-                            color: "var(--text)",
-                            cursor: "pointer",
-                            borderRadius: 5,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          {st.label}
-                          {st.url && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)" }}>↗</span>}
-                        </button>
-                      ))
-                    ))}
-                </div>
-              ) : (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    onSelectModule(moduleInfo.id);
-                    onSelectView(t.id);
-                    closeAll();
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    width: "100%",
-                    textAlign: "left",
-                    background: view === t.id ? "var(--accent-light)" : "transparent",
-                    border: "none",
-                    padding: "8px 10px",
-                    fontSize: 13,
-                    color: view === t.id ? "var(--accent)" : "var(--text)",
-                    cursor: "pointer",
-                    borderRadius: 5,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (view !== t.id) e.currentTarget.style.background = "var(--panel-2)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (view !== t.id) e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  {t.label}
-                  {t.id === "poskodenia" && badgeCount > 0 && (
-                    <span style={{ marginLeft: "auto", background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 6px", fontFamily: "Barlow", fontWeight: 700 }}>
-                      {badgeCount}
-                    </span>
-                  )}
-                </button>
-              )
-            )}
-          </div>
-      )}
-    </div>
-  );
-}
 
 /* ---------------------------------------------------------
    Generické komponenty pre jednoduché zoznamové dokumenty
@@ -7309,14 +7229,14 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-function Header({ module, setModule, view, setView, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
-  // Ktorého modulu zoznam záložiek je práve otvorený — zdieľané medzi
-  // všetkými tromi tlačidlami (nie samostatný stav v každom), nech klik na
-  // INÝ modul, kým je jeden už otvorený, prepne priamo na jeden krát — bez
-  // toho by prvý klik len zavrel starý (jeho vlastný neviditeľný prekryv cez
-  // celú obrazovku "zachytil" klik skôr, než sa dostal k novému tlačidlu), a
-  // až druhý klik otvoril nový.
-  const [openModuleId, setOpenModuleId] = useState(null);
+// Bočné menu (nahrádza predošlé rozbaľovacie tlačidlá v hornej lište) —
+// "otvorený" modul je vždy presne ten aktívny (module === m.id), žiadny
+// samostatný stav navyše. Klik na iný modul prepne naň (setModule si už aj
+// predtým vyberal jeho prvú záložku), klik na záložku v OTVORENOM module len
+// prepne pohľad. Používa sa dvakrát — ako trvalý panel na webe a v rovnakej
+// podobe vnútri výsuvného menu na mobile (viď <Header>).
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView }) {
+  const [docsExpanded, setDocsExpanded] = useState(false);
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -7345,15 +7265,85 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
     ...(can(effectiveUser, "trash_view") ? [{ id: "kos", label: "Kôš" }] : []),
     ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }] : []),
   ];
-  const rawTabs = module === "servis" ? servisTabs : module === "administrativa" ? administrativaTabs : poziciovnaTabs;
-  // Externý šofér nemá vidieť nič okrem svojich preprav — ani ostatné záložky v
-  // rámci Požičovne (Kalendár, Zákazky, Stroje, Šoféri, Dokumenty).
-  const tabs = effectiveUser?.role === "externy_sofer" ? rawTabs.filter((t) => t.id === "prepravy") : rawTabs;
+  // Externý šofér nemá vidieť nič okrem svojich preprav.
+  const modules = [
+    {
+      id: "poziciovna",
+      label: "Požičovňa",
+      tabs: effectiveUser?.role === "externy_sofer" ? poziciovnaTabs.filter((t) => t.id === "prepravy") : poziciovnaTabs,
+      badge: 0,
+    },
+    ...(effectiveUser?.role !== "externy_sofer" ? [{ id: "servis", label: "Servis", tabs: servisTabs, badge: damageAlertCount }] : []),
+    ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva", tabs: administrativaTabs, badge: 0 }] : []),
+  ];
 
+  return (
+    <nav className="sidebar-nav">
+      {modules.map((m) => {
+        const isOpen = module === m.id;
+        return (
+          <div key={m.id} className={`sidebar-module${isOpen ? " open" : ""}`}>
+            <button className="sidebar-group" onClick={() => onSelectModule(m.id)}>
+              <span>{m.label}</span>
+              {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
+              <span className="chev">▸</span>
+            </button>
+            {isOpen && (
+              <div className="sidebar-tabs">
+                {m.tabs.map((t) =>
+                  t.dropdown ? (
+                    <div key={t.id}>
+                      <button className="sidebar-item" onClick={() => setDocsExpanded((v) => !v)}>
+                        {t.label} {docsExpanded ? "▴" : "▾"}
+                      </button>
+                      {docsExpanded &&
+                        ((DOCUMENT_SUBTABS[m.id] || []).length === 0 ? (
+                          <div className="sidebar-subnote">Táto sekcia sa pripravuje.</div>
+                        ) : (
+                          (DOCUMENT_SUBTABS[m.id] || []).map((st) => (
+                            <button
+                              key={st.id}
+                              className="sidebar-item sidebar-subitem"
+                              onClick={() => {
+                                onSelectModule(m.id);
+                                onPickDocumentsSubView(st);
+                              }}
+                            >
+                              {st.label}
+                              {st.url && <span style={{ marginLeft: "auto", fontSize: 11 }}>↗</span>}
+                            </button>
+                          ))
+                        ))}
+                    </div>
+                  ) : (
+                    <button
+                      key={t.id}
+                      className={`sidebar-item${view === t.id ? " active" : ""}`}
+                      onClick={() => {
+                        onSelectModule(m.id);
+                        onSelectView(t.id);
+                      }}
+                    >
+                      {t.label}
+                      {t.id === "poskodenia" && m.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{m.badge}</span>}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Header({ module, alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate, onToggleMobileNav }) {
   return (
     <div style={{ background: "var(--panel)" }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
+          <button className="mobile-nav-toggle" onClick={onToggleMobileNav} aria-label="Menu">☰</button>
           <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
           <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
           <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
@@ -7408,48 +7398,23 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
           </div>
         </div>
       </div>
-      <div
-        className="header-navbar"
-        style={{
-          width: "100%",
-          padding: "10px 24px",
-          display: "flex",
-          alignItems: "center",
-          gap: 24,
-          flexWrap: "wrap",
-          boxSizing: "border-box",
-          background: "var(--panel-2)",
-          borderBottom: "2px solid var(--border)",
-        }}
-      >
-        <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", borderRadius: 8, padding: 3 }}>
-          {[
-            { id: "poziciovna", label: "Požičovňa", tabs: effectiveUser?.role === "externy_sofer" ? poziciovnaTabs.filter((t) => t.id === "prepravy") : poziciovnaTabs, badge: 0 },
-            ...(effectiveUser?.role !== "externy_sofer"
-              ? [{ id: "servis", label: "Servis", tabs: servisTabs, badge: damageAlertCount }]
-              : []),
-            ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva", tabs: administrativaTabs, badge: 0 }] : []),
-          ].map((m) => (
-            <ModuleNavButton
-              key={m.id}
-              moduleInfo={m}
-              isActive={module === m.id}
-              isOpen={openModuleId === m.id}
-              onToggleOpen={() => setOpenModuleId((cur) => (cur === m.id ? null : m.id))}
-              onCloseOpen={() => setOpenModuleId(null)}
-              currentTabLabel={module === m.id ? m.tabs.find((t) => t.id === view)?.label : null}
-              tabs={m.tabs}
-              view={view}
-              badgeCount={m.badge}
-              documentSubTabs={DOCUMENT_SUBTABS[m.id] || []}
-              onSelectModule={setModule}
-              onSelectView={setView}
-              onPickDocumentsSubView={onPickDocumentsSubView}
-            />
-          ))}
-        </div>
-        {(module === "servis" || module === "poziciovna") &&
-          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
+      {(module === "servis" || module === "poziciovna") &&
+        (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
+        <div
+          className="header-navbar"
+          style={{
+            width: "100%",
+            padding: "10px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 6,
+            flexWrap: "wrap",
+            boxSizing: "border-box",
+            background: "var(--panel-2)",
+            borderBottom: "2px solid var(--border)",
+          }}
+        >
           <div className="header-tech-actions" style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
             {module === "servis" && can(effectiveUser, "protocol_write") && (
               <button onClick={() => openProtocol({})} className="btn btn-accent" style={{ fontSize: 12 }}>
@@ -7489,8 +7454,8 @@ function Header({ module, setModule, view, setView, alertCount, damageAlertCount
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
       {(can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
         <div className="mobile-tech-actions">
           <button onClick={onOpenPhoneDirectory} className="mobile-tech-action-btn">
@@ -8698,7 +8663,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
         <button className="btn btn-accent" onClick={onAdd}>+ Pridať zamestnanca</button>
       </div>
       <div className="panel">
-      <table>
+      <table className="table-cards">
         <thead>
           <tr>
             <th>Meno</th>
@@ -8713,14 +8678,14 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
         </thead>
         <tbody>
           {visible.length === 0 && (
-            <tr><td colSpan={8} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zamestnanci.</td></tr>
+            <tr><td className="td-plain" colSpan={8} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zamestnanci.</td></tr>
           )}
           {visible.map((e) => {
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
             const isDuplicate = !e.archived && duplicateKeys.includes(e.name.trim().toLowerCase());
             return (
               <tr key={e.id} style={isDuplicate ? { background: "#fff7e6" } : undefined}>
-                <td style={{ fontWeight: 600 }}>
+                <td className="td-plain" style={{ fontWeight: 600 }}>
                   {e.name}
                   {isDuplicate && (
                     <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: "#7a5200" }} title="Rovnaké meno má aj iný aktívny záznam">
@@ -8728,11 +8693,11 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
                     </span>
                   )}
                 </td>
-                <td>{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}</td>
-                <td>{e.depo || "—"}</td>
-                <td>{e.phone || "—"}</td>
-                <td>{e.email || "—"}</td>
-                <td>
+                <td data-label="Rola">{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}</td>
+                <td data-label="Depo">{e.depo || "—"}</td>
+                <td data-label="Telefón">{e.phone || "—"}</td>
+                <td data-label="Email">{e.email || "—"}</td>
+                <td data-label="Prepojený účet">
                   {linkedProfile ? (
                     <span className="badge badge-ok">{linkedProfile.name}</span>
                   ) : (
@@ -8742,17 +8707,15 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
                     {linkedProfile ? "Zmeniť" : "Prepojiť"}
                   </button>
                 </td>
-                <td>{e.archived ? <span className="badge badge-danger">Archivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
-                <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(e)}>Upraviť</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onArchive(e)}>
-                    {e.archived ? "Aktivovať" : "Archivovať"}
-                  </button>
-                  {isAdminUser(user) && (
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(e.id)}>
-                      Zmazať
-                    </button>
-                  )}
+                <td data-label="Stav">{e.archived ? <span className="badge badge-danger">Archivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+                <td className="td-actions" style={{ textAlign: "right" }}>
+                  <KebabMenu
+                    actions={[
+                      { label: "Upraviť", onClick: () => onEdit(e) },
+                      { label: e.archived ? "Aktivovať" : "Archivovať", onClick: () => onArchive(e) },
+                      isAdminUser(user) && { label: "Zmazať", onClick: () => onDelete(e.id), danger: true },
+                    ]}
+                  />
                 </td>
               </tr>
             );
@@ -8882,7 +8845,7 @@ function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) 
         </label>
       </div>
       <div className="panel">
-        <table>
+        <table className="table-cards">
           <thead>
             <tr>
               <th>Meno</th>
@@ -8896,19 +8859,19 @@ function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) 
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
+              <tr><td className="td-plain" colSpan={7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
             )}
             {visible.map((d) => {
               const activeJob = jobs.find((j) => j.driverId === d.id && j.status !== "completed" && j.startDate <= today && (!j.endDate || j.endDate >= today));
               return (
                 <tr key={d.id} onClick={() => onOpenCard(d)} style={{ cursor: "pointer", opacity: d.archived ? 0.6 : 1 }}>
-                  <td style={{ fontWeight: 600 }}>{d.name}{d.archived ? " (archivovaný)" : ""}</td>
-                  <td className="mono">{d.phone || "—"}</td>
-                  <td className="mono">{d.email || "—"}</td>
-                  <td>{d.depo || "—"}</td>
-                  <td className="mono">{vehicleByEmployeeId[d.id]?.spz || "—"}</td>
-                  <td>{activeJob ? <StatusBadge status="active" /> : <StatusBadge status="free" />}</td>
-                  <td></td>
+                  <td className="td-plain" style={{ fontWeight: 600 }}>{d.name}{d.archived ? " (archivovaný)" : ""}</td>
+                  <td className="mono" data-label="Telefón">{d.phone || "—"}</td>
+                  <td className="mono" data-label="Email">{d.email || "—"}</td>
+                  <td data-label="Depo">{d.depo || "—"}</td>
+                  <td className="mono" data-label="Auto">{vehicleByEmployeeId[d.id]?.spz || "—"}</td>
+                  <td data-label="Dnes">{activeJob ? <StatusBadge status="active" /> : <StatusBadge status="free" />}</td>
+                  <td className="td-plain"></td>
                 </tr>
               );
             })}
@@ -8950,7 +8913,7 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
         )}
       </div>
       <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
-        <table>
+        <table className="table-cards">
           <thead>
             <tr>
               <th>Firma</th>
@@ -8963,18 +8926,18 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zákazníci.</td></tr>
+              <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zákazníci.</td></tr>
             )}
             {visible.map((c) => (
               <tr key={c.id} onClick={() => onOpenCard(c)} style={{ cursor: "pointer" }}>
-                <td style={{ fontWeight: 600 }}>{c.firma}</td>
-                <td className="mono">{c.ico || "—"}</td>
-                <td className="mono">{c.cisloOdberatela || "—"}</td>
-                <td>{(c.contacts || []).length || "—"}</td>
-                <td>{jobCountFor(c) || "—"}</td>
-                <td>
+                <td className="td-plain" style={{ fontWeight: 600 }}>{c.firma}</td>
+                <td className="mono" data-label="IČO">{c.ico || "—"}</td>
+                <td className="mono" data-label="Číslo odberateľa">{c.cisloOdberatela || "—"}</td>
+                <td data-label="Kontaktné osoby">{(c.contacts || []).length || "—"}</td>
+                <td data-label="Aktívne zákazky">{jobCountFor(c) || "—"}</td>
+                <td className="td-actions">
                   {isBlacklisted(c) && (
-                    <span className="badge" style={{ background: "var(--danger-bg)", color: "var(--danger)", fontSize: 10 }}>Blacklist</span>
+                    <span className="badge badge-danger" style={{ fontSize: 10 }}>Blacklist</span>
                   )}
                 </td>
               </tr>
@@ -10018,11 +9981,12 @@ function AddMachineModal({ existing, machineModels, machines, onClose, onSave, o
    Autá (vozový park) — zoznam, pridanie/úprava, karta so STK/EK
 --------------------------------------------------------- */
 function vehicleDateStatus(date, today) {
-  if (!date) return { color: "var(--text-dim)", bg: "transparent", label: "—" };
-  if (date < today) return { color: "var(--danger)", bg: "var(--danger-bg)", label: "po termíne" };
+  // cls: "" = obyčajný text (badge len na termíny, ktoré si to zaslúžia).
+  if (!date) return { cls: "", label: "—" };
+  if (date < today) return { cls: "badge-danger", label: "po termíne" };
   const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-  if (daysLeft <= 30) return { color: "var(--warn, #b07e00)", bg: "var(--warn-bg, #fff8e1)", label: `o ${daysLeft} dní` };
-  return { color: "var(--text)", bg: "transparent", label: "" };
+  if (daysLeft <= 30) return { cls: "badge-warn", label: `o ${daysLeft} dní` };
+  return { cls: "", label: "" };
 }
 function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, onDelete }) {
   const employeeById = Object.fromEntries(employees.map((e) => [e.id, e]));
@@ -10035,7 +9999,7 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
         <button className="btn btn-accent" onClick={onAdd}>+ Pridať auto</button>
       </div>
       <div className="panel">
-        <table>
+        <table className="table-cards">
           <thead>
             <tr>
               <th>ŠPZ</th>
@@ -10048,19 +10012,19 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
           </thead>
           <tbody>
             {vehicles.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne autá.</td></tr>
+              <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne autá.</td></tr>
             )}
             {vehicles.map((v) => {
               const stk = vehicleDateStatus(v.stkDate, today);
               const ek = vehicleDateStatus(v.ekDate, today);
               return (
                 <tr key={v.id}>
-                  <td style={{ fontWeight: 600, cursor: "pointer" }} onClick={() => onOpenCard(v)}>{v.spz || "—"}</td>
-                  <td>{v.znacka || "—"}</td>
-                  <td>{employeeById[v.assignedEmployeeId]?.name || "— nepriradené —"}</td>
-                  <td style={{ color: stk.color, background: stk.bg }}>{v.stkDate ? `${fmtDate(v.stkDate)}${stk.label ? " · " + stk.label : ""}` : "—"}</td>
-                  <td style={{ color: ek.color, background: ek.bg }}>{v.ekDate ? `${fmtDate(v.ekDate)}${ek.label ? " · " + ek.label : ""}` : "—"}</td>
-                  <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  <td className="td-plain" style={{ fontWeight: 600, cursor: "pointer" }} onClick={() => onOpenCard(v)}>{v.spz || "—"}</td>
+                  <td data-label="Značka / model">{v.znacka || "—"}</td>
+                  <td data-label="Priradená osoba">{employeeById[v.assignedEmployeeId]?.name || "— nepriradené —"}</td>
+                  <td data-label="STK">{v.stkDate ? (stk.cls ? <span className={`badge ${stk.cls}`}>{fmtDate(v.stkDate)}{stk.label ? " · " + stk.label : ""}</span> : fmtDate(v.stkDate)) : "—"}</td>
+                  <td data-label="EK">{v.ekDate ? (ek.cls ? <span className={`badge ${ek.cls}`}>{fmtDate(v.ekDate)}{ek.label ? " · " + ek.label : ""}</span> : fmtDate(v.ekDate)) : "—"}</td>
+                  <td className="td-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(v)}>Upraviť</button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(v)}>Zmazať</button>
                   </td>
@@ -10120,8 +10084,16 @@ function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose
     return (
       <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 12 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
-        <div style={{ color: status.color, background: status.bg, display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 13, marginBottom: 4 }}>
-          {date ? `${fmtDate(date)}${status.label ? " · " + status.label : ""}` : "— nezadané —"}
+        <div style={{ marginBottom: 4 }}>
+          {date ? (
+            status.cls ? (
+              <span className={`badge ${status.cls}`} style={{ fontSize: 13 }}>{fmtDate(date)}{status.label ? " · " + status.label : ""}</span>
+            ) : (
+              fmtDate(date)
+            )
+          ) : (
+            "— nezadané —"
+          )}
         </div>
         {vehicle[`${field}ChangedAt`] && (
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>
@@ -14868,18 +14840,14 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             </span>
             <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
             {missingSerial && (
-              <span className="badge" style={{ background: "var(--danger-bg)", color: "var(--danger)", fontSize: 10 }}>
+              <span className="badge badge-danger" style={{ fontSize: 10 }}>
                 ⚠ Chýba sériové číslo
               </span>
             )}
             {variant === "revizia" && (
               <span
-                className="badge"
-                style={{
-                  background: d.revizeType === "EZ" ? "var(--info-bg)" : d.revizeType === "ZZ+EZ" ? "var(--danger-bg)" : "var(--warn-bg)",
-                  color: d.revizeType === "EZ" ? "var(--info)" : d.revizeType === "ZZ+EZ" ? "var(--danger)" : "var(--warn)",
-                  fontSize: 10,
-                }}
+                className={`badge ${d.revizeType === "EZ" ? "badge-info" : d.revizeType === "ZZ+EZ" ? "badge-danger" : "badge-warn"}`}
+                style={{ fontSize: 10 }}
                 title={
                   d.revizeType === "EZ"
                     ? "Revízia elektrického zariadenia"
@@ -14900,10 +14868,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
                 <span className="badge badge-danger">Nové</span>
               )
             ) : (
-              <span
-                className="badge"
-                style={{ background: DAMAGE_STAV_META[damageDisplayStav(d)]?.bg || (damageDisplayStav(d) === "pridelene" ? "var(--info-bg)" : "var(--danger-bg)"), color: barColor }}
-              >
+              <span className={`badge ${damageBadgeCls(d)}`}>
                 {damageLabel(d)}{damageDisplayStav(d) === "pridelene" ? ` — ${assignedTechNames} · ${fmtDate(d.assignedDate)}` : ""}
               </span>
             )}
@@ -14943,41 +14908,19 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               </button>
             )
           )}
-          {can(user, perm.status) && (isSimple ? (
-            d.resolved ? (
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onResolve(d.id, false)}>
-                Otvoriť znova
-              </button>
-            ) : (
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onComplete(d)}>
-                {completeLabel}
-              </button>
-            )
-          ) : (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onComplete(d)}>
-              {completeLabel}
-            </button>
-          ))}
-          {onDelete && perm.del && can(user, perm.del) && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px", color: "var(--danger)" }} onClick={() => onDelete(d.id)}>
-              Zmazať
-            </button>
-          )}
-          {onProtocol && can(user, "protocol_write") && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onProtocol(d)}>
-              Vypísať protokol
-            </button>
-          )}
-          {onProtocol && can(user, "protocol_write") && (
-            <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }}>
-              Záznam z merania VTZ EZ ↗
-            </a>
-          )}
-          {onProtocol && can(user, "protocol_write") && (
-            <a href="https://matecoapp.netlify.app/fotky" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }}>
-              Odfotiť stroj ↗
-            </a>
-          )}
+          <KebabMenu
+            actions={[
+              can(user, perm.status) && (isSimple
+                ? (d.resolved
+                    ? { label: "Otvoriť znova", onClick: () => onResolve(d.id, false) }
+                    : { label: completeLabel, onClick: () => onComplete(d) })
+                : { label: completeLabel, onClick: () => onComplete(d) }),
+              onProtocol && can(user, "protocol_write") && { label: "Vypísať protokol", onClick: () => onProtocol(d) },
+              onProtocol && can(user, "protocol_write") && { label: "Záznam z merania VTZ EZ ↗", href: "https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" },
+              onProtocol && can(user, "protocol_write") && { label: "Odfotiť stroj ↗", href: "https://matecoapp.netlify.app/fotky" },
+              onDelete && perm.del && can(user, perm.del) && { label: "Zmazať", onClick: () => onDelete(d.id), danger: true },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -18966,10 +18909,7 @@ function AuditLogView({ profiles }) {
                     <td>{who}</td>
                     <td>{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
                     <td>
-                      <span className="badge" style={{
-                        background: e.action === "delete" ? "var(--danger-bg)" : e.action === "insert" ? "var(--ok-bg, var(--info-bg))" : "var(--info-bg)",
-                        color: e.action === "delete" ? "var(--danger)" : e.action === "insert" ? "var(--ok)" : "var(--info)",
-                      }}>
+                      <span className={`badge ${e.action === "delete" ? "badge-danger" : e.action === "insert" ? "badge-ok" : "badge-info"}`}>
                         {AUDIT_ACTION_LABELS[e.action] || e.action}
                       </span>
                     </td>
@@ -18993,7 +18933,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         Noví ľudia sa registrujú sami na prihlasovacej obrazovke — tu im len prideľte rolu, prípadne ich deaktivujte/zmažte.
       </div>
-      <table>
+      <table className="table-cards">
         <thead>
           <tr>
             <th>Meno</th>
@@ -19005,13 +18945,13 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
         </thead>
         <tbody>
           {profiles.length === 0 && (
-            <tr><td colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni používatelia.</td></tr>
+            <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni používatelia.</td></tr>
           )}
           {profiles.map((p) => (
             <tr key={p.id}>
-              <td style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
-              <td className="mono">{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
-              <td>
+              <td className="td-plain" style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
+              <td className="mono" data-label="Email">{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
+              <td data-label="Rola">
                 {p.id === currentUser?.id ? (
                   <span
                     style={{ color: "var(--text-dim)" }}
@@ -19034,32 +18974,15 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
                   </span>
                 )}
               </td>
-              <td>{p.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
-              <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                {(p.email || p.id === currentUser?.id) && (
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 11, padding: "4px 8px" }}
-                    onClick={() => onResetPassword(p.email || currentUser.email)}
-                    title="Pošle používateľovi mail s odkazom na nastavenie nového hesla"
-                  >
-                    Resetovať heslo
-                  </button>
-                )}
-                {p.id !== currentUser?.id && (
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 11, padding: "4px 8px" }}
-                    onClick={() => onUpdate(p.id, { active: p.active === false ? true : false })}
-                  >
-                    {p.active === false ? "Aktivovať" : "Deaktivovať"}
-                  </button>
-                )}
-                {p.id !== currentUser?.id && (
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(p.id)}>
-                    Zmazať
-                  </button>
-                )}
+              <td data-label="Stav">{p.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+              <td className="td-actions" style={{ textAlign: "right" }}>
+                <KebabMenu
+                  actions={[
+                    (p.email || p.id === currentUser?.id) && { label: "Resetovať heslo", onClick: () => onResetPassword(p.email || currentUser.email) },
+                    p.id !== currentUser?.id && { label: p.active === false ? "Aktivovať" : "Deaktivovať", onClick: () => onUpdate(p.id, { active: p.active === false ? true : false }) },
+                    p.id !== currentUser?.id && { label: "Zmazať", onClick: () => onDelete(p.id), danger: true },
+                  ]}
+                />
               </td>
             </tr>
           ))}
@@ -19123,6 +19046,71 @@ function GlobalStyle() {
       }
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+
+      /* Bočné menu (Požičovňa/Servis/Administratíva + ich záložky) — nahrádza
+         predošlé rozbaľovacie tlačidlá v hornej lište. Aktívny modul je vždy
+         presne ten, čo je "otvorený" (rovnaký stav, žiadny extra) — klik na
+         iný modul rovno prepne aj na jeho prvú záložku (setModule to už
+         robí), klik na záložku v OTVORENOM module len prepne pohľad. */
+      .app-body-row { display: flex; flex: 1; min-height: 0; }
+      .sidebar-nav { width: 190px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
+      .sidebar-module { border-bottom: 1px solid var(--border); }
+      .sidebar-module:last-child { border-bottom: none; }
+      .sidebar-group {
+        display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+        padding: 10px 14px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
+        color: var(--text); background: transparent; border: none; cursor: pointer;
+      }
+      .sidebar-module.open .sidebar-group { color: var(--accent); }
+      .sidebar-group .chev { margin-left: auto; font-size: 10px; color: var(--text-dim); transition: transform .15s; }
+      .sidebar-module.open .sidebar-group .chev { transform: rotate(90deg); color: var(--accent); }
+      .sidebar-badge { background: var(--accent); color: #fff; font-size: 10px; border-radius: 99px; padding: 1px 6px; font-weight: 700; }
+      .sidebar-module.open .sidebar-group .sidebar-badge { background: #fff; color: var(--accent); }
+      .sidebar-tabs { padding-bottom: 6px; }
+      .sidebar-item {
+        display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+        padding: 7px 14px 7px 28px; font-family: 'Barlow', sans-serif; font-size: 12.5px;
+        color: var(--text-dim); background: transparent; border: none; cursor: pointer; border-radius: 0;
+      }
+      .sidebar-item:hover { background: var(--panel-2); }
+      .sidebar-item.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
+      .sidebar-subitem { padding-left: 40px; font-size: 12px; }
+      .sidebar-subnote { padding: 6px 14px 6px 40px; font-size: 11px; color: var(--text-dim); }
+
+      /* Tabuľka (.table-cards) sa na mobile prekreslí na kartičky — každý
+         riadok = jedna karta, buňky pod sebou ako "label: hodnota" (label z
+         data-label atribútu, keď ho buňka má). Webové zobrazenie (bežná
+         tabuľka) je nezmenené, toto platí len pod @media nižšie. */
+      @media (max-width: 720px) {
+        table.table-cards thead { display: none; }
+        table.table-cards, table.table-cards tbody { display: block; width: 100%; }
+        table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+        table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
+        table.table-cards td[data-label]::before { content: attr(data-label); font-size: 11px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; }
+        table.table-cards td.td-plain { display: block; text-align: left; }
+        table.table-cards td.td-actions { justify-content: flex-end; }
+      }
+
+      /* Položka v kebab (⋮) menu — riadkové akcie skryté za jedným tlačidlom
+         namiesto radu btn-ghost tlačidiel v tabuľke/karte. */
+      .kebab-item {
+        display: block; width: 100%; text-align: left; background: transparent; border: none;
+        padding: 8px 10px; font-size: 13px; font-family: 'Barlow', sans-serif; cursor: pointer;
+        border-radius: 5px; text-decoration: none;
+      }
+      .kebab-item:hover { background: var(--panel-2); }
+
+      /* Hamburger na otvorenie toho istého menu ako výsuvný panel — len na
+         mobile (nižšie v @media). Na webe je bočné menu trvalo viditeľné,
+         tlačidlo tam netreba. */
+      .mobile-nav-toggle {
+        display: none; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0;
+        background: rgba(255,255,255,.18); border: none; color: #fff; font-size: 16px; cursor: pointer;
+      }
+      .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
+      .mobile-nav-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+      .mobile-nav-drawer { position: relative; width: 78%; max-width: 280px; background: var(--panel); height: 100%; overflow-y: auto; box-shadow: 4px 0 20px rgba(0,0,0,.2); padding-top: env(safe-area-inset-top); }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
          Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja), a to aj pri
@@ -19272,6 +19260,12 @@ function GlobalStyle() {
 
         /* To isté pre bublinu "čaká na zobrazenie" (skok na zvýraznené poškodenie). */
         .damage-toast-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
+
+        /* Bočné menu na mobile nie je trvalé (zabralo by príliš veľa šírky) —
+           namiesto toho hamburger v hornej lište otvorí to isté menu ako
+           výsuvný panel (mobile-nav-drawer, mimo tohto breakpointu vyššie). */
+        .sidebar-nav { display: none; }
+        .mobile-nav-toggle { display: inline-flex; }
 
         :root {
           --gantt-name-col: 92px;
