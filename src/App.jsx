@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.454";
+const APP_VERSION = "1.0.455";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12899,13 +12899,15 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
     <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
-      {/* transform: translateZ(0) — vynúti si vlastnú kompozitnú (GPU) vrstvu.
-          Bez toho vedel mobilný Safari po zascrollovaní ďaleko od začiatku
-          tejto rozsiahlej mriežky (stovky stĺpcov, len malá časť naozaj
-          vykreslená kvôli virtualizácii) prestať prekresľovať sticky hlavičku
-          aj riadky správne — číselne bol výrez v poriadku, len sa to
-          nevykreslilo. Toto je štandardná poistka na presne tento typ chyby. */}
-      <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight, transform: "translateZ(0)" }}>
+      {/* POZOR: translateZ(0)/transform na TOMTO obale (rodič sticky prvkov)
+          bola zlá cesta — mobilný Safari má známu chybu, že position:sticky
+          prestane fungovať úplne, keď má nadradený prvok "transform" (aj
+          neviditeľný ako translateZ(0)). To vysvetľuje, prečo po v1.0.454
+          zmizli aj riadky s menom stroja, nielen dni — sticky stĺpec so
+          menom aj sticky hlavička dní sú vnútri tohto obalu. Namiesto toho
+          ide willChange:"transform" priamo na SAMOTNÉ sticky prvky nižšie —
+          to isté prinútenie vlastnej GPU vrstvy, ale bez rozbitia sticky. */}
+      <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight }}>
         {/* Hlavička dní — "sticky" hore, vykresľuje sa z nej len viditeľná časť. */}
         <div
           style={{
@@ -12917,9 +12919,10 @@ const CalendarGrid = React.memo(function CalendarGrid({
             zIndex: 3,
             background: "var(--panel)",
             height: HEADER_HEIGHT,
+            willChange: "transform",
           }}
         >
-          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)" }}></div>
+          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)", willChange: "transform" }}></div>
           {visibleDayIdx.map((i) => {
             const iso = allDays[i];
             const isToday = iso === today;
@@ -12989,6 +12992,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                     color: "var(--accent)",
                     borderLeft: "3px solid var(--accent)",
                     whiteSpace: "nowrap",
+                    willChange: "transform",
                   }}
                 >
                   {item.label}
@@ -13025,7 +13029,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
               <div
                 onClick={() => onOpenCard(m)}
                 className="gantt-name-wrap"
-                style={{ position: "sticky", left: 0, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer" }}
+                style={{ position: "sticky", left: 0, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer", willChange: "transform" }}
               >
                 {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
                     vnútornom obale, nie na tom vonkajšom vyššie — keby bolo na
@@ -16837,7 +16841,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         sa celá stránka vrátane hlavičky/tlačidiel nad kalendárom, nielen
         samotný Gantt. Toto to zastaví presne na hranici Gantt kontajnera. */}
     <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
-          <div style={{ width: "100%", minWidth: "max-content", transform: "translateZ(0)" }}>
+          <div style={{ width: "100%", minWidth: "max-content" }}>
             <div
               style={{
                 display: "grid",
@@ -16847,9 +16851,10 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 top: 0,
                 zIndex: 4,
                 background: "var(--panel)",
+                willChange: "transform",
               }}
             >
-              <div style={{ position: "sticky", left: 0, zIndex: 5, background: "var(--panel)" }}></div>
+              <div style={{ position: "sticky", left: 0, zIndex: 5, background: "var(--panel)", willChange: "transform" }}></div>
               {allDays.map((iso) => {
                 const d = Number(iso.slice(8, 10));
                 const mo = Number(iso.slice(5, 7));
@@ -16907,6 +16912,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     background: "var(--panel)",
                     paddingRight: 6,
                     paddingTop: 4,
+                    willChange: "transform",
                   }}
                   title="Zobraziť kartu technika"
                 >
