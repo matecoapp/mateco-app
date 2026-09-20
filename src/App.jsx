@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.453";
+const APP_VERSION = "1.0.454";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12899,7 +12899,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
     <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
-      <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight }}>
+      {/* transform: translateZ(0) — vynúti si vlastnú kompozitnú (GPU) vrstvu.
+          Bez toho vedel mobilný Safari po zascrollovaní ďaleko od začiatku
+          tejto rozsiahlej mriežky (stovky stĺpcov, len malá časť naozaj
+          vykreslená kvôli virtualizácii) prestať prekresľovať sticky hlavičku
+          aj riadky správne — číselne bol výrez v poriadku, len sa to
+          nevykreslilo. Toto je štandardná poistka na presne tento typ chyby. */}
+      <div style={{ position: "relative", width: "max-content", minWidth: "100%", height: HEADER_HEIGHT + layoutItems.totalHeight, transform: "translateZ(0)" }}>
         {/* Hlavička dní — "sticky" hore, vykresľuje sa z nej len viditeľná časť. */}
         <div
           style={{
@@ -16831,7 +16837,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         sa celá stránka vrátane hlavičky/tlačidiel nad kalendárom, nielen
         samotný Gantt. Toto to zastaví presne na hranici Gantt kontajnera. */}
     <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
-          <div style={{ width: "100%", minWidth: "max-content" }}>
+          <div style={{ width: "100%", minWidth: "max-content", transform: "translateZ(0)" }}>
             <div
               style={{
                 display: "grid",
