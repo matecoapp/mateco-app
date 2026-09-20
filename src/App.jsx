@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.462";
+const APP_VERSION = "1.0.463";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1559,7 +1559,6 @@ function DispatcherApp() {
   const [showHandoverProtocol, setShowHandoverProtocol] = useState(null); // job, ktorej sa práve vypĺňa protokol o odovzdaní
 
   const [assignments, setAssignments] = useState([]);
-  const [showAddTechnician, setShowAddTechnician] = useState(null); // null | {} | { existing: technician }
   const [showAddEmployee, setShowAddEmployee] = useState(null); // null | {} | { existing: employee } — modul Administratíva
   const [linkAccountTarget, setLinkAccountTarget] = useState(null); // employee, ktorému sa práve prepája účet
   const [technicianCard, setTechnicianCard] = useState(null);
@@ -2411,14 +2410,9 @@ function DispatcherApp() {
       if (emp) updateProfileInfo(userId, { role: emp.role });
     }
   }
-  // Spätne kompatibilná "persist" funkcia pre technikov — teraz zapisuje
-  // do jednotného zoznamu osôb (employees), zvyšok platformy sa nemusí meniť.
-  // (Šoféri sa už rovnakou cestou needitujú — úprava/archivácia šoféra ide
-  // len cez Administratívu → Zamestnanci, teda priamo cez persistEmployees.)
+  // Šoféri aj technici sa už needitujú/neachivujú vlastnou cestou — úprava a
+  // archivácia oboch ide len cez Administratívu → Zamestnanci (persistEmployees).
   const persistJobs = useCallback(makeRecordPersist("jobs", setJobs), []);
-  function persistTechnicians(list) {
-    persistEmployees([...employees.filter((e) => e.role !== "technik"), ...list.map((t) => ({ ...t, role: "technik" }))]);
-  }
   const persistAssignments = useCallback(makeRecordPersist("assignments", setAssignments), []);
   const persistDamages = useCallback(makeRecordPersist("damages", setDamages), []);
   const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
@@ -3858,22 +3852,6 @@ function DispatcherApp() {
       }
     }
   }
-  function addTechnician(data) {
-    persistTechnicians([...technicians, { id: uid(), ...data }]);
-    setShowAddTechnician(null);
-  }
-  function updateTechnician(id, patch) {
-    persistTechnicians(technicians.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  }
-  function saveTechnicianModal(data) {
-    if (showAddTechnician?.existing) {
-      updateTechnician(showAddTechnician.existing.id, data);
-      setShowAddTechnician(null);
-    } else {
-      addTechnician(data);
-    }
-    goBackCard();
-  }
   function saveAssignment(data, id) {
     if (id) {
       persistAssignments(assignments.map((a) => (a.id === id ? { ...a, ...data } : a)));
@@ -4271,17 +4249,6 @@ function DispatcherApp() {
     if (!track) {
       persistDamages(damages.filter((d) => !(d.machineId === id && d.type === "uradnaSkuska" && !d.resolved)));
     }
-  }
-  function setTechnicianArchived(id, archived, reason, note) {
-    persistTechnicians(
-      technicians.map((t) =>
-        t.id === id
-          ? archived
-            ? { ...t, archived: true, archivedReason: reason, archivedNote: note, archivedDate: today }
-            : { ...t, archived: false, archivedReason: null, archivedNote: null, archivedDate: null }
-          : t
-      )
-    );
   }
   // Po vytvorení zákazky, alebo po zmene depa vývozu/dátumu vývozu, dopočíta
   // checkera (depoCheckers + prípadná náhrada) a vytvorí/aktualizuje mu
@@ -4956,7 +4923,6 @@ function DispatcherApp() {
                 onQuickWeeklyDuty={toggleWeeklyDuty}
                 onQuickVacationWithSubstitute={quickVacationWithSubstitute}
                 depoCheckers={depoCheckers}
-                onAddTechnician={() => setShowAddTechnician({})}
                 onOpenTechnician={(t) => setTechnicianCard(t)}
                 onOpenCheckerInspection={(a) => setCheckerInspectionTarget(a)}
                 plannerTargetDate={plannerTargetDate}
@@ -6192,37 +6158,14 @@ function DispatcherApp() {
           }}
         />
       )}
-      {showAddTechnician && (
-        <AddTechnicianModal existing={showAddTechnician.existing} onClose={() => { setShowAddTechnician(null); goBackCard(); }} onSave={saveTechnicianModal} />
-      )}
       {technicianCard && (
         <TechnicianCardModal
           technician={technicianCard}
           assignments={assignments}
           machines={enrichedMachines}
           today={today}
-          user={effectiveUser}
           vehicleSpz={vehicleByEmployeeId[technicianCard.id]?.spz}
           onClose={() => { setTechnicianCard(null); setCardHistory([]); }}
-          onEdit={() => {
-            pushCard("technician", technicianCard);
-            setShowAddTechnician({ existing: technicianCard });
-            setTechnicianCard(null);
-          }}
-          onArchive={() => {
-            setArchiveTarget({
-              label: `technika ${technicianCard.name}`,
-              reasons: ["Ukončenie pracovného pomeru", "Odchod do dôchodku", "Dlhodobá PN", "Iné"],
-              onConfirm: (reason, note) => {
-                setTechnicianArchived(technicianCard.id, true, reason, note);
-                setTechnicianCard((prev) => (prev ? { ...prev, archived: true, archivedReason: reason, archivedNote: note } : prev));
-              },
-            });
-          }}
-          onUnarchive={() => {
-            setTechnicianArchived(technicianCard.id, false);
-            setTechnicianCard((prev) => (prev ? { ...prev, archived: false } : prev));
-          }}
         />
       )}
       {assignSlot && (
@@ -16133,35 +16076,6 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
   );
 }
 
-function AddTechnicianModal({ existing, onClose, onSave }) {
-  const [name, setName] = useState(existing?.name || "");
-  const [skratka, setSkratka] = useState(existing?.skratka || "");
-  const [depo, setDepo] = useState(existing?.depo || "");
-  const [phone, setPhone] = useState(existing?.phone || "");
-  const [email, setEmail] = useState(existing?.email || "");
-  return (
-    <Modal title={existing ? "Upraviť technika" : "Pridať technika"} onClose={onClose}>
-      <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Skratka (ERP)"><input value={skratka} onChange={(e) => setSkratka(e.target.value.toUpperCase())} style={{ width: "100%" }} /></Field>
-      <Field label="Depo *">
-        <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— vybrať depo —</option>
-          {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Field>
-      <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-      <button
-        className="btn btn-accent"
-        disabled={!name.trim() || !depo.trim()}
-        onClick={() => onSave({ name: name.trim(), skratka: skratka.trim(), depo: depo.trim(), phone: phone.trim(), email: email.trim() })}
-      >
-        {existing ? "Uložiť zmeny" : "Uložiť"}
-      </button>
-    </Modal>
-  );
-}
-
 /* ---------------------------------------------------------
    Technicians overview (today + tomorrow, per technician)
 --------------------------------------------------------- */
@@ -16462,7 +16376,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
 /* ---------------------------------------------------------
    Technician card modal (karta technika)
 --------------------------------------------------------- */
-function TechnicianCardModal({ technician, assignments, machines, today, user, onClose, onEdit, onArchive, onUnarchive, vehicleSpz }) {
+function TechnicianCardModal({ technician, assignments, machines, today, onClose, vehicleSpz }) {
   const t = technician;
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const upcoming = assignments
@@ -16499,13 +16413,8 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
           })}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {can(user, "technician_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť</button>}
-        {can(user, "technician_archive") && (
-          <button className="btn btn-ghost" onClick={() => (t.archived ? onUnarchive() : onArchive())}>
-            {t.archived ? "Vrátiť z archívu" : "Archivovať"}
-          </button>
-        )}
+      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+        Úprava údajov a archivácia sa robí v Administratíve → Zamestnanci.
       </div>
     </Modal>
   );
@@ -16514,7 +16423,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, user, o
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onAddTechnician, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, showArchived, setShowArchived, onOpenCheckerInspection, plannerTargetDate, onPlannerTargetDateConsumed }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, showArchived, setShowArchived, onOpenCheckerInspection, plannerTargetDate, onPlannerTargetDateConsumed }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
