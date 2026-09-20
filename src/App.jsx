@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.476";
+const APP_VERSION = "1.0.477";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7496,7 +7496,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
     if (module === m.id) {
       m.tabs.forEach((t) => {
-        railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}` });
+        railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}`, active: !t.dropdown && view === t.id });
         // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
         // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
         // pod nimi posunie hore oproti textu.
@@ -7551,7 +7551,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           if (r.kind === "dot") {
             return (
               <div key={r.key} className="rail-row" style={{ height: rowHeights[r.key] || 29 }}>
-                <span className="rail-tick" />
+                <span className={`rail-tick${r.active ? " active" : ""}`} />
               </div>
             );
           }
@@ -19281,7 +19281,9 @@ function GlobalStyle() {
          položky v zozname záložiek Požičovne/Servisu, len v IconRail flyoute
          (quickActionsByModule sa do mobilnej zásuvky neposiela). */
       .sidebar-quick { border-top: 1px dashed var(--border); margin: 6px 6px 4px; padding-top: 6px; }
-      .sidebar-item.quick { color: var(--accent); font-weight: 600; }
+      /* line-height vyšší ako bežný .sidebar-item (29px), nech je riadok
+         34px — presne ako 34px ikonka rýchlej akcie v IconRail páse. */
+      .sidebar-item.quick { color: var(--accent); font-weight: 600; line-height: 20px; }
 
       /* IconRail — úzky pás ikon na webe namiesto trvalo roztiahnutého
          bočného menu (nezaberá šírku plochy). Farba záhlavia, nech je hneď
@@ -19297,14 +19299,18 @@ function GlobalStyle() {
          34px) zodpovedá skutočnej výške riadku vo flyoute (.sidebar-group
          ~34px, .sidebar-item ~29px), nech si sedia 1:1 aj vizuálne, nielen
          počtom. Padding hore 8px = to isté, čo .rail-flyout-nav. */
-      .icon-rail { width: 52px; height: 100%; background: #22262b; display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+      /* Svetlý režim: biely pás + biele vysunuté menu, oddelené od plochy
+         červenou linkou, čierne ikony/bodky, zvolený modul = biela ikona v
+         červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
+         Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
+         tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
+      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-        color: rgba(255,255,255,.55); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
+        color: var(--text); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
       }
-      .rail-icon:hover { color: rgba(255,255,255,.85); }
-      .rail-icon.active { color: #fff; }
-      .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
+      .rail-icon:hover { background: var(--panel-2); }
+      .rail-icon.active { color: #fff; background: var(--accent); }
       /* Jeden riadok = jeden riadok vo flyoute (záložka = bodka, rýchla akcia
          = červená ikona) — výšku dostane inline (odmeraná v IconRail), toto
          je len fallback kým sa neodmeria. */
@@ -19312,8 +19318,9 @@ function GlobalStyle() {
       /* Rovnako veľké ako ikony modulov (34px), nech sú dobre vidno. */
       .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--accent); }
       .rail-icon.quick svg { width: 18px; height: 18px; }
-      .rail-icon.quick:hover { background: rgba(227,6,19,.18); }
-      .rail-tick { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,.28); flex-shrink: 0; }
+      .rail-icon.quick:hover { background: var(--accent-light); }
+      .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
+      .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
@@ -19327,10 +19334,20 @@ function GlobalStyle() {
            — IconRail z neho meria skutočnú výšku riadkov; viditeľnosť rieši
            len trieda .visible, nie mount/unmount. */
         position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
+        border-right: 2px solid var(--accent); box-shadow: 6px 0 20px rgba(0,0,0,.14); overflow-y: auto; z-index: 50;
         opacity: 0; pointer-events: none; transition: opacity .1s;
       }
       .rail-flyout.visible { opacity: 1; pointer-events: auto; }
+
+      /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
+      .app-shell.dark .icon-rail { background: #22262b; border-right: none; }
+      .app-shell.dark .rail-icon { color: rgba(255,255,255,.55); }
+      .app-shell.dark .rail-icon:hover { color: rgba(255,255,255,.85); background: transparent; }
+      .app-shell.dark .rail-icon.active { color: #fff; background: transparent; }
+      .app-shell.dark .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
+      .app-shell.dark .rail-tick { background: rgba(255,255,255,.32); opacity: 1; }
+      .app-shell.dark .rail-tick.active { background: #fff; border-color: var(--accent); }
+      .app-shell.dark .rail-flyout { border-right: 1px solid var(--border); }
       .rail-flyout-nav { width: 100%; padding: 8px 0; }
 
       /* Tabuľka (.table-cards) sa na mobile prekreslí na kartičky — každý
