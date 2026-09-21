@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.515";
+const APP_VERSION = "1.0.516";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7311,27 +7311,6 @@ function MailIcon({ size = 15 }) {
     </svg>
   );
 }
-// Ťahač bez skrine na korbe (kabína + nízka plošina), plná silueta
-// (currentColor), schválený návrh — nahradilo pôvodné 🚚 emoji aj obrysovú
-// verziu. `flip` zrkadlí kabínu na pravú stranu (smer "do zákazky" pri
-// návoze); bez neho kabína smeruje doľava (smer "späť do zákazky" pri zvoze).
-function TruckIcon({ size = 16, flip = false }) {
-  return (
-    <svg viewBox="0 0 48 24" width={size} height={(size * 24) / 48} style={flip ? { transform: "scaleX(-1)" } : undefined}>
-      <g fill="currentColor">
-        <rect x="3" y="9" width="8" height="8" rx="0.6" />
-        <rect x="11" y="15" width="23" height="2.4" />
-        <rect x="11" y="11" width="1.4" height="4" />
-        <rect x="32.6" y="13" width="1.4" height="4" />
-      </g>
-      <rect x="4.6" y="10.5" width="4.8" height="3.4" rx="0.4" fill="var(--panel, #fff)" />
-      <circle cx="7.5" cy="18.5" r="2.3" fill="currentColor" />
-      <circle cx="7.5" cy="18.5" r="0.9" fill="var(--panel, #fff)" />
-      <circle cx="27" cy="18.5" r="2.3" fill="currentColor" />
-      <circle cx="27" cy="18.5" r="0.9" fill="var(--panel, #fff)" />
-    </svg>
-  );
-}
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -13306,10 +13285,11 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       <div
                         key={`dep-${j.id}`}
                         className="gantt-transport-icon"
-                        style={{ gridColumn: depCol + 1, gridRow: 1 }}
+                        onClick={() => onOpenJob(j)}
+                        style={{ gridColumn: depCol + 1, gridRow: 1, cursor: "pointer" }}
                       >
                         <span>návoz</span>
-                        <TruckIcon size={18} flip />
+                        <span aria-hidden="true">▶</span>
                         <div className="gantt-tooltip">
                           <div style={{ fontWeight: 600 }}>{early ? "Prednávoz stroja" : "Odložený vývoz stroja"}</div>
                           <div>Zákazka: {who}</div>
@@ -13328,9 +13308,10 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       <div
                         key={`pick-${j.id}`}
                         className="gantt-transport-icon"
-                        style={{ gridColumn: pickCol + 1, gridRow: 1 }}
+                        onClick={() => onOpenJob(j)}
+                        style={{ gridColumn: pickCol + 1, gridRow: 1, cursor: "pointer" }}
                       >
-                        <TruckIcon size={18} />
+                        <span aria-hidden="true">◀</span>
                         <span>zvoz</span>
                         <div className="gantt-tooltip">
                           <div style={{ fontWeight: 600 }}>{late ? "Neskorší zvoz stroja" : "Skorší zvoz stroja"}</div>
