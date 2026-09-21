@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.500";
+const APP_VERSION = "1.0.501";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7122,6 +7122,10 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
+// Skratky modulov v úzkom IconRail páse — písmená namiesto SVG ikon (lepšie
+// čitateľné v tak úzkom stĺpci ako samostatné piktogramy).
+const MODULE_SHORT_LABEL = { poziciovna: "POŽ", servis: "SRV", administrativa: "ADM" };
+
 // Zoznam modulov + ich záložiek — zdieľané medzi bočným menu na mobile
 // (SidebarNav, vnútri výsuvnej zásuvky) a ikonovým pásom na webe (IconRail),
 // nech sa tabuľka záložiek nemusí udržiavať na dvoch miestach naraz.
@@ -7435,11 +7439,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           {railRows.filter((r) => r.kind === "module").map((r) => (
             <button
               key={r.id}
-              className={`rail-icon${r.active ? " active" : ""}`}
+              className={`rail-icon rail-icon-label${r.active ? " active" : ""}`}
               title={r.label}
               onClick={() => onSelectModule(r.id)}
             >
-              {r.icon}
+              {MODULE_SHORT_LABEL[r.id] || r.label}
               {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
             </button>
           ))}
@@ -12923,13 +12927,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
             position: "sticky",
             top: 0,
             zIndex: 3,
-            background: "var(--panel-2)",
+            background: "var(--accent-light)",
             borderBottom: "1px solid var(--border)",
             height: HEADER_HEIGHT,
             willChange: "transform",
           }}
         >
-          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel-2)", willChange: "transform" }}></div>
+          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--accent-light)", willChange: "transform" }}></div>
           {visibleDayIdx.map((i) => {
             const iso = allDays[i];
             const isToday = iso === today;
@@ -12951,7 +12955,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   whiteSpace: "nowrap",
                   borderRight: "1px solid var(--border)",
                   paddingBottom: 3,
-                  background: isWeekend ? "var(--warn-bg)" : "var(--panel-2)",
+                  background: isWeekend ? "var(--warn-bg)" : "var(--accent-light)",
                 }}
               >
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
@@ -13036,7 +13040,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
               <div
                 onClick={() => onOpenCard(m)}
                 className="gantt-name-wrap"
-                style={{ position: "sticky", left: 0, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer", willChange: "transform" }}
+                style={{ position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer", willChange: "transform" }}
               >
                 {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
                     vnútornom obale, nie na tom vonkajšom vyššie — keby bolo na
@@ -19284,7 +19288,7 @@ function GlobalStyle() {
          niečím vykompenzovať — takto netreba). */
       /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
          AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
-      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); }
+      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); margin-bottom: 6px; }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
@@ -19311,7 +19315,7 @@ function GlobalStyle() {
       /* Len tenká čiarka (box-shadow, nie border — ten by pridal 1px výšky
          navyše, čo pás nemá čím vykompenzovať). */
       .sidebar-quick { box-shadow: inset 0 1px 0 var(--border); }
-      .sidebar-group.rail-ask { color: #e6392e; font-weight: 700; background: #1a1a1a; border-radius: 6px; }
+      .sidebar-group.rail-ask { color: #e6392e; font-weight: 700; background: #1a1a1a; border-radius: 6px; margin-bottom: 10px; }
       .sidebar-group.rail-ask:hover { background: #2b2b2b; }
       .sidebar-group.rail-ask svg { flex-shrink: 0; }
       /* 34px riadok (nie 29 ako bežná .sidebar-item) — presne ako 34px
@@ -19343,13 +19347,16 @@ function GlobalStyle() {
       .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
       /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
          dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
-      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); }
+      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); margin-bottom: 6px; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
         color: var(--accent); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
       }
       .rail-icon:hover { background: var(--panel-2); }
       .rail-icon.active { color: #fff; background: var(--accent); }
+      /* Skratky modulov (POŽ/SRV/ADM) namiesto SVG ikon — rovnaký box ako
+         .rail-icon, len s textom. */
+      .rail-icon-label { font-family: 'Barlow Condensed', 'Barlow', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
       /* Jeden riadok = jeden riadok vo flyoute (záložka = bodka, rýchla akcia
          = červená ikona) — 29px, presne ako .sidebar-item tam (zdieľaná
          konštanta, viď komentár pri .sidebar-item). */
@@ -19365,7 +19372,7 @@ function GlobalStyle() {
       .rail-icon.quick svg { width: 18px; height: 18px; }
       .rail-icon.quick:hover { background: var(--panel-2); }
       /* výnimka — "Čo vyriešiť dnes?" nie je rýchla akcia modulu, čierny box + červená bublina, jednoznačne oddelené */
-      .rail-icon.quick.rail-ask { color: #e6392e; background: #1a1a1a; border-radius: 8px; }
+      .rail-icon.quick.rail-ask { color: #e6392e; background: #1a1a1a; border-radius: 8px; margin-bottom: 10px; }
       .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
