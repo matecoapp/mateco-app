@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.511";
+const APP_VERSION = "1.0.512";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19596,7 +19596,13 @@ function GlobalStyle() {
       .gantt-drag-handle.end { right: 0; }
       /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
          vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
-      .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: #1a1a1a; pointer-events: auto; cursor: default; z-index: 1; line-height: 1; }
+      /* Bez vlastného z-index na tomto boxe (len position:relative ako kotva
+         pre tooltip) — icon tak zostáva v "auto" vrstve, VŽDY za menom
+         stroja (to má z-index:2, teda vyššiu explicitnú vrstvu), zatiaľ čo
+         jeho .gantt-tooltip (z-index:50) sa vie normálne vyšvihnúť nad
+         VŠETKY riadky, lebo nie je zamknutý v nízkej lokálnej "stacking
+         context" tohto boxu. */
+      .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: #1a1a1a; pointer-events: auto; cursor: default; line-height: 1; }
       .app-shell.dark .gantt-transport-icon { color: #fff; }
       /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
          zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
