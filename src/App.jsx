@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.487";
+const APP_VERSION = "1.0.488";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9692,6 +9692,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
 
       let finalText = raw;
       let errorMsg = null;
+      let incomplete = false;
       if (raw.includes("\u0000ERROR\u0000")) {
         const [before, after] = raw.split("\u0000ERROR\u0000");
         finalText = before;
@@ -9705,6 +9706,12 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
         } catch {
           // ak by sa META z nejakého dôvodu nedala rozobrať, aspoň zobrazený text ostáva v poriadku
         }
+      } else {
+        // Stream sa skončil (done), ale bez koncového oddeľovača, čo server
+        // vždy pripája na záver — spojenie sa teda pravdepodobne prerušilo
+        // skôr, než agent dopísal celú odpoveď (napr. studený štart edge
+        // funkcie pri prvom dopyte). To, čo prišlo, NIE je hotová odpoveď.
+        incomplete = true;
       }
 
       if (errorMsg) {
@@ -9714,6 +9721,16 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
           return copy;
         });
         if (conversationModeRef.current) speak("Nastala chyba: " + errorMsg);
+      } else if (incomplete) {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            text: (finalText ? finalText + "\n\n" : "") + "⚠️ Odpoveď sa neprijala celá (spojenie sa asi prerušilo) — skús sa opýtať znova.",
+          };
+          return copy;
+        });
+        return null; // neber ako platnú odpoveď — napr. askDaily si to nesmie zacachovať
       } else {
         const replyText = finalText || "(prázdna odpoveď)";
         setMessages((m) => {
