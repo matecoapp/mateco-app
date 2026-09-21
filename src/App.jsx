@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.481";
+const APP_VERSION = "1.0.484";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5830,7 +5830,6 @@ function DispatcherApp() {
           session={session}
           machines={enrichedMachines}
           onOpenCard={(m) => setMachineCard(m)}
-          onNavigate={navigateFromNotification}
           askTrigger={maskotAskTick}
           briefingItems={briefingItems}
           today={today}
@@ -9339,39 +9338,13 @@ function CustomerDetailModal({
 // "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka. Kódy strojov v
 // tvare [[GS-2032]] sa navyše vykreslia ako klikateľné tlačidlo, čo priamo
 // otvorí kartu stroja (ak sa nájde v aktuálne dostupnom zozname).
-function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard, onNavigate) {
+function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
   const parts = String(text).split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g);
   return parts.map((p, i) => {
     const key = `${keyPrefix}-${i}`;
     if (p.startsWith("**") && p.endsWith("**")) return <strong key={key}>{p.slice(2, -2)}</strong>;
     if (p.startsWith("[[") && p.endsWith("]]")) {
-      const inner = p.slice(2, -2).trim();
-      // [[NAV:modul:view|Text]] — odkaz na miesto v appke (napr. z denného
-      // súhrnu "čo vyriešiť dnes"), vloží ho appka sama do promptu; maSKot ho
-      // len prepíše nezmenený do svojej odpovede.
-      if (inner.startsWith("NAV:") && onNavigate) {
-        const [route, label] = inner.slice(4).split("|");
-        const [mod, view] = route.split(":");
-        return (
-          <button
-            key={key}
-            onClick={() => onNavigate({ module: mod, view })}
-            style={{
-              background: "var(--accent-light, #fdf0f0)",
-              color: "var(--accent)",
-              border: "1px solid var(--accent)",
-              borderRadius: 4,
-              padding: "0 5px",
-              fontSize: "inherit",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {label || "Otvoriť →"}
-          </button>
-        );
-      }
-      const code = inner;
+      const code = p.slice(2, -2).trim();
       const machine = machineByCode?.get(norm(code));
       if (machine && onOpenCard) {
         return (
@@ -9399,7 +9372,7 @@ function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard, onNavigate) 
   });
 }
 const norm = (s) => String(s ?? "").toLowerCase();
-function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
+function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
   const lines = String(text).split("\n");
   const blocks = [];
   let i = 0;
@@ -9443,7 +9416,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
                   <tr>
                     {b.header.map((h, hi) => (
                       <th key={hi} style={{ border: "1px solid rgba(0,0,0,.15)", padding: "3px 6px", textAlign: "left", background: "rgba(0,0,0,.06)", whiteSpace: "nowrap" }}>
-                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard, onNavigate)}
+                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard)}
                       </th>
                     ))}
                   </tr>
@@ -9453,7 +9426,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
                     <tr key={ri}>
                       {r.map((c, ci) => (
                         <td key={ci} style={{ border: "1px solid rgba(0,0,0,.1)", padding: "3px 6px", whiteSpace: "nowrap" }}>
-                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard, onNavigate)}
+                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard)}
                         </td>
                       ))}
                     </tr>
@@ -9467,14 +9440,14 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
           return (
             <ul key={bi} style={{ margin: "4px 0", paddingLeft: 18 }}>
               {b.items.map((it, ii) => (
-                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard, onNavigate)}</li>
+                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard)}</li>
               ))}
             </ul>
           );
         }
         return (
           <div key={bi} style={{ whiteSpace: "pre-wrap" }}>
-            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard, onNavigate)}
+            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard)}
           </div>
         );
       })}
@@ -9482,7 +9455,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
   );
 }
 
-function MaskotChatWidget({ session, machines, onOpenCard, onNavigate, askTrigger, briefingItems, today }) {
+function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingItems, today }) {
   const [open, setOpen] = useState(false);
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
   // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
@@ -9775,13 +9748,10 @@ function MaskotChatWidget({ session, machines, onOpenCard, onNavigate, askTrigge
       setMessages((m) => [...m, { role: "user", text: "Čo mám dnes vyriešiť?" }, { role: "assistant", text: cached.answer }]);
       return;
     }
-    const list = (briefingItems || [])
-      .map((it) => `- ${it.label}${it.link ? ` [[NAV:${it.link.module}:${it.link.view}|Otvoriť]]` : ""}`)
-      .join("\n");
-    const prompt = list
-      ? `Toto sú položky, ktoré dnes (${today}) čakajú na vyriešenie:\n${list}\n\nNapíš mi to prehľadne ako krátky zoznam vecí na dnes. Ponechaj odkazy v tvare [[NAV:...]] presne tak, ako sú, nič v nich nemeň.`
-      : `Momentálne appka nehlási žiadnu naliehavú položku na dnes (${today}). Napíš mi to jednoducho, jednou vetou.`;
-    const answer = await send(prompt);
+    // Agent si vie sám dotiahnuť aktuálne dáta a odpovedať oveľa podrobnejšie
+    // (aj s konkrétnymi kódmi strojov, klikacími) než čo appka vie predpočítať
+    // vopred — netreba mu teda nič posielať navyše, len sa spýtať.
+    const answer = await send("Čo mám dnes vyriešiť?");
     if (answer) {
       try { localStorage.setItem(storageKeyBase + "_daily", JSON.stringify({ date: today, snapshot: dailySnapshot, answer })); } catch {}
     }
@@ -9900,7 +9870,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, onNavigate, askTrigge
                 }}
               >
                 {m.imagePreview && <img src={m.imagePreview} alt="" style={{ maxWidth: "100%", borderRadius: 6, marginBottom: 4, display: "block" }} />}
-                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} onNavigate={onNavigate} />
+                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} />
               </div>
             ))}
             {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
@@ -19359,7 +19329,7 @@ function GlobalStyle() {
       .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-        color: var(--text); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
+        color: var(--accent); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
       }
       .rail-icon:hover { background: var(--panel-2); }
       .rail-icon.active { color: #fff; background: var(--accent); }
@@ -19374,9 +19344,12 @@ function GlobalStyle() {
       .rail-row:hover:not(:disabled) { background: var(--panel-2); }
       .rail-row-quick { height: 34px; }
       /* Rovnako veľké ako ikony modulov (34px), nech sú dobre vidno. */
-      .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--accent); }
+      .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--text-dim); }
       .rail-icon.quick svg { width: 18px; height: 18px; }
-      .rail-icon.quick:hover { background: var(--accent-light); }
+      .rail-icon.quick:hover { background: var(--panel-2); }
+      /* výnimka — "Čo vyriešiť dnes?" nie je rýchla akcia modulu, ostáva výrazná červená */
+      .rail-icon.quick.rail-ask { color: var(--accent); }
+      .rail-icon.quick.rail-ask:hover { background: var(--accent-light); }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
       /* rovnaké deliace čiary ako vo flyoute (.sidebar-module/.sidebar-quick),
@@ -19394,13 +19367,19 @@ function GlobalStyle() {
            linka (tú má len samotný úzky pás vľavo, .icon-rail). */
         position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
         border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
+        /* horný padding je TU, nie na .rail-flyout-nav — musí platiť aj pre
+           tlačidlo "Čo vyriešiť dnes?" nad ním, inak je o 8px vyššie než
+           zodpovedajúca ikona bubliny v .icon-rail (tá má padding-top tiež
+           na vonkajšom kontajneri, nie až pri prvej ikone). */
+        padding-top: 8px;
       }
-      .rail-flyout-nav { width: 100%; padding: 8px 0; }
+      .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
 
       /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
       .app-shell.dark .icon-rail { background: #22262b; border-right: none; }
       .app-shell.dark .rail-icon { color: rgba(255,255,255,.55); }
       .app-shell.dark .rail-icon:hover { color: rgba(255,255,255,.85); background: transparent; }
+      .app-shell.dark .rail-icon.quick { color: var(--accent); }
       .app-shell.dark .rail-icon.active { color: #fff; background: transparent; }
       .app-shell.dark .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
       .app-shell.dark .rail-tick { background: rgba(255,255,255,.32); opacity: 1; }
