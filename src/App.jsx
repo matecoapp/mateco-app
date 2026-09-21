@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.501";
+const APP_VERSION = "1.0.502";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11120,6 +11120,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
       title={`Požičovňová zákazka · ${machine?.code || "—"}${job.machineDisplayName ? " · " + job.machineDisplayName : machine?.type ? " · " + machine.type : ""}`}
       onClose={onClose}
       onBack={onBack}
+      wide
       headerExtra={
         machine && onOpenMachineCard ? (
           <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
@@ -11428,7 +11429,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
   const isPending = r.status === "pending";
   return (
-    <Modal title={`${isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"} · ${machine?.code || "—"}`} onClose={onClose}>
+    <Modal title={`${isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"} · ${machine?.code || "—"}`} onClose={onClose} wide>
       {isPending && (
         <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
           ⏳ Čaká na schválenie — kým ju dispečer alebo vedúci požičovne neschváli, v kalendári sa nezobrazí.
