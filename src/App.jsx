@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.505";
+const APP_VERSION = "1.0.506";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7296,6 +7296,13 @@ function ChatBubbleIcon({ size = 15 }) {
   );
 }
 const RAIL_ICON_CHAT = <ChatBubbleIcon size={15} />;
+function PhoneIcon({ size = 15 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z" />
+    </svg>
+  );
+}
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -7458,17 +7465,16 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           );
         })}
         {/* Telefónny zoznam a spätná väzba mailom — presunuté z hornej lišty
-            sem, celkom dole v páse (marginTop: auto), nech sú stále na
-            rovnakom mieste, nezávisle od toho, koľko riadkov má aktívny
-            modul nad nimi. */}
-        <div className="rail-row-quick rail-divider-before" style={{ marginTop: "auto", height: 34 }}>
-          <button className="rail-icon quick" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}>
-            📞
+            sem. position:sticky+bottom:0 (nie len marginTop:auto), nech
+            "neutekajú" mimo viditeľnú plochu, keď má aktívny modul veľa
+            záložiek a pás sa musí scrollovať (.icon-rail má teraz vlastný
+            overflow-y:auto) — takto zostanú vždy pripnuté dole. */}
+        <div className="rail-bottom-actions">
+          <button className="rail-icon quick rail-bottom-icon" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}>
+            <PhoneIcon size={16} />
           </button>
-        </div>
-        <div className="rail-row-quick" style={{ height: 34 }}>
           <button
-            className="rail-icon quick"
+            className="rail-icon quick rail-bottom-icon"
             title="Poslať pripomienku"
             onClick={() =>
               composeMail({
@@ -7478,7 +7484,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
               })
             }
           >
-            💬
+            <ChatBubbleIcon size={16} />
           </button>
         </div>
       </div>
@@ -7502,12 +7508,17 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             docsExpanded={docsExpanded}
             onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
           />
-          <div style={{ marginTop: "auto", boxShadow: "inset 0 1px 0 var(--border)" }}>
-            <button className="sidebar-group" onClick={onOpenPhoneDirectory}>
-              <span>📞 Telefónny zoznam</span>
+          {/* position:sticky+bottom:0 (nie marginTop:auto) — keď má aktívny
+              modul veľa záložiek a flyout sa scrolluje (má vlastný
+              overflow-y:auto), tieto dve tlačidlá majú zostať vždy pripnuté
+              dole, nie "utiecť" mimo viditeľnú plochu. */}
+          <div className="rail-flyout-bottom" style={{ position: "sticky", bottom: 0, background: "var(--panel)", boxShadow: "inset 0 1px 0 var(--border)" }}>
+            <button className="sidebar-group rail-bottom-icon" onClick={onOpenPhoneDirectory}>
+              <PhoneIcon size={15} />
+              <span>Telefónny zoznam</span>
             </button>
             <button
-              className="sidebar-group"
+              className="sidebar-group rail-bottom-icon"
               onClick={() =>
                 composeMail({
                   to: "radoslav.podusel@matecoslovakia.sk",
@@ -7516,7 +7527,8 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
                 })
               }
             >
-              <span>💬 Poslať pripomienku</span>
+              <ChatBubbleIcon size={15} />
+              <span>Poslať pripomienku</span>
             </button>
           </div>
       </div>
@@ -19384,7 +19396,7 @@ function GlobalStyle() {
          červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
          Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
          tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
-      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; overflow-y: auto; overflow-x: hidden; }
       /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
          dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
       .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
@@ -19420,6 +19432,16 @@ function GlobalStyle() {
          nezaberá výšku, nerozhodí zarovnanie s textom (moduly/tabs čiaru má
          .rail-modules vyššie) */
       .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
+      /* Telefón/pripomienka celkom dole v úzkom páse — sticky (nie len
+         marginTop:auto), nech zostanú vidno aj keď sa pás musí scrollovať. */
+      .rail-bottom-actions {
+        position: sticky; bottom: 0; width: 100%; flex-shrink: 0;
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding-top: 6px; margin-top: 6px; background: var(--panel);
+        box-shadow: inset 0 1px 0 var(--border);
+      }
+      .app-shell.dark .rail-bottom-actions { background: #22262b; }
+      .rail-icon.quick.rail-bottom-icon, .sidebar-group.rail-bottom-icon { color: var(--accent); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
