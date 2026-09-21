@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.519";
+const APP_VERSION = "1.0.520";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1614,6 +1614,14 @@ function DispatcherApp() {
   }
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // body nemá vlastný --bg (tá premenná sa v tmavom režime prepisuje len
+  // v rámci .app-shell.dark, nie na body/html) — bez tejto triedy by pri
+  // "gumovom" overscrolle (iOS/trackpad potiahnutie nad okraj stránky) bolo
+  // za appkou vidno biele pozadie prehliadača aj v tmavom režime.
+  useEffect(() => {
+    document.body.classList.toggle("dark", darkMode);
+  }, [darkMode]);
 
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
@@ -19351,6 +19359,15 @@ function GlobalStyle() {
         --gantt-cell-bg: #e8eaed;
         --gantt-cell-border: #c9ccd1;
       }
+      /* Predvolený 8px margin prehliadača na body nebol nikde resetovaný —
+         cez tento okraj presvitalo biele pozadie body (appka naň nikdy
+         nenastavovala žiadnu farbu) aj v tmavom režime, keďže --bg sa v
+         tmavom režime prepisuje len v rámci .app-shell.dark, nie na body.
+         .dark trieda na body (nastavovaná v JS podľa darkMode) drží pozadie
+         pod appkou správne aj pri "gumovom" overscrolle. */
+      html, body { margin: 0; }
+      body { background: #f0f0f0; }
+      body.dark { background: #14171a; }
       .app-shell.dark {
         --bg: #14171a;
         --panel: #1e2226;
