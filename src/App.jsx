@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.492";
+const APP_VERSION = "1.0.493";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7351,7 +7351,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   }
   function scheduleHide() {
     cancelHide();
-    hideTimer.current = setTimeout(() => setRailHover(false), 180);
+    hideTimer.current = setTimeout(() => setRailHover(false), 40);
   }
 
   const canProtocol = can(effectiveUser, "protocol_write");
@@ -19357,7 +19357,7 @@ function GlobalStyle() {
            na vonkajšom kontajneri, nie až pri prvej ikone). */
         padding-top: 8px;
         opacity: 0; transform: translateX(-16px); pointer-events: none;
-        transition: opacity .22s ease, transform .22s ease;
+        transition: opacity .35s ease, transform .35s ease;
       }
       .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
       .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
