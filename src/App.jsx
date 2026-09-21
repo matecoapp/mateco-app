@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.484";
+const APP_VERSION = "1.0.485";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9743,8 +9743,15 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
   async function askDaily() {
     setOpen(true);
     let cached = null;
-    try { cached = JSON.parse(localStorage.getItem(storageKeyBase + "_daily") || "null"); } catch {}
+    // "_daily_v2" — staré cache z verzie, čo posielala pokazený [[NAV:...]]
+    // text, nech sa tým kľúčom už nikdy neprečíta (bola by to tá istá
+    // pokazená odpoveď navždy, kým by sa nezmenili briefingItems).
+    try { cached = JSON.parse(localStorage.getItem(storageKeyBase + "_daily_v2") || "null"); } catch {}
     if (cached && cached.date === today && cached.snapshot === dailySnapshot) {
+      // Ak je táto odpoveď už posledná v chate, len otvor okno — neduplikuj
+      // ju s každým ďalším klikom na to isté tlačidlo.
+      const last = messages[messages.length - 1];
+      if (last?.role === "assistant" && last.text === cached.answer) return;
       setMessages((m) => [...m, { role: "user", text: "Čo mám dnes vyriešiť?" }, { role: "assistant", text: cached.answer }]);
       return;
     }
@@ -9753,7 +9760,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
     // vopred — netreba mu teda nič posielať navyše, len sa spýtať.
     const answer = await send("Čo mám dnes vyriešiť?");
     if (answer) {
-      try { localStorage.setItem(storageKeyBase + "_daily", JSON.stringify({ date: today, snapshot: dailySnapshot, answer })); } catch {}
+      try { localStorage.setItem(storageKeyBase + "_daily_v2", JSON.stringify({ date: today, snapshot: dailySnapshot, answer })); } catch {}
     }
   }
   const prevAskTrigger = useRef(askTrigger);
