@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.520";
+const APP_VERSION = "1.0.521";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1037,9 +1037,7 @@ function FilterPopover({ activeCount, onClear, children }) {
       >
         Filtre
         {activeCount > 0 && (
-          <span style={{ background: "var(--accent)", color: "#fff", fontSize: 10, borderRadius: 99, padding: "1px 6px", fontWeight: 700 }}>
-            {activeCount}
-          </span>
+          <span className="count-badge">{activeCount}</span>
         )}
         <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? "▴" : "▾"}</span>
       </button>
@@ -1247,8 +1245,8 @@ function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra, ele
               </button>
             )}
             {headerExtra}
-            <button className="btn btn-ghost" onClick={onClose}>
-              Zavrieť
+            <button className="modal-close-x" onClick={onClose} aria-label="Zavrieť" title="Zavrieť">
+              ×
             </button>
           </div>
         </div>
@@ -6035,7 +6033,7 @@ function DispatcherApp() {
               color: "#fff",
               borderRadius: 10,
               padding: "12px 14px",
-              boxShadow: "0 6px 20px rgba(0,0,0,.25)",
+              boxShadow: "0 4px 16px rgba(0,0,0,.12)",
               display: "flex",
               flexDirection: "column",
               gap: 8,
@@ -9802,7 +9800,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
-          boxShadow: "0 2px 10px rgba(0,0,0,.25)",
+          boxShadow: "0 4px 16px rgba(0,0,0,.12)",
         }}
       >
         <ChatBubbleIcon size={26} />
@@ -9822,7 +9820,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
             background: "var(--panel)",
             border: "1px solid var(--border)",
             borderRadius: 10,
-            boxShadow: "0 4px 20px rgba(0,0,0,.3)",
+            boxShadow: "0 4px 16px rgba(0,0,0,.12)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -14039,8 +14037,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>{`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`}</span>
           {!m.currentJob && !m.archived && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 12px", borderRadius: 999, background: "#eaf5ee", color: "#1f9254", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1f9254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            <span className="badge badge-ok" style={{ fontSize: 11 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
               Voľný stroj
             </span>
           )}
@@ -14079,7 +14077,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12 }}>
             {modelParams.map(([label, value]) => (
-              <div key={label} style={{ padding: "4px 10px", background: "var(--panel-2)", borderRadius: 999 }}>
+              <div key={label} style={{ padding: "4px 10px", background: "var(--panel-2)", borderRadius: 6 }}>
                 <span style={{ color: "var(--text-dim)" }}>{label}: </span>
                 <span style={{ fontWeight: 600 }}>{value}</span>
               </div>
@@ -14135,7 +14133,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                 background: "var(--panel)",
                 border: "1px solid var(--border)",
                 borderRadius: 8,
-                boxShadow: "0 4px 16px rgba(0,0,0,.15)",
+                boxShadow: "0 4px 16px rgba(0,0,0,.10)",
                 display: "flex",
                 flexDirection: "column",
                 minWidth: 200,
@@ -14183,10 +14181,10 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             className="btn"
             onClick={() => setExpandedSection(expandedSection === "servis" ? null : "servis")}
             style={{
-              background: expandedSection === "servis" ? "var(--accent)" : "transparent",
-              color: expandedSection === "servis" ? "#fff" : "var(--text)",
+              background: expandedSection === "servis" ? "var(--accent-light)" : "transparent",
+              color: expandedSection === "servis" ? "var(--accent)" : "var(--text)",
               border: "1px solid " + (expandedSection === "servis" ? "var(--accent)" : "var(--border)"),
-              borderRadius: 999,
+              borderRadius: 6,
             }}
           >
             Servisná história ({history.length})
@@ -14197,10 +14195,10 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             className="btn"
             onClick={() => setExpandedSection(expandedSection === "prenajom" ? null : "prenajom")}
             style={{
-              background: expandedSection === "prenajom" ? "var(--accent)" : "transparent",
-              color: expandedSection === "prenajom" ? "#fff" : "var(--text)",
+              background: expandedSection === "prenajom" ? "var(--accent-light)" : "transparent",
+              color: expandedSection === "prenajom" ? "var(--accent)" : "var(--text)",
               border: "1px solid " + (expandedSection === "prenajom" ? "var(--accent)" : "var(--border)"),
-              borderRadius: 999,
+              borderRadius: 6,
             }}
           >
             História požičania ({jobs.filter((j) => j.machineId === m.id).length})
@@ -14211,10 +14209,10 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             className="btn"
             onClick={() => setExpandedSection(expandedSection === "kontroly" ? null : "kontroly")}
             style={{
-              background: expandedSection === "kontroly" ? "var(--accent)" : "transparent",
-              color: expandedSection === "kontroly" ? "#fff" : "var(--text)",
+              background: expandedSection === "kontroly" ? "var(--accent-light)" : "transparent",
+              color: expandedSection === "kontroly" ? "var(--accent)" : "var(--text)",
               border: "1px solid " + (expandedSection === "kontroly" ? "var(--accent)" : "var(--border)"),
-              borderRadius: 999,
+              borderRadius: 6,
             }}
           >
             Kontroly stroja ({machineInspections.length})
@@ -18494,7 +18492,7 @@ function ColumnFilterButton({ label, options, selected, onChange }) {
           style={{
             position: "absolute", top: "100%", left: 0, marginTop: 2, zIndex: 30,
             background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8,
-            boxShadow: "0 4px 16px rgba(0,0,0,.15)", minWidth: 180, maxHeight: 260, overflowY: "auto", padding: 6,
+            boxShadow: "0 4px 16px rgba(0,0,0,.10)", minWidth: 180, maxHeight: 260, overflowY: "auto", padding: 6,
           }}
         >
           <div style={{ display: "flex", gap: 6, marginBottom: 6, fontSize: 11 }}>
@@ -19596,7 +19594,7 @@ function GlobalStyle() {
       }
       .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
       .mobile-nav-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
-      .mobile-nav-drawer { position: relative; width: 78%; max-width: 280px; background: var(--panel); height: 100%; overflow-y: auto; box-shadow: 4px 0 20px rgba(0,0,0,.2); padding-top: env(safe-area-inset-top); }
+      .mobile-nav-drawer { position: relative; width: 78%; max-width: 280px; background: var(--panel); height: 100%; overflow-y: auto; box-shadow: 4px 0 16px rgba(0,0,0,.10); padding-top: env(safe-area-inset-top); }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
          Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja), a to aj pri
@@ -19671,6 +19669,18 @@ function GlobalStyle() {
       .badge-warn { background: var(--warn-bg); color: var(--warn); }
       .badge-danger { background: var(--danger-bg); color: var(--danger); }
       .badge-info { background: var(--info-bg); color: var(--info); }
+      /* Zdieľaný "počítací" odznak (aktívne filtre a pod.) — jeden radius/
+         veľkosť namiesto toho, aby si ho každé miesto vyrábalo nanovo. */
+      .count-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 10px; border-radius: 10px; min-width: 16px; height: 16px; padding: 0 5px; font-weight: 700; line-height: 1; }
+      /* Zdieľané "×" tlačidlo na zatvorenie — tlmené (žiadne pozadie v pokoji,
+         jemné pri hoveri), rovnaký jazyk ako .rail-icon namiesto textového
+         tlačidla "Zavrieť" alebo červeného kruhu. */
+      .modal-close-x {
+        width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        background: transparent; border: none; color: var(--text-dim); font-size: 22px; line-height: 1; cursor: pointer;
+        transition: background .15s ease, color .15s ease; flex-shrink: 0;
+      }
+      .modal-close-x:hover { background: var(--panel-2); color: var(--text); }
       input, select, textarea { background: #fff; border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
       input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
       table { width: 100%; border-collapse: collapse; }
