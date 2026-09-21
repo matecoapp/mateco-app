@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.499";
+const APP_VERSION = "1.0.500";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12923,12 +12923,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
             position: "sticky",
             top: 0,
             zIndex: 3,
-            background: "var(--panel)",
+            background: "var(--panel-2)",
+            borderBottom: "1px solid var(--border)",
             height: HEADER_HEIGHT,
             willChange: "transform",
           }}
         >
-          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel)", willChange: "transform" }}></div>
+          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--panel-2)", willChange: "transform" }}></div>
           {visibleDayIdx.map((i) => {
             const iso = allDays[i];
             const isToday = iso === today;
@@ -12949,8 +12950,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   fontWeight: isToday ? 600 : 400,
                   whiteSpace: "nowrap",
                   borderRight: "1px solid var(--border)",
-                  paddingBottom: 4,
-                  background: isWeekend ? "var(--warn-bg)" : "var(--panel)",
+                  paddingBottom: 3,
+                  background: isWeekend ? "var(--warn-bg)" : "var(--panel-2)",
                 }}
               >
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".03em" }}>{DOW_NAMES[dow]}</div>
@@ -13561,8 +13562,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   // výške). Kratší obsah (bez poznámky) sa v riadku len zarovná na stred
   // (grid nižšie má "alignItems: center").
   const ROW_HEIGHT = compactMode ? 26 : 40;
-  const DIVIDER_HEIGHT = compactMode ? 22 : 34;
-  const HEADER_HEIGHT = 40;
+  const DIVIDER_HEIGHT = compactMode ? 18 : 24;
+  const HEADER_HEIGHT = 32;
 
   // Presné rozloženie zhora nadol — riadky strojov AJ deliace čiary kategórií
   // (majú inú výšku), každý so svojou kumulatívnou polohou "top". Toto appke
@@ -19324,7 +19325,10 @@ function GlobalStyle() {
          plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      .icon-rail-wrap { position: sticky; top: 0; flex-shrink: 0; z-index: 50; isolation: isolate; }
+      /* Výška NATVRDO 100vh (nie spoliehanie sa na flex-stretch od suseda) —
+         inak "sticky" nemá čo držať, keď je obsah vedľa nej niekedy presne
+         na výšku okna (napr. fullscreen gantt) a nič sa nescrolluje. */
+      .icon-rail-wrap { position: sticky; top: 0; height: 100vh; flex-shrink: 0; z-index: 50; isolation: isolate; }
       /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
          nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
          medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
