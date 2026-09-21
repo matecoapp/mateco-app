@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.486";
+const APP_VERSION = "1.0.487";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9728,7 +9728,10 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
             if (conversationModeRef.current) startListening();
           });
         }
-        return replyText;
+        // finalText, nie replyText — ten obsahuje aj náhradný text "(prázdna
+        // odpoveď)" pre zobrazenie v bubline, čo by sa inak vydávalo za
+        // skutočnú odpoveď (a napr. askDaily by si to zbytočne zacachoval).
+        return finalText || null;
       }
     } catch (e) {
       setMessages((m) => {
