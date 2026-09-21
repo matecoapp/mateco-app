@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.510";
+const APP_VERSION = "1.0.511";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -19425,7 +19425,7 @@ function GlobalStyle() {
          červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
          Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
          tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
-      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; }
+      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; }
       /* Scrollovateľná časť pásu (moduly/záložky) — flex:1 necháva zvyšné
          miesto pre .rail-bottom-actions POD ňou, mimo scrollu, takže telefón
          a pripomienka sú vždy vidno vizuálne na spodku, nie len "za
@@ -19436,10 +19436,12 @@ function GlobalStyle() {
       .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-        color: var(--accent); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
+        color: var(--text-dim); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
+        transition: background .15s ease, color .15s ease;
       }
-      .rail-icon:hover { background: var(--panel-2); }
+      .rail-icon:hover { background: var(--panel-2); color: var(--text); }
       .rail-icon.active { color: #fff; background: var(--accent); }
+      .rail-icon.active:hover { color: #fff; }
       /* Skratky modulov (POŽ/SRV/ADM) namiesto SVG ikon — rovnaký box ako
          .rail-icon, len s textom. */
       .rail-icon-label { font-family: 'Barlow Condensed', 'Barlow', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
@@ -19485,10 +19487,10 @@ function GlobalStyle() {
            z merania VTZ EZ" zalamovali na 2 riadky. Len tieň, žiadna deliaca
            linka (tú má len samotný úzky pás vľavo, .icon-rail). */
         position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); z-index: 50;
+        border-right: 1px solid var(--border); box-shadow: 4px 0 16px rgba(0,0,0,.10); z-index: 50;
         display: flex; flex-direction: column;
-        opacity: 0; transform: translateX(-16px); pointer-events: none;
-        transition: opacity .35s ease, transform .35s ease;
+        opacity: 0; transform: translateX(-10px); pointer-events: none;
+        transition: opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
       /* Scrollovateľná časť (moduly/záložky) — flex:1 necháva zvyšný priestor
