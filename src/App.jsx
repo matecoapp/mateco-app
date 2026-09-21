@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.507";
+const APP_VERSION = "1.0.508";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7303,6 +7303,14 @@ function PhoneIcon({ size = 15 }) {
     </svg>
   );
 }
+function MailIcon({ size = 15 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 6 9 7 9-7" />
+    </svg>
+  );
+}
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -7423,52 +7431,56 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   return (
     <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
-        {effectiveUser?.role === "admin" && (
-          <button className="rail-icon quick rail-ask" title="Čo vyriešiť dnes?" onClick={onAskDaily}>
-            {RAIL_ICON_CHAT}
-          </button>
-        )}
-        <div className="rail-modules">
-          {railRows.filter((r) => r.kind === "module").map((r) => (
-            <button
-              key={r.id}
-              className={`rail-icon rail-icon-label${r.active ? " active" : ""}`}
-              title={r.label}
-              onClick={() => onSelectModule(r.id)}
-            >
-              {MODULE_SHORT_LABEL[r.id] || r.label}
-              {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
+        {/* Scrollovateľná časť (moduly/záložky) — oddelená od telefónu/
+            pripomienky nižšie, nech tie zostanú VIZUÁLNE vždy dole na
+            spodku (flex:1 tu hore necháva zvyšný priestor), nie len "za
+            posledným riadkom", keď je obsahu málo. */}
+        <div className="rail-scroll">
+          {effectiveUser?.role === "admin" && (
+            <button className="rail-icon quick rail-ask" title="Čo vyriešiť dnes?" onClick={onAskDaily}>
+              {RAIL_ICON_CHAT}
             </button>
-          ))}
-        </div>
-        {railRows.filter((r) => r.kind !== "module").map((r) => {
-          const dividerCls = r.dividerBefore ? " rail-divider-before" : "";
-          if (r.kind === "dot") {
-            return (
-              <button key={r.key} className={`rail-row${dividerCls}`} title={r.label} onClick={r.onClick} disabled={!r.onClick}>
-                <span className={`rail-tick${r.active ? " active" : ""}`} />
+          )}
+          <div className="rail-modules">
+            {railRows.filter((r) => r.kind === "module").map((r) => (
+              <button
+                key={r.id}
+                className={`rail-icon rail-icon-label${r.active ? " active" : ""}`}
+                title={r.label}
+                onClick={() => onSelectModule(r.id)}
+              >
+                {MODULE_SHORT_LABEL[r.id] || r.label}
+                {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
               </button>
-            );
-          }
-          return (
-            <div key={r.key} className={`rail-row rail-row-quick${dividerCls}`}>
-              {r.href ? (
-                <a className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
-                  {r.icon}
-                </a>
-              ) : (
-                <button className="rail-icon quick" title={r.label} onClick={r.onClick}>
-                  {r.icon}
+            ))}
+          </div>
+          {railRows.filter((r) => r.kind !== "module").map((r) => {
+            const dividerCls = r.dividerBefore ? " rail-divider-before" : "";
+            if (r.kind === "dot") {
+              return (
+                <button key={r.key} className={`rail-row${dividerCls}`} title={r.label} onClick={r.onClick} disabled={!r.onClick}>
+                  <span className={`rail-tick${r.active ? " active" : ""}`} />
                 </button>
-              )}
-            </div>
-          );
-        })}
+              );
+            }
+            return (
+              <div key={r.key} className={`rail-row rail-row-quick${dividerCls}`}>
+                {r.href ? (
+                  <a className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
+                    {r.icon}
+                  </a>
+                ) : (
+                  <button className="rail-icon quick" title={r.label} onClick={r.onClick}>
+                    {r.icon}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
         {/* Telefónny zoznam a spätná väzba mailom — presunuté z hornej lišty
-            sem. position:sticky+bottom:0 (nie len marginTop:auto), nech
-            "neutekajú" mimo viditeľnú plochu, keď má aktívny modul veľa
-            záložiek a pás sa musí scrollovať (.icon-rail má teraz vlastný
-            overflow-y:auto) — takto zostanú vždy pripnuté dole. */}
+            sem, mimo scrollovateľnej časti vyššie, takže sú VŽDY vidno
+            celkom dole v páse, nezávisle od počtu riadkov nad nimi. */}
         <div className="rail-bottom-actions">
           <button className="rail-icon quick rail-bottom-icon" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}>
             <PhoneIcon size={16} />
@@ -7484,41 +7496,41 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
               })
             }
           >
-            <ChatBubbleIcon size={16} />
+            <MailIcon size={16} />
           </button>
         </div>
       </div>
       <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`}>
-          {effectiveUser?.role === "admin" && (
-            <button className="sidebar-group rail-ask" onClick={onAskDaily}>
-              <ChatBubbleIcon size={15} />
-              <span>Čo vyriešiť dnes?</span>
-            </button>
-          )}
-          <SidebarNav
-            className="rail-flyout-nav"
-            module={module}
-            view={view}
-            effectiveUser={effectiveUser}
-            damageAlertCount={damageAlertCount}
-            onSelectModule={onSelectModule}
-            onSelectView={onSelectView}
-            onPickDocumentsSubView={onPickDocumentsSubView}
-            quickActionsByModule={quickActionsByModule}
-            docsExpanded={docsExpanded}
-            onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
-          />
-          {/* position:sticky+bottom:0 (nie marginTop:auto) — keď má aktívny
-              modul veľa záložiek a flyout sa scrolluje (má vlastný
-              overflow-y:auto), tieto dve tlačidlá majú zostať vždy pripnuté
-              dole, nie "utiecť" mimo viditeľnú plochu. */}
-          <div className="rail-flyout-bottom" style={{ position: "sticky", bottom: 0, background: "var(--panel)", boxShadow: "inset 0 1px 0 var(--border)" }}>
-            <button className="sidebar-group rail-bottom-icon" onClick={onOpenPhoneDirectory}>
-              <PhoneIcon size={15} />
-              <span>Telefónny zoznam</span>
+          <div className="rail-flyout-scroll">
+            {effectiveUser?.role === "admin" && (
+              <button className="sidebar-group rail-ask" onClick={onAskDaily}>
+                <ChatBubbleIcon size={15} />
+                <span>Čo vyriešiť dnes?</span>
+              </button>
+            )}
+            <SidebarNav
+              className="rail-flyout-nav"
+              module={module}
+              view={view}
+              effectiveUser={effectiveUser}
+              damageAlertCount={damageAlertCount}
+              onSelectModule={onSelectModule}
+              onSelectView={onSelectView}
+              onPickDocumentsSubView={onPickDocumentsSubView}
+              quickActionsByModule={quickActionsByModule}
+              docsExpanded={docsExpanded}
+              onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
+            />
+          </div>
+          {/* Mimo scrollovateľnej časti vyššie (rail-flyout-scroll) — vždy
+              vidno celkom dole, textové menu bez ikon (tie má len úzky
+              ikonový pás vľavo). */}
+          <div className="rail-flyout-bottom">
+            <button className="sidebar-item" onClick={onOpenPhoneDirectory}>
+              Telefónny zoznam
             </button>
             <button
-              className="sidebar-group rail-bottom-icon"
+              className="sidebar-item"
               onClick={() =>
                 composeMail({
                   to: "radoslav.podusel@matecoslovakia.sk",
@@ -7527,8 +7539,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
                 })
               }
             >
-              <ChatBubbleIcon size={15} />
-              <span>Poslať pripomienku</span>
+              Poslať pripomienku
             </button>
           </div>
       </div>
@@ -19396,7 +19407,12 @@ function GlobalStyle() {
          červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
          Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
          tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
-      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; overflow-y: auto; overflow-x: hidden; }
+      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; }
+      /* Scrollovateľná časť pásu (moduly/záložky) — flex:1 necháva zvyšné
+         miesto pre .rail-bottom-actions POD ňou, mimo scrollu, takže telefón
+         a pripomienka sú vždy vidno vizuálne na spodku, nie len "za
+         posledným riadkom" pri krátkom obsahu. */
+      .rail-scroll { width: 100%; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; }
       /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
          dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
       .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
@@ -19432,16 +19448,15 @@ function GlobalStyle() {
          nezaberá výšku, nerozhodí zarovnanie s textom (moduly/tabs čiaru má
          .rail-modules vyššie) */
       .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
-      /* Telefón/pripomienka celkom dole v úzkom páse — sticky (nie len
-         marginTop:auto), nech zostanú vidno aj keď sa pás musí scrollovať. */
+      /* Telefón/pripomienka celkom dole v úzkom páse — MIMO .rail-scroll
+         vyššie (nie sticky vnútri neho), takže sú vždy vizuálne na spodku
+         pásu, nezávisle od toho, koľko riadkov má aktívny modul nad nimi. */
       .rail-bottom-actions {
-        position: sticky; bottom: 0; width: 100%; flex-shrink: 0;
+        width: 100%; flex-shrink: 0;
         display: flex; flex-direction: column; align-items: center; gap: 2px;
-        padding-top: 6px; margin-top: 6px; background: var(--panel);
-        box-shadow: inset 0 1px 0 var(--border);
+        padding-top: 6px; box-shadow: inset 0 1px 0 var(--border);
       }
-      .app-shell.dark .rail-bottom-actions { background: #22262b; }
-      .rail-icon.quick.rail-bottom-icon, .sidebar-group.rail-bottom-icon { color: var(--accent); }
+      .rail-icon.quick.rail-bottom-icon { color: var(--accent); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
         font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
@@ -19452,18 +19467,26 @@ function GlobalStyle() {
            z merania VTZ EZ" zalamovali na 2 riadky. Len tieň, žiadna deliaca
            linka (tú má len samotný úzky pás vľavo, .icon-rail). */
         position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
+        border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); z-index: 50;
         display: flex; flex-direction: column;
+        opacity: 0; transform: translateX(-16px); pointer-events: none;
+        transition: opacity .35s ease, transform .35s ease;
+      }
+      .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
+      /* Scrollovateľná časť (moduly/záložky) — flex:1 necháva zvyšný priestor
+         pre .rail-flyout-bottom POD ňou, mimo scrollu, nech telefón a
+         pripomienka zostanú vždy vizuálne na spodku vysunutého menu. */
+      .rail-flyout-scroll {
+        width: 100%; flex: 1; min-height: 0; overflow-y: auto;
         /* horný padding je TU, nie na .rail-flyout-nav — musí platiť aj pre
            tlačidlo "Čo vyriešiť dnes?" nad ním, inak je o 8px vyššie než
            zodpovedajúca ikona bubliny v .icon-rail (tá má padding-top tiež
            na vonkajšom kontajneri, nie až pri prvej ikone). */
         padding-top: 8px;
-        opacity: 0; transform: translateX(-16px); pointer-events: none;
-        transition: opacity .35s ease, transform .35s ease;
       }
-      .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
       .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
+      .rail-flyout-bottom { width: 100%; flex-shrink: 0; padding: 4px 0; box-shadow: inset 0 1px 0 var(--border); }
+      .rail-flyout-bottom .sidebar-item { padding-left: 14px; }
 
       /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
       .app-shell.dark .icon-rail { background: #22262b; border-right: none; }
