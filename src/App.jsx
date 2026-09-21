@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.490";
+const APP_VERSION = "1.0.491";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7473,8 +7473,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           );
         })}
       </div>
-      {railHover && (
-        <div className="rail-flyout">
+      <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`}>
           {effectiveUser?.role === "admin" && (
             <button className="sidebar-group rail-ask" onClick={onAskDaily}>
               <ChatBubbleIcon size={15} />
@@ -7494,8 +7493,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             docsExpanded={docsExpanded}
             onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
           />
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -19358,7 +19356,10 @@ function GlobalStyle() {
            zodpovedajúca ikona bubliny v .icon-rail (tá má padding-top tiež
            na vonkajšom kontajneri, nie až pri prvej ikone). */
         padding-top: 8px;
+        opacity: 0; transform: translateX(-6px); pointer-events: none;
+        transition: opacity .15s ease, transform .15s ease;
       }
+      .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
       .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
 
       /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
