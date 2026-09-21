@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.509";
+const APP_VERSION = "1.0.510";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7311,6 +7311,18 @@ function MailIcon({ size = 15 }) {
     </svg>
   );
 }
+// Plná silueta (fill, nie stroke) — podľa referenčnej ikony od používateľa;
+// currentColor, nech ju .gantt-transport-icon/.app-shell.dark vie prefarbiť
+// čierno/bielo namiesto pôvodného 🚚 emoji.
+function TruckIcon({ size = 13 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+      <path d="M2 15h11V6a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v9zM15 8h3l3 4v3h-6V8z" />
+      <circle cx="6.5" cy="17.5" r="2" />
+      <circle cx="17.5" cy="17.5" r="2" />
+    </svg>
+  );
+}
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -13279,7 +13291,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         className="gantt-transport-icon"
                         style={{ gridColumn: depCol + 1, gridRow: 1 }}
                       >
-                        <span aria-hidden="true">🚚</span>
+                        <TruckIcon size={13} />
                         <span>návoz</span>
                         <div className="gantt-tooltip">
                           <div style={{ fontWeight: 600 }}>{early ? "Prednávoz stroja" : "Odložený vývoz stroja"}</div>
@@ -13301,7 +13313,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         className="gantt-transport-icon"
                         style={{ gridColumn: pickCol + 1, gridRow: 1 }}
                       >
-                        <span aria-hidden="true">🚚</span>
+                        <TruckIcon size={13} />
                         <span>zvoz</span>
                         <div className="gantt-tooltip">
                           <div style={{ fontWeight: 600 }}>{late ? "Neskorší zvoz stroja" : "Skorší zvoz stroja"}</div>
@@ -19392,10 +19404,16 @@ function GlobalStyle() {
          plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      /* Výška NATVRDO 100vh (nie spoliehanie sa na flex-stretch od suseda) —
-         inak "sticky" nemá čo držať, keď je obsah vedľa nej niekedy presne
-         na výšku okna (napr. fullscreen gantt) a nič sa nescrolluje. */
-      .icon-rail-wrap { position: sticky; top: 0; height: 100vh; flex-shrink: 0; z-index: 50; isolation: isolate; }
+      /* Výška 100% (nie 100vh!) — .app-body-row je flex:1/min-height:0 vnútri
+         .app-shell (flex column s Headerom nad ním), takže jeho vlastná
+         výška je vždy presne "zvyšok obrazovky POD headerom" (definitná
+         flexbox hodnota, nie odhad). 100vh by bolo o výšku Headera VIAC než
+         túto skutočne viditeľnú plochu — spodok pásu (telefón/pripomienka)
+         by tak "utiekol" pod dolný okraj obrazovky, kým sa celá stránka
+         neposcrolluje. 100% tu funguje spoľahlivo (na rozdiel od pôvodného
+         spoliehania sa na flex-stretch bez explicitnej výšky), lebo ide o
+         percento z DEFINITNEJ výšky rodiča, nie o meranie obsahu suseda. */
+      .icon-rail-wrap { position: sticky; top: 0; height: 100%; flex-shrink: 0; z-index: 50; isolation: isolate; }
       /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
          nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
          medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
@@ -19576,7 +19594,8 @@ function GlobalStyle() {
       .gantt-drag-handle.end { right: 0; }
       /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
          vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
-      .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--text-dim); pointer-events: auto; cursor: default; z-index: 2; line-height: 1; }
+      .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: #1a1a1a; pointer-events: auto; cursor: default; z-index: 1; line-height: 1; }
+      .app-shell.dark .gantt-transport-icon { color: #fff; }
       /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
          zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
          bez "fill" geometrie, si to niektoré prehliadače spočítajú s nulovým
