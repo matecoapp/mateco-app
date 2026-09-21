@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.480";
+const APP_VERSION = "1.0.481";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2267,17 +2267,12 @@ function DispatcherApp() {
     return items;
   }, [currentUser, myEmployee, reservations, jobs, damages, spareParts, today]);
 
-  // Zobrazí sa raz za deň (nie pri každom prihlásení, ak sa človek prihlási
-  // viackrát v ten istý deň) — a len vtedy, keď je naozaj čo hlásiť.
-  const [showBriefing, setShowBriefing] = useState(false);
-  useEffect(() => {
-    if (!currentUser || !loaded) return;
-    if (briefingItems.length === 0) return;
-    const key = `mateco_briefing_shown_${currentUser.id}_${today}`;
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, "1");
-    setShowBriefing(true);
-  }, [currentUser, loaded, briefingItems, today]);
+  // Predtým sa toto raz denne samo vyskočilo v modálnom okne — zrušené (klik na
+  // položku presmeroval a okno sa zavrelo, k ostatným položkám sa už nedalo
+  // vrátiť). Dáta (briefingItems) ostávajú, len ich teraz na požiadanie
+  // prednesie maSKot (tlačidlo "Čo vyriešiť dnes?" v ráme) — v AI chate sú
+  // všetky odkazy klikacie a chat ostáva otvorený.
+  const [maskotAskTick, setMaskotAskTick] = useState(0);
 
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
   // (napr. vedúci servisu rovno v Servise) — len pri prvom prihlásení v novej
@@ -4740,10 +4735,6 @@ function DispatcherApp() {
         </Modal>
       )}
 
-      {showBriefing && (
-        <DailyBriefingModal items={briefingItems} onNavigate={navigateFromNotification} onClose={() => setShowBriefing(false)} />
-      )}
-
       <div className="app-body-row">
         <IconRail
           module={module}
@@ -4755,6 +4746,7 @@ function DispatcherApp() {
           onPickDocumentsSubView={pickDocumentsSubView}
           onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
           onAddReservation={() => setShowAddReservation({})}
+          onAskDaily={() => setMaskotAskTick((n) => n + 1)}
         />
         {mobileNavOpen && (
           <div className="mobile-nav-overlay">
@@ -5834,7 +5826,15 @@ function DispatcherApp() {
       {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
           Keď sa osvedčí, rozšíriť podmienku na ďalšie role. */}
       {effectiveUser?.role === "admin" && (
-        <MaskotChatWidget session={session} machines={enrichedMachines} onOpenCard={(m) => setMachineCard(m)} />
+        <MaskotChatWidget
+          session={session}
+          machines={enrichedMachines}
+          onOpenCard={(m) => setMachineCard(m)}
+          onNavigate={navigateFromNotification}
+          askTrigger={maskotAskTick}
+          briefingItems={briefingItems}
+          today={today}
+        />
       )}
       {showUnknownSerialReport && (
         <UnknownSerialDamageModal
@@ -6590,40 +6590,6 @@ const ROLE_NOTIFICATION_KINDS = {
 // appke samotnej (zvonček) sa teraz zobrazuje VŽDY všetko, toto nastavenie
 // sa týka len push. Predvolene sú zapnuté všetky (chýbajúci kľúč == zapnuté).
 // Denný briefing — na mieru podľa role, vyskočí raz denne po prihlásení.
-function DailyBriefingModal({ items, onNavigate, onClose }) {
-  return (
-    <Modal title="Dnešný prehľad" onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
-        {items.map((item, i) => (
-          <button
-            key={i}
-            onClick={() => {
-              onNavigate(item.link);
-              onClose();
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              textAlign: "left",
-              padding: "12px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--border)",
-              background: "var(--panel-2)",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            <span style={{ fontSize: 20 }}>→</span>
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-      <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
-    </Modal>
-  );
-}
-
 function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisablePush, onSave, onClose }) {
   const [prefs, setPrefs] = useState(currentUser.notificationPrefs || {});
   const browserBlocked = typeof Notification !== "undefined" && Notification.permission === "denied";
@@ -7405,6 +7371,11 @@ const RAIL_ICON_GEAR = (
   </svg>
 );
 const RAIL_ICONS = { poziciovna: RAIL_ICON_PLATFORM, servis: RAIL_ICON_WRENCH, administrativa: RAIL_ICON_GEAR };
+const RAIL_ICON_CHAT = (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a8 8 0 1 1 3.4 6.5L3 20l1.3-3.6A7.96 7.96 0 0 1 3 12z" />
+  </svg>
+);
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -7441,7 +7412,7 @@ const RAIL_ICON_RULER = (
 // EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation }) {
+function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily }) {
   const [railHover, setRailHover] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
@@ -7532,6 +7503,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   return (
     <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
       <div className="icon-rail">
+        {effectiveUser?.role === "admin" && (
+          <button className="rail-icon quick rail-ask" title="Čo vyriešiť dnes?" onClick={onAskDaily}>
+            {RAIL_ICON_CHAT}
+          </button>
+        )}
         {railRows.map((r) => {
           const dividerCls = `${r.dividerAfter ? " rail-divider-after" : ""}${r.dividerBefore ? " rail-divider-before" : ""}`;
           if (r.kind === "module") {
@@ -7571,6 +7547,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
       </div>
       {railHover && (
         <div className="rail-flyout">
+          {effectiveUser?.role === "admin" && (
+            <button className="sidebar-group rail-ask" onClick={onAskDaily}>
+              <span>Čo vyriešiť dnes?</span>
+            </button>
+          )}
           <SidebarNav
             className="rail-flyout-nav"
             module={module}
@@ -9358,13 +9339,39 @@ function CustomerDetailModal({
 // "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka. Kódy strojov v
 // tvare [[GS-2032]] sa navyše vykreslia ako klikateľné tlačidlo, čo priamo
 // otvorí kartu stroja (ak sa nájde v aktuálne dostupnom zozname).
-function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
+function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard, onNavigate) {
   const parts = String(text).split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g);
   return parts.map((p, i) => {
     const key = `${keyPrefix}-${i}`;
     if (p.startsWith("**") && p.endsWith("**")) return <strong key={key}>{p.slice(2, -2)}</strong>;
     if (p.startsWith("[[") && p.endsWith("]]")) {
-      const code = p.slice(2, -2).trim();
+      const inner = p.slice(2, -2).trim();
+      // [[NAV:modul:view|Text]] — odkaz na miesto v appke (napr. z denného
+      // súhrnu "čo vyriešiť dnes"), vloží ho appka sama do promptu; maSKot ho
+      // len prepíše nezmenený do svojej odpovede.
+      if (inner.startsWith("NAV:") && onNavigate) {
+        const [route, label] = inner.slice(4).split("|");
+        const [mod, view] = route.split(":");
+        return (
+          <button
+            key={key}
+            onClick={() => onNavigate({ module: mod, view })}
+            style={{
+              background: "var(--accent-light, #fdf0f0)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent)",
+              borderRadius: 4,
+              padding: "0 5px",
+              fontSize: "inherit",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {label || "Otvoriť →"}
+          </button>
+        );
+      }
+      const code = inner;
       const machine = machineByCode?.get(norm(code));
       if (machine && onOpenCard) {
         return (
@@ -9392,7 +9399,7 @@ function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
   });
 }
 const norm = (s) => String(s ?? "").toLowerCase();
-function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
+function MaskotMessageContent({ text, machineByCode, onOpenCard, onNavigate }) {
   const lines = String(text).split("\n");
   const blocks = [];
   let i = 0;
@@ -9436,7 +9443,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
                   <tr>
                     {b.header.map((h, hi) => (
                       <th key={hi} style={{ border: "1px solid rgba(0,0,0,.15)", padding: "3px 6px", textAlign: "left", background: "rgba(0,0,0,.06)", whiteSpace: "nowrap" }}>
-                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard)}
+                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard, onNavigate)}
                       </th>
                     ))}
                   </tr>
@@ -9446,7 +9453,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
                     <tr key={ri}>
                       {r.map((c, ci) => (
                         <td key={ci} style={{ border: "1px solid rgba(0,0,0,.1)", padding: "3px 6px", whiteSpace: "nowrap" }}>
-                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard)}
+                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard, onNavigate)}
                         </td>
                       ))}
                     </tr>
@@ -9460,14 +9467,14 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
           return (
             <ul key={bi} style={{ margin: "4px 0", paddingLeft: 18 }}>
               {b.items.map((it, ii) => (
-                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard)}</li>
+                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard, onNavigate)}</li>
               ))}
             </ul>
           );
         }
         return (
           <div key={bi} style={{ whiteSpace: "pre-wrap" }}>
-            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard)}
+            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard, onNavigate)}
           </div>
         );
       })}
@@ -9475,7 +9482,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
   );
 }
 
-function MaskotChatWidget({ session, machines, onOpenCard }) {
+function MaskotChatWidget({ session, machines, onOpenCard, onNavigate, askTrigger, briefingItems, today }) {
   const [open, setOpen] = useState(false);
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
   // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
@@ -9736,6 +9743,7 @@ function MaskotChatWidget({ session, machines, onOpenCard }) {
             if (conversationModeRef.current) startListening();
           });
         }
+        return replyText;
       }
     } catch (e) {
       setMessages((m) => {
@@ -9747,6 +9755,44 @@ function MaskotChatWidget({ session, machines, onOpenCard }) {
       setSending(false);
     }
   }
+
+  // "Čo vyriešiť dnes?" — spúšťa sa z tlačidla v ráme (IconRail). Odpoveď sa
+  // cachuje na celý deň podľa toho, čo appka práve vidí v briefingItems (tá
+  // istá dátová logika, čo mal predtým vyskakujúci denný súhrn) — ak sa
+  // položky odvtedy nezmenili, znova sa nič nepýta agenta, len ukáže starú
+  // odpoveď z tohto dňa. Zmenia sa (niečo pribudlo/vyriešilo sa) → spýta sa
+  // znova, nanovo, z aktuálnych dát — vyriešené veci tak samé zmiznú, bez
+  // toho, aby si agent musel čokoľvek "pamätať" navyše.
+  const dailySnapshot = useMemo(
+    () => (briefingItems || []).map((it) => `${it.label}|${it.link?.module || ""}:${it.link?.view || ""}`).join("||"),
+    [briefingItems]
+  );
+  async function askDaily() {
+    setOpen(true);
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(storageKeyBase + "_daily") || "null"); } catch {}
+    if (cached && cached.date === today && cached.snapshot === dailySnapshot) {
+      setMessages((m) => [...m, { role: "user", text: "Čo mám dnes vyriešiť?" }, { role: "assistant", text: cached.answer }]);
+      return;
+    }
+    const list = (briefingItems || [])
+      .map((it) => `- ${it.label}${it.link ? ` [[NAV:${it.link.module}:${it.link.view}|Otvoriť]]` : ""}`)
+      .join("\n");
+    const prompt = list
+      ? `Toto sú položky, ktoré dnes (${today}) čakajú na vyriešenie:\n${list}\n\nNapíš mi to prehľadne ako krátky zoznam vecí na dnes. Ponechaj odkazy v tvare [[NAV:...]] presne tak, ako sú, nič v nich nemeň.`
+      : `Momentálne appka nehlási žiadnu naliehavú položku na dnes (${today}). Napíš mi to jednoducho, jednou vetou.`;
+    const answer = await send(prompt);
+    if (answer) {
+      try { localStorage.setItem(storageKeyBase + "_daily", JSON.stringify({ date: today, snapshot: dailySnapshot, answer })); } catch {}
+    }
+  }
+  const prevAskTrigger = useRef(askTrigger);
+  useEffect(() => {
+    if (!askTrigger || askTrigger === prevAskTrigger.current) return;
+    prevAskTrigger.current = askTrigger;
+    askDaily();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askTrigger]);
 
   return (
     <>
@@ -9854,7 +9900,7 @@ function MaskotChatWidget({ session, machines, onOpenCard }) {
                 }}
               >
                 {m.imagePreview && <img src={m.imagePreview} alt="" style={{ maxWidth: "100%", borderRadius: 6, marginBottom: 4, display: "block" }} />}
-                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} />
+                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} onNavigate={onNavigate} />
               </div>
             ))}
             {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
@@ -19286,6 +19332,7 @@ function GlobalStyle() {
       /* Len tenká čiarka (box-shadow, nie border — ten by pridal 1px výšky
          navyše, čo pás nemá čím vykompenzovať). */
       .sidebar-quick { box-shadow: inset 0 1px 0 var(--border); }
+      .sidebar-group.rail-ask { color: var(--accent); font-weight: 700; }
       /* 34px riadok (nie 29 ako bežná .sidebar-item) — presne ako 34px
          ikonka rýchlej akcie v IconRail páse. */
       .sidebar-item.quick { height: 34px; color: var(--accent); font-weight: 600; }
