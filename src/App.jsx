@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.496";
+const APP_VERSION = "1.0.499";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7631,7 +7631,7 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
         ) : null
       }
     >
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Technik" value={technician?.name} />
         <CardField label="Dátum" value={fmtDate(a.date)} />
         <CardField label="Umiestnenie" value={machineCurrentLocation(machine) || a.umiestnenie} />
@@ -9911,7 +9911,7 @@ function DriverCardModal({ driver, jobs, today, onClose, vehicleSpz }) {
 
   return (
     <Modal title={d.name} onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Telefón" value={d.phone} />
         <CardField label="Email" value={d.email} />
         <CardField label="Depo" value={d.depo} />
@@ -11159,7 +11159,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
           </span>
         </div>
       ))}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Zákazník" value={job.customer} />
         <CardField label="Kontaktná osoba" value={job.customerContactName} />
         <CardField
@@ -11430,7 +11430,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
           ⏳ Čaká na schválenie — kým ju dispečer alebo vedúci požičovne neschváli, v kalendári sa nezobrazí.
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Zákazník" value={r.customer} />
         <CardField label="Kam" value={r.toLocation} />
         <CardField label="Obchodník" value={r.obchodnik} dotColor={salespersonColor(r.obchodnik, salespeople)} />
@@ -12904,7 +12904,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // kvôli tabuľkám), "prebublať" von a posunúť celú stránku vrátane
   // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
       {/* POZOR: translateZ(0)/transform na TOMTO obale (rodič sticky prvkov)
           bola zlá cesta — mobilný Safari má známu chybu, že position:sticky
           prestane fungovať úplne, keď má nadradený prvok "transform" (aj
@@ -13355,6 +13355,19 @@ const CalendarGrid = React.memo(function CalendarGrid({
 });
 
 function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation }) {
+  // Fullscreen gantt — namiesto pevných "65vh" (zbytočná prázdna plocha pod
+  // tabuľkou na vyšších oknách) sa výška dopočíta na zvyšok viditeľnej
+  // obrazovky od miesta, kde kalendár začína, nech vyplní čo najviac.
+  const rootRef = useRef(null);
+  const [availH, setAvailH] = useState(null);
+  useEffect(() => {
+    function measure() {
+      if (rootRef.current) setAvailH(window.innerHeight - rootRef.current.getBoundingClientRect().top - 16);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -13726,8 +13739,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   }, [monthOffset]);
 
   return (
-    <div>
-      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8 }}>
+    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: availH ? `${availH}px` : undefined }}>
+      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {depoOptions.map((d) => (
             <button
@@ -13802,7 +13815,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
       </div>
 
-      <div className="panel" style={{ padding: 16 }}>
+      <div className="panel" style={{ padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {relevantMachines.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
             Žiadne stroje nezodpovedajú filtru.
@@ -13844,12 +13857,12 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           />
         )}
       </div>
-      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-dim)", marginTop: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-dim)", marginTop: 12, flexWrap: "wrap", flexShrink: 0 }}>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
       </div>
-      <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {salespeople.map((s) => (
           <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
         ))}
@@ -13924,21 +13937,26 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       wide
     >
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-        {[
-          ["Model", m.type, false],
-          ["Sériové číslo", m.code, false],
-          ["Servisný stav", m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov"), m.hasOpenDamage],
-          ["Platnosť revízie ZZ", notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null), reviziaOverdue],
-          ["Platnosť revízie EZ", notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null), reviziaEZOverdue],
-          ["Dátum najbližšej úradnej skúšky", skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null), skuskaOverdue],
-          ["Depo", m.depo, false],
-          ["Aktuálna zákazka", m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —", false],
-        ].map(([label, value, danger]) => (
-          <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "#faf9f7" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)" }}>{value || "—"}</div>
-          </div>
-        ))}
+        <CardField label="Model" value={m.type} />
+        <CardField label="Sériové číslo" value={m.code} />
+        <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
+        <CardField
+          label="Platnosť revízie ZZ"
+          value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null)}
+          danger={reviziaOverdue}
+        />
+        <CardField
+          label="Platnosť revízie EZ"
+          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null)}
+          danger={reviziaEZOverdue}
+        />
+        <CardField
+          label="Dátum najbližšej úradnej skúšky"
+          value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null)}
+          danger={skuskaOverdue}
+        />
+        <CardField label="Depo" value={m.depo} />
+        <CardField label="Aktuálna zákazka" value={m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"} />
       </div>
       {modelParams.length > 0 && (
         <div style={{ marginBottom: 18 }}>
@@ -14315,9 +14333,9 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
 }
 function CardField({ label, value, danger, dotColor }) {
   return (
-    <div style={{ padding: "9px 12px", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: danger ? "var(--danger-bg)" : "var(--panel)" }}>
-      <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "#faf9f7" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
         {dotColor && <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: dotColor, flexShrink: 0 }} />}
         {value || "—"}
       </div>
@@ -14562,7 +14580,7 @@ function DamageReportModal({ machine, today, onClose, onSave }) {
           Pred ďalším nahlásením skontrolujte históriu v karte stroja, či nejde o to isté.
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Model" value={model} />
         <CardField label="Sériové číslo" value={machine.code} />
         <CardField label="Dátum nahlásenia" value={fmtDate(today)} />
@@ -14636,7 +14654,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         ) : null
       }
     >
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         {isExterna ? (
           <>
             <CardField label="Zákazník" value={d.customer} />
@@ -16183,7 +16201,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
     const stavLabel = techIds.length ? "Pridelené" : "Nové";
     return (
       <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose} onBack={onBack}>
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
           <CardField label="Stav" value={stavLabel} danger={!techIds.length} />
           <CardField label="Pridelené komu" value={techNames || "— zatiaľ nikomu —"} />
@@ -16198,7 +16216,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
     <Modal title={`Servisný záznam · ${d.code}`} onClose={onClose} onBack={onBack}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Nahlásené" value={fmtDate(d.dateReported)} />
         <CardField label={isSimple ? "Dátum vykonania" : "Dátum opravy"} value={doneDate ? fmtDate(doneDate) : null} />
       </div>
@@ -16534,7 +16552,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 
   return (
     <Modal title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Skratka (ERP)" value={t.skratka} />
         <CardField label="ŠPZ servisného auta" value={vehicleSpz} />
         <CardField label="Depo" value={t.depo} />
@@ -19306,7 +19324,7 @@ function GlobalStyle() {
          plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      .icon-rail-wrap { position: relative; flex-shrink: 0; z-index: 50; isolation: isolate; }
+      .icon-rail-wrap { position: sticky; top: 0; flex-shrink: 0; z-index: 50; isolation: isolate; }
       /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
          nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
          medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
