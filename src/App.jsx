@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.521";
+const APP_VERSION = "1.0.522";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1204,7 +1204,7 @@ function KebabMenu({ actions }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
-function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra, elevated }) {
+function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerExtra, elevated }) {
   return (
     <div
       className="modal-overlay"
@@ -1234,22 +1234,48 @@ function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra, ele
         onClick={(e) => e.stopPropagation()}
         style={{ width: xwide ? 980 : wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
       >
-        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 }}>
-          <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
-            {title}
-          </h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {onBack && (
-              <button className="btn btn-ghost" onClick={onBack}>
-                Späť
+        {eyebrow ? (
+          <>
+            {/* Horný "toolbar" riadok — Späť + súvisiace akcie vľavo, × vpravo,
+                vždy na tom istom mieste bez ohľadu na dĺžku titulku pod ním
+                (predtým bol titulok v tom istom riadku ako tlačidlá a pri
+                dlhšom texte sa nepekne lámal popri nich). */}
+            <div className="modal-toolbar">
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {onBack && (
+                  <button className="btn btn-ghost" onClick={onBack}>
+                    ← Späť
+                  </button>
+                )}
+                {headerExtra}
+              </div>
+              <button className="modal-close-x" onClick={onClose} aria-label="Zavrieť" title="Zavrieť">
+                ×
               </button>
-            )}
-            {headerExtra}
-            <button className="modal-close-x" onClick={onClose} aria-label="Zavrieť" title="Zavrieť">
-              ×
-            </button>
+            </div>
+            <div className="modal-title-block">
+              <div className="modal-eyebrow">{eyebrow}</div>
+              <h3 className="label-font modal-title-main">{title}</h3>
+            </div>
+          </>
+        ) : (
+          <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 }}>
+            <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
+              {title}
+            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {onBack && (
+                <button className="btn btn-ghost" onClick={onBack}>
+                  Späť
+                </button>
+              )}
+              {headerExtra}
+              <button className="modal-close-x" onClick={onClose} aria-label="Zavrieť" title="Zavrieť">
+                ×
+              </button>
+            </div>
           </div>
-        </div>
+        )}
         {children}
       </div>
     </div>
@@ -11185,7 +11211,14 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
   const checkerZvoz = checkerZvozId ? technicianById?.[checkerZvozId] : null;
   return (
     <Modal
-      title={`Požičovňová zákazka · ${machine?.code || "—"}${job.machineDisplayName ? " · " + job.machineDisplayName : machine?.type ? " · " + machine.type : ""}`}
+      eyebrow="Požičovňová zákazka"
+      title={
+        <>
+          {job.machineDisplayName || machine?.type || ""}
+          {(job.machineDisplayName || machine?.type) && machine?.code ? " · " : ""}
+          {machine?.code && <span style={{ color: "var(--accent)" }}>{machine.code}</span>}
+        </>
+      }
       onClose={onClose}
       onBack={onBack}
       wide
@@ -11497,7 +11530,12 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   const canActDirectly = can(user, "reservation_convert"); // dispečer/vedúci požičovne
   const isPending = r.status === "pending";
   return (
-    <Modal title={`${isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"} · ${machine?.code || "—"}`} onClose={onClose} wide>
+    <Modal
+      eyebrow={isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"}
+      title={<span style={{ color: "var(--accent)" }}>{machine?.code || "—"}</span>}
+      onClose={onClose}
+      wide
+    >
       {isPending && (
         <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
           ⏳ Čaká na schválenie — kým ju dispečer alebo vedúci požičovne neschváli, v kalendári sa nezobrazí.
@@ -19681,6 +19719,13 @@ function GlobalStyle() {
         transition: background .15s ease, color .15s ease; flex-shrink: 0;
       }
       .modal-close-x:hover { background: var(--panel-2); color: var(--text); }
+      /* Karty s "eyebrow" titulkom (identita — zákazka, rezervácia, stroj,
+         zákazník, auto) — horný toolbar riadok oddelený čiarou, mierne
+         záporný margin nech siaha až po okraj panelu ako pri iných kartách. */
+      .modal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -20px -20px 14px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+      .modal-title-block { margin-bottom: 16px; }
+      .modal-eyebrow { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-dim); margin-bottom: 2px; }
+      .modal-title-main { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.25; margin: 0; }
       input, select, textarea { background: #fff; border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
       input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
       table { width: 100%; border-collapse: collapse; }
@@ -19805,7 +19850,9 @@ function GlobalStyle() {
         /* Modálne okná — takmer celá obrazovka, menší padding */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; }
         .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        .modal-toolbar { margin: calc(-1 * max(12px, env(safe-area-inset-top))) -12px 14px !important; }
         .modal-header h3 { font-size: 15px !important; }
+        .modal-title-main { font-size: 15px !important; }
 
         /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
         .panel { overflow-x: auto; }
