@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.503";
+const APP_VERSION = "1.0.504";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4663,6 +4663,7 @@ function DispatcherApp() {
           onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
           onAddReservation={() => setShowAddReservation({})}
           onAskDaily={() => setMaskotAskTick((n) => n + 1)}
+          onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         />
         {mobileNavOpen && (
           <div className="mobile-nav-overlay">
@@ -6340,21 +6341,6 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               onClick={() => {
-                composeMail({
-                  to: "radoslav.podusel@matecoslovakia.sk",
-                  subject: "Pripomienky k mateco App",
-                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
-                });
-                setOpen(false);
-              }}
-            >
-              💬 Poslať pripomienku
-            </button>
-            <button
-              style={itemStyle}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              onClick={() => {
                 try {
                   localStorage.removeItem(MAIL_PREF_KEY);
                 } catch (e) {}
@@ -7346,7 +7332,7 @@ const RAIL_ICON_RULER = (
 // EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily }) {
+function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory }) {
   const [railHover, setRailHover] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
@@ -7471,6 +7457,30 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             </div>
           );
         })}
+        {/* Telefónny zoznam a spätná väzba mailom — presunuté z hornej lišty
+            sem, celkom dole v páse (marginTop: auto), nech sú stále na
+            rovnakom mieste, nezávisle od toho, koľko riadkov má aktívny
+            modul nad nimi. */}
+        <div className="rail-row-quick rail-divider-before" style={{ marginTop: "auto", height: 34 }}>
+          <button className="rail-icon quick" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}>
+            📞
+          </button>
+        </div>
+        <div className="rail-row-quick" style={{ height: 34 }}>
+          <button
+            className="rail-icon quick"
+            title="Poslať pripomienku"
+            onClick={() =>
+              composeMail({
+                to: "radoslav.podusel@matecoslovakia.sk",
+                subject: "Pripomienky k mateco App",
+                body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
+              })
+            }
+          >
+            💬
+          </button>
+        </div>
       </div>
       <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`}>
           {effectiveUser?.role === "admin" && (
@@ -7492,6 +7502,23 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             docsExpanded={docsExpanded}
             onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
           />
+          <div style={{ marginTop: "auto", boxShadow: "inset 0 1px 0 var(--border)" }}>
+            <button className="sidebar-group" onClick={onOpenPhoneDirectory}>
+              <span>📞 Telefónny zoznam</span>
+            </button>
+            <button
+              className="sidebar-group"
+              onClick={() =>
+                composeMail({
+                  to: "radoslav.podusel@matecoslovakia.sk",
+                  subject: "Pripomienky k mateco App",
+                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
+                })
+              }
+            >
+              <span>💬 Poslať pripomienku</span>
+            </button>
+          </div>
       </div>
     </div>
   );
@@ -7511,22 +7538,6 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
           <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
           <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
           <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
-            <button
-              onClick={onOpenPhoneDirectory}
-              style={{
-                fontSize: 13,
-                color: "var(--accent)",
-                background: "#fff",
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 4,
-                padding: "3px 9px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-              title="Telefónny zoznam"
-            >
-              📞
-            </button>
             <NotificationBell
               notifications={myNotifications}
               unreadCount={unreadNotificationCount}
@@ -19313,7 +19324,7 @@ function GlobalStyle() {
          niečím vykompenzovať — takto netreba). */
       /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
          AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
-      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); margin-bottom: 6px; }
+      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
@@ -19372,7 +19383,7 @@ function GlobalStyle() {
       .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
       /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
          dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
-      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); margin-bottom: 6px; }
+      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
         color: var(--accent); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
@@ -19416,6 +19427,7 @@ function GlobalStyle() {
            linka (tú má len samotný úzky pás vľavo, .icon-rail). */
         position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
         border-right: 1px solid var(--border); box-shadow: 6px 0 20px rgba(0,0,0,.16); overflow-y: auto; z-index: 50;
+        display: flex; flex-direction: column;
         /* horný padding je TU, nie na .rail-flyout-nav — musí platiť aj pre
            tlačidlo "Čo vyriešiť dnes?" nad ním, inak je o 8px vyššie než
            zodpovedajúca ikona bubliny v .icon-rail (tá má padding-top tiež
