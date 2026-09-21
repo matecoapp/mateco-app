@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.495";
+const APP_VERSION = "1.0.496";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7383,7 +7383,6 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   modules.forEach((m) => {
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
   });
-  if (railRows.length) railRows[railRows.length - 1].dividerAfter = true;
 
   const activeModule = modules.find((m) => m.id === module);
   if (activeModule) {
@@ -7432,21 +7431,21 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
             {RAIL_ICON_CHAT}
           </button>
         )}
-        {railRows.map((r) => {
-          const dividerCls = `${r.dividerAfter ? " rail-divider-after" : ""}${r.dividerBefore ? " rail-divider-before" : ""}`;
-          if (r.kind === "module") {
-            return (
-              <button
-                key={r.id}
-                className={`rail-icon${r.active ? " active" : ""}${dividerCls}`}
-                title={r.label}
-                onClick={() => onSelectModule(r.id)}
-              >
-                {r.icon}
-                {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
-              </button>
-            );
-          }
+        <div className="rail-modules">
+          {railRows.filter((r) => r.kind === "module").map((r) => (
+            <button
+              key={r.id}
+              className={`rail-icon${r.active ? " active" : ""}`}
+              title={r.label}
+              onClick={() => onSelectModule(r.id)}
+            >
+              {r.icon}
+              {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
+            </button>
+          ))}
+        </div>
+        {railRows.filter((r) => r.kind !== "module").map((r) => {
+          const dividerCls = r.dividerBefore ? " rail-divider-before" : "";
           if (r.kind === "dot") {
             return (
               <button key={r.key} className={`rail-row${dividerCls}`} title={r.label} onClick={r.onClick} disabled={!r.onClick}>
@@ -19266,7 +19265,7 @@ function GlobalStyle() {
          niečím vykompenzovať — takto netreba). */
       /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
          AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
-      .sidebar-modules { box-shadow: 0 2px 0 rgba(0,0,0,.14); }
+      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
@@ -19320,6 +19319,9 @@ function GlobalStyle() {
          Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
          tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
       .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+      /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
+         dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
+      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); }
       .rail-icon {
         width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
         color: var(--accent); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
@@ -19345,9 +19347,9 @@ function GlobalStyle() {
       .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
-      /* rovnaké deliace čiary ako vo flyoute (.sidebar-modules/.sidebar-quick),
-         tiež box-shadow → nezaberá výšku, nerozhodí zarovnanie s textom */
-      .rail-divider-after { box-shadow: 0 2px 0 rgba(0,0,0,.14); }
+      /* rovnaká deliaca čiara ako vo flyoute (.sidebar-quick), box-shadow →
+         nezaberá výšku, nerozhodí zarovnanie s textom (moduly/tabs čiaru má
+         .rail-modules vyššie) */
       .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
