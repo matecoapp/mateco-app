@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.516";
+const APP_VERSION = "1.0.517";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1206,7 +1206,7 @@ function KebabMenu({ actions }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
-function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra }) {
+function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra, elevated }) {
   return (
     <div
       className="modal-overlay"
@@ -1218,7 +1218,11 @@ function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra }) {
         // prekryté tlačidlá na spodku otvorenej karty/formulára a nedali sa
         // použiť. Pod dropdown menu a notifikáciami (200+), tie majú ostať
         // dostupné aj cez otvorené okno.
-        zIndex: 160,
+        // elevated (170) je pre potvrdzovacie okná otvárané SPOD inej karty —
+        // všetky Modal majú rovnaké 160, takže poradie dvoch takých by sa inak
+        // riadilo poradím v kóde, nie poradím otvorenia, a potvrdenie by vedelo
+        // vypadnúť pod kartu, z ktorej bolo vyvolané.
+        zIndex: elevated ? 170 : 160,
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
@@ -1264,7 +1268,7 @@ function Modal({ title, onClose, onBack, children, wide, xwide, headerExtra }) {
 function TwoStepConfirmModal({ actionLabel, itemLabel, warningText, confirmButtonLabel, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   return (
-    <Modal title={step === 1 ? `Naozaj ${actionLabel}?` : `Potvrďte: ${actionLabel}`} onClose={onClose}>
+    <Modal title={step === 1 ? `Naozaj ${actionLabel}?` : `Potvrďte: ${actionLabel}`} onClose={onClose} elevated>
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 18 }}>Naozaj chcete {actionLabel} {itemLabel}?</div>
@@ -1299,7 +1303,7 @@ function TwoStepConfirmModal({ actionLabel, itemLabel, warningText, confirmButto
 function ConfirmDeleteModal({ label, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   return (
-    <Modal title={step === 1 ? "Naozaj vymazať?" : "Potvrďte vymazanie"} onClose={onClose}>
+    <Modal title={step === 1 ? "Naozaj vymazať?" : "Potvrďte vymazanie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 18 }}>Naozaj chcete vymazať {label}?</div>
@@ -1341,7 +1345,7 @@ function ConfirmDeleteModal({ label, onClose, onConfirm }) {
 function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   return (
-    <Modal title={step === 1 ? "Vyradiť protokol zo zákazky?" : "Potvrďte vyradenie"} onClose={onClose}>
+    <Modal title={step === 1 ? "Vyradiť protokol zo zákazky?" : "Potvrďte vyradenie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 6 }}>
@@ -1388,7 +1392,7 @@ function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
 function ReopenConfirmModal({ label, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   return (
-    <Modal title={step === 1 ? "Otvoriť znova?" : "Potvrďte opätovné otvorenie"} onClose={onClose}>
+    <Modal title={step === 1 ? "Otvoriť znova?" : "Potvrďte opätovné otvorenie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 18 }}>
@@ -1427,7 +1431,7 @@ function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }
   const hasHandover = !!handoverProtocol?.handoverDone;
   const hasReturn = !!handoverProtocol?.returnDone;
   return (
-    <Modal title={step === 1 ? "Zrušiť ukončenie zákazky?" : "Potvrďte zrušenie ukončenia"} onClose={onClose}>
+    <Modal title={step === 1 ? "Zrušiť ukončenie zákazky?" : "Potvrďte zrušenie ukončenia"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
           <div style={{ fontSize: 14, marginBottom: 10 }}>
@@ -1512,7 +1516,7 @@ function ArchiveReasonModal({ label, reasons, onClose, onConfirm }) {
 --------------------------------------------------------- */
 function ConfirmActionModal({ message, confirmLabel, onClose, onConfirm }) {
   return (
-    <Modal title="Potvrdenie" onClose={onClose}>
+    <Modal title="Potvrdenie" onClose={onClose} elevated>
       <div style={{ fontSize: 14, marginBottom: 18 }}>{message}</div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
