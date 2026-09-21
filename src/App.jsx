@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.488";
+const APP_VERSION = "1.0.489";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2182,96 +2182,12 @@ function DispatcherApp() {
   // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
   const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
 
-  // Denný briefing — na mieru podľa role, nahrádza starý "Denný súhrn" (ten bol
-  // len jeden riadok textu v zvončeku, a len pre dvoch vedúcich). Vracia zoznam
-  // položiek {label, count, link} — prázdne/nulové položky sa vynechajú, takže
-  // ak nie je čo hlásiť, briefing sa vôbec nezobrazí (žiadna prázdna obrazovka).
-  const briefingItems = useMemo(() => {
-    if (!currentUser) return [];
-    const items = [];
-    const tomorrow = addDaysISO(today, 1);
-    const role = currentUser.role;
-
-    const addPoziciovnaItems = () => {
-      const expiringReservations = reservations.filter(
-        (r) => (r.status === "pending" || r.status === "approved") && r.expectedStart && r.expectedStart >= today && r.expectedStart <= addDaysISO(today, 3)
-      );
-      if (expiringReservations.length > 0) {
-        items.push({
-          label: `${expiringReservations.length} nezáväzných rezervácií so začiatkom do 3 dní, ešte nepremenených na zákazku`,
-          link: { module: "poziciovna", view: "jobs" },
-        });
-      }
-      const staleReservations = reservations.filter((r) => r.status === "pending" && !r.reminderSentAt);
-      if (staleReservations.length > 0) {
-        items.push({ label: `${staleReservations.length} rezervácií čaká na schválenie`, link: { module: "poziciovna", view: "jobs" } });
-      }
-      const noDriverToday = jobs.filter((j) => (j.departureDate === today || j.departureDate === tomorrow) && !j.driverId && j.status !== "completed");
-      if (noDriverToday.length > 0) {
-        items.push({ label: `${noDriverToday.length} zákaziek na dnes/zajtra bez priradeného šoféra (vývoz)`, link: { module: "poziciovna", view: "prepravy" } });
-      }
-    };
-    const addServisItems = () => {
-      const newDamages = damages.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId && !(d.technicianIds || []).length);
-      if (newDamages.length > 0) {
-        items.push({ label: `${newDamages.length} nových nepridelených poškodení`, link: { module: "servis", view: "poskodenia" } });
-      }
-      const overdueRevisions = damages.filter((d) => (d.type === "revizia" || d.type === "uradnaSkuska") && d.overdue && !d.resolved);
-      if (overdueRevisions.length > 0) {
-        items.push({ label: `${overdueRevisions.length} revízií/úradných skúšok po termíne`, link: { module: "servis", view: "revizie" } });
-      }
-      const pendingParts = spareParts.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
-      if (pendingParts.length > 0) {
-        items.push({ label: `${pendingParts.length} požiadaviek na náhradné diely čaká na schválenie`, link: { module: "servis", view: "diely" } });
-      }
-    };
-
-    if (role === "admin") {
-      addPoziciovnaItems();
-      addServisItems();
-    } else if (role === "veduci_pozicovne" || role === "dispecer_pozicovne") {
-      addPoziciovnaItems();
-    } else if (role === "veduci_servisu" || role === "dispecer_servisu") {
-      addServisItems();
-    } else if (role === "obchodnik") {
-      const myStale = reservations.filter((r) => r.obchodnik === currentUser.name && r.status === "pending" && !r.reminderSentAt);
-      if (myStale.length > 0) {
-        items.push({ label: `${myStale.length} vašich rezervácií čaká na schválenie`, link: { module: "poziciovna", view: "jobs" } });
-      }
-      const myJobsSoon = jobs.filter((j) => j.obchodnik === currentUser.name && (j.startDate === today || j.startDate === tomorrow) && j.status !== "completed");
-      if (myJobsSoon.length > 0) {
-        items.push({ label: `${myJobsSoon.length} vašich zákaziek začína dnes/zajtra`, link: { module: "poziciovna", view: "jobs" } });
-      }
-    } else if (role === "technik" && myEmployee) {
-      const myOpenDamages = damages.filter((d) => {
-        const ids = d.technicianIds && d.technicianIds.length ? d.technicianIds : d.technicianId ? [d.technicianId] : [];
-        return ids.includes(myEmployee.id) && !d.resolved;
-      });
-      if (myOpenDamages.length > 0) {
-        items.push({ label: `${myOpenDamages.length} vám pridelených úloh čaká na vyriešenie`, link: { module: "servis", view: "poskodenia" } });
-      }
-    } else if ((role === "sofer" || role === "externy_sofer") && myEmployee) {
-      const myTransportsToday = jobs.filter(
-        (j) => (j.departureDate === today && j.driverId === myEmployee.id) || (j.pickupDate === today && j.returnDriverId === myEmployee.id)
-      );
-      if (myTransportsToday.length > 0) {
-        items.push({ label: `${myTransportsToday.length} prepráv na dnes`, link: { module: "poziciovna", view: "prepravy" } });
-      }
-      const myTransportsTomorrow = jobs.filter(
-        (j) => (j.departureDate === tomorrow && j.driverId === myEmployee.id) || (j.pickupDate === tomorrow && j.returnDriverId === myEmployee.id)
-      );
-      if (myTransportsTomorrow.length > 0) {
-        items.push({ label: `${myTransportsTomorrow.length} prepráv na zajtra`, link: { module: "poziciovna", view: "prepravy" } });
-      }
-    }
-    return items;
-  }, [currentUser, myEmployee, reservations, jobs, damages, spareParts, today]);
-
-  // Predtým sa toto raz denne samo vyskočilo v modálnom okne — zrušené (klik na
-  // položku presmeroval a okno sa zavrelo, k ostatným položkám sa už nedalo
-  // vrátiť). Dáta (briefingItems) ostávajú, len ich teraz na požiadanie
-  // prednesie maSKot (tlačidlo "Čo vyriešiť dnes?" v ráme) — v AI chate sú
-  // všetky odkazy klikacie a chat ostáva otvorený.
+  // Predtým tu bol vlastný "Denný súhrn" počítaný z lokálnych dát appky —
+  // zrušený (klik na položku presmeroval a modálne okno sa zavrelo, k
+  // ostatným položkám sa už nedalo vrátiť). Nahradilo ho tlačidlo "Čo
+  // vyriešiť dnes?" v ráme, ktoré sa spýta priamo maSKota — ten si dáta
+  // dotiahne sám živo z databázy (presnejšie, aj s klikacími odkazmi), takže
+  // appka už nemusí nič vlastné predpočítavať.
   const [maskotAskTick, setMaskotAskTick] = useState(0);
 
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
@@ -5843,8 +5759,6 @@ function DispatcherApp() {
           machines={enrichedMachines}
           onOpenCard={(m) => setMachineCard(m)}
           askTrigger={maskotAskTick}
-          briefingItems={briefingItems}
-          today={today}
         />
       )}
       {showUnknownSerialReport && (
@@ -9467,7 +9381,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
   );
 }
 
-function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingItems, today }) {
+function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
   const [open, setOpen] = useState(false);
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
   // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
@@ -9761,25 +9675,20 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
     }
   }
 
-  // "Čo vyriešiť dnes?" — spúšťa sa z tlačidla v ráme (IconRail). Odpoveď sa
-  // cachuje na celý deň podľa toho, čo appka práve vidí v briefingItems (tá
-  // istá dátová logika, čo mal predtým vyskakujúci denný súhrn) — ak sa
-  // položky odvtedy nezmenili, znova sa nič nepýta agenta, len ukáže starú
-  // odpoveď z tohto dňa. Zmenia sa (niečo pribudlo/vyriešilo sa) → spýta sa
-  // znova, nanovo, z aktuálnych dát — vyriešené veci tak samé zmiznú, bez
-  // toho, aby si agent musel čokoľvek "pamätať" navyše.
-  const dailySnapshot = useMemo(
-    () => (briefingItems || []).map((it) => `${it.label}|${it.link?.module || ""}:${it.link?.view || ""}`).join("||"),
-    [briefingItems]
-  );
+  // "Čo vyriešiť dnes?" — spúšťa sa z tlačidla v ráme (IconRail). Agent si
+  // dáta ťahá sám, naživo z databázy — appka tu nemá žiadnu vlastnú kópiu, s
+  // ktorou by sa dalo spoľahlivo porovnať "zmenilo sa niečo odvtedy?" (skúšané:
+  // appka mala lokálnu kópiu revízií, tá sa vedela rozísť so skutočným stavom
+  // v databáze a ukazovala starú odpoveď ako aktuálnu). Namiesto porovnávania
+  // obsahu preto len obmedzenie v čase — opakovaný klik do pár minút ukáže tú
+  // istú odpoveď (chráni pred omylom viacnásobným klikaním), po uplynutí sa
+  // spýta agenta odznova a dostane naozaj čerstvé dáta.
+  const DAILY_ASK_COOLDOWN_MS = 2 * 60 * 1000;
   async function askDaily() {
     setOpen(true);
     let cached = null;
-    // "_daily_v2" — staré cache z verzie, čo posielala pokazený [[NAV:...]]
-    // text, nech sa tým kľúčom už nikdy neprečíta (bola by to tá istá
-    // pokazená odpoveď navždy, kým by sa nezmenili briefingItems).
-    try { cached = JSON.parse(localStorage.getItem(storageKeyBase + "_daily_v2") || "null"); } catch {}
-    if (cached && cached.date === today && cached.snapshot === dailySnapshot) {
+    try { cached = JSON.parse(localStorage.getItem(storageKeyBase + "_daily_v3") || "null"); } catch {}
+    if (cached && Date.now() - cached.ts < DAILY_ASK_COOLDOWN_MS) {
       // Ak je táto odpoveď už posledná v chate, len otvor okno — neduplikuj
       // ju s každým ďalším klikom na to isté tlačidlo.
       const last = messages[messages.length - 1];
@@ -9787,12 +9696,9 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, briefingI
       setMessages((m) => [...m, { role: "user", text: "Čo mám dnes vyriešiť?" }, { role: "assistant", text: cached.answer }]);
       return;
     }
-    // Agent si vie sám dotiahnuť aktuálne dáta a odpovedať oveľa podrobnejšie
-    // (aj s konkrétnymi kódmi strojov, klikacími) než čo appka vie predpočítať
-    // vopred — netreba mu teda nič posielať navyše, len sa spýtať.
     const answer = await send("Čo mám dnes vyriešiť?");
     if (answer) {
-      try { localStorage.setItem(storageKeyBase + "_daily_v2", JSON.stringify({ date: today, snapshot: dailySnapshot, answer })); } catch {}
+      try { localStorage.setItem(storageKeyBase + "_daily_v3", JSON.stringify({ ts: Date.now(), answer })); } catch {}
     }
   }
   const prevAskTrigger = useRef(askTrigger);
