@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.485";
+const APP_VERSION = "1.0.486";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5197,6 +5197,7 @@ function DispatcherApp() {
             }}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+            highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
           />
         )}
@@ -5220,6 +5221,7 @@ function DispatcherApp() {
             }}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+            highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
           />
         )}
@@ -5712,6 +5714,16 @@ function DispatcherApp() {
             setMachineCard(null);
           }}
           onOpenDamage={(d) => {
+            // Nevyriešené (revízia po termíne a pod.) sa v malom read-only okne
+            // aj tak nedá vybaviť — pridelenie/rozhodnutie sa robí len v
+            // reálnej záložke (Revízie/Poškodenia/...), tak tam radšej rovno
+            // presmeruj a zvýrazni ten záznam, namiesto mŕtveho okna bez akcií.
+            if (!d.resolved) {
+              const view = d.type === "revizia" ? "revizie" : d.type === "uradnaSkuska" ? "uradne_skusky" : d.type === "externa" ? "externe" : "poskodenia";
+              setMachineCard(null);
+              navigateFromNotification({ module: "servis", view, damageId: d.id });
+              return;
+            }
             pushCard("machine", machineCard);
             setViewResolutionTarget(d);
             setMachineCard(null);
@@ -15593,7 +15605,7 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -15603,6 +15615,21 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   function statusOf(d) {
     return d.resolved ? "resolved" : d.technicianId ? "assigned" : "new";
   }
+
+  // Ak sem appka navigovala kvôli konkrétnemu záznamu (napr. z karty stroja),
+  // uisti sa, že ho aktuálne filtre neschovávajú — rovnaký princíp ako v
+  // DamagesView.
+  useEffect(() => {
+    if (highlightDamageId) {
+      const target = revisionEvents.find((x) => x.id === highlightDamageId);
+      if (target) {
+        setActiveFilters((prev) => (prev.has(statusOf(target)) ? prev : new Set([...prev, statusOf(target)])));
+        setDepoFilter(null);
+        setSearch("");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightDamageId]);
   const filterButtons = [
     { id: "new", label: "Nové" },
     { id: "assigned", label: "Pridelené" },
@@ -15714,6 +15741,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 onProtocol={onProtocol}
                 variant="revizia"
                 locationLabel={locationLabel(d)}
+                highlighted={d.id === highlightDamageId}
               />
             ))}
           </div>
@@ -15741,6 +15769,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 onProtocol={onProtocol}
                 variant="revizia"
                 locationLabel={locationLabel(d)}
+                highlighted={d.id === highlightDamageId}
               />
             ))}
           </div>
@@ -15753,7 +15782,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 /* ---------------------------------------------------------
    Úradné skúšky view — same mechanics as revisions, year-based
 --------------------------------------------------------- */
-function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll }) {
+function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -15764,6 +15793,19 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
   function statusOf(d) {
     return d.resolved ? "resolved" : d.technicianId ? "assigned" : "new";
   }
+
+  // Rovnaký princíp ako v RevisionsView/DamagesView.
+  useEffect(() => {
+    if (highlightDamageId) {
+      const target = events.find((x) => x.id === highlightDamageId);
+      if (target) {
+        setActiveFilters((prev) => (prev.has(statusOf(target)) ? prev : new Set([...prev, statusOf(target)])));
+        setDepoFilter(null);
+        setSearch("");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightDamageId]);
   const filterButtons = [
     { id: "new", label: "Nové" },
     { id: "assigned", label: "Pridelené" },
@@ -15875,6 +15917,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 onProtocol={onProtocol}
                 variant="uradnaSkuska"
                 locationLabel={locationLabel(d)}
+                highlighted={d.id === highlightDamageId}
               />
             ))}
           </div>
@@ -15902,6 +15945,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 onProtocol={onProtocol}
                 variant="uradnaSkuska"
                 locationLabel={locationLabel(d)}
+                highlighted={d.id === highlightDamageId}
               />
             ))}
           </div>
