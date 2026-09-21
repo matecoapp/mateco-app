@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.508";
+const APP_VERSION = "1.0.509";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13399,7 +13399,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   hranicu — pri strojoch sa nezobrazovala (meno stroja
                   nevyplňovalo celú výšku riadku) a pri dňoch to pri
                   nezarovnaní vyzeralo ako dvojitá čiara. */}
-              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: "var(--border)", zIndex: 25, pointerEvents: "none" }} />
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: "var(--border)", zIndex: 2, pointerEvents: "none" }} />
             </div>
           );
         })}
