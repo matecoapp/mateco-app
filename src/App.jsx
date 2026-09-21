@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.504";
+const APP_VERSION = "1.0.505";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13047,7 +13047,6 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 alignItems: "center",
                 background: rowBg,
                 borderRadius: 4,
-                borderBottom: "1px solid var(--border)",
                 boxSizing: "border-box",
               }}
             >
@@ -13058,17 +13057,10 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   position: "sticky",
                   left: 0,
                   zIndex: 2,
-                  alignSelf: "stretch",
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
                   background: rowBg === "transparent" ? "var(--panel)" : rowBg,
                   paddingRight: 6,
                   paddingLeft: 4,
                   cursor: "pointer",
-                  borderBottom: "1px solid var(--border)",
-                  boxSizing: "border-box",
                   willChange: "transform",
                 }}
               >
@@ -13136,13 +13128,6 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       alignSelf: "stretch",
                       height: "100%",
                       borderRight: "1px solid var(--border)",
-                      // Hranica medzi riadkami je zvyčajne na samotnom RADE
-                      // (dole) — pri víkendovom (nepriehľadnom) pozadí by ju to
-                      // prekrylo, takže by víkendové stĺpce vyzerali ako jeden
-                      // súvislý pás bez deliacich čiar medzi strojmi. Táto
-                      // hranica tu je preto navyše, nech je vidno vždy,
-                      // nezávisle od farby pozadia dňa.
-                      borderBottom: "1px solid var(--border)",
                       boxSizing: "border-box",
                       background: isWeekend ? "var(--warn-bg)" : "transparent",
                       cursor: onAddJob ? "pointer" : "default",
@@ -13269,11 +13254,16 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       <div
                         key={`dep-${j.id}`}
                         className="gantt-transport-icon"
-                        title={`Zákazka ${who} má ${early ? "prednávoz" : "odložený vývoz"} stroja (zmluva: ${fmtDate(j.startDate)} · skutočný vývoz: ${fmtDate(j.departureDate)})`}
                         style={{ gridColumn: depCol + 1, gridRow: 1 }}
                       >
                         <span aria-hidden="true">🚚</span>
                         <span>návoz</span>
+                        <div className="gantt-tooltip">
+                          <div style={{ fontWeight: 600 }}>{early ? "Prednávoz stroja" : "Odložený vývoz stroja"}</div>
+                          <div>Zákazka: {who}</div>
+                          <div>Zmluva: {fmtDate(j.startDate)}</div>
+                          <div>Skutočný vývoz: {fmtDate(j.departureDate)}</div>
+                        </div>
                       </div>
                     );
                   }
@@ -13286,11 +13276,16 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       <div
                         key={`pick-${j.id}`}
                         className="gantt-transport-icon"
-                        title={`Zákazka ${who} má ${late ? "neskorší" : "skorší"} zvoz stroja (zmluva: ${j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · skutočný zvoz: ${fmtDate(j.pickupDate)})`}
                         style={{ gridColumn: pickCol + 1, gridRow: 1 }}
                       >
                         <span aria-hidden="true">🚚</span>
                         <span>zvoz</span>
+                        <div className="gantt-tooltip">
+                          <div style={{ fontWeight: 600 }}>{late ? "Neskorší zvoz stroja" : "Skorší zvoz stroja"}</div>
+                          <div>Zákazka: {who}</div>
+                          <div>Zmluva: {j.endDate ? fmtDate(j.endDate) : "bez určeného konca"}</div>
+                          <div>Skutočný zvoz: {fmtDate(j.pickupDate)}</div>
+                        </div>
                       </div>
                     );
                   }
@@ -13373,6 +13368,15 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   </div>
                 );
               })}
+              {/* Spodná deliaca čiara riadku — JEDNA, cez celú šírku (aj pod
+                  menom stroja aj pod bunkami dní), pripnutá presne na spodný
+                  okraj riadku cez position:absolute+bottom:0 (nezávisle od
+                  toho, či obsah niektorej bunky presahuje item.height).
+                  Predtým mala každá bunka dňa + meno stroja svoju VLASTNÚ
+                  hranicu — pri strojoch sa nezobrazovala (meno stroja
+                  nevyplňovalo celú výšku riadku) a pri dňoch to pri
+                  nezarovnaní vyzeralo ako dvojitá čiara. */}
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: "var(--border)", pointerEvents: "none" }} />
             </div>
           );
         })}
@@ -19514,7 +19518,7 @@ function GlobalStyle() {
         z-index: 50;
         pointer-events: none;
       }
-      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip { visibility: visible; opacity: 1; }
+      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip, .gantt-transport-icon:hover .gantt-tooltip { visibility: visible; opacity: 1; }
       /* Ťahanie zákazky/rezervácie v Gantte (presun/zmena termínu) — stredná
          časť bloku = kurzor "uchopiť" (presun), tenké 8px pruhy na okrajoch =
          kurzor na zmenu šírky (zmena len začiatku/konca). Samotné ťahanie
@@ -19527,7 +19531,7 @@ function GlobalStyle() {
       .gantt-drag-handle.end { right: 0; }
       /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
          vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
-      .gantt-transport-icon { display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--text-dim); pointer-events: auto; cursor: default; z-index: 2; line-height: 1; }
+      .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--text-dim); pointer-events: auto; cursor: default; z-index: 2; line-height: 1; }
       /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
          zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
          bez "fill" geometrie, si to niektoré prehliadače spočítajú s nulovým
