@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.517";
+const APP_VERSION = "1.0.518";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7357,6 +7357,28 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   const hideTimer = useRef(null);
   const modules = buildNavModules(effectiveUser, damageAlertCount);
 
+  // .icon-rail-wrap je len "dištančná" medzera vo flex riadku (.app-body-row)
+  // — samotný pás a vysunuté menu sú position:fixed, ukotvené priamo na
+  // viewport zhora po spodok. Predtým (position:sticky + height:100%) sa
+  // výška počítala ako percento z výšky .app-body-row, tá je ale definitná
+  // len vtedy, keď je stránka presne na výšku obrazovky — pri dlhšom obsahu
+  // (napr. dlhý zoznam strojov), ktorý naťahuje celú stránku a scrolluje sa
+  // celý dokument, .app-body-row je vysoká ako OBSAH, nie ako viditeľná
+  // plocha, takže telefón/mail na spodku pásu vždy "utiekli" mimo obraz.
+  // Fixed pozícia to rieši úplne — vždy presne vypĺňa viditeľnú výšku pod
+  // headerom, nezávisle od dĺžky stránky. Výška headeru sa mení (wrapuje sa
+  // na užšom okne, safe-area inset hore), tak sa meria reálne (nie natvrdo).
+  const wrapRef = useRef(null);
+  const [railTop, setRailTop] = useState(0);
+  useLayoutEffect(() => {
+    function measure() {
+      if (wrapRef.current) setRailTop(wrapRef.current.getBoundingClientRect().top + window.scrollY);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
   function cancelHide() {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }
@@ -7433,8 +7455,8 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   // border-box) — žiadne hádanie z paddingu/line-height, žiadne meranie DOM,
   // len dve zdieľané konštanty na oboch stranách, nech sa nemajú ako rozísť.
   return (
-    <div className="icon-rail-wrap" onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
-      <div className="icon-rail">
+    <div className="icon-rail-wrap" ref={wrapRef} onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
+      <div className="icon-rail" style={{ top: railTop }}>
         {/* Scrollovateľná časť (moduly/záložky) — oddelená od telefónu/
             pripomienky nižšie, nech tie zostanú VIZUÁLNE vždy dole na
             spodku (flex:1 tu hore necháva zvyšný priestor), nie len "za
@@ -7504,7 +7526,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
           </button>
         </div>
       </div>
-      <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`}>
+      <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`} style={{ top: railTop }}>
           <div className="rail-flyout-scroll">
             {effectiveUser?.role === "admin" && (
               <button className="sidebar-group rail-ask" onClick={onAskDaily}>
@@ -19406,16 +19428,18 @@ function GlobalStyle() {
          plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
          protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
          zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      /* Výška 100% (nie 100vh!) — .app-body-row je flex:1/min-height:0 vnútri
-         .app-shell (flex column s Headerom nad ním), takže jeho vlastná
-         výška je vždy presne "zvyšok obrazovky POD headerom" (definitná
-         flexbox hodnota, nie odhad). 100vh by bolo o výšku Headera VIAC než
-         túto skutočne viditeľnú plochu — spodok pásu (telefón/pripomienka)
-         by tak "utiekol" pod dolný okraj obrazovky, kým sa celá stránka
-         neposcrolluje. 100% tu funguje spoľahlivo (na rozdiel od pôvodného
-         spoliehania sa na flex-stretch bez explicitnej výšky), lebo ide o
-         percento z DEFINITNEJ výšky rodiča, nie o meranie obsahu suseda. */
-      .icon-rail-wrap { position: sticky; top: 0; height: 100%; flex-shrink: 0; z-index: 50; isolation: isolate; }
+      /* .icon-rail-wrap je len dištančná medzera vo flex riadku (.app-body-row),
+         drží 52px šírky, nič nevykresľuje. Samotný pás (.icon-rail) aj vysunuté
+         menu (.rail-flyout) sú position:fixed, ukotvené priamo na viewport od
+         (JS zmeraného) vrchu po úplný spodok — height:100%/sticky tu totiž
+         spoliehalo na to, že .app-body-row má definitnú výšku "zvyšok
+         obrazovky pod headerom", čo platí LEN keď je stránka presne na výšku
+         obrazovky. Pri dlhšom obsahu (napr. dlhý zoznam strojov), ktorý
+         naťahuje celý dokument a scrolluje sa celá stránka, je .app-body-row
+         vysoká ako OBSAH, nie ako viditeľná plocha — spodok pásu (telefón/
+         pripomienka) tak vždy "utiekol" mimo obraz. Fixed (top nastavený z
+         IconRail cez inline style, viď wrapRef/railTop) to rieši úplne. */
+      .icon-rail-wrap { width: 52px; flex-shrink: 0; }
       /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
          nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
          medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
@@ -19427,7 +19451,7 @@ function GlobalStyle() {
          červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
          Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
          tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
-      .icon-rail { width: 52px; height: 100%; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; }
+      .icon-rail { position: fixed; left: 0; bottom: 0; width: 52px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; z-index: 50; isolation: isolate; }
       /* Scrollovateľná časť pásu (moduly/záložky) — flex:1 necháva zvyšné
          miesto pre .rail-bottom-actions POD ňou, mimo scrollu, takže telefón
          a pripomienka sú vždy vidno vizuálne na spodku, nie len "za
@@ -19488,7 +19512,7 @@ function GlobalStyle() {
         /* 260px, nie 205 — pri 205 sa "Poškodenia strojov požičovne" a "Záznam
            z merania VTZ EZ" zalamovali na 2 riadky. Len tieň, žiadna deliaca
            linka (tú má len samotný úzky pás vľavo, .icon-rail). */
-        position: absolute; top: 0; left: 52px; width: 260px; height: 100%; background: var(--panel);
+        position: fixed; left: 52px; bottom: 0; width: 260px; background: var(--panel);
         border-right: 1px solid var(--border); box-shadow: 4px 0 16px rgba(0,0,0,.10); z-index: 50;
         display: flex; flex-direction: column;
         opacity: 0; transform: translateX(-10px); pointer-events: none;
