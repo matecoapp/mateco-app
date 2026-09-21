@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.518";
+const APP_VERSION = "1.0.519";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7046,7 +7046,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
           .slice(0, 8);
 
   return (
-    <div ref={boxRef} style={{ position: "relative", minWidth: 200 }}>
+    <div ref={boxRef} style={{ position: "relative", width: "100%", maxWidth: 480, minWidth: 200 }}>
       <input
         value={query}
         onChange={(e) => {
@@ -7575,7 +7575,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
 
 function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate, onToggleMobileNav }) {
   return (
-    <div style={{ background: "var(--panel)" }}>
+    <div style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           <button className="mobile-nav-toggle" onClick={onToggleMobileNav} aria-label="Menu">☰</button>
@@ -7585,8 +7585,10 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
             Interná platforma
           </span>
           <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
-          <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
-          <div className="header-top-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
+          <div style={{ flex: "1 1 auto", display: "flex", justifyContent: "center", minWidth: 120 }}>
+            <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
+          </div>
+          <div className="header-top-actions" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
             <NotificationBell
               notifications={myNotifications}
               unreadCount={unreadNotificationCount}
