@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.489";
+const APP_VERSION = "1.0.490";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7296,11 +7296,14 @@ const RAIL_ICON_GEAR = (
   </svg>
 );
 const RAIL_ICONS = { poziciovna: RAIL_ICON_PLATFORM, servis: RAIL_ICON_WRENCH, administrativa: RAIL_ICON_GEAR };
-const RAIL_ICON_CHAT = (
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12a8 8 0 1 1 3.4 6.5L3 20l1.3-3.6A7.96 7.96 0 0 1 3 12z" />
-  </svg>
-);
+function ChatBubbleIcon({ size = 15 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a8 8 0 1 1 3.4 6.5L3 20l1.3-3.6A7.96 7.96 0 0 1 3 12z" />
+    </svg>
+  );
+}
+const RAIL_ICON_CHAT = <ChatBubbleIcon size={15} />;
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -7474,6 +7477,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
         <div className="rail-flyout">
           {effectiveUser?.role === "admin" && (
             <button className="sidebar-group rail-ask" onClick={onAskDaily}>
+              <ChatBubbleIcon size={15} />
               <span>Čo vyriešiť dnes?</span>
             </button>
           )}
@@ -9257,7 +9261,7 @@ function CustomerDetailModal({
 // od toho, či má človek telefón prepojený s počítačom (napr. Windows Phone Link).
 // maSKot — AI asistent appky, plávajúce tlačidlo + jednoduché chat okno.
 // Zatiaľ len na testovanie (pozri podmienku vyššie, kde sa toto renderuje).
-// Logo je od v1.0.365 skutočný obrázok (public/maskot-logo.png), nie kreslené SVG.
+// Ikona je od v1.0.490 čierny box s červenou bublinou (ChatBubbleIcon), nie logo.
 
 // Jednoduché vykreslenie základného markdownu (tabuľky, odrážky, **tučné**) v
 // odpovedi maSKota — appka posiela čistý text, bez tohto by sa znaky "|" a
@@ -9722,16 +9726,19 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
           zIndex: 200,
           width: 52,
           height: 52,
-          borderRadius: "50%",
-          background: "#fff",
-          border: "3px solid var(--accent)",
+          borderRadius: 14,
+          background: "#1a1a1a",
+          color: "#e6392e",
+          border: "none",
           padding: 0,
-          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           cursor: "pointer",
           boxShadow: "0 2px 10px rgba(0,0,0,.25)",
         }}
       >
-        <img src={import.meta.env.BASE_URL + "maskot-logo.png"} alt="maSKot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <ChatBubbleIcon size={26} />
       </button>
       {open && (
         <div
@@ -9756,8 +9763,8 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
         >
           <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", border: "2px solid #fff", overflow: "hidden", flexShrink: 0, display: "inline-block" }}>
-                <img src={import.meta.env.BASE_URL + "maskot-logo.png"} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <span style={{ width: 26, height: 26, borderRadius: 7, background: "#1a1a1a", color: "#e6392e", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ChatBubbleIcon size={15} />
               </span>
               maSKot (beta)
             </span>
@@ -19279,7 +19286,9 @@ function GlobalStyle() {
       /* Len tenká čiarka (box-shadow, nie border — ten by pridal 1px výšky
          navyše, čo pás nemá čím vykompenzovať). */
       .sidebar-quick { box-shadow: inset 0 1px 0 var(--border); }
-      .sidebar-group.rail-ask { color: var(--accent); font-weight: 700; }
+      .sidebar-group.rail-ask { color: #e6392e; font-weight: 700; background: #1a1a1a; border-radius: 6px; }
+      .sidebar-group.rail-ask:hover { background: #2b2b2b; }
+      .sidebar-group.rail-ask svg { flex-shrink: 0; }
       /* 34px riadok (nie 29 ako bežná .sidebar-item) — presne ako 34px
          ikonka rýchlej akcie v IconRail páse. */
       .sidebar-item.quick { height: 34px; color: var(--accent); font-weight: 600; }
@@ -19324,9 +19333,9 @@ function GlobalStyle() {
       .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--text-dim); }
       .rail-icon.quick svg { width: 18px; height: 18px; }
       .rail-icon.quick:hover { background: var(--panel-2); }
-      /* výnimka — "Čo vyriešiť dnes?" nie je rýchla akcia modulu, ostáva výrazná červená */
-      .rail-icon.quick.rail-ask { color: var(--accent); }
-      .rail-icon.quick.rail-ask:hover { background: var(--accent-light); }
+      /* výnimka — "Čo vyriešiť dnes?" nie je rýchla akcia modulu, čierny box + červená bublina, jednoznačne oddelené */
+      .rail-icon.quick.rail-ask { color: #e6392e; background: #1a1a1a; border-radius: 8px; }
+      .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
       /* rovnaké deliace čiary ako vo flyoute (.sidebar-module/.sidebar-quick),
