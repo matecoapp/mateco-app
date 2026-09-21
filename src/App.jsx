@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.502";
+const APP_VERSION = "1.0.503";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12982,6 +12982,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   height: item.height,
                   background: "var(--accent-soft, rgba(227,6,19,.10))",
                   borderRadius: 4,
+                  borderBottom: "1px solid var(--border)",
+                  boxSizing: "border-box",
                 }}
               >
                 {/* Popisok kategórie je "lepiaci" (position:sticky), presne ako
@@ -13041,7 +13043,23 @@ const CalendarGrid = React.memo(function CalendarGrid({
               <div
                 onClick={() => onOpenCard(m)}
                 className="gantt-name-wrap"
-                style={{ position: "sticky", left: 0, zIndex: 2, background: rowBg === "transparent" ? "var(--panel)" : rowBg, paddingRight: 6, paddingLeft: 4, cursor: "pointer", willChange: "transform" }}
+                style={{
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 2,
+                  alignSelf: "stretch",
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  background: rowBg === "transparent" ? "var(--panel)" : rowBg,
+                  paddingRight: 6,
+                  paddingLeft: 4,
+                  cursor: "pointer",
+                  borderBottom: "1px solid var(--border)",
+                  boxSizing: "border-box",
+                  willChange: "transform",
+                }}
               >
                 {/* Orezanie dlhého textu (overflow:hidden) je zámerne na TOMTO
                     vnútornom obale, nie na tom vonkajšom vyššie — keby bolo na
@@ -13224,23 +13242,27 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 );
               })}
               {/* Ikonky skutočného vývozu/zvozu — čisto vizuálne (bez ťahania),
-                  zobrazia sa len keď sa skutočný dátum LÍŠI od zmluvného. Smer
-                  šípky je pevne daný TYPOM udalosti (vývoz=vpravo, zvoz=vľavo),
-                  nezávisle od toho, či je skutočný dátum skorší alebo neskorší
-                  než zmluvný — presne tak to bolo dohodnuté. */}
+                  zobrazia sa len keď sa skutočný dátum LÍŠI od zmluvného.
+                  Popisok je pevne daný TYPOM udalosti (vývoz="návoz",
+                  zvoz="zvoz"), nezávisle od toho, či je skutočný dátum
+                  skorší alebo neskorší než zmluvný — presne tak to bolo
+                  dohodnuté; tooltip (title) rozlišuje skorší/neskorší. */}
               {mJobs.flatMap((j) => {
                 const icons = [];
+                const who = j.customer || m.code;
                 if (j.departureDate && j.departureDate !== j.startDate) {
                   const depCol = colForDate(j.departureDate, true);
                   if (depCol - 1 >= visibleColRange.startIdx && depCol - 1 <= visibleColRange.endIdx) {
+                    const early = j.departureDate < j.startDate;
                     icons.push(
                       <div
                         key={`dep-${j.id}`}
                         className="gantt-transport-icon"
-                        title={`Zmluva: ${fmtDate(j.startDate)} · Skutočný vývoz: ${fmtDate(j.departureDate)}`}
+                        title={`Zákazka ${who} má ${early ? "prednávoz" : "odložený vývoz"} stroja (zmluva: ${fmtDate(j.startDate)} · skutočný vývoz: ${fmtDate(j.departureDate)})`}
                         style={{ gridColumn: depCol + 1, gridRow: 1 }}
                       >
-                        🚚▶
+                        <span aria-hidden="true">🚚</span>
+                        <span>návoz</span>
                       </div>
                     );
                   }
@@ -13248,14 +13270,16 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 if (j.pickupDate && j.pickupDate !== j.endDate) {
                   const pickCol = colForDate(j.pickupDate, true);
                   if (pickCol - 1 >= visibleColRange.startIdx && pickCol - 1 <= visibleColRange.endIdx) {
+                    const late = !j.endDate || j.pickupDate > j.endDate;
                     icons.push(
                       <div
                         key={`pick-${j.id}`}
                         className="gantt-transport-icon"
-                        title={`Zmluva: ${j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · Skutočný zvoz: ${fmtDate(j.pickupDate)}`}
+                        title={`Zákazka ${who} má ${late ? "neskorší" : "skorší"} zvoz stroja (zmluva: ${j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · skutočný zvoz: ${fmtDate(j.pickupDate)})`}
                         style={{ gridColumn: pickCol + 1, gridRow: 1 }}
                       >
-                        🚚◀
+                        <span aria-hidden="true">🚚</span>
+                        <span>zvoz</span>
                       </div>
                     );
                   }
@@ -19491,7 +19515,7 @@ function GlobalStyle() {
       .gantt-drag-handle.end { right: 0; }
       /* Ikonka skutočného vývozu/zvozu (odlišného od zmluvného dátumu) — čisto
          vizuálna, nezasahuje do klikov na samotnú zákazku pod ňou. */
-      .gantt-transport-icon { display: flex; align-items: center; justify-content: center; font-size: 11px; pointer-events: none; z-index: 2; line-height: 1; }
+      .gantt-transport-icon { display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--text-dim); pointer-events: auto; cursor: default; z-index: 2; line-height: 1; }
       /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
          zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
          bez "fill" geometrie, si to niektoré prehliadače spočítajú s nulovým
