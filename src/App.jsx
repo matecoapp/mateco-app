@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.493";
+const APP_VERSION = "1.0.494";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7181,80 +7181,82 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
   const docsExpanded = onToggleDocsExpanded ? docsExpandedProp : docsExpandedState;
   const toggleDocsExpanded = onToggleDocsExpanded || (() => setDocsExpandedState((v) => !v));
   const modules = buildNavModules(effectiveUser, damageAlertCount);
+  // Moduly (Požičovňa/Servis/Administratíva) sú zoskupené hore ako jeden
+  // blok, oddelené jednou čiarou od záložiek AKTUÁLNE otvoreného modulu pod
+  // nimi — namiesto pôvodného akordeónu (záložky priamo pod svojím modulom,
+  // ostatné moduly sa posúvali). IconRail nižšie musí mať rovnaké poradie
+  // riadkov 1:1 (viď railRows tam).
+  const activeModule = modules.find((m) => m.id === module);
+  const quickActions = quickActionsByModule?.[module];
 
   return (
     <nav className={className || "sidebar-nav"}>
-      {modules.map((m) => {
-        const isOpen = module === m.id;
-        const quickActions = quickActionsByModule?.[m.id];
-        return (
-          <div key={m.id} className={`sidebar-module${isOpen ? " open" : ""}`}>
-            <button className="sidebar-group" onClick={() => onSelectModule(m.id)}>
-              <span>{m.label}</span>
-              {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
-              <span className="chev">▸</span>
-            </button>
-            {isOpen && (
-              <div className="sidebar-tabs">
-                {m.tabs.map((t) =>
-                  t.dropdown ? (
-                    <div key={t.id}>
-                      <button className="sidebar-item" onClick={toggleDocsExpanded}>
-                        {t.label} {docsExpanded ? "▴" : "▾"}
-                      </button>
-                      {docsExpanded &&
-                        ((DOCUMENT_SUBTABS[m.id] || []).length === 0 ? (
-                          <div className="sidebar-subnote">Táto sekcia sa pripravuje.</div>
-                        ) : (
-                          (DOCUMENT_SUBTABS[m.id] || []).map((st) => (
-                            <button
-                              key={st.id}
-                              className="sidebar-item sidebar-subitem"
-                              onClick={() => {
-                                onSelectModule(m.id);
-                                onPickDocumentsSubView(st);
-                              }}
-                            >
-                              {st.label}
-                              {st.url && <span style={{ marginLeft: "auto", fontSize: 11 }}>↗</span>}
-                            </button>
-                          ))
-                        ))}
-                    </div>
+      <div className="sidebar-modules">
+        {modules.map((m) => (
+          <button key={m.id} className={`sidebar-group${module === m.id ? " active" : ""}`} onClick={() => onSelectModule(m.id)}>
+            <span>{m.label}</span>
+            {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
+          </button>
+        ))}
+      </div>
+      {activeModule && (
+        <div className="sidebar-tabs">
+          {activeModule.tabs.map((t) =>
+            t.dropdown ? (
+              <div key={t.id}>
+                <button className="sidebar-item" onClick={toggleDocsExpanded}>
+                  {t.label} {docsExpanded ? "▴" : "▾"}
+                </button>
+                {docsExpanded &&
+                  ((DOCUMENT_SUBTABS[activeModule.id] || []).length === 0 ? (
+                    <div className="sidebar-subnote">Táto sekcia sa pripravuje.</div>
                   ) : (
-                    <button
-                      key={t.id}
-                      className={`sidebar-item${view === t.id ? " active" : ""}`}
-                      onClick={() => {
-                        onSelectModule(m.id);
-                        onSelectView(t.id);
-                      }}
-                    >
-                      {t.label}
-                      {t.id === "poskodenia" && m.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{m.badge}</span>}
-                    </button>
-                  )
-                )}
-                {quickActions?.length > 0 && (
-                  <div className="sidebar-quick">
-                    {quickActions.map((qa) =>
-                      qa.href ? (
-                        <a key={qa.key} className="sidebar-item quick" href={qa.href} target="_blank" rel="noopener noreferrer">
-                          {qa.label}
-                        </a>
-                      ) : (
-                        <button key={qa.key} className="sidebar-item quick" onClick={qa.onClick}>
-                          {qa.label}
-                        </button>
-                      )
-                    )}
-                  </div>
-                )}
+                    (DOCUMENT_SUBTABS[activeModule.id] || []).map((st) => (
+                      <button
+                        key={st.id}
+                        className="sidebar-item sidebar-subitem"
+                        onClick={() => {
+                          onSelectModule(activeModule.id);
+                          onPickDocumentsSubView(st);
+                        }}
+                      >
+                        {st.label}
+                        {st.url && <span style={{ marginLeft: "auto", fontSize: 11 }}>↗</span>}
+                      </button>
+                    ))
+                  ))}
               </div>
-            )}
-          </div>
-        );
-      })}
+            ) : (
+              <button
+                key={t.id}
+                className={`sidebar-item${view === t.id ? " active" : ""}`}
+                onClick={() => {
+                  onSelectModule(activeModule.id);
+                  onSelectView(t.id);
+                }}
+              >
+                {t.label}
+                {t.id === "poskodenia" && activeModule.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{activeModule.badge}</span>}
+              </button>
+            )
+          )}
+          {quickActions?.length > 0 && (
+            <div className="sidebar-quick">
+              {quickActions.map((qa) =>
+                qa.href ? (
+                  <a key={qa.key} className="sidebar-item quick" href={qa.href} target="_blank" rel="noopener noreferrer">
+                    {qa.label}
+                  </a>
+                ) : (
+                  <button key={qa.key} className="sidebar-item quick" onClick={qa.onClick}>
+                    {qa.label}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </nav>
   );
 }
@@ -7374,55 +7376,49 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
     ].filter(Boolean),
   };
 
-  // 1:1 s textovým menu (SidebarNav): pre každý riadok, čo sa tam zobrazí,
-  // je tu presne jeden riadok v páse — nadpis modulu = ikona modulu, jeho
-  // záložka = bodka, jeho rýchla akcia = červená ikona. Záložky/akcie modulu
-  // sa objavia/schovajú v páse presne vtedy, keď sa otvorí/zavrie v menu
-  // (module === m.id), rovnaký poradie ako v SidebarNav (najprv záložky,
-  // rýchle akcie za nimi).
+  // 1:1 s textovým menu (SidebarNav): moduly sú zoskupené hore ako jeden
+  // blok ikon, jedna deliaca čiara, potom bodky/rýchle akcie LEN aktuálne
+  // otvoreného modulu — rovnaké poradie ako v SidebarNav.
   const railRows = [];
-  modules.forEach((m, mi) => {
+  modules.forEach((m) => {
     railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
-    if (module === m.id) {
-      m.tabs.forEach((t) => {
-        railRows.push({
-          kind: "dot",
-          key: `dot-${m.id}-${t.id}`,
-          label: t.label,
-          active: !t.dropdown && view === t.id,
-          onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(m.id); onSelectView(t.id); },
-        });
-        // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
-        // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
-        // pod nimi posunie hore oproti textu. Klikateľné rovnako ako v menu.
-        if (t.dropdown && docsExpanded) {
-          const subs = DOCUMENT_SUBTABS[m.id] || [];
-          if (subs.length === 0) {
-            railRows.push({ kind: "dot", key: `dot-${m.id}-${t.id}-sub-0`, label: "Táto sekcia sa pripravuje." });
-          } else {
-            subs.forEach((st) => {
-              railRows.push({
-                kind: "dot",
-                key: `dot-${m.id}-${t.id}-sub-${st.id}`,
-                label: st.label,
-                onClick: () => { onSelectModule(m.id); onPickDocumentsSubView(st); },
-              });
-            });
-          }
-        }
-      });
-      const quickActions = quickActionsByModule[m.id] || [];
-      quickActions.forEach((qa, qi) => {
-        railRows.push({ kind: "quick", ...qa, dividerBefore: qi === 0 });
-      });
-    }
-    // Rovnaké deliace čiary ako vo flyoute (.sidebar-module box-shadow medzi
-    // modulmi, .sidebar-quick box-shadow nad rýchlymi akciami) — box-shadow
-    // nezaberá výšku, takže sa tým nič neposunie oproti textovému menu.
-    if (mi < modules.length - 1) {
-      railRows[railRows.length - 1].dividerAfter = true;
-    }
   });
+  if (railRows.length) railRows[railRows.length - 1].dividerAfter = true;
+
+  const activeModule = modules.find((m) => m.id === module);
+  if (activeModule) {
+    activeModule.tabs.forEach((t) => {
+      railRows.push({
+        kind: "dot",
+        key: `dot-${activeModule.id}-${t.id}`,
+        label: t.label,
+        active: !t.dropdown && view === t.id,
+        onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(activeModule.id); onSelectView(t.id); },
+      });
+      // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
+      // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
+      // pod nimi posunie hore oproti textu. Klikateľné rovnako ako v menu.
+      if (t.dropdown && docsExpanded) {
+        const subs = DOCUMENT_SUBTABS[activeModule.id] || [];
+        if (subs.length === 0) {
+          railRows.push({ kind: "dot", key: `dot-${activeModule.id}-${t.id}-sub-0`, label: "Táto sekcia sa pripravuje." });
+        } else {
+          subs.forEach((st) => {
+            railRows.push({
+              kind: "dot",
+              key: `dot-${activeModule.id}-${t.id}-sub-${st.id}`,
+              label: st.label,
+              onClick: () => { onSelectModule(activeModule.id); onPickDocumentsSubView(st); },
+            });
+          });
+        }
+      }
+    });
+    const quickActions = quickActionsByModule[activeModule.id] || [];
+    quickActions.forEach((qa, qi) => {
+      railRows.push({ kind: "quick", ...qa, dividerBefore: qi === 0 });
+    });
+  }
 
   // Výška riadkov je pevná (34px ikona/rýchla akcia, 29px bodka) a rovnaká
   // čísla sú natvrdo aj vo flyoute (.sidebar-group/.sidebar-item, box-sizing:
@@ -13912,7 +13908,21 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
     : [];
   return (
     <>
-    <Modal title={`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`} onClose={onClose} onBack={onBack} wide>
+    <Modal
+      title={
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span>{`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`}</span>
+          {!m.currentJob && !m.archived && (
+            <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 999, background: "#eaf5ee", color: "#1f9254", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em" }}>
+              Voľný stroj
+            </span>
+          )}
+        </span>
+      }
+      onClose={onClose}
+      onBack={onBack}
+      wide
+    >
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
@@ -14971,9 +14981,10 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
       style={{
         padding: 14,
         borderLeft: `3px solid ${barColor}`,
+        borderRadius: 12,
         opacity: isDone ? 0.7 : 1,
         outline: highlighted ? "2px solid var(--accent)" : "none",
-        boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "none",
+        boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "0 1px 3px rgba(20,20,19,.07)",
         transition: "box-shadow .3s, outline .3s",
       }}
     >
@@ -19254,21 +19265,20 @@ function GlobalStyle() {
       /* box-shadow namiesto border-bottom — čiarka sa vykreslí, ale NEPRIDÁ
          výšku navyše (border by pridal 1px, čo by sa v páse muselo naviac
          niečím vykompenzovať — takto netreba). */
-      .sidebar-module { box-shadow: 0 1px 0 var(--border); }
-      .sidebar-module:last-child { box-shadow: none; }
+      /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
+         AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
+      .sidebar-modules { box-shadow: 0 1px 0 var(--border); }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
       .sidebar-group {
         display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; text-align: left; box-sizing: border-box;
         padding: 0 14px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
-        color: var(--text); background: transparent; border: none; cursor: pointer;
+        color: var(--text); background: transparent; border: none; cursor: pointer; border-radius: 6px;
       }
-      .sidebar-module.open .sidebar-group { color: var(--accent); }
-      .sidebar-group .chev { margin-left: auto; font-size: 10px; color: var(--text-dim); transition: transform .15s; }
-      .sidebar-module.open .sidebar-group .chev { transform: rotate(90deg); color: var(--accent); }
+      .sidebar-group.active { color: #fff; background: var(--accent); }
       .sidebar-badge { background: var(--accent); color: #fff; font-size: 10px; border-radius: 99px; padding: 1px 6px; font-weight: 700; }
-      .sidebar-module.open .sidebar-group .sidebar-badge { background: #fff; color: var(--accent); }
+      .sidebar-group.active .sidebar-badge { background: #fff; color: var(--accent); }
       .sidebar-item {
         display: flex; align-items: center; gap: 6px; width: 100%; height: 29px; text-align: left; box-sizing: border-box;
         padding: 0 14px 0 28px; font-family: 'Barlow', sans-serif; font-size: 12.5px;
@@ -19336,7 +19346,7 @@ function GlobalStyle() {
       .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
-      /* rovnaké deliace čiary ako vo flyoute (.sidebar-module/.sidebar-quick),
+      /* rovnaké deliace čiary ako vo flyoute (.sidebar-modules/.sidebar-quick),
          tiež box-shadow → nezaberá výšku, nerozhodí zarovnanie s textom */
       .rail-divider-after { box-shadow: 0 1px 0 var(--border); }
       .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
