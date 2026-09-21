@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.494";
+const APP_VERSION = "1.0.495";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5575,7 +5575,7 @@ function DispatcherApp() {
       )}
       {machineCard && (
         <MachineCardModal
-          machine={machines.find((m) => m.id === machineCard.id) || machineCard}
+          machine={enrichedMachines.find((m) => m.id === machineCard.id) || machineCard}
           machineModels={machineModels}
           history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
           jobs={jobs}
@@ -13913,7 +13913,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>{`${m.code}${m.type ? " · " + m.type : ""}${m.archived ? " (archivovaný)" : ""}`}</span>
           {!m.currentJob && !m.archived && (
-            <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 999, background: "#eaf5ee", color: "#1f9254", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 12px", borderRadius: 999, background: "#eaf5ee", color: "#1f9254", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1f9254" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
               Voľný stroj
             </span>
           )}
@@ -13923,36 +13924,31 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       onBack={onBack}
       wide
     >
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
-        <CardField label="Model" value={m.type} />
-        <CardField label="Sériové číslo" value={m.code} />
-        <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
-        <CardField
-          label="Platnosť revízie ZZ"
-          value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null)}
-          danger={reviziaOverdue}
-        />
-        <CardField
-          label="Platnosť revízie EZ"
-          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null)}
-          danger={reviziaEZOverdue}
-        />
-        <CardField
-          label="Dátum najbližšej úradnej skúšky"
-          value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null)}
-          danger={skuskaOverdue}
-        />
-        <CardField label="Depo" value={m.depo} />
-        <CardField label="Aktuálna zákazka" value={m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"} />
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+        {[
+          ["Model", m.type, false],
+          ["Sériové číslo", m.code, false],
+          ["Servisný stav", m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov"), m.hasOpenDamage],
+          ["Platnosť revízie ZZ", notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null), reviziaOverdue],
+          ["Platnosť revízie EZ", notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null), reviziaEZOverdue],
+          ["Dátum najbližšej úradnej skúšky", skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null), skuskaOverdue],
+          ["Depo", m.depo, false],
+          ["Aktuálna zákazka", m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —", false],
+        ].map(([label, value, danger]) => (
+          <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "#faf9f7" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)" }}>{value || "—"}</div>
+          </div>
+        ))}
       </div>
       {modelParams.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
             Parametre modelu
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: 13 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12 }}>
             {modelParams.map(([label, value]) => (
-              <div key={label}>
+              <div key={label} style={{ padding: "4px 10px", background: "var(--panel-2)", borderRadius: 999 }}>
                 <span style={{ color: "var(--text-dim)" }}>{label}: </span>
                 <span style={{ fontWeight: 600 }}>{value}</span>
               </div>
@@ -14059,6 +14055,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               background: expandedSection === "servis" ? "var(--accent)" : "transparent",
               color: expandedSection === "servis" ? "#fff" : "var(--text)",
               border: "1px solid " + (expandedSection === "servis" ? "var(--accent)" : "var(--border)"),
+              borderRadius: 999,
             }}
           >
             Servisná história ({history.length})
@@ -14072,6 +14069,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               background: expandedSection === "prenajom" ? "var(--accent)" : "transparent",
               color: expandedSection === "prenajom" ? "#fff" : "var(--text)",
               border: "1px solid " + (expandedSection === "prenajom" ? "var(--accent)" : "var(--border)"),
+              borderRadius: 999,
             }}
           >
             História požičania ({jobs.filter((j) => j.machineId === m.id).length})
@@ -14085,6 +14083,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               background: expandedSection === "kontroly" ? "var(--accent)" : "transparent",
               color: expandedSection === "kontroly" ? "#fff" : "var(--text)",
               border: "1px solid " + (expandedSection === "kontroly" ? "var(--accent)" : "var(--border)"),
+              borderRadius: 999,
             }}
           >
             Kontroly stroja ({machineInspections.length})
@@ -19267,7 +19266,7 @@ function GlobalStyle() {
          niečím vykompenzovať — takto netreba). */
       /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
          AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
-      .sidebar-modules { box-shadow: 0 1px 0 var(--border); }
+      .sidebar-modules { box-shadow: 0 2px 0 rgba(0,0,0,.14); }
       /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
          nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
          (to opakovane nesedelo). Nemení sa jedno bez druhého. */
@@ -19348,7 +19347,7 @@ function GlobalStyle() {
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
       /* rovnaké deliace čiary ako vo flyoute (.sidebar-modules/.sidebar-quick),
          tiež box-shadow → nezaberá výšku, nerozhodí zarovnanie s textom */
-      .rail-divider-after { box-shadow: 0 1px 0 var(--border); }
+      .rail-divider-after { box-shadow: 0 2px 0 rgba(0,0,0,.14); }
       .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
       .rail-badge {
         position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
