@@ -401,7 +401,8 @@ function openPrintableServiceProtocol(p) {
   // upraviteľné je až po potvrdení (contenteditable sa prepne na "true").
   function field(label, key, value, opts = {}) {
     const cls = "v editfield" + (opts.red ? " red" : "");
-    return `<div class="field"><span class="l">${esc(label)}</span><div class="${cls}" data-field="${key}" contenteditable="false">${esc(value)}</div></div>`;
+    const suffix = opts.suffix ? ` <span class="unit">${esc(opts.suffix)}</span>` : "";
+    return `<div class="field"><span class="l">${esc(label)}</span><span class="vwrap"><div class="${cls}" data-field="${key}" contenteditable="false">${esc(value)}</div>${suffix}</span></div>`;
   }
   // Neupraviteľné pole (nahlásená závada — patrí zákazke, opravuje sa na karte zákazky).
   function staticField(label, value, red) {
@@ -410,8 +411,14 @@ function openPrintableServiceProtocol(p) {
   function sigBlock(dataUrl, label) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
-  const workRows = p.workItems && p.workItems.length ? p.workItems : [{}];
-  const matRows = p.materialItems && p.materialItems.length ? p.materialItems : [{}];
+  const ROW_COUNT = 13;
+  const padRows = (arr) => {
+    const rows = (arr || []).slice(0, ROW_COUNT);
+    while (rows.length < ROW_COUNT) rows.push({});
+    return rows;
+  };
+  const workRows = padRows(p.workItems);
+  const matRows = padRows(p.materialItems);
   const faultLine = [
     p.faultCode ? `Kód poruchy ${p.faultCode}` : "",
     p.faultFullText || p.jobDesc || "",
@@ -441,6 +448,8 @@ function openPrintableServiceProtocol(p) {
   .field .l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 2px; }
   .field .v { font-size: 12.5px; font-weight: 600; }
   .field .v.red { color: #E30613; }
+  .field .vwrap { display: flex; align-items: baseline; gap: 4px; }
+  .field .unit { font-size: 11px; color: #666; font-weight: 600; white-space: nowrap; }
 
   .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 7px 20px; }
 
@@ -468,10 +477,10 @@ function openPrintableServiceProtocol(p) {
   .summary .field .l { color: #E30613; }
 
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 6px; }
-  .sigbox { border: 1px solid #ddd; border-radius: 4px; padding: 6px; }
+  .sigbox { border: 1px solid #ddd; border-radius: 4px; padding: 10px; }
   .siglabel { font-size: 9.5px; color: #666; text-transform: uppercase; margin-bottom: 3px; }
-  .sigimg { height: 32px; display: block; }
-  .signone { height: 32px; display: flex; align-items: center; color: #999; font-size: 10px; }
+  .sigimg { height: 90px; max-width: 100%; display: block; }
+  .signone { height: 90px; display: flex; align-items: center; color: #999; font-size: 10px; }
   .signame { font-size: 11.5px; font-weight: 600; margin-top: 3px; border-top: 1px solid #eee; padding-top: 3px; border-left: none; }
 
   .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
@@ -490,7 +499,7 @@ function openPrintableServiceProtocol(p) {
 
   @media print {
     body { background: #fff; }
-    .page { box-shadow: none; margin: 0; width: auto; min-height: 100vh; }
+    .page { box-shadow: none; margin: 0; }
     .toolbar { display: none; }
     .editfield[contenteditable="true"] { box-shadow: none !important; background: transparent !important; }
     .addrow, table.items td.rm { display: none !important; }
@@ -501,15 +510,16 @@ function openPrintableServiceProtocol(p) {
 <body>
 
 <div class="toolbar">
-  <button id="startEdit" class="ghost" onclick="requestEdit()">✏️ Upraviť protokol</button>
-  <button id="saveEdit" class="primary" onclick="saveProtocol()">💾 Uložiť zmeny</button>
+  <button id="startEdit" class="ghost" onclick="requestEdit()">Upraviť protokol</button>
+  <button id="saveEdit" class="primary" onclick="saveProtocol()">Uložiť zmeny</button>
   <button id="cancelEdit" class="ghost" onclick="cancelEdit()">Zrušiť úpravu</button>
   <span id="saveMsg"></span>
-  <button class="primary" onclick="window.print()">🖨️ Tlačiť / uložiť ako PDF</button>
-  ${p.imageUrl ? `<a class="ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>` : ""}
+  <button class="primary" onclick="window.print()">Tlačiť / uložiť ako PDF</button>
+  ${p.imageUrl ? `<a class="ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">Pôvodný snapshot</a>` : ""}
+  ${!p.damageId ? `<button class="ghost" onclick="requestAssign()">Priradiť k zákazke</button>` : ""}
 </div>
 
-<div class="page">
+<div class="page" id="pageContent">
   <div class="body-content">
   <div class="head">
     <div class="logo">mateco</div>
@@ -525,8 +535,6 @@ function openPrintableServiceProtocol(p) {
       ${field("Zákazník", "clientName", p.clientName)}
       ${field("Vykonal", "technicianName", p.technicianName)}
       ${field("Kontaktná osoba", "customerSignatoryName", p.customerSignatoryName || p.clientContact)}
-      ${field("Telefón", "clientPhone", p.clientPhone)}
-      ${field("E-mail", "clientEmail", p.clientEmail)}
     </div>
   </div>
 
@@ -576,11 +584,11 @@ function openPrintableServiceProtocol(p) {
   <div class="section">
     <div class="sechead">Súhrn — podklad pre fakturáciu</div>
     <div class="secbody summary">
-      ${field("Celkový čas opravy (hod.)", "totalHours", p.totalHours)}
-      ${field("Cestovný čas (hod.)", "travelHours", p.travelHours)}
-      ${field("Najazdené km", "travelKm", p.travelKm)}
+      ${field("Celkový čas opravy", "totalHours", p.totalHours, { suffix: "hod." })}
+      ${field("Cestovný čas", "travelHours", p.travelHours, { suffix: "hod." })}
+      ${field("Najazdené km", "travelKm", p.travelKm, { suffix: "km" })}
       ${staticField("Dátum", p.jobDate ? fmtDate(p.jobDate) : fmtDate(p.createdAt))}
-      ${field("Miesto vykonanej práce", "location", p.location)}
+      ${field("Miesto práce", "location", p.location)}
     </div>
   </div>
 
@@ -601,12 +609,27 @@ function openPrintableServiceProtocol(p) {
 <script>
   function requestEdit() {
     if (!confirm('Naozaj chcete upraviť odoslaný protokol?')) return;
+    window.__protocolSnapshot = document.getElementById('pageContent').innerHTML;
     document.body.classList.add('editing');
     document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'true'); });
   }
-  function cancelEdit() {
+  function lockFields() {
     document.body.classList.remove('editing');
     document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'false'); });
+  }
+  function cancelEdit() {
+    if (window.__protocolSnapshot != null) {
+      document.getElementById('pageContent').innerHTML = window.__protocolSnapshot;
+    }
+    lockFields();
+  }
+  function requestAssign() {
+    if (!window.opener || window.opener.closed) {
+      alert('Okno appky sa nenašlo — otvorte protokol znova z appky.');
+      return;
+    }
+    window.opener.postMessage({ type: 'mateco_protocol_request_assign', id: ${JSON.stringify(p.id)} }, '*');
+    window.opener.focus();
   }
   function addWorkRow() {
     var tr = document.createElement('tr');
@@ -642,7 +665,7 @@ function openPrintableServiceProtocol(p) {
     window.opener.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
     msg.style.color = '#2f7d32';
     msg.textContent = 'Uložené ✓';
-    cancelEdit();
+    lockFields();
     setTimeout(function() { msg.textContent = ''; }, 2500);
   }
 </script>
@@ -1903,6 +1926,7 @@ function DispatcherApp() {
   const [confirmAction, setConfirmAction] = useState(null); // { message, confirmLabel, onConfirm }
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
+  const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol na priradenie k externej zákazke — otvorené aj z náhľadu protokolu (mateco_protocol_request_assign)
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
   const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
@@ -2372,6 +2396,9 @@ function DispatcherApp() {
         }
       } else if (event.data.type === "mateco_protocol_edited") {
         updateProtocolLog(event.data.id, event.data.patch);
+      } else if (event.data.type === "mateco_protocol_request_assign") {
+        const target = protocolLogs.find((x) => x.id === event.data.id);
+        if (target) setAssignProtocolTarget(target);
       }
     }
     window.addEventListener("message", onMessage);
@@ -6406,6 +6433,17 @@ function DispatcherApp() {
           onClose={() => setAssignmentDetail(null)}
           onReschedule={(dmg) => { setAssignmentDetail(null); setDamageAssignTarget(dmg); }}
           onOpenMachineCard={(m) => { setAssignmentDetail(null); setMachineCard(m); }}
+        />
+      )}
+      {assignProtocolTarget && (
+        <AssignProtocolToExternalModal
+          protocol={assignProtocolTarget}
+          damages={damages.filter((d) => d.type === "externa")}
+          onClose={() => setAssignProtocolTarget(null)}
+          onAssign={(damageId) => {
+            assignProtocolToDamage(assignProtocolTarget.id, damageId);
+            setAssignProtocolTarget(null);
+          }}
         />
       )}
       {protocolModalData && (
@@ -14803,7 +14841,6 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                         onClick={() => openPrintableServiceProtocol(p)}
                         style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
                       >
-                        <span style={{ fontSize: 24, width: 60, textAlign: "center", flexShrink: 0 }}>📄</span>
                         <div style={{ fontSize: 12, color: "var(--text)", minWidth: 0 }}>
                           <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)}</div>
                           <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
@@ -14812,8 +14849,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                         </div>
                       </button>
                       {p.imageUrl && (
-                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 18, flexShrink: 0 }}>
-                          🖼️
+                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" className="btn btn-ghost" style={{ fontSize: 11, flexShrink: 0 }}>
+                          Snapshot
                         </a>
                       )}
                       {onAssignProtocolToDamage && (can(user, "damage_status") || can(user, "external_status")) && (
@@ -15372,9 +15409,9 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>📄 Zobraziť protokol</button>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>
+              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">Pôvodný snapshot</a>
             )}
           </div>
         </div>
@@ -16103,7 +16140,13 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
               <div key={p.id} className="panel" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 90, fontSize: 12, color: "var(--text-dim)" }}>{p.createdAt ? fmtDate(p.createdAt) : "—"}</div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.clientName || "— bez zákazníka —"}</div>
+                  <div
+                    style={{ fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+                    onClick={() => openPrintableServiceProtocol(p)}
+                    title="Zobraziť protokol"
+                  >
+                    {p.clientName || "— bez zákazníka —"}
+                  </div>
                   <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[p.machineModel, p.machineSerial].filter(Boolean).join(" · ") || "—"}</div>
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-dim)", minWidth: 100 }}>{p.technicianName || "—"}</div>
@@ -16112,9 +16155,6 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                   <input type="checkbox" checked={!!p.invoiced} onChange={() => onToggleProtocolInvoiced(p.id)} />
                   Vyfakturované
                 </label>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => openPrintableServiceProtocol(p)}>
-                  📄 Zobraziť protokol
-                </button>
                 <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => setAssignPickerFor(p)}>
                   Priradiť k zákazke
                 </button>
@@ -16940,9 +16980,9 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
             Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>📄 Zobraziť protokol</button>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>
+              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">Pôvodný snapshot</a>
             )}
           </div>
         </div>
@@ -17894,11 +17934,11 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                         onClick={() => openPrintableServiceProtocol(p)}
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--accent)", border: "none", background: "none", cursor: "pointer", padding: 0 }}
                       >
-                        📄 Protokol ({fmtDate(p.createdAt)})
+                        Protokol ({fmtDate(p.createdAt)})
                       </button>
                       {p.imageUrl && (
-                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 13 }}>
-                          🖼️
+                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 11 }}>
+                          Snapshot
                         </a>
                       )}
                     </span>
