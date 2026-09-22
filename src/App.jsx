@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.533";
+const APP_VERSION = "1.0.534";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -255,12 +255,20 @@ let _protocolTechniciansList = [];
 function setProtocolTechniciansList(list) {
   _protocolTechniciansList = list || [];
 }
+// JSON.stringify nikdy needescapuje "<" — voľný text, ktorý niekto napíše do appky
+// (napr. model externého stroja, umiestnenie), tak môže obsahovať "</script>" a
+// predčasne ukončiť tento tag (XSS). < je pre JS engine identické s "<" v
+// stringu, ale HTML parser v ňom nevidí skutočný "<", takže sa tag nedá takto
+// prelomiť — dáta v window.__PROTOCOL_PREFILL__ atď. ostávajú úplne rovnaké.
+function jsonForScriptTag(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
 function decodeProtocolHtml(params) {
   const binary = atob(PROTOCOL_HTML_B64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   let html = new TextDecoder("utf-8").decode(bytes);
-  const script = `<script>window.__PROTOCOL_PREFILL__ = ${JSON.stringify(params || {})}; window.__PROTOCOL_MACHINES__ = ${JSON.stringify(_protocolMachinesList)}; window.__PROTOCOL_TECHNICIANS__ = ${JSON.stringify(_protocolTechniciansList)};</script>`;
+  const script = `<script>window.__PROTOCOL_PREFILL__ = ${jsonForScriptTag(params || {})}; window.__PROTOCOL_MACHINES__ = ${jsonForScriptTag(_protocolMachinesList)}; window.__PROTOCOL_TECHNICIANS__ = ${jsonForScriptTag(_protocolTechniciansList)};</script>`;
   html = html.replace("<head>", "<head>" + script);
   return html;
 }
