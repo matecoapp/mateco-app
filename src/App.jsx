@@ -379,13 +379,15 @@ function openPrintableHandoverProtocol(job, machine, p) {
   win.document.close();
 }
 
-// Zobrazenie/tlač/úprava servisného protokolu, vykreslené priamo z uložených dát
-// (nie z fotky). Otvára sa v novom okne (rovnaký princíp ako openPrintableHandoverProtocol),
-// polia sú priamo upraviteľné (input/textarea, vyzerajú ako text, kým na ne nekliknete) —
-// tlačidlo "Uložiť zmeny" pošle patch naspäť appke cez postMessage (rovnaká cesta, akou appka
-// dnes prijíma vyplnený formulár od technika, pozri "mateco_protocol_edited" v onMessage).
-// Tlač je samostatné tlačidlo — žiadna auto-tlač, nech je vidno samotný dokument.
-// Link na pôvodný odfotený formulár (imageUrl) je vždy hore ako záložná verzia.
+// Zobrazenie/tlač/úprava servisného protokolu — vzhľad presne podľa dohodnutého návrhu
+// (servisny_protokol_navrh.html): biela A4 "stránka" so sekciami, hlavička s logom a
+// číslom protokolu, pätka s údajmi firmy. Vykreslené priamo z uložených dát (nie z fotky).
+// Polia sú pri otvorení READONLY (vyzerajú ako čistý text) — úprava sa musí najprv
+// odsúhlasiť potvrdením (confirm), až potom appka uvoľní editáciu. "Uložiť zmeny" pošle
+// patch naspäť appke cez postMessage (rovnaká cesta, akou appka dnes prijíma vyplnený
+// formulár od technika — pozri "mateco_protocol_edited" v onMessage). Tlač je samostatné
+// tlačidlo, žiadna auto-tlač. Link na pôvodný odfotený formulár (imageUrl) je vždy hore
+// ako záložná verzia.
 function openPrintableServiceProtocol(p) {
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
@@ -394,86 +396,126 @@ function openPrintableServiceProtocol(p) {
     alert("Prehliadač zablokoval otvorenie okna — povoľte vyskakovacie okná pre túto stránku.");
     return;
   }
+  // Upraviteľné pole — contenteditable div namiesto <input>, takže v zobrazení je
+  // 1:1 rovnaké ako pôvodný statický text (zalamuje sa rovnako, žiadny box okolo) a
+  // upraviteľné je až po potvrdení (contenteditable sa prepne na "true").
   function field(label, key, value, opts = {}) {
-    const tag = opts.area ? "textarea" : "input";
-    const attrs = opts.area ? `rows="${opts.rows || 2}"` : `type="text"`;
-    const content = opts.area ? esc(value) : "";
-    const valueAttr = opts.area ? "" : `value="${escAttr(value)}"`;
-    return `<div><span class="l">${esc(label)}:</span><${tag} class="editfield" data-field="${key}" ${attrs} ${valueAttr}>${content}</${tag}></div>`;
+    const cls = "v editfield" + (opts.red ? " red" : "");
+    return `<div class="field"><span class="l">${esc(label)}</span><div class="${cls}" data-field="${key}" contenteditable="false">${esc(value)}</div></div>`;
+  }
+  // Neupraviteľné pole (nahlásená závada — patrí zákazke, opravuje sa na karte zákazky).
+  function staticField(label, value, red) {
+    return `<div class="field"><span class="l">${esc(label)}</span><span class="v${red ? " red" : ""}">${esc(value) || "—"}</span></div>`;
   }
   function sigBlock(dataUrl, label) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
-  const workRows = (p.workItems && p.workItems.length ? p.workItems : [{}]);
-  const matRows = (p.materialItems && p.materialItems.length ? p.materialItems : [{}]);
+  const workRows = p.workItems && p.workItems.length ? p.workItems : [{}];
+  const matRows = p.materialItems && p.materialItems.length ? p.materialItems : [{}];
+  const faultLine = [
+    p.faultCode ? `Kód poruchy ${p.faultCode}` : "",
+    p.faultFullText || p.jobDesc || "",
+    p.status ? `Stav zákazky: ${p.status}` : "",
+  ].filter(Boolean).join(" – ") || "—";
+
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Servisný protokol ${esc(p.machineSerial)}</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
-  .toolbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #1a1a1a; }
-  .toolbar button, .toolbar a { font-family: inherit; font-size: 13px; padding: 7px 14px; border-radius: 4px; border: 0; cursor: pointer; text-decoration: none; }
-  .btn-save { background: #E30613; color: #fff; }
-  .btn-print { background: #444; color: #fff; }
-  .btn-snap { background: transparent; color: #ccc; border: 1px solid #555 !important; }
-  #saveMsg { color: #7ed67e; font-size: 12px; margin-left: 4px; }
-  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
-  h1 { font-size: 17px; color: #E30613; margin: 0 0 2px; letter-spacing: .03em; }
-  .sub { font-size: 11.5px; color: #555; margin-bottom: 16px; }
-  .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; overflow: hidden; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+  .body-content { flex: 1; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .logo { font-size: 22px; font-weight: 800; color: #E30613; letter-spacing: .01em; }
+  .head h1 { font-size: 17px; color: #E30613; margin: 0; text-align: right; letter-spacing: .03em; }
+  .protnum { text-align: right; font-size: 11.5px; margin-top: 5px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; white-space: nowrap; }
+  .protnum span.l { color: #666; white-space: nowrap; }
+  .protnum .editfield { font-weight: bold; color: #E30613; min-width: 60px; }
+
+  .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
   .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; letter-spacing: .04em; }
-  .secbody { padding: 8px 12px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
-  .grid2 span.l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 1px; }
-  table.items { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .secbody { padding: 8px 14px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 20px; }
+  .field .l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 2px; }
+  .field .v { font-size: 12.5px; font-weight: 600; }
+  .field .v.red { color: #E30613; }
+
+  .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 7px 20px; }
+
+  .itemcols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+  .itemcol .itemcolhead { font-weight: bold; font-size: 10px; text-transform: uppercase; color: #E30613; border-bottom: 2px solid #E30613; padding-bottom: 4px; margin-bottom: 4px; letter-spacing: .03em; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 11.5px; }
   table.items th { background: #f4f4f4; border-bottom: 1px solid #ddd; text-align: left; padding: 3px 6px; font-size: 9.5px; text-transform: uppercase; color: #555; }
-  table.items td { padding: 2px 6px; border-bottom: 1px solid #f0f0f0; }
-  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; width: 15%; }
-  table.items td.rm { width: 20px; padding: 0; }
-  table.items td.rm button { border: 0; background: none; cursor: pointer; color: #c62828; }
-  .addrow { font-size: 11px; color: var(--accent, #E30613); background: none; border: 0; cursor: pointer; padding: 4px 0; }
-  .editfield, .editarea { border: 1px dashed transparent; background: transparent; font: inherit; color: inherit; padding: 1px 2px; width: 100%; font-family: inherit; resize: vertical; }
-  .editfield:hover, .editarea:hover { border-color: #ddd; }
-  .editfield:focus, .editarea:focus { outline: none; border-color: #E30613; background: #fff8f8; }
-  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
-  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 6px; }
-  .siglabel { font-size: 10px; color: #666; margin-bottom: 4px; }
-  .sigimg { max-width: 100%; height: 50px; }
-  .signone { font-size: 10px; color: #999; height: 50px; display: flex; align-items: center; }
+  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; }
+  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; }
+  table.items td.rm { display: none; width: 18px; padding: 0 0 0 2px; }
+  table.items td.rm button { border: 0; background: none; cursor: pointer; color: #c62828; font-size: 11px; }
+  .addrow { display: none; font-size: 10.5px; color: #E30613; background: none; border: 0; cursor: pointer; padding: 4px 0 0; }
+
+  .notes { font-size: 11.5px; min-height: 48px; white-space: pre-wrap; line-height: 1.5; }
+
+  /* contenteditable polia — v zobrazení vyzerajú presne ako statický text (žiadny box,
+     žiadne orámovanie); rámik a zvýraznenie sa objaví, len keď je zapnutá úprava. */
+  .editfield { outline: none; }
+  body.editing .editfield[contenteditable="true"] { border-radius: 2px; box-shadow: 0 0 0 1px transparent; }
+  body.editing .editfield[contenteditable="true"]:hover { box-shadow: 0 0 0 1px #ddd; }
+  body.editing .editfield[contenteditable="true"]:focus { box-shadow: 0 0 0 1px #E30613; background: #fff8f8; }
+
+  .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px 14px; }
+  .summary .field .v { font-size: 12.5px; }
+  .summary .field .l { color: #E30613; }
+
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 6px; }
+  .sigbox { border: 1px solid #ddd; border-radius: 4px; padding: 6px; }
+  .siglabel { font-size: 9.5px; color: #666; text-transform: uppercase; margin-bottom: 3px; }
+  .sigimg { height: 32px; display: block; }
+  .signone { height: 32px; display: flex; align-items: center; color: #999; font-size: 10px; }
+  .signame { font-size: 11.5px; font-weight: 600; margin-top: 3px; border-top: 1px solid #eee; padding-top: 3px; border-left: none; }
+
+  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
+  .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
+
+  .toolbar { text-align: center; margin: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar button, .toolbar a { font-family: inherit; font-size: 13px; padding: 8px 18px; border-radius: 4px; border: 0; cursor: pointer; text-decoration: none; }
+  .toolbar .primary { background: #E30613; color: #fff; }
+  .toolbar .ghost { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+  #saveEdit, #cancelEdit { display: none; }
+  body.editing #startEdit { display: none; }
+  body.editing #saveEdit, body.editing #cancelEdit { display: inline-block; }
+  body.editing .addrow { display: inline-block; }
+  body.editing table.items td.rm { display: table-cell; }
+  #saveMsg { align-self: center; font-size: 12px; }
+
   @media print {
     body { background: #fff; }
-    .toolbar { display: none; }
     .page { box-shadow: none; margin: 0; width: auto; min-height: 100vh; }
-    .editfield, .editarea { border: none !important; }
-    .addrow, table.items td.rm { display: none; }
-    @page { size: A4; margin: 10mm; }
+    .toolbar { display: none; }
+    .editfield[contenteditable="true"] { box-shadow: none !important; background: transparent !important; }
+    .addrow, table.items td.rm { display: none !important; }
+    @page { size: A4; margin: 0; }
   }
-</style></head>
+</style>
+</head>
 <body>
-  <div class="toolbar">
-    <button class="btn-save" onclick="saveProtocol()">💾 Uložiť zmeny</button>
-    <span id="saveMsg"></span>
-    <div style="flex:1"></div>
-    <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť ako PDF</button>
-    ${p.imageUrl ? `<a class="btn-snap" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>` : ""}
-  </div>
-  <div class="page">
-  <h1>PROTOKOL O VYKONANÍ OPRAVY</h1>
-  <div class="sub">${p.machineSerial ? esc(p.machineSerial) + " · " : ""}${fmtDate(p.createdAt)}${p.technicianName ? " · " + esc(p.technicianName) : ""}</div>
 
-  <div class="section">
-    <div class="sechead">Stroj a zákazka</div>
-    <div class="secbody grid2">
-      ${field("Typ / Model", "machineModel", p.machineModel)}
-      ${field("Sériové číslo", "machineSerial", p.machineSerial)}
-      ${field("Počet MTH", "machineHours", p.machineHours)}
-      ${field("Zákazka č.", "jobNumber", p.jobNumber)}
-      ${field("Stav", "status", p.status)}
-      ${field("Kód poruchy", "faultCode", p.faultCode)}
-    </div>
-    <div class="secbody" style="border-top:1px solid #eee;">
-      ${field("Popis závady", "faultFullText", p.faultFullText || p.jobDesc, { area: true, rows: 2 })}
+<div class="toolbar">
+  <button id="startEdit" class="ghost" onclick="requestEdit()">✏️ Upraviť protokol</button>
+  <button id="saveEdit" class="primary" onclick="saveProtocol()">💾 Uložiť zmeny</button>
+  <button id="cancelEdit" class="ghost" onclick="cancelEdit()">Zrušiť úpravu</button>
+  <span id="saveMsg"></span>
+  <button class="primary" onclick="window.print()">🖨️ Tlačiť / uložiť ako PDF</button>
+  ${p.imageUrl ? `<a class="ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>` : ""}
+</div>
+
+<div class="page">
+  <div class="body-content">
+  <div class="head">
+    <div class="logo">mateco</div>
+    <div>
+      <h1>PROTOKOL O VYKONANÍ OPRAVY</h1>
+      <div class="protnum"><span class="l">Protokol č.:</span><div class="editfield" data-field="jobNumber" contenteditable="false">${esc(p.jobNumber || (p.id || "").slice(0, 8).toUpperCase())}</div></div>
     </div>
   </div>
 
@@ -481,93 +523,129 @@ function openPrintableServiceProtocol(p) {
     <div class="sechead">Odberateľ</div>
     <div class="secbody grid2">
       ${field("Zákazník", "clientName", p.clientName)}
+      ${field("Vykonal", "technicianName", p.technicianName)}
       ${field("Kontaktná osoba", "customerSignatoryName", p.customerSignatoryName || p.clientContact)}
       ${field("Telefón", "clientPhone", p.clientPhone)}
       ${field("E-mail", "clientEmail", p.clientEmail)}
-      ${field("Miesto", "location", p.location)}
     </div>
   </div>
 
   <div class="section">
-    <div class="sechead">Vykonaná práca</div>
-    <div class="secbody">
-      <table class="items" id="workTable">
-        <thead><tr><th>Popis práce</th><th class="num">Hod.</th><th class="rm"></th></tr></thead>
-        <tbody id="workBody">${workRows.map((r) => `<tr><td><input class="editfield work-input" type="text" value="${escAttr(r.work)}"></td><td class="num"><input class="editfield hours-input" type="text" value="${escAttr(r.hours)}"></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
+    <div class="sechead">Opravovaný stroj</div>
+    <div class="secbody grid3">
+      ${field("Typ / Názov", "machineModel", p.machineModel, { red: true })}
+      ${field("Sériové číslo", "machineSerial", p.machineSerial, { red: true })}
+      ${field("Počet MTH", "machineHours", p.machineHours)}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sechead">Nahlásené závady</div>
+    <div class="secbody notes">${esc(faultLine)}</div>
+  </div>
+
+  <div class="section">
+   <div class="sechead">Vykonaná práca a použitý materiál</div>
+   <div class="secbody">
+    <div class="itemcols">
+    <div class="itemcol">
+      <div class="itemcolhead">Vykonaná práca</div>
+      <table class="items">
+        <thead><tr><th>Popis práce</th><th class="num" style="width:15%">Hod.</th><th class="rm"></th></tr></thead>
+        <tbody id="workBody">${workRows.map((r) => `<tr><td><div class="editfield work-input" contenteditable="false">${esc(r.work)}</div></td><td class="num"><div class="editfield hours-input" contenteditable="false">${esc(r.hours)}</div></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
       </table>
       <button class="addrow" onclick="addWorkRow()">+ Pridať riadok</button>
     </div>
-  </div>
-
-  <div class="section">
-    <div class="sechead">Použitý materiál</div>
-    <div class="secbody">
-      <table class="items" id="matTable">
-        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num">Ks</th><th class="rm"></th></tr></thead>
-        <tbody id="matBody">${matRows.map((r) => `<tr><td><input class="editfield desc-input" type="text" value="${escAttr(r.desc)}"></td><td><input class="editfield pn-input" type="text" value="${escAttr(r.pn)}"></td><td class="num"><input class="editfield ks-input" type="text" value="${escAttr(r.ks)}"></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
+    <div class="itemcol">
+      <div class="itemcolhead">Použitý materiál</div>
+      <table class="items">
+        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th><th class="rm"></th></tr></thead>
+        <tbody id="matBody">${matRows.map((r) => `<tr><td><div class="editfield desc-input" contenteditable="false">${esc(r.desc)}</div></td><td><div class="editfield pn-input" contenteditable="false">${esc(r.pn)}</div></td><td class="num"><div class="editfield ks-input" contenteditable="false">${esc(r.ks)}</div></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
       </table>
       <button class="addrow" onclick="addMatRow()">+ Pridať riadok</button>
     </div>
+    </div>
+   </div>
   </div>
 
   <div class="section">
     <div class="sechead">Poznámky / odporúčania</div>
-    <div class="secbody">${field("Poznámka", "workNotes", p.workNotes, { area: true, rows: 2 })}</div>
+    <div class="secbody notes editfield" data-field="workNotes" contenteditable="false">${esc(p.workNotes)}</div>
   </div>
 
   <div class="section">
-    <div class="sechead">Súhrn</div>
-    <div class="secbody grid2">
+    <div class="sechead">Súhrn — podklad pre fakturáciu</div>
+    <div class="secbody summary">
       ${field("Celkový čas opravy (hod.)", "totalHours", p.totalHours)}
       ${field("Cestovný čas (hod.)", "travelHours", p.travelHours)}
       ${field("Najazdené km", "travelKm", p.travelKm)}
-      ${field("Poznámka k ceste", "travelNote", p.travelNote)}
+      ${staticField("Dátum", p.jobDate ? fmtDate(p.jobDate) : fmtDate(p.createdAt))}
+      ${field("Miesto vykonanej práce", "location", p.location)}
     </div>
   </div>
 
   <div class="sigs">
-    ${sigBlock(p.technicianSignature, `Podpis technika${p.technicianName ? " — " + p.technicianName : ""}`)}
-    ${sigBlock(p.customerSignature, `Podpis zákazníka${p.customerSignatoryName ? " — " + p.customerSignatoryName : ""}`)}
+    ${sigBlock(p.technicianSignature, "Podpis technika")}
+    ${sigBlock(p.customerSignature, "Podpis zákazníka")}
   </div>
   </div>
 
-  <script>
-    function addWorkRow() {
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td><input class="editfield work-input" type="text"></td>'
-        + '<td class="num"><input class="editfield hours-input" type="text"></td>'
-        + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
-      document.getElementById('workBody').appendChild(tr);
+  <div class="footer">
+    mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
+    <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
+  </div>
+</div>
+
+<script>
+  function requestEdit() {
+    if (!confirm('Naozaj chcete upraviť odoslaný protokol?')) return;
+    document.body.classList.add('editing');
+    document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'true'); });
+  }
+  function cancelEdit() {
+    document.body.classList.remove('editing');
+    document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'false'); });
+  }
+  function addWorkRow() {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><div class="editfield work-input" contenteditable="true"></div></td>'
+      + '<td class="num"><div class="editfield hours-input" contenteditable="true"></div></td>'
+      + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
+    document.getElementById('workBody').appendChild(tr);
+  }
+  function addMatRow() {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><div class="editfield desc-input" contenteditable="true"></div></td>'
+      + '<td><div class="editfield pn-input" contenteditable="true"></div></td>'
+      + '<td class="num"><div class="editfield ks-input" contenteditable="true"></div></td>'
+      + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
+    document.getElementById('matBody').appendChild(tr);
+  }
+  function textOf(el) { return (el.innerText || el.textContent || '').trim(); }
+  function saveProtocol() {
+    var patch = {};
+    document.querySelectorAll('[data-field]').forEach(function(el) { patch[el.dataset.field] = textOf(el); });
+    patch.workItems = Array.from(document.querySelectorAll('#workBody tr')).map(function(tr) {
+      return { work: textOf(tr.querySelector('.work-input')), hours: textOf(tr.querySelector('.hours-input')) };
+    }).filter(function(r) { return r.work; });
+    patch.materialItems = Array.from(document.querySelectorAll('#matBody tr')).map(function(tr) {
+      return { desc: textOf(tr.querySelector('.desc-input')), pn: textOf(tr.querySelector('.pn-input')), ks: textOf(tr.querySelector('.ks-input')) };
+    }).filter(function(r) { return r.desc || r.pn; });
+    var msg = document.getElementById('saveMsg');
+    if (!window.opener || window.opener.closed) {
+      msg.style.color = '#c62828';
+      msg.textContent = 'Okno appky sa nenašlo — otvorte protokol znova z appky.';
+      return;
     }
-    function addMatRow() {
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td><input class="editfield desc-input" type="text"></td>'
-        + '<td><input class="editfield pn-input" type="text"></td>'
-        + '<td class="num"><input class="editfield ks-input" type="text"></td>'
-        + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
-      document.getElementById('matBody').appendChild(tr);
-    }
-    function saveProtocol() {
-      var patch = {};
-      document.querySelectorAll('[data-field]').forEach(function(el) { patch[el.dataset.field] = el.value; });
-      patch.workItems = Array.from(document.querySelectorAll('#workBody tr')).map(function(tr) {
-        return { work: tr.querySelector('.work-input').value, hours: tr.querySelector('.hours-input').value };
-      }).filter(function(r) { return r.work.trim(); });
-      patch.materialItems = Array.from(document.querySelectorAll('#matBody tr')).map(function(tr) {
-        return { desc: tr.querySelector('.desc-input').value, pn: tr.querySelector('.pn-input').value, ks: tr.querySelector('.ks-input').value };
-      }).filter(function(r) { return r.desc.trim() || r.pn.trim(); });
-      var msg = document.getElementById('saveMsg');
-      if (!window.opener || window.opener.closed) {
-        msg.style.color = '#e57373';
-        msg.textContent = 'Okno appky sa nenašlo — otvorte protokol znova z appky.';
-        return;
-      }
-      window.opener.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
-      msg.style.color = '#7ed67e';
-      msg.textContent = 'Uložené ✓';
-      setTimeout(function() { msg.textContent = ''; }, 2500);
-    }
-  </script>
+    window.opener.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
+    msg.style.color = '#2f7d32';
+    msg.textContent = 'Uložené ✓';
+    cancelEdit();
+    setTimeout(function() { msg.textContent = ''; }, 2500);
+  }
+</script>
 </body></html>`;
   win.document.write(docHtml);
   win.document.close();
@@ -15135,9 +15213,12 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
   const [showAssignProtocolPicker, setShowAssignProtocolPicker] = useState(false);
   const canEditNote = !isSimple && onSaveNote && (can(user, "damage_status") || can(user, "external_status"));
   const canEditContact = !isSimple && onSaveContact && (can(user, "damage_status") || can(user, "external_status"));
+  // Pre stroj z databázy filtrujeme podľa machineId. Externá zákazka (bez machineId)
+  // nemá "svoj" stroj na filtrovanie — ponúkni všetky celkom nepriradené protokoly
+  // (rovnaká množina ako "Ostatné externé protokoly" v module Externé servisné zákazky).
   const unassignedProtocolsForMachine = d.machineId
     ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && !p.damageId && !p.assignmentId)
-    : [];
+    : (protocolLogs || []).filter((p) => !p.machineId && !p.damageId && !p.assignmentId);
 
   return (
     <Modal
