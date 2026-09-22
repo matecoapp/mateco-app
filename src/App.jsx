@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.526";
+const APP_VERSION = "1.0.527";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6281,7 +6281,6 @@ function DispatcherApp() {
               Vývoz {job ? fmtDate(job.startDate) : "—"} · {machineCurrentLocation(machine) || job?.fromDepo || "—"}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setCheckerInspectionConfirmTarget(null)}>Zrušiť</button>
               <button
                 className="btn btn-accent"
                 onClick={() => {
