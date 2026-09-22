@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.527";
+const APP_VERSION = "1.0.528";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8831,7 +8831,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         const driver = quickFilter.key !== "unassigned" ? drivers.find((d) => d.id === quickFilter.key) : null;
         const sendStatus = driver ? getTransportSendStatus(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id)) : null;
         return (
-          <Modal title={`${quickFilter.driverName} — ${quickFilter.label} (${liveItems.length})`} onClose={() => setQuickFilter(null)} wide>
+          <Modal eyebrow={quickFilter.label} title={`${quickFilter.driverName} (${liveItems.length})`} onClose={() => setQuickFilter(null)} wide>
             {driver && liveItems.length > 0 && can(user, "transport_assign_driver") && (
               <div style={{ marginBottom: 14 }}>
                 <button
@@ -10081,7 +10081,7 @@ function DriverCardModal({ driver, jobs, today, onClose, vehicleSpz }) {
     .slice(0, 8);
 
   return (
-    <Modal title={d.name} onClose={onClose} wide>
+    <Modal eyebrow="Vodič" title={d.name} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Telefón" value={d.phone} />
         <CardField label="Email" value={d.email} />
@@ -10765,7 +10765,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // cestou než cez normálne (už správne strážené) tlačidlá.
   if (!existing && !canFillHandoverPhase(job, myEmployee, "prevzatie")) {
     return (
-      <Modal title="Protokol o odovzdaní a prevzatí stroja" onClose={onClose}>
+      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
           Nový protokol môže vypísať len šofér pridelený na vývoz tohto stroja, a to v deň vývozu.
         </div>
@@ -10815,12 +10815,12 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   if (screen === "sent") {
     return (
-      <Modal title="Protokol o odovzdaní" onClose={onClose}>
+      <Modal eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Protokol o prevzatí bol odoslaný</div>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
-            {machine?.code || "—"} · {job?.customer || "—"}
+            {job?.customer || "—"}
           </div>
         </div>
         {portalLink && (
@@ -10852,9 +10852,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   if (screen === "view" && existing) {
     return (
-      <Modal title="Protokol o odovzdaní a prevzatí stroja" onClose={onClose} wide>
+      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-          {machine?.code || "—"} {machine?.type ? `· ${machine.type}` : ""} · Protokol č. {existing.protocolNumber}
+          {machine?.type ? `${machine.type} · ` : ""}Protokol č. {existing.protocolNumber}
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
           {job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}
@@ -10931,9 +10931,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   }
 
   return (
-    <Modal title="Protokol o odovzdaní a prevzatí stroja" onClose={onClose} wide>
+    <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-        {machine?.code || "—"} {machine?.type ? `· ${machine.type}` : ""}
+        {machine?.type || ""}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         {job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}
@@ -11162,9 +11162,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   }
 
   return (
-    <Modal title="Kontrola stroja pred vývozom" onClose={onClose} wide>
+    <Modal eyebrow="Kontrola stroja pred vývozom" title={machine?.code || "Stroj"} onClose={onClose} wide>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-        {machine?.code || "—"} {machine?.type ? `· ${machine.type}` : ""}
+        {machine?.type || ""}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         {job?.customer || "—"} · Vývoz {job?.startDate ? fmtDate(job.startDate) : "—"}
@@ -16778,7 +16778,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
     .slice(0, 8);
 
   return (
-    <Modal title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
+    <Modal eyebrow="Technik" title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Skratka (ERP)" value={t.skratka} />
         <CardField label="ŠPZ servisného auta" value={vehicleSpz} />
@@ -17313,7 +17313,7 @@ function CheckerVacationModal({ technician, depos, clickedDate, technicians, onC
   const canSave = startDate && endDate && startDate <= endDate && substituteId;
 
   return (
-    <Modal title={`Dovolenka — ${technician.name}`} onClose={onClose}>
+    <Modal eyebrow="Dovolenka" title={technician.name} onClose={onClose}>
       <div style={{ fontSize: 13, marginBottom: 14 }}>
         {technician.name} je checker pre depo <strong>{depos.join(", ")}</strong>. Na obdobie dovolenky treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť na pôvodného.
       </div>
