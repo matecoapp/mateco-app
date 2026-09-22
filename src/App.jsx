@@ -490,7 +490,7 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
      nie generický webový vzhľad. Samotná stránka protokolu nižšie ostáva podľa
      schváleného návrhu (Arial, firemná hlavička/pätka) — mení sa len appkové UI okolo nej. */
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
-  .toolbar { text-align: center; margin: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; }
+  .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
   .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
   .btn-accent { background: #E30613; color: #fff; }
   .btn-accent:hover { background: #B5040F; }
@@ -611,7 +611,7 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
       <div class="itemcolhead">Použitý materiál</div>
       <table class="items">
         <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th></tr></thead>
-        <tbody id="matBody">${matRows.map((r) => `<tr><td><div class="editfield desc-input" contenteditable="false">${esc(r.desc)}</div></td><td><div class="editfield pn-input" contenteditable="false">${esc(r.pn)}</div></td><td class="num"><div class="editfield qty-input" contenteditable="false">${esc(r.qty)}</div></td></tr>`).join("")}</tbody>
+        <tbody id="matBody">${matRows.map((r) => `<tr><td><div class="editfield desc-input" contenteditable="false">${esc(r.desc)}</div></td><td><div class="editfield pn-input" contenteditable="false">${esc(r.pn)}</div></td><td class="num"><div class="editfield qty-input" contenteditable="false">${esc(r.qty ?? r.ks ?? r.count)}</div></td></tr>`).join("")}</tbody>
       </table>
     </div>
     </div>
