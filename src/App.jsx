@@ -3122,12 +3122,16 @@ function DispatcherApp() {
   // stroje (bez zhody v našej databáze) sa ignorujú — nemajú kam sa priradiť.
   async function handleProtocolSubmission(data) {
     console.log("[protokol] prijatá správa od formulára:", data);
-    if (!data.machineId) {
-      console.warn("[protokol] bez machineId — externý stroj alebo chýbajúci kontext, platforma to ignoruje.");
-      return;
+    // Externý stroj nemá machineId (nie je v našej databáze) — uloží sa aj tak,
+    // priradený k damageId (externej zákazke) ak existuje, inak ako "nepriradený"
+    // (zobrazí sa v zozname "Ostatné externé protokoly" v module Externé servisné
+    // zákazky, odkiaľ sa dá dodatočne priradiť). Zahodí sa len úplne prázdna správa
+    // bez akéhokoľvek kontextu (nemalo by nastať, len poistka).
+    if (!data.machineId && !data.damageId) {
+      console.warn("[protokol] bez machineId aj damageId — ukladá sa ako nepriradený externý protokol.");
     }
     try {
-      const machine = machineById[data.machineId];
+      const machine = data.machineId ? machineById[data.machineId] : null;
       const byteChars = atob(data.imageBase64);
       const byteNumbers = new Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
@@ -3176,6 +3180,9 @@ function DispatcherApp() {
         customerSignature: data.customerSignature || "",
         imageUrl: pub.publicUrl,
         createdAt: data.submittedAt || new Date().toISOString(),
+        // Relevantné len pre protokoly bez zákazky (damageId aj machineId null) —
+        // sledovanie, že sa síce nezaložila zákazka, ale servis bol vyfakturovaný.
+        invoiced: false,
       };
       persistProtocolLogs([...protocolLogs, record]);
       console.log("[protokol] úspešne uložený a priradený:", record);
@@ -3185,7 +3192,7 @@ function DispatcherApp() {
       // Namiesto všeobecného upozornenia pošli dispečerovi rovno odkaz na
       // konkrétnu zákazku, nech ju vie skontrolovať a zavrieť.
       let matchedOpenTicket = null;
-      if (!data.damageId) {
+      if (!data.damageId && data.machineId) {
         const submittedName = (data.technicianName || "").trim().toLowerCase();
         matchedOpenTicket = submittedName
           ? damages.find((d) => {
@@ -3225,6 +3232,11 @@ function DispatcherApp() {
   // priradených aj viac (napr. diagnostika bez opravy + neskoršia výmena dielu).
   function assignProtocolToDamage(protocolId, damageId) {
     persistProtocolLogs(protocolLogs.map((p) => (p.id === protocolId ? { ...p, damageId } : p)));
+  }
+  // "Vyfakturované" na nepriradenom externom protokole (bez damageId/machineId) —
+  // len sledovanie pre dispečera, nič iné v appke sa tým neriadi.
+  function toggleProtocolInvoiced(protocolId) {
+    persistProtocolLogs(protocolLogs.map((p) => (p.id === protocolId ? { ...p, invoiced: !p.invoiced } : p)));
   }
   // Opak vyššie — vyradí protokol zo zákazky (vráti ho medzi "Ostatné protokoly" na
   // karte stroja), napr. keď ho niekto omylom priradil nesprávne.
@@ -5072,6 +5084,7 @@ function DispatcherApp() {
         {module === "servis" && view === "externe" && (
           <ExternalServiceView
             damages={damages}
+            protocolLogs={protocolLogs}
             technicians={technicians}
             user={effectiveUser}
             onAdd={() => setShowExternalReport(true)}
@@ -5084,6 +5097,8 @@ function DispatcherApp() {
             onResolve={setDamageResolved}
             onComplete={handleAttemptCompleteDamage}
             onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+            onAssignProtocol={assignProtocolToDamage}
+            onToggleProtocolInvoiced={toggleProtocolInvoiced}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
             onOpenSummary={() => setExternaSummaryOpen(true)}
@@ -15577,11 +15592,31 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
+function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
   const depoOptions = DEPO_OPTIONS;
+
+  // Protokoly vypísané pre externý stroj úplne mimo zákazky (technik klikol
+  // "Vypísať protokol" bez otvorenej externej zákazky) — nemajú kam inam patriť,
+  // tak visia tu ako "nepriradené", kým ich dispečer priradí alebo len označí
+  // ako vyfakturované (bez toho, aby sme kvôli tomu museli zakladať zákazku).
+  const [unassignedSearch, setUnassignedSearch] = useState("");
+  const [showInvoiced, setShowInvoiced] = useState(false);
+  const [assignPickerFor, setAssignPickerFor] = useState(null);
+  const unassignedProtocols = (protocolLogs || []).filter((p) => !p.damageId && !p.machineId);
+  let unassignedFiltered = unassignedProtocols.filter((p) => !!p.invoiced === showInvoiced);
+  if (unassignedSearch.trim()) {
+    const q = unassignedSearch.trim().toLowerCase();
+    unassignedFiltered = unassignedFiltered.filter((p) =>
+      (p.clientName || "").toLowerCase().includes(q) ||
+      (p.machineModel || "").toLowerCase().includes(q) ||
+      (p.machineSerial || "").toLowerCase().includes(q)
+    );
+  }
+  unassignedFiltered = [...unassignedFiltered].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const externaDamages = damages.filter((d) => d.type === "externa");
 
   // Ak platforma navigovala sem kvôli konkrétnemu záznamu (klik na notifikáciu),
   // uisti sa, že ho aktuálne filtre neschovávajú (napr. medzitým vyriešený).
@@ -15725,7 +15760,109 @@ function ExternalServiceView({ damages, technicians, user, onAdd, onAssign, onDe
           <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" />
         ))}
       </div>
+
+      {onAssignProtocol && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+            Ostatné externé protokoly <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>— vypísané bez založenej zákazky ({unassignedProtocols.length})</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <SearchInput placeholder="Hľadať firmu, model, sériové číslo…" value={unassignedSearch} onChange={setUnassignedSearch} style={{ minWidth: 260 }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="btn"
+                onClick={() => setShowInvoiced(false)}
+                style={{ padding: "6px 12px", fontSize: 12, background: !showInvoiced ? "var(--accent)" : "transparent", color: !showInvoiced ? "#fff" : "var(--text-dim)", border: "1px solid " + (!showInvoiced ? "var(--accent)" : "var(--border)") }}
+              >
+                Nevyfakturované
+              </button>
+              <button
+                className="btn"
+                onClick={() => setShowInvoiced(true)}
+                style={{ padding: "6px 12px", fontSize: 12, background: showInvoiced ? "var(--accent)" : "transparent", color: showInvoiced ? "#fff" : "var(--text-dim)", border: "1px solid " + (showInvoiced ? "var(--accent)" : "var(--border)") }}
+              >
+                Vyfakturované (história)
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {unassignedFiltered.length === 0 && (
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>
+                {showInvoiced ? "Žiadne vyfakturované nepriradené protokoly." : "Žiadne nevyfakturované nepriradené protokoly."}
+              </div>
+            )}
+            {unassignedFiltered.map((p) => (
+              <div key={p.id} className="panel" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 90, fontSize: 12, color: "var(--text-dim)" }}>{p.createdAt ? fmtDate(p.createdAt) : "—"}</div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.clientName || "— bez zákazníka —"}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[p.machineModel, p.machineSerial].filter(Boolean).join(" · ") || "—"}</div>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", minWidth: 100 }}>{p.technicianName || "—"}</div>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", minWidth: 70 }}>{p.totalHours ? `${p.totalHours} hod.` : "—"}</div>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!p.invoiced} onChange={() => onToggleProtocolInvoiced(p.id)} />
+                  Vyfakturované
+                </label>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => setAssignPickerFor(p)}>
+                  Priradiť k zákazke
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {assignPickerFor && (
+        <AssignProtocolToExternalModal
+          protocol={assignPickerFor}
+          damages={externaDamages}
+          onClose={() => setAssignPickerFor(null)}
+          onAssign={(damageId) => {
+            onAssignProtocol(assignPickerFor.id, damageId);
+            setAssignPickerFor(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign }) {
+  const [q, setQ] = useState(`${protocol.clientName || ""} ${protocol.machineSerial || ""}`.trim());
+  const query = q.trim().toLowerCase();
+  const filtered = damages.filter((d) => {
+    if (!query) return true;
+    return (
+      (d.customer || "").toLowerCase().includes(query) ||
+      (d.model || "").toLowerCase().includes(query) ||
+      (d.serialNumber || "").toLowerCase().includes(query) ||
+      (d.code || "").toLowerCase().includes(query)
+    );
+  });
+  return (
+    <Modal title="Priradiť protokol k externej zákazke" onClose={onClose}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+        Protokol: {protocol.clientName || "— bez zákazníka —"} · {[protocol.machineModel, protocol.machineSerial].filter(Boolean).join(" · ") || "—"} · {protocol.createdAt ? fmtDate(protocol.createdAt) : "—"}
+      </div>
+      <SearchInput placeholder="Hľadať zákazníka, model, sériové číslo…" value={q} onChange={setQ} style={{ width: "100%", marginBottom: 10 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "50vh", overflowY: "auto" }}>
+        {filtered.length === 0 && (
+          <div style={{ padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>Žiadna zhoda.</div>
+        )}
+        {filtered.map((d) => (
+          <button
+            key={d.id}
+            className="btn btn-ghost"
+            style={{ textAlign: "left", padding: "8px 10px", display: "block" }}
+            onClick={() => onAssign(d.id)}
+          >
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{d.customer || "— bez zákazníka —"}{d.resolved ? " · vyriešené" : ""}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[d.model, d.serialNumber].filter(Boolean).join(" · ") || "—"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</div>
+          </button>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
