@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.528";
+const APP_VERSION = "1.0.529";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11525,12 +11525,10 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             const line = `Kontakt: ${k.name}${k.role ? ` (${k.role})` : ""}${k.phone ? ` · ${k.phone}` : ""}${k.email ? ` · ${k.email}` : ""}`;
             setNotes((n) => (n ? n + "\n" + line : line));
           }}
+          onAddNew={selectedCustomerId && onAddNewContact ? (contact) => onAddNewContact(selectedCustomerId, contact) : undefined}
         />
         <div style={{ gridColumn: "1 / -1" }}>
           <BlacklistWarning match={blacklistMatch} />
-          {selectedCustomerId && onAddNewContact && (
-            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
-          )}
         </div>
         <Field label="Obchodník *">
           <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
@@ -11805,24 +11803,24 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               if (k.email) setCustomerEmail(k.email);
               if (k.name) setCustomerContactName(k.name);
             }}
+            onAddNew={
+              customer.trim()
+                ? (contact) => {
+                    const withId = { id: uid(), ...contact };
+                    if (selectedCustomerId && onAddNewContact) {
+                      onAddNewContact(selectedCustomerId, contact);
+                    } else {
+                      setPendingContacts((prev) => [...prev, withId]);
+                    }
+                    setSelectedContacts((prev) => [...prev, withId]);
+                    if (contact.email) setCustomerEmail(contact.email);
+                    if (contact.phone) setCustomerPhone(contact.phone);
+                    if (contact.name) setCustomerContactName(contact.name);
+                  }
+                : undefined
+            }
           />
           <BlacklistWarning match={blacklistMatch} />
-          {customer.trim() && (
-            <NewContactInlineForm
-              onSave={(contact) => {
-                const withId = { id: uid(), ...contact };
-                if (selectedCustomerId && onAddNewContact) {
-                  onAddNewContact(selectedCustomerId, contact);
-                } else {
-                  setPendingContacts((prev) => [...prev, withId]);
-                }
-                setSelectedContacts((prev) => [...prev, withId]);
-                if (contact.email) setCustomerEmail(contact.email);
-                if (contact.phone) setCustomerPhone(contact.phone);
-                if (contact.name) setCustomerContactName(contact.name);
-              }}
-            />
-          )}
           {(customerContactName || customerPhone || customerEmail) && (
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
               Kontakt na zákazke: {customerContactName || "—"} · {customerPhone || "—"}{customerEmail ? ` · ${customerEmail}` : ""}
@@ -11978,8 +11976,10 @@ function BlacklistWarning({ match }) {
 // kde sa píše zákazka/rezervácia/externá zákazka — uloží sa hneď (nezávisle od
 // toho, či sa samotná zákazka uloží), rovno do databázy zákazníka. Zobrazuje sa
 // len vtedy, keď je zákazník skutočne vybraný z databázy (má id).
-function NewContactInlineForm({ onSave }) {
-  const [open, setOpen] = useState(false);
+// Ovláda ho ContactPicker (voľba "+ Nová kontaktná osoba" hore v dropdowne) —
+// samo osebe už neriadi, či je otvorený, nech sa v layoute pod dropdownom
+// nezobrazuje zbytočné ďalšie tlačidlo/pole navyše.
+function NewContactInlineForm({ onSave, onCancel }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [phone, setPhone] = useState("");
@@ -11987,13 +11987,6 @@ function NewContactInlineForm({ onSave }) {
   const [saved, setSaved] = useState(false);
   if (saved) {
     return <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>✓ Kontakt "{name}" pridaný k zákazníkovi.</div>;
-  }
-  if (!open) {
-    return (
-      <button type="button" className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 10 }} onClick={() => setOpen(true)}>
-        + Nová kontaktná osoba (uloží sa k zákazníkovi)
-      </button>
-    );
   }
   return (
     <div className="panel" style={{ padding: 10, marginBottom: 10 }}>
@@ -12004,7 +11997,7 @@ function NewContactInlineForm({ onSave }) {
         <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Zrušiť</button>
+        <button type="button" className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
         <button
           type="button"
           className="btn btn-accent"
@@ -12021,20 +12014,34 @@ function NewContactInlineForm({ onSave }) {
   );
 }
 
-function ContactPicker({ contacts, onSelect }) {
-  if (!contacts || contacts.length === 0) return null;
+// "+ Nová kontaktná osoba" je prvá voľba v tom istom dropdowne (nie samostatné
+// tlačidlo/pole vedľa neho) — po jej výbere sa dropdown nahradí formulárom
+// NewContactInlineForm, "Zrušiť" sa vráti späť na dropdown.
+function ContactPicker({ contacts, onSelect, onAddNew }) {
+  const [adding, setAdding] = useState(false);
+  if ((!contacts || contacts.length === 0) && !onAddNew) return null;
+  if (adding) {
+    return (
+      <NewContactInlineForm
+        onSave={(contact) => { onAddNew(contact); setAdding(false); }}
+        onCancel={() => setAdding(false)}
+      />
+    );
+  }
   return (
     <Field label="Kontaktná osoba (voliteľné)">
       <select
         defaultValue=""
         onChange={(e) => {
-          const c = contacts.find((k) => k.id === e.target.value);
+          if (e.target.value === "__new__") { setAdding(true); return; }
+          const c = (contacts || []).find((k) => k.id === e.target.value);
           if (c) onSelect(c);
         }}
         style={{ width: "100%" }}
       >
         <option value="">— vyber kontaktnú osobu —</option>
-        {contacts.map((k) => (
+        {onAddNew && <option value="__new__">+ Nová kontaktná osoba</option>}
+        {(contacts || []).map((k) => (
           <option key={k.id} value={k.id}>
             {k.name}{k.role ? ` (${k.role})` : ""}
           </option>
@@ -15740,12 +15747,10 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
             const line = `Kontakt: ${k.name}${k.role ? ` (${k.role})` : ""}${k.phone ? ` · ${k.phone}` : ""}${k.email ? ` · ${k.email}` : ""}`;
             setPopis((p) => (p ? p + "\n" + line : line));
           }}
+          onAddNew={selectedCustomerId && onAddNewContact ? (contact) => onAddNewContact(selectedCustomerId, contact) : undefined}
         />
         <div style={{ gridColumn: "1 / -1" }}>
           <BlacklistWarning match={blacklistMatch} />
-          {selectedCustomerId && onAddNewContact && (
-            <NewContactInlineForm onSave={(contact) => onAddNewContact(selectedCustomerId, contact)} />
-          )}
         </div>
         <Field label="Miesto (mesto / adresa) *"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="napr. Trnava" style={{ width: "100%" }} /></Field>
         <Field label="Model / typ stroja *"><input value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%" }} /></Field>
