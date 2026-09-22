@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.524";
+const APP_VERSION = "1.0.525";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11262,13 +11262,11 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
           Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať.
         </div>
       )}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-        {readOnly ? (
-          <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
-        ) : (
+      {!readOnly && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
           <button className="btn btn-accent" onClick={handleSave}>Uložiť</button>
-        )}
-      </div>
+        </div>
+      )}
     </Modal>
   );
 }
