@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.529";
+const APP_VERSION = "1.0.530";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12040,7 +12040,7 @@ function ContactPicker({ contacts, onSelect, onAddNew }) {
         style={{ width: "100%" }}
       >
         <option value="">— vyber kontaktnú osobu —</option>
-        {onAddNew && <option value="__new__">+ Nová kontaktná osoba</option>}
+        {onAddNew && <option value="__new__" style={{ color: "var(--accent)", fontWeight: 700 }}>+ Nová kontaktná osoba</option>}
         {(contacts || []).map((k) => (
           <option key={k.id} value={k.id}>
             {k.name}{k.role ? ` (${k.role})` : ""}
