@@ -404,10 +404,6 @@ function openPrintableServiceProtocol(p) {
     const suffix = opts.suffix ? ` <span class="unit">${esc(opts.suffix)}</span>` : "";
     return `<div class="field"><span class="l">${esc(label)}</span><span class="vwrap"><div class="${cls}" data-field="${key}" contenteditable="false">${esc(value)}</div>${suffix}</span></div>`;
   }
-  // Neupraviteľné pole (nahlásená závada — patrí zákazke, opravuje sa na karte zákazky).
-  function staticField(label, value, red) {
-    return `<div class="field"><span class="l">${esc(label)}</span><span class="v${red ? " red" : ""}">${esc(value) || "—"}</span></div>`;
-  }
   function sigBlock(dataUrl, label) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -486,16 +482,35 @@ function openPrintableServiceProtocol(p) {
   .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
   .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
 
-  .toolbar { text-align: center; margin: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-  .toolbar button, .toolbar a { font-family: inherit; font-size: 13px; padding: 8px 18px; border-radius: 4px; border: 0; cursor: pointer; text-decoration: none; }
-  .toolbar .primary { background: #E30613; color: #fff; }
-  .toolbar .ghost { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+  /* Panel appky (toolbar, potvrdzovací dialóg) — rovnaké komponenty/farby ako
+     zvyšok appky (Barlow, .btn/.btn-accent/.btn-ghost, .panel, .modal-overlay),
+     nie generický webový vzhľad. Samotná stránka protokolu nižšie ostáva podľa
+     schváleného návrhu (Arial, firemná hlavička/pätka) — mení sa len appkové UI okolo nej. */
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
+  .toolbar { text-align: center; margin: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; }
+  .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
+  .btn-accent { background: #E30613; color: #fff; }
+  .btn-accent:hover { background: #B5040F; }
+  .btn-ghost { background: #fff; border: 1px solid #e0e0e0; color: #1a1a1a; }
+  .btn-ghost:hover { border-color: #E30613; color: #E30613; }
   #saveEdit, #cancelEdit { display: none; }
   body.editing #startEdit { display: none; }
   body.editing #saveEdit, body.editing #cancelEdit { display: inline-block; }
   body.editing .addrow { display: inline-block; }
   body.editing table.items td.rm { display: table-cell; }
-  #saveMsg { align-self: center; font-size: 12px; }
+  #saveMsg { align-self: center; font-size: 12px; font-family: 'Barlow', Arial, sans-serif; }
+
+  .datefield { border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 600; color: #1a1a1a; padding: 0; width: 118px; outline: none; }
+  .datefield:disabled { opacity: 1; -webkit-text-fill-color: #1a1a1a; color: #1a1a1a; }
+  body.editing .datefield:not(:disabled) { box-shadow: 0 0 0 1px #E30613; border-radius: 2px; background: #fff8f8; padding: 2px 4px; }
+
+  /* Potvrdzovací dialóg (namiesto natívneho confirm()) — rovnaký .modal-overlay/.panel vzhľad ako appka. */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 500; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; font-family: 'Barlow', Arial, sans-serif; }
+  .modal-overlay.open { display: flex; }
+  .modal-panel { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 20px; width: 420px; max-width: 100%; }
+  .modal-panel h3 { font-size: 18px; margin: 0 0 16px; color: #E30613; }
+  .modal-panel .msg { font-size: 14px; margin-bottom: 18px; color: #1a1a1a; }
+  .modal-panel .actions { display: flex; gap: 8px; }
 
   @media print {
     body { background: #fff; }
@@ -510,13 +525,24 @@ function openPrintableServiceProtocol(p) {
 <body>
 
 <div class="toolbar">
-  <button id="startEdit" class="ghost" onclick="requestEdit()">Upraviť protokol</button>
-  <button id="saveEdit" class="primary" onclick="saveProtocol()">Uložiť zmeny</button>
-  <button id="cancelEdit" class="ghost" onclick="cancelEdit()">Zrušiť úpravu</button>
+  <button id="startEdit" class="btn btn-ghost" onclick="requestEdit()">Upraviť protokol</button>
+  <button id="saveEdit" class="btn btn-accent" onclick="saveProtocol()">Uložiť zmeny</button>
+  <button id="cancelEdit" class="btn btn-ghost" onclick="cancelEdit()">Zrušiť úpravu</button>
   <span id="saveMsg"></span>
-  <button class="primary" onclick="window.print()">Tlačiť / uložiť ako PDF</button>
-  ${p.imageUrl ? `<a class="ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">Pôvodný snapshot</a>` : ""}
-  ${!p.damageId ? `<button class="ghost" onclick="requestAssign()">Priradiť k zákazke</button>` : ""}
+  <button class="btn btn-accent" onclick="window.print()">Tlačiť / uložiť ako PDF</button>
+  ${p.imageUrl ? `<a class="btn btn-ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">Pôvodný snapshot</a>` : ""}
+  ${!p.damageId ? `<button class="btn btn-ghost" onclick="requestAssign()">Priradiť k zákazke</button>` : ""}
+</div>
+
+<div id="confirmOverlay" class="modal-overlay" onclick="if(event.target===this) closeConfirmEdit()">
+  <div class="modal-panel">
+    <h3>Potvrdenie</h3>
+    <div class="msg">Naozaj chcete upraviť odoslaný protokol?</div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="closeConfirmEdit()">Zrušiť</button>
+      <button class="btn btn-accent" onclick="confirmEditYes()">Upraviť</button>
+    </div>
+  </div>
 </div>
 
 <div class="page" id="pageContent">
@@ -587,7 +613,7 @@ function openPrintableServiceProtocol(p) {
       ${field("Celkový čas opravy", "totalHours", p.totalHours, { suffix: "hod." })}
       ${field("Cestovný čas", "travelHours", p.travelHours, { suffix: "hod." })}
       ${field("Najazdené km", "travelKm", p.travelKm, { suffix: "km" })}
-      ${staticField("Dátum", p.jobDate ? fmtDate(p.jobDate) : fmtDate(p.createdAt))}
+      <div class="field"><span class="l">Dátum</span><input type="date" id="jobDateInput" class="datefield" value="${escAttr(p.jobDate || (p.createdAt || "").slice(0, 10))}" disabled></div>
       ${field("Miesto práce", "location", p.location)}
     </div>
   </div>
@@ -608,14 +634,24 @@ function openPrintableServiceProtocol(p) {
 
 <script>
   function requestEdit() {
-    if (!confirm('Naozaj chcete upraviť odoslaný protokol?')) return;
+    document.getElementById('confirmOverlay').classList.add('open');
+  }
+  function closeConfirmEdit() {
+    document.getElementById('confirmOverlay').classList.remove('open');
+  }
+  function confirmEditYes() {
+    closeConfirmEdit();
     window.__protocolSnapshot = document.getElementById('pageContent').innerHTML;
     document.body.classList.add('editing');
     document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'true'); });
+    var dateEl = document.getElementById('jobDateInput');
+    if (dateEl) dateEl.disabled = false;
   }
   function lockFields() {
     document.body.classList.remove('editing');
     document.querySelectorAll('.editfield').forEach(function(el) { el.setAttribute('contenteditable', 'false'); });
+    var dateEl = document.getElementById('jobDateInput');
+    if (dateEl) dateEl.disabled = true;
   }
   function cancelEdit() {
     if (window.__protocolSnapshot != null) {
@@ -650,6 +686,7 @@ function openPrintableServiceProtocol(p) {
   function saveProtocol() {
     var patch = {};
     document.querySelectorAll('[data-field]').forEach(function(el) { patch[el.dataset.field] = textOf(el); });
+    patch.jobDate = document.getElementById('jobDateInput').value;
     patch.workItems = Array.from(document.querySelectorAll('#workBody tr')).map(function(tr) {
       return { work: textOf(tr.querySelector('.work-input')), hours: textOf(tr.querySelector('.hours-input')) };
     }).filter(function(r) { return r.work; });
