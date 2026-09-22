@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.534";
+const APP_VERSION = "1.0.535";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -18267,7 +18267,7 @@ const SPAREPART_STAV = {
 };
 
 function blankSparePartRow() {
-  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "", urcenieStrojText: "" };
+  return { key: uid(), dodavatel: "", cisloPolozky: "", pocetKusov: "", cisloDielu: "", popisDielu: "", poznamka: "", urcenieTyp: "", urcenieStrojId: "", urcenieStrojText: "", urcenieExternaText: "" };
 }
 
 function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onClose, onSave }) {
@@ -18298,7 +18298,8 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
       r.cisloDielu.trim() &&
       r.popisDielu.trim() &&
       r.urcenieTyp &&
-      (r.urcenieTyp !== "stroj" || r.urcenieStrojId)
+      (r.urcenieTyp !== "stroj" || r.urcenieStrojId) &&
+      (r.urcenieTyp !== "externa" || r.urcenieExternaText.trim())
   );
   const canSave = depo.trim() && filledRows.length > 0;
 
@@ -18318,6 +18319,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
             typ: r.urcenieTyp,
             strojId: r.urcenieTyp === "stroj" ? r.urcenieStrojId : "",
             strojKod: stroj ? `${stroj.code}${stroj.type ? " · " + stroj.type : ""}` : "",
+            externaText: r.urcenieTyp === "externa" ? r.urcenieExternaText.trim() : "",
           },
         };
       })
@@ -18365,7 +18367,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <select
                       value={r.urcenieTyp}
-                      onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); updateRow(r.key, "urcenieStrojText", ""); }}
+                      onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); updateRow(r.key, "urcenieStrojText", ""); updateRow(r.key, "urcenieExternaText", ""); }}
                       style={{ fontSize: 12, width: 140 }}
                     >
                       <option value="">— vybrať —</option>
@@ -18396,6 +18398,14 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                           <span style={{ fontSize: 10, color: "var(--danger)" }}>Vyber stroj zo zoznamu</span>
                         )}
                       </>
+                    )}
+                    {r.urcenieTyp === "externa" && (
+                      <input
+                        value={r.urcenieExternaText}
+                        placeholder="Ktorá externá zákazka? *"
+                        onChange={(e) => updateRow(r.key, "urcenieExternaText", e.target.value)}
+                        style={{ fontSize: 12, width: 140, borderColor: !r.urcenieExternaText.trim() ? "var(--danger)" : undefined }}
+                      />
                     )}
                   </div>
                 </td>
@@ -18650,7 +18660,7 @@ function ColumnFilterButton({ label, options, selected, onChange }) {
 function urcenieLabel(u) {
   if (!u || !u.typ) return "—";
   if (u.typ === "sklad") return "Na sklad";
-  if (u.typ === "externa") return "Externá zákazka";
+  if (u.typ === "externa") return u.externaText ? `Externá zákazka: ${u.externaText}` : "Externá zákazka";
   if (u.typ === "stroj") return u.strojKod || "Stroj";
   return "—";
 }
