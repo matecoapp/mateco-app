@@ -379,6 +379,120 @@ function openPrintableHandoverProtocol(job, machine, p) {
   win.document.close();
 }
 
+// Tlačová/PDF verzia servisného protokolu, vykreslená priamo z uložených dát
+// (nie z fotky) — link na pôvodný odfotený formulár (imageUrl) je vždy vidieť
+// hore ako záložná verzia, pre prípad že by sa niektoré pole nenačítalo správne.
+function openPrintableServiceProtocol(p) {
+  const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Prehliadač zablokoval otvorenie okna — povoľte vyskakovacie okná pre túto stránku.");
+    return;
+  }
+  function sigBlock(dataUrl, label) {
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— bez podpisu —</div>`}</div>`;
+  }
+  const workRows = (p.workItems || []).filter((r) => r.work);
+  const matRows = (p.materialItems || []).filter((r) => r.desc || r.pn);
+  const docHtml = `<!DOCTYPE html>
+<html lang="sk"><head><meta charset="UTF-8">
+<title>Servisný protokol ${esc(p.machineSerial)}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 24px; }
+  h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; }
+  .sub { font-size: 11px; color: #555; margin-bottom: 10px; }
+  .snapshot-link { font-size: 10.5px; margin-bottom: 16px; }
+  .snapshot-link a { color: #666; }
+  .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; overflow: hidden; }
+  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; }
+  .secbody { padding: 8px 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
+  .grid2 span.l { color: #666; display: inline-block; min-width: 130px; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.items th { background: #f4f4f4; border-bottom: 1px solid #ddd; text-align: left; padding: 3px 6px; font-size: 9.5px; text-transform: uppercase; color: #555; }
+  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; }
+  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; }
+  .notes { white-space: pre-wrap; }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 6px; }
+  .siglabel { font-size: 10px; color: #666; margin-bottom: 4px; }
+  .sigimg { max-width: 100%; height: 50px; }
+  .signone { font-size: 10px; color: #999; height: 50px; display: flex; align-items: center; }
+  @media print { body { margin: 10mm; } .snapshot-link { display: none; } }
+</style></head>
+<body>
+  <h1>PROTOKOL O VYKONANÍ OPRAVY</h1>
+  <div class="sub">${p.machineSerial ? esc(p.machineSerial) + " · " : ""}${fmtDate(p.createdAt)}${p.technicianName ? " · " + esc(p.technicianName) : ""}</div>
+  ${p.imageUrl ? `<div class="snapshot-link"><a href="${esc(p.imageUrl)}" target="_blank" rel="noreferrer">Zobraziť pôvodný odfotený formulár (záloha) →</a></div>` : ""}
+
+  <div class="section">
+    <div class="sechead">Stroj a zákazka</div>
+    <div class="secbody grid2">
+      <div><span class="l">Typ / Model:</span>${esc(p.machineModel)}</div>
+      <div><span class="l">Sériové číslo:</span>${esc(p.machineSerial)}</div>
+      <div><span class="l">Počet MTH:</span>${esc(p.machineHours)}</div>
+      <div><span class="l">Zákazka č.:</span>${esc(p.jobNumber)}</div>
+      <div><span class="l">Stav:</span>${esc(p.status)}</div>
+      <div><span class="l">Kód poruchy:</span>${esc(p.faultCode)}</div>
+    </div>
+    ${p.faultFullText || p.jobDesc ? `<div class="secbody notes" style="border-top:1px solid #eee;">${esc(p.faultFullText || p.jobDesc)}</div>` : ""}
+  </div>
+
+  <div class="section">
+    <div class="sechead">Odberateľ</div>
+    <div class="secbody grid2">
+      <div><span class="l">Zákazník:</span>${esc(p.clientName)}</div>
+      <div><span class="l">Kontaktná osoba:</span>${esc(p.clientContact)}</div>
+      <div><span class="l">Telefón:</span>${esc(p.clientPhone)}</div>
+      <div><span class="l">E-mail:</span>${esc(p.clientEmail)}</div>
+      <div><span class="l">Miesto:</span>${esc(p.location)}</div>
+    </div>
+  </div>
+
+  ${workRows.length ? `<div class="section">
+    <div class="sechead">Vykonaná práca</div>
+    <div class="secbody">
+      <table class="items">
+        <thead><tr><th>Popis práce</th><th class="num" style="width:15%">Hod.</th></tr></thead>
+        <tbody>${workRows.map((r) => `<tr><td>${esc(r.work)}</td><td class="num">${esc(r.hours)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  </div>` : ""}
+
+  ${matRows.length ? `<div class="section">
+    <div class="sechead">Použitý materiál</div>
+    <div class="secbody">
+      <table class="items">
+        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th></tr></thead>
+        <tbody>${matRows.map((r) => `<tr><td>${esc(r.desc)}</td><td>${esc(r.pn)}</td><td class="num">${esc(r.ks)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  </div>` : ""}
+
+  ${p.workNotes ? `<div class="section"><div class="sechead">Poznámky / odporúčania</div><div class="secbody notes">${esc(p.workNotes)}</div></div>` : ""}
+
+  <div class="section">
+    <div class="sechead">Súhrn</div>
+    <div class="secbody grid2">
+      <div><span class="l">Celkový čas opravy:</span>${esc(p.totalHours)} hod.</div>
+      <div><span class="l">Cestovný čas:</span>${esc(p.travelHours)} hod.</div>
+      <div><span class="l">Najazdené km:</span>${esc(p.travelKm)} km</div>
+      <div><span class="l">Dátum:</span>${p.jobDate ? fmtDate(p.jobDate) : fmtDate(p.createdAt)}</div>
+      ${p.travelNote ? `<div><span class="l">Poznámka k ceste:</span>${esc(p.travelNote)}</div>` : ""}
+    </div>
+  </div>
+
+  <div class="sigs">
+    ${sigBlock(p.technicianSignature, `Podpis technika${p.technicianName ? " — " + p.technicianName : ""}`)}
+    ${sigBlock(p.customerSignature, `Podpis zákazníka${p.customerSignatoryName ? " — " + p.customerSignatoryName : ""}`)}
+  </div>
+
+  <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+  win.document.write(docHtml);
+  win.document.close();
+}
+
 function buildProtocolParams(d, technicians, machineById) {
   const params = {};
   const m = d.machineId ? machineById[d.machineId] : null;
@@ -14505,15 +14619,23 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
                   .map((p) => (
                     <div key={p.id} className="panel" style={{ padding: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                      <a href={p.imageUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", flex: 1, minWidth: 0 }}>
-                        <img src={p.imageUrl} alt="Protokol" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                      <button
+                        onClick={() => openPrintableServiceProtocol(p)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+                      >
+                        <span style={{ fontSize: 24, width: 60, textAlign: "center", flexShrink: 0 }}>📄</span>
                         <div style={{ fontSize: 12, color: "var(--text)", minWidth: 0 }}>
                           <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)}</div>
                           <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                             {p.workDescription || "— bez popisu vykonanej práce —"}
                           </div>
                         </div>
-                      </a>
+                      </button>
+                      {p.imageUrl && (
+                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 18, flexShrink: 0 }}>
+                          🖼️
+                        </a>
+                      )}
                       {onAssignProtocolToDamage && (can(user, "damage_status") || can(user, "external_status")) && (
                         <button
                           className="btn btn-ghost"
@@ -15066,9 +15188,12 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
               </button>
             )}
           </div>
-          <a href={p.imageUrl} target="_blank" rel="noreferrer">
-            <img src={p.imageUrl} alt="Protokol" style={{ maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
-          </a>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>📄 Zobraziť protokol</button>
+            {p.imageUrl && (
+              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>
+            )}
+          </div>
         </div>
       ))}
       {!isSimple && onAssignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
@@ -16628,9 +16753,12 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, onClose, 
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
             Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
           </div>
-          <a href={p.imageUrl} target="_blank" rel="noreferrer">
-            <img src={p.imageUrl} alt="Protokol" style={{ maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
-          </a>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p)}>📄 Zobraziť protokol</button>
+            {p.imageUrl && (
+              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>
+            )}
+          </div>
         </div>
       ))}
     </Modal>
@@ -17575,10 +17703,19 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{machineCurrentLocation(machine) || a.umiestnenie || "—"}{a.firma ? " · " + a.firma : ""}</div>
                   {a.poznamka && <div style={{ fontSize: 12, marginTop: 4 }}>{a.poznamka}</div>}
                   {(protocolLogs || []).filter((p) => p.assignmentId === a.id || (a.damageId && p.damageId === a.damageId)).map((p) => (
-                    <a key={p.id} href={p.imageUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "var(--accent)" }}>
-                      <img src={p.imageUrl} alt="Protokol" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 3, border: "1px solid var(--border)" }} />
-                      Protokol ({fmtDate(p.createdAt)})
-                    </a>
+                    <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                      <button
+                        onClick={() => openPrintableServiceProtocol(p)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--accent)", border: "none", background: "none", cursor: "pointer", padding: 0 }}
+                      >
+                        📄 Protokol ({fmtDate(p.createdAt)})
+                      </button>
+                      {p.imageUrl && (
+                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 13 }}>
+                          🖼️
+                        </a>
+                      )}
+                    </span>
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
