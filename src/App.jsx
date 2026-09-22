@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.530";
+const APP_VERSION = "1.0.532";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -18334,7 +18334,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
       </div>
 
       <div style={{ overflowX: "auto", marginBottom: 10 }}>
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <table className="table-cards" style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
               <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Počet ks *</th>
@@ -18350,10 +18350,10 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td style={{ padding: "3px 6px" }}><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: 65, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: 160, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}>
+                <td data-label="Počet ks *" style={{ padding: "3px 6px" }}><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: 65, fontSize: 12 }} /></td>
+                <td data-label="Číslo dielu *" style={{ padding: "3px 6px" }}><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td data-label="Popis dielu *" style={{ padding: "3px 6px" }}><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: 160, fontSize: 12 }} /></td>
+                <td data-label="Určenie *" style={{ padding: "3px 6px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <select
                       value={r.urcenieTyp}
@@ -18391,11 +18391,11 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                     )}
                   </div>
                 </td>
-                <td style={{ padding: "3px 6px" }}><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: 130, fontSize: 12 }} /></td>
-                <td style={{ padding: "3px 6px" }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} onClick={() => removeRow(r.key)}>✕</button>
+                <td data-label="Dodávateľ" style={{ padding: "3px 6px" }}><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td data-label="Číslo položky" style={{ padding: "3px 6px" }}><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
+                <td data-label="Poznámka" style={{ padding: "3px 6px" }}><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: 130, fontSize: 12 }} /></td>
+                <td className="td-actions" style={{ padding: "3px 6px" }}>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Odstrániť riadok" onClick={() => removeRow(r.key)}>✕</button>
                 </td>
               </tr>
             ))}
@@ -18694,6 +18694,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const [customEnd, setCustomEnd] = useState(today);
   const [showAdd, setShowAdd] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
+  const [uncheckedPendingIds, setUncheckedPendingIds] = useState(() => new Set()); // pri hromadnom schválení — odškrtnuté id sa vynechajú
   const [confirmMessage, setConfirmMessage] = useState(null); // krátky zatvárateľný pás po odoslaní požiadavky
   const [searchQuery, setSearchQuery] = useState(""); // vyhľadávanie histórie naprieč všetkými depami a celým časom
 
@@ -19012,13 +19013,28 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
 
       {pending.length > 0 && canManage && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--warn)", marginBottom: 8 }}>
-            Čaká na schválenie ({pending.length})
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--warn)" }}>
+              Čaká na schválenie ({pending.length})
+            </div>
+            {pending.length > 1 && (
+              <button
+                className="btn btn-accent"
+                style={{ fontSize: 11, padding: "3px 8px" }}
+                onClick={() => {
+                  pending.filter((p) => !uncheckedPendingIds.has(p.id)).forEach((p) => onApprove(p.id));
+                  setUncheckedPendingIds(new Set());
+                }}
+              >
+                Schváliť vybrané ({pending.filter((p) => !uncheckedPendingIds.has(p.id)).length})
+              </button>
+            )}
           </div>
           <div className="panel" style={{ padding: 0, overflow: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
+                  {pending.length > 1 && <th></th>}
                   {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
                   <th></th>
@@ -19027,6 +19043,21 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               <tbody>
                 {pending.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    {pending.length > 1 && (
+                      <td style={{ padding: "6px 12px" }}>
+                        <input
+                          type="checkbox"
+                          checked={!uncheckedPendingIds.has(p.id)}
+                          onChange={(e) =>
+                            setUncheckedPendingIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.delete(p.id); else next.add(p.id);
+                              return next;
+                            })
+                          }
+                        />
+                      </td>
+                    )}
                     {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
                     <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
                     <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
@@ -19694,9 +19725,14 @@ function GlobalStyle() {
         table.table-cards, table.table-cards tbody { display: block; width: 100%; }
         table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
         table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
-        table.table-cards td[data-label]::before { content: attr(data-label); font-size: 11px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; }
+        table.table-cards td[data-label]::before { content: attr(data-label); font-size: 11px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
         table.table-cards td.td-plain { display: block; text-align: left; }
         table.table-cards td.td-actions { justify-content: flex-end; }
+        /* Vstupy/selecty v karte majú na desktope pevnú (úzku) šírku pre
+           tabuľkový layout — na mobile namiesto toho vyplnia zvyšok riadku
+           vedľa labelu, nech sa nemusí posúvať do boku ani pri dlhších
+           hodnotách (popis dielu a pod.). */
+        table.table-cards td input, table.table-cards td select { width: 100% !important; max-width: 200px; }
       }
 
       /* Položka v kebab (⋮) menu — riadkové akcie skryté za jedným tlačidlom
