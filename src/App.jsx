@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.523";
+const APP_VERSION = "1.0.524";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1648,6 +1648,17 @@ function DispatcherApp() {
     document.body.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // Jednoduchý zdieľaný "toast" na potvrdenie odoslania (nahlásenie
+  // poškodenia, nová zákazka/rezervácia, kontaktná osoba a pod.) — predtým
+  // sa formulár len potichu zatvoril a odosielajúci nevedel, či to prešlo.
+  const [toast, setToast] = useState(null); // string | null
+  const toastTimer = useRef(null);
+  function showToast(message) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }
+
   function askDelete(label, onConfirm) {
     setConfirmDelete({ label, onConfirm });
   }
@@ -1664,6 +1675,10 @@ function DispatcherApp() {
   const [technicianCard, setTechnicianCard] = useState(null);
   const [assignSlot, setAssignSlot] = useState(null); // { technicianId, date }
   const [checkerInspectionTarget, setCheckerInspectionTarget] = useState(null); // assignment (kind: "kontrolaStroja") clicked v Pláne servisu
+  // Medzikrok pred samotným checklistom (viď onOpenCheckerInspection nižšie) —
+  // klik na "Kontrola stroja" v Pláne servisu predtým otváral rovno celý
+  // checklist, čo sa dalo ľahko spustiť omylom jedným klikom.
+  const [checkerInspectionConfirmTarget, setCheckerInspectionConfirmTarget] = useState(null);
   const [damages, setDamages] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [transportSendLog, setTransportSendLog] = useState([]); // [{id, driverId, date, sentAt, transportIds:[...]}]
@@ -2620,6 +2635,7 @@ function DispatcherApp() {
         createdBy: currentUser?.name || "",
       },
     ]);
+    showToast("Zákazník bol pridaný.");
   }
   // Úprava základných údajov zákazníka — volajúci (UI) si pred týmto sám
   // vyžiada dvojkrokové potvrdenie, táto funkcia už len uloží.
@@ -2630,6 +2646,7 @@ function DispatcherApp() {
     persistCustomers(
       customers.map((c) => (c.id === customerId ? { ...c, contacts: [...(c.contacts || []), { id: uid(), ...contact }] } : c))
     );
+    showToast("Kontaktná osoba bola pridaná.");
   }
   function updateCustomerContact(customerId, contactId, data) {
     persistCustomers(
@@ -2637,11 +2654,13 @@ function DispatcherApp() {
         c.id === customerId ? { ...c, contacts: (c.contacts || []).map((k) => (k.id === contactId ? { ...k, ...data } : k)) } : c
       )
     );
+    showToast("Kontaktná osoba bola upravená.");
   }
   function deleteCustomerContact(customerId, contactId) {
     persistCustomers(
       customers.map((c) => (c.id === customerId ? { ...c, contacts: (c.contacts || []).filter((k) => k.id !== contactId) } : c))
     );
+    showToast("Kontaktná osoba bola vymazaná.");
   }
   // Zisti, či na zákazníka ešte niečo aktívne odkazuje (nedokončené zákazky,
   // nevyriešené poškodenia/externé zákazky, čakajúce/schválené rezervácie) —
@@ -3062,6 +3081,7 @@ function DispatcherApp() {
         : `${currentUser?.name || "Obchodník"} žiada o nezáväznú rezerváciu: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Čaká na schválenie.`,
       link: { module: "poziciovna", view: "calendar", reservationId: record.id },
     });
+    showToast(autoApproved ? "Rezervácia bola vytvorená." : "Žiadosť o rezerváciu bola odoslaná.");
     return record;
   }
   function approveReservation(id) {
@@ -3357,6 +3377,7 @@ function DispatcherApp() {
       message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis}“.`,
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
+    showToast("Poškodenie bolo nahlásené.");
     setShowDamageReport(null);
     goBackCard();
   }
@@ -3392,6 +3413,7 @@ function DispatcherApp() {
       message: `Nahlásené poškodenie bez sériového čísla${data.customer ? " — " + data.customer : ""}: „${data.popis}“. Treba doplniť stroj, kým sa dá prideliť technikovi.`,
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
+    showToast("Poškodenie bolo nahlásené.");
     setShowUnknownSerialReport(false);
   }
   // Dodatočné "dokreslenie" poškodenia bez sériového čísla — dotiahne presne tie
@@ -4293,6 +4315,7 @@ function DispatcherApp() {
     const record = { id: uid(), status: "planned", ...data };
     persistJobs([...jobs, record]);
     setShowAddJob(null);
+    showToast("Zákazka bola vytvorená.");
     ensureCheckerAssignment(record);
     // Nová zákazka môže mať šoféra priradeného rovno pri vzniku (vo formulári) —
     // updateJob() tu ešte nebeží (záznam ešte neexistoval), preto rovnaká
@@ -4366,6 +4389,7 @@ function DispatcherApp() {
       message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}`,
       link: { module: "poziciovna", view: "jobs", jobId },
     });
+    showToast("Problém s prepravou bol odoslaný.");
   }
   function resolveTransportIssue(jobId) {
     persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : j)));
@@ -4388,6 +4412,7 @@ function DispatcherApp() {
     if (showAddJob?.existing) {
       updateJob(showAddJob.existing.id, data);
       setShowAddJob(null);
+      showToast("Zákazka bola upravená.");
     } else {
       const newJob = addJob(data);
       if (showAddJob?.prefillReservation) {
@@ -4585,6 +4610,11 @@ function DispatcherApp() {
   return (
     <div className={`app-shell${darkMode ? " dark" : ""}`}>
       <GlobalStyle />
+      {toast && (
+        <div className="app-toast" role="status">
+          ✓ {toast}
+        </div>
+      )}
       <Header
         module={module}
         setModule={setModule}
@@ -4961,7 +4991,7 @@ function DispatcherApp() {
                 onQuickVacationWithSubstitute={quickVacationWithSubstitute}
                 depoCheckers={depoCheckers}
                 onOpenTechnician={(t) => setTechnicianCard(t)}
-                onOpenCheckerInspection={(a) => setCheckerInspectionTarget(a)}
+                onOpenCheckerInspection={(a) => setCheckerInspectionConfirmTarget(a)}
                 plannerTargetDate={plannerTargetDate}
                 onPlannerTargetDateConsumed={() => setPlannerTargetDate(null)}
               />
@@ -5414,17 +5444,17 @@ function DispatcherApp() {
           onRequestConvert={() => {
             requestReservationConvert(reservationCardTarget);
             setReservationCardTarget(null);
-            alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o premenu na zákazku.");
+            showToast("Žiadosť o premenu na zákazku bola odoslaná.");
           }}
           onRequestDelete={() => {
             requestReservationDelete(reservationCardTarget);
             setReservationCardTarget(null);
-            alert("Dispečerovi a vedúcemu požičovne bola odoslaná žiadosť o zmazanie rezervácie.");
+            showToast("Žiadosť o zmazanie rezervácie bola odoslaná.");
           }}
           onRequestReminder={() => {
             requestReservationReminder(reservationCardTarget);
             setReservationCardTarget(null);
-            alert("Dispečerovi a vedúcemu požičovne bola odoslaná pripomienka.");
+            showToast("Pripomienka bola odoslaná.");
           }}
         />
       )}
@@ -6239,6 +6269,32 @@ function DispatcherApp() {
           onReschedule={(damage) => { setAssignSlot(null); setDamageAssignTarget(damage); }}
         />
       )}
+      {checkerInspectionConfirmTarget && (() => {
+        const job = jobs.find((j) => j.id === checkerInspectionConfirmTarget.jobId);
+        const machine = job ? enrichedMachineById[job.machineId] : null;
+        return (
+          <Modal eyebrow="Kontrola stroja pred vývozom" title={machine?.code || "Stroj"} onClose={() => setCheckerInspectionConfirmTarget(null)}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>
+              {machine?.type ? `${machine.type} · ` : ""}{job?.customer || "—"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 18 }}>
+              Vývoz {job ? fmtDate(job.startDate) : "—"} · {machineCurrentLocation(machine) || job?.fromDepo || "—"}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setCheckerInspectionConfirmTarget(null)}>Zrušiť</button>
+              <button
+                className="btn btn-accent"
+                onClick={() => {
+                  setCheckerInspectionTarget(checkerInspectionConfirmTarget);
+                  setCheckerInspectionConfirmTarget(null);
+                }}
+              >
+                Spustiť kontrolu
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
       {checkerInspectionTarget && (() => {
         const job = jobs.find((j) => j.id === checkerInspectionTarget.jobId);
         const machine = job ? enrichedMachineById[job.machineId] : null;
@@ -9199,10 +9255,10 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete }) {
     return (
       <div className="panel" style={{ padding: 10, marginBottom: 8 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-          <input placeholder="Meno" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Funkcia" value={role} onChange={(e) => setRole(e.target.value)} />
-          <input placeholder="Telefón" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Field label="Meno"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Funkcia"><input value={role} onChange={(e) => setRole(e.target.value)} /></Field>
+          <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
+          <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-ghost" onClick={() => setEditing(false)}>Zrušiť</button>
@@ -9221,15 +9277,26 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete }) {
   }
   return (
     <div className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-      <div>
-        <div style={{ fontWeight: 600 }}>{contact.name || "—"}{contact.role ? ` · ${contact.role}` : ""}</div>
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          {contact.phone && <a href={`tel:${contact.phone}`} style={{ marginRight: 10 }}>{contact.phone}</a>}
-          {contact.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontWeight: 600 }}>
+          {contact.name || "—"}
+          {contact.role && <span className="badge">{contact.role}</span>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4, fontSize: 12, color: "var(--text-dim)" }}>
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <PhoneIcon size={12} /> {contact.phone}
+            </a>
+          )}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <MailIcon size={12} /> {contact.email}
+            </a>
+          )}
         </div>
       </div>
       {canEdit && (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px" }} onClick={() => setEditing(true)}>Upraviť</button>
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={onDelete}>Zmazať</button>
         </div>
@@ -17335,8 +17402,8 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
             const linkedDamage = a.damageId ? (damages || []).find((d) => d.id === a.damageId) : null;
             if (editingId === a.id) return null;
             return (
-              <div key={a.id} className="panel" style={{ padding: 12, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                <div>
+              <div key={a.id} className="panel" style={{ padding: 12, display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>
                     {machine?.code || a.stroj || "— stroj neurčený —"}{machine?.type ? ` · ${machine.type}` : ""}
                   </div>
@@ -19732,6 +19799,15 @@ function GlobalStyle() {
         transition: background .15s ease, color .15s ease; flex-shrink: 0;
       }
       .modal-close-x:hover { background: var(--panel-2); color: var(--text); }
+      /* Toast s potvrdením odoslania — hore na strede, sám zmizne po pár
+         sekundách. z-index 250: nad kartami (160/170), pod dropdown/notif. (200+). */
+      .app-toast {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 250;
+        background: var(--ok); color: #fff; padding: 9px 16px; border-radius: 8px;
+        font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+        animation: app-toast-in .2s ease;
+      }
+      @keyframes app-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
       /* Karty s "eyebrow" titulkom (identita — zákazka, rezervácia, stroj,
          zákazník, auto) — horný toolbar riadok oddelený čiarou, mierne
          záporný margin nech siaha až po okraj panelu ako pri iných kartách. */
