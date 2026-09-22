@@ -243,6 +243,12 @@ let _protocolOpenListener = null;
 function setProtocolOpenListener(fn) {
   _protocolOpenListener = fn;
 }
+// Rovnaký princíp pre náhľad/tlač VYPLNENÉHO protokolu (openPrintableServiceProtocol) —
+// window.open() je v tomto sandboxe blokované, takže sa aj tento zobrazuje inline v appke.
+let _printProtocolOpenListener = null;
+function setPrintProtocolOpenListener(fn) {
+  _printProtocolOpenListener = fn;
+}
 // Aktuálny zoznam strojov platformy (S/N + model) — platforma ho priebežne aktualizuje,
 // aby ho protokol mohol použiť namiesto vlastného natvrdo zabudovaného zoznamu.
 let _protocolMachinesList = [];
@@ -391,11 +397,6 @@ function openPrintableHandoverProtocol(job, machine, p) {
 function openPrintableServiceProtocol(p, assignCandidates = []) {
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
-  const win = window.open("", "_blank");
-  if (!win) {
-    alert("Prehliadač zablokoval otvorenie okna — povoľte vyskakovacie okná pre túto stránku.");
-    return;
-  }
   // Upraviteľné pole — contenteditable div namiesto <input>, takže v zobrazení je
   // 1:1 rovnaké ako pôvodný statický text (zalamuje sa rovnako, žiadny box okolo) a
   // upraviteľné je až po potvrdení (contenteditable sa prepne na "true").
@@ -456,9 +457,6 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
   table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; height: 19px; }
   table.items td .editfield { min-height: 1em; }
   table.items td.num, table.items th.num { text-align: right; white-space: nowrap; }
-  table.items td.rm { display: none; width: 18px; padding: 0 0 0 2px; }
-  table.items td.rm button { border: 0; background: none; cursor: pointer; color: #c62828; font-size: 11px; }
-  .addrow { display: none; font-size: 10.5px; color: #E30613; background: none; border: 0; cursor: pointer; padding: 4px 0 0; }
 
   .notes { font-size: 11.5px; min-height: 48px; white-space: pre-wrap; line-height: 1.5; }
 
@@ -497,8 +495,6 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
   #saveEdit, #cancelEdit { display: none; }
   body.editing #startEdit { display: none; }
   body.editing #saveEdit, body.editing #cancelEdit { display: inline-block; }
-  body.editing .addrow { display: inline-block; }
-  body.editing table.items td.rm { display: table-cell; }
   #saveMsg { align-self: center; font-size: 12px; font-family: 'Barlow', Arial, sans-serif; }
 
   .datefield { border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 600; color: #1a1a1a; padding: 0; width: 118px; outline: none; }
@@ -525,7 +521,6 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
     .page { box-shadow: none; margin: 0; }
     .toolbar { display: none; }
     .editfield[contenteditable="true"] { box-shadow: none !important; background: transparent !important; }
-    .addrow, table.items td.rm { display: none !important; }
     @page { size: A4; margin: 0; }
   }
 </style>
@@ -579,7 +574,7 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
     <div class="secbody grid2">
       ${field("Zákazník", "clientName", p.clientName)}
       ${field("Vykonal", "technicianName", p.technicianName)}
-      ${field("Kontaktná osoba", "customerSignatoryName", p.customerSignatoryName || p.clientContact)}
+      ${field("Kontaktná osoba", "customerSignatoryName", p.clientContact || p.customerSignatoryName)}
     </div>
   </div>
 
@@ -604,18 +599,16 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
     <div class="itemcol">
       <div class="itemcolhead">Vykonaná práca</div>
       <table class="items">
-        <thead><tr><th>Popis práce</th><th class="num" style="width:15%">Hod.</th><th class="rm"></th></tr></thead>
-        <tbody id="workBody">${workRows.map((r) => `<tr><td><div class="editfield work-input" contenteditable="false">${esc(r.work)}</div></td><td class="num"><div class="editfield hours-input" contenteditable="false">${esc(r.hours)}</div></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
+        <thead><tr><th>Popis práce</th><th class="num" style="width:15%">Hod.</th></tr></thead>
+        <tbody id="workBody">${workRows.map((r) => `<tr><td><div class="editfield work-input" contenteditable="false">${esc(r.work)}</div></td><td class="num"><div class="editfield hours-input" contenteditable="false">${esc(r.hours)}</div></td></tr>`).join("")}</tbody>
       </table>
-      <button class="addrow" onclick="addWorkRow()">+ Pridať riadok</button>
     </div>
     <div class="itemcol">
       <div class="itemcolhead">Použitý materiál</div>
       <table class="items">
-        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th><th class="rm"></th></tr></thead>
-        <tbody id="matBody">${matRows.map((r) => `<tr><td><div class="editfield desc-input" contenteditable="false">${esc(r.desc)}</div></td><td><div class="editfield pn-input" contenteditable="false">${esc(r.pn)}</div></td><td class="num"><div class="editfield ks-input" contenteditable="false">${esc(r.ks)}</div></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
+        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th></tr></thead>
+        <tbody id="matBody">${matRows.map((r) => `<tr><td><div class="editfield desc-input" contenteditable="false">${esc(r.desc)}</div></td><td><div class="editfield pn-input" contenteditable="false">${esc(r.pn)}</div></td><td class="num"><div class="editfield qty-input" contenteditable="false">${esc(r.qty)}</div></td></tr>`).join("")}</tbody>
       </table>
-      <button class="addrow" onclick="addMatRow()">+ Pridať riadok</button>
     </div>
     </div>
    </div>
@@ -698,29 +691,14 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
     document.getElementById('assignEmpty').style.display = visible ? 'none' : 'block';
   }
   function chooseAssignTarget(damageId) {
-    if (!window.opener || window.opener.closed) {
+    if (window.parent === window) {
       alert('Okno appky sa nenašlo — otvorte protokol znova z appky.');
       return;
     }
-    window.opener.postMessage({ type: 'mateco_protocol_assign', id: ${JSON.stringify(p.id)}, damageId: damageId }, '*');
+    window.parent.postMessage({ type: 'mateco_protocol_assign', id: ${JSON.stringify(p.id)}, damageId: damageId }, '*');
     closeAssignPicker();
     var btn = document.getElementById('openAssign');
     if (btn) { btn.disabled = true; btn.textContent = 'Priradené ✓'; }
-  }
-  function addWorkRow() {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td><div class="editfield work-input" contenteditable="true"></div></td>'
-      + '<td class="num"><div class="editfield hours-input" contenteditable="true"></div></td>'
-      + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
-    document.getElementById('workBody').appendChild(tr);
-  }
-  function addMatRow() {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td><div class="editfield desc-input" contenteditable="true"></div></td>'
-      + '<td><div class="editfield pn-input" contenteditable="true"></div></td>'
-      + '<td class="num"><div class="editfield ks-input" contenteditable="true"></div></td>'
-      + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
-    document.getElementById('matBody').appendChild(tr);
   }
   function textOf(el) { return (el.innerText || el.textContent || '').trim(); }
   function saveProtocol() {
@@ -731,15 +709,15 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
       return { work: textOf(tr.querySelector('.work-input')), hours: textOf(tr.querySelector('.hours-input')) };
     }).filter(function(r) { return r.work; });
     patch.materialItems = Array.from(document.querySelectorAll('#matBody tr')).map(function(tr) {
-      return { desc: textOf(tr.querySelector('.desc-input')), pn: textOf(tr.querySelector('.pn-input')), ks: textOf(tr.querySelector('.ks-input')) };
+      return { desc: textOf(tr.querySelector('.desc-input')), pn: textOf(tr.querySelector('.pn-input')), qty: textOf(tr.querySelector('.qty-input')) };
     }).filter(function(r) { return r.desc || r.pn; });
     var msg = document.getElementById('saveMsg');
-    if (!window.opener || window.opener.closed) {
+    if (window.parent === window) {
       msg.style.color = '#c62828';
       msg.textContent = 'Okno appky sa nenašlo — otvorte protokol znova z appky.';
       return;
     }
-    window.opener.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
+    window.parent.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
     msg.style.color = '#2f7d32';
     msg.textContent = 'Uložené ✓';
     lockFields();
@@ -747,8 +725,11 @@ function openPrintableServiceProtocol(p, assignCandidates = []) {
   }
 </script>
 </body></html>`;
-  win.document.write(docHtml);
-  win.document.close();
+  if (_printProtocolOpenListener) {
+    _printProtocolOpenListener(docHtml);
+  } else {
+    console.error("Zobrazenie protokolu ešte nie je pripravené.");
+  }
 }
 
 function buildProtocolParams(d, technicians, machineById) {
@@ -2003,6 +1984,7 @@ function DispatcherApp() {
   const [confirmAction, setConfirmAction] = useState(null); // { message, confirmLabel, onConfirm }
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
+  const [printProtocolHtml, setPrintProtocolHtml] = useState(null); // náhľad/tlač vyplneného protokolu (openPrintableServiceProtocol) — inline v appke, nie nová karta
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
   const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
@@ -2272,6 +2254,11 @@ function DispatcherApp() {
   useEffect(() => {
     setProtocolOpenListener((html, params) => setProtocolModalData({ html, params }));
     return () => setProtocolOpenListener(null);
+  }, []);
+
+  useEffect(() => {
+    setPrintProtocolOpenListener((html) => setPrintProtocolHtml(html));
+    return () => setPrintProtocolOpenListener(null);
   }, []);
 
   useEffect(() => {
@@ -6513,6 +6500,9 @@ function DispatcherApp() {
       {protocolModalData && (
         <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} />
       )}
+      {printProtocolHtml && (
+        <PrintProtocolModal html={printProtocolHtml} onClose={() => setPrintProtocolHtml(null)} />
+      )}
       {pendingMail && <MailChoiceModal mail={pendingMail} onClose={() => setPendingMail(null)} />}
       {highlightDamageId && (() => {
         const hd = damages.find((d) => d.id === highlightDamageId);
@@ -8294,6 +8284,42 @@ function ProtocolModal({ html, params, onClose }) {
             ? `Predvyplnené: ${entries.map(([k, v]) => `${k}=${v}`).join(" · ")}`
             : "Žiadne údaje neboli predvyplnené (prázdny formulár)"}
         </div>
+        <button className="btn" style={{ background: "#fff", color: "var(--text)" }} onClick={onClose}>
+          ✕ Zavrieť protokol
+        </button>
+      </div>
+      <div className="protocol-frame-wrap" style={{ flex: 1, minHeight: 0, position: "relative", background: "#fff", borderRadius: 8, overflow: "hidden" }}>
+        <iframe
+          title="Servisný protokol"
+          srcDoc={html}
+          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Náhľad/tlač VYPLNENÉHO servisného protokolu (openPrintableServiceProtocol) — rovnaký
+// princíp ako ProtocolModal vyššie (iframe namiesto window.open, ktoré je v appke
+// blokované), len bez "predvyplnené" odznaku, ktorý sem nepatrí.
+function PrintProtocolModal({ html, onClose }) {
+  return (
+    <div
+      className="protocol-overlay"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.7)",
+        zIndex: 200,
+        display: "flex",
+        flexDirection: "column",
+        padding: "16px",
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
         <button className="btn" style={{ background: "#fff", color: "var(--text)" }} onClick={onClose}>
           ✕ Zavrieť protokol
         </button>
