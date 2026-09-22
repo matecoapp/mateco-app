@@ -379,106 +379,149 @@ function openPrintableHandoverProtocol(job, machine, p) {
   win.document.close();
 }
 
-// Tlačová/PDF verzia servisného protokolu, vykreslená priamo z uložených dát
-// (nie z fotky) — link na pôvodný odfotený formulár (imageUrl) je vždy vidieť
-// hore ako záložná verzia, pre prípad že by sa niektoré pole nenačítalo správne.
+// Zobrazenie/tlač/úprava servisného protokolu, vykreslené priamo z uložených dát
+// (nie z fotky). Otvára sa v novom okne (rovnaký princíp ako openPrintableHandoverProtocol),
+// polia sú priamo upraviteľné (input/textarea, vyzerajú ako text, kým na ne nekliknete) —
+// tlačidlo "Uložiť zmeny" pošle patch naspäť appke cez postMessage (rovnaká cesta, akou appka
+// dnes prijíma vyplnený formulár od technika, pozri "mateco_protocol_edited" v onMessage).
+// Tlač je samostatné tlačidlo — žiadna auto-tlač, nech je vidno samotný dokument.
+// Link na pôvodný odfotený formulár (imageUrl) je vždy hore ako záložná verzia.
 function openPrintableServiceProtocol(p) {
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   const win = window.open("", "_blank");
   if (!win) {
     alert("Prehliadač zablokoval otvorenie okna — povoľte vyskakovacie okná pre túto stránku.");
     return;
   }
+  function field(label, key, value, opts = {}) {
+    const tag = opts.area ? "textarea" : "input";
+    const attrs = opts.area ? `rows="${opts.rows || 2}"` : `type="text"`;
+    const content = opts.area ? esc(value) : "";
+    const valueAttr = opts.area ? "" : `value="${escAttr(value)}"`;
+    return `<div><span class="l">${esc(label)}:</span><${tag} class="editfield" data-field="${key}" ${attrs} ${valueAttr}>${content}</${tag}></div>`;
+  }
   function sigBlock(dataUrl, label) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— bez podpisu —</div>`}</div>`;
   }
-  const workRows = (p.workItems || []).filter((r) => r.work);
-  const matRows = (p.materialItems || []).filter((r) => r.desc || r.pn);
+  const workRows = (p.workItems && p.workItems.length ? p.workItems : [{}]);
+  const matRows = (p.materialItems && p.materialItems.length ? p.materialItems : [{}]);
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Servisný protokol ${esc(p.machineSerial)}</title>
 <style>
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 24px; }
-  h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; }
-  .sub { font-size: 11px; color: #555; margin-bottom: 10px; }
-  .snapshot-link { font-size: 10.5px; margin-bottom: 16px; }
-  .snapshot-link a { color: #666; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .toolbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #1a1a1a; }
+  .toolbar button, .toolbar a { font-family: inherit; font-size: 13px; padding: 7px 14px; border-radius: 4px; border: 0; cursor: pointer; text-decoration: none; }
+  .btn-save { background: #E30613; color: #fff; }
+  .btn-print { background: #444; color: #fff; }
+  .btn-snap { background: transparent; color: #ccc; border: 1px solid #555 !important; }
+  #saveMsg { color: #7ed67e; font-size: 12px; margin-left: 4px; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+  h1 { font-size: 17px; color: #E30613; margin: 0 0 2px; letter-spacing: .03em; }
+  .sub { font-size: 11.5px; color: #555; margin-bottom: 16px; }
   .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; overflow: hidden; }
-  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; }
+  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; letter-spacing: .04em; }
   .secbody { padding: 8px 12px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
-  .grid2 span.l { color: #666; display: inline-block; min-width: 130px; }
-  table.items { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  .grid2 span.l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 1px; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 12px; }
   table.items th { background: #f4f4f4; border-bottom: 1px solid #ddd; text-align: left; padding: 3px 6px; font-size: 9.5px; text-transform: uppercase; color: #555; }
-  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; }
-  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; }
-  .notes { white-space: pre-wrap; }
+  table.items td { padding: 2px 6px; border-bottom: 1px solid #f0f0f0; }
+  table.items td.num, table.items th.num { text-align: right; white-space: nowrap; width: 15%; }
+  table.items td.rm { width: 20px; padding: 0; }
+  table.items td.rm button { border: 0; background: none; cursor: pointer; color: #c62828; }
+  .addrow { font-size: 11px; color: var(--accent, #E30613); background: none; border: 0; cursor: pointer; padding: 4px 0; }
+  .editfield, .editarea { border: 1px dashed transparent; background: transparent; font: inherit; color: inherit; padding: 1px 2px; width: 100%; font-family: inherit; resize: vertical; }
+  .editfield:hover, .editarea:hover { border-color: #ddd; }
+  .editfield:focus, .editarea:focus { outline: none; border-color: #E30613; background: #fff8f8; }
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
   .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 6px; }
   .siglabel { font-size: 10px; color: #666; margin-bottom: 4px; }
   .sigimg { max-width: 100%; height: 50px; }
   .signone { font-size: 10px; color: #999; height: 50px; display: flex; align-items: center; }
-  @media print { body { margin: 10mm; } .snapshot-link { display: none; } }
+  @media print {
+    body { background: #fff; }
+    .toolbar { display: none; }
+    .page { box-shadow: none; margin: 0; width: auto; min-height: 100vh; }
+    .editfield, .editarea { border: none !important; }
+    .addrow, table.items td.rm { display: none; }
+    @page { size: A4; margin: 10mm; }
+  }
 </style></head>
 <body>
+  <div class="toolbar">
+    <button class="btn-save" onclick="saveProtocol()">💾 Uložiť zmeny</button>
+    <span id="saveMsg"></span>
+    <div style="flex:1"></div>
+    <button class="btn-print" onclick="window.print()">🖨️ Tlačiť / Uložiť ako PDF</button>
+    ${p.imageUrl ? `<a class="btn-snap" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">🖼️ Pôvodný snapshot</a>` : ""}
+  </div>
+  <div class="page">
   <h1>PROTOKOL O VYKONANÍ OPRAVY</h1>
   <div class="sub">${p.machineSerial ? esc(p.machineSerial) + " · " : ""}${fmtDate(p.createdAt)}${p.technicianName ? " · " + esc(p.technicianName) : ""}</div>
-  ${p.imageUrl ? `<div class="snapshot-link"><a href="${esc(p.imageUrl)}" target="_blank" rel="noreferrer">Zobraziť pôvodný odfotený formulár (záloha) →</a></div>` : ""}
 
   <div class="section">
     <div class="sechead">Stroj a zákazka</div>
     <div class="secbody grid2">
-      <div><span class="l">Typ / Model:</span>${esc(p.machineModel)}</div>
-      <div><span class="l">Sériové číslo:</span>${esc(p.machineSerial)}</div>
-      <div><span class="l">Počet MTH:</span>${esc(p.machineHours)}</div>
-      <div><span class="l">Zákazka č.:</span>${esc(p.jobNumber)}</div>
-      <div><span class="l">Stav:</span>${esc(p.status)}</div>
-      <div><span class="l">Kód poruchy:</span>${esc(p.faultCode)}</div>
+      ${field("Typ / Model", "machineModel", p.machineModel)}
+      ${field("Sériové číslo", "machineSerial", p.machineSerial)}
+      ${field("Počet MTH", "machineHours", p.machineHours)}
+      ${field("Zákazka č.", "jobNumber", p.jobNumber)}
+      ${field("Stav", "status", p.status)}
+      ${field("Kód poruchy", "faultCode", p.faultCode)}
     </div>
-    ${p.faultFullText || p.jobDesc ? `<div class="secbody notes" style="border-top:1px solid #eee;">${esc(p.faultFullText || p.jobDesc)}</div>` : ""}
+    <div class="secbody" style="border-top:1px solid #eee;">
+      ${field("Popis závady", "faultFullText", p.faultFullText || p.jobDesc, { area: true, rows: 2 })}
+    </div>
   </div>
 
   <div class="section">
     <div class="sechead">Odberateľ</div>
     <div class="secbody grid2">
-      <div><span class="l">Zákazník:</span>${esc(p.clientName)}</div>
-      <div><span class="l">Kontaktná osoba:</span>${esc(p.clientContact)}</div>
-      <div><span class="l">Telefón:</span>${esc(p.clientPhone)}</div>
-      <div><span class="l">E-mail:</span>${esc(p.clientEmail)}</div>
-      <div><span class="l">Miesto:</span>${esc(p.location)}</div>
+      ${field("Zákazník", "clientName", p.clientName)}
+      ${field("Kontaktná osoba", "customerSignatoryName", p.customerSignatoryName || p.clientContact)}
+      ${field("Telefón", "clientPhone", p.clientPhone)}
+      ${field("E-mail", "clientEmail", p.clientEmail)}
+      ${field("Miesto", "location", p.location)}
     </div>
   </div>
 
-  ${workRows.length ? `<div class="section">
+  <div class="section">
     <div class="sechead">Vykonaná práca</div>
     <div class="secbody">
-      <table class="items">
-        <thead><tr><th>Popis práce</th><th class="num" style="width:15%">Hod.</th></tr></thead>
-        <tbody>${workRows.map((r) => `<tr><td>${esc(r.work)}</td><td class="num">${esc(r.hours)}</td></tr>`).join("")}</tbody>
+      <table class="items" id="workTable">
+        <thead><tr><th>Popis práce</th><th class="num">Hod.</th><th class="rm"></th></tr></thead>
+        <tbody id="workBody">${workRows.map((r) => `<tr><td><input class="editfield work-input" type="text" value="${escAttr(r.work)}"></td><td class="num"><input class="editfield hours-input" type="text" value="${escAttr(r.hours)}"></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
       </table>
+      <button class="addrow" onclick="addWorkRow()">+ Pridať riadok</button>
     </div>
-  </div>` : ""}
+  </div>
 
-  ${matRows.length ? `<div class="section">
+  <div class="section">
     <div class="sechead">Použitý materiál</div>
     <div class="secbody">
-      <table class="items">
-        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num" style="width:14%">Ks</th></tr></thead>
-        <tbody>${matRows.map((r) => `<tr><td>${esc(r.desc)}</td><td>${esc(r.pn)}</td><td class="num">${esc(r.ks)}</td></tr>`).join("")}</tbody>
+      <table class="items" id="matTable">
+        <thead><tr><th>Popis / názov dielu</th><th style="width:28%">P/N</th><th class="num">Ks</th><th class="rm"></th></tr></thead>
+        <tbody id="matBody">${matRows.map((r) => `<tr><td><input class="editfield desc-input" type="text" value="${escAttr(r.desc)}"></td><td><input class="editfield pn-input" type="text" value="${escAttr(r.pn)}"></td><td class="num"><input class="editfield ks-input" type="text" value="${escAttr(r.ks)}"></td><td class="rm"><button onclick="this.closest('tr').remove()">✕</button></td></tr>`).join("")}</tbody>
       </table>
+      <button class="addrow" onclick="addMatRow()">+ Pridať riadok</button>
     </div>
-  </div>` : ""}
+  </div>
 
-  ${p.workNotes ? `<div class="section"><div class="sechead">Poznámky / odporúčania</div><div class="secbody notes">${esc(p.workNotes)}</div></div>` : ""}
+  <div class="section">
+    <div class="sechead">Poznámky / odporúčania</div>
+    <div class="secbody">${field("Poznámka", "workNotes", p.workNotes, { area: true, rows: 2 })}</div>
+  </div>
 
   <div class="section">
     <div class="sechead">Súhrn</div>
     <div class="secbody grid2">
-      <div><span class="l">Celkový čas opravy:</span>${esc(p.totalHours)} hod.</div>
-      <div><span class="l">Cestovný čas:</span>${esc(p.travelHours)} hod.</div>
-      <div><span class="l">Najazdené km:</span>${esc(p.travelKm)} km</div>
-      <div><span class="l">Dátum:</span>${p.jobDate ? fmtDate(p.jobDate) : fmtDate(p.createdAt)}</div>
-      ${p.travelNote ? `<div><span class="l">Poznámka k ceste:</span>${esc(p.travelNote)}</div>` : ""}
+      ${field("Celkový čas opravy (hod.)", "totalHours", p.totalHours)}
+      ${field("Cestovný čas (hod.)", "travelHours", p.travelHours)}
+      ${field("Najazdené km", "travelKm", p.travelKm)}
+      ${field("Poznámka k ceste", "travelNote", p.travelNote)}
     </div>
   </div>
 
@@ -486,8 +529,45 @@ function openPrintableServiceProtocol(p) {
     ${sigBlock(p.technicianSignature, `Podpis technika${p.technicianName ? " — " + p.technicianName : ""}`)}
     ${sigBlock(p.customerSignature, `Podpis zákazníka${p.customerSignatoryName ? " — " + p.customerSignatoryName : ""}`)}
   </div>
+  </div>
 
-  <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+  <script>
+    function addWorkRow() {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><input class="editfield work-input" type="text"></td>'
+        + '<td class="num"><input class="editfield hours-input" type="text"></td>'
+        + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
+      document.getElementById('workBody').appendChild(tr);
+    }
+    function addMatRow() {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><input class="editfield desc-input" type="text"></td>'
+        + '<td><input class="editfield pn-input" type="text"></td>'
+        + '<td class="num"><input class="editfield ks-input" type="text"></td>'
+        + '<td class="rm"><button onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
+      document.getElementById('matBody').appendChild(tr);
+    }
+    function saveProtocol() {
+      var patch = {};
+      document.querySelectorAll('[data-field]').forEach(function(el) { patch[el.dataset.field] = el.value; });
+      patch.workItems = Array.from(document.querySelectorAll('#workBody tr')).map(function(tr) {
+        return { work: tr.querySelector('.work-input').value, hours: tr.querySelector('.hours-input').value };
+      }).filter(function(r) { return r.work.trim(); });
+      patch.materialItems = Array.from(document.querySelectorAll('#matBody tr')).map(function(tr) {
+        return { desc: tr.querySelector('.desc-input').value, pn: tr.querySelector('.pn-input').value, ks: tr.querySelector('.ks-input').value };
+      }).filter(function(r) { return r.desc.trim() || r.pn.trim(); });
+      var msg = document.getElementById('saveMsg');
+      if (!window.opener || window.opener.closed) {
+        msg.style.color = '#e57373';
+        msg.textContent = 'Okno appky sa nenašlo — otvorte protokol znova z appky.';
+        return;
+      }
+      window.opener.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
+      msg.style.color = '#7ed67e';
+      msg.textContent = 'Uložené ✓';
+      setTimeout(function() { msg.textContent = ''; }, 2500);
+    }
+  </script>
 </body></html>`;
   win.document.write(docHtml);
   win.document.close();
@@ -2212,6 +2292,8 @@ function DispatcherApp() {
           setProtocolModalData(null);
           setTimeout(() => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById)), 50);
         }
+      } else if (event.data.type === "mateco_protocol_edited") {
+        updateProtocolLog(event.data.id, event.data.patch);
       }
     }
     window.addEventListener("message", onMessage);
@@ -2854,6 +2936,14 @@ function DispatcherApp() {
         if (link.checklistAssignmentId) setMachineCardChecklistTarget(link.checklistAssignmentId);
       }
     }
+    if (link.assignmentId) {
+      const a = assignments.find((x) => x.id === link.assignmentId);
+      if (a) {
+        const m = a.machineId ? enrichedMachineById[a.machineId] : null;
+        const dmg = a.damageId ? damages.find((x) => x.id === a.damageId) : null;
+        setAssignmentDetail({ assignment: a, machine: m, damage: dmg });
+      }
+    }
     if (link.reservationId) {
       const r = reservations.find((x) => x.id === link.reservationId);
       if (r) setReservationCardTarget(r);
@@ -3230,6 +3320,12 @@ function DispatcherApp() {
     persistReservations(reservations.map((r) => (r.id === id ? { ...r, ...data } : r)));
   }
   const persistProtocolLogs = useCallback(makeRecordPersist("protocolLogs", setProtocolLogs), []);
+  // Ručná úprava už uloženého protokolu (z openPrintableServiceProtocol, cez postMessage
+  // "mateco_protocol_edited") — dispečer opravuje preklep/doplní pole po tom, čo bol
+  // protokol už odoslaný technikom.
+  function updateProtocolLog(id, patch) {
+    persistProtocolLogs(protocolLogs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
   // Prijme "odfotenie" vyplneného protokolu z vnoreného formulára (postMessage), uloží
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
   // priradeniu ak sa dá, inak aspoň k stroju (sekcia "Ostatné protokoly"). Externé
@@ -3332,7 +3428,13 @@ function DispatcherApp() {
           roles: ["dispecer_servisu", "veduci_servisu"],
           title: "Protokol odoslaný — servis pravdepodobne ukončený",
           message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"}. Skontrolujte a v prípade potreby ukončite zákazku.`,
-          link: data.damageId ? { module: "servis", view: "poskodenia", damageId: data.damageId } : { module: "poziciovna", view: "dashboard", machineId: data.machineId },
+          link: data.damageId
+            ? { module: "servis", view: "poskodenia", damageId: data.damageId }
+            : data.machineId
+              ? { module: "poziciovna", view: "dashboard", machineId: data.machineId }
+              : data.assignmentId
+                ? { module: "servis", view: "plan", assignmentId: data.assignmentId }
+                : { module: "servis", view: "externe" },
         });
       }
     } catch (e) {
@@ -15929,6 +16031,9 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                   <input type="checkbox" checked={!!p.invoiced} onChange={() => onToggleProtocolInvoiced(p.id)} />
                   Vyfakturované
                 </label>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => openPrintableServiceProtocol(p)}>
+                  📄 Zobraziť protokol
+                </button>
                 <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => setAssignPickerFor(p)}>
                   Priradiť k zákazke
                 </button>
