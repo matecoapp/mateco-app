@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.532";
+const APP_VERSION = "1.0.533";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -18317,7 +18317,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
   }
 
   return (
-    <Modal title="Nová požiadavka na náhradné diely" onClose={onClose} wide>
+    <Modal title="Nová požiadavka na náhradné diely" onClose={onClose} xwide>
       {canManage ? (
         <Field label="Depo *">
           <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: 240 }}>
