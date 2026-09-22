@@ -388,7 +388,7 @@ function openPrintableHandoverProtocol(job, machine, p) {
 // formulár od technika — pozri "mateco_protocol_edited" v onMessage). Tlač je samostatné
 // tlačidlo, žiadna auto-tlač. Link na pôvodný odfotený formulár (imageUrl) je vždy hore
 // ako záložná verzia.
-function openPrintableServiceProtocol(p) {
+function openPrintableServiceProtocol(p, assignCandidates = []) {
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   const win = window.open("", "_blank");
@@ -425,7 +425,7 @@ function openPrintableServiceProtocol(p) {
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Servisný protokol ${esc(p.machineSerial)}</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
   .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
   .body-content { flex: 1; }
@@ -453,7 +453,8 @@ function openPrintableServiceProtocol(p) {
   .itemcol .itemcolhead { font-weight: bold; font-size: 10px; text-transform: uppercase; color: #E30613; border-bottom: 2px solid #E30613; padding-bottom: 4px; margin-bottom: 4px; letter-spacing: .03em; }
   table.items { width: 100%; border-collapse: collapse; font-size: 11.5px; }
   table.items th { background: #f4f4f4; border-bottom: 1px solid #ddd; text-align: left; padding: 3px 6px; font-size: 9.5px; text-transform: uppercase; color: #555; }
-  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; }
+  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; height: 19px; }
+  table.items td .editfield { min-height: 1em; }
   table.items td.num, table.items th.num { text-align: right; white-space: nowrap; }
   table.items td.rm { display: none; width: 18px; padding: 0 0 0 2px; }
   table.items td.rm button { border: 0; background: none; cursor: pointer; color: #c62828; font-size: 11px; }
@@ -463,7 +464,7 @@ function openPrintableServiceProtocol(p) {
 
   /* contenteditable polia — v zobrazení vyzerajú presne ako statický text (žiadny box,
      žiadne orámovanie); rámik a zvýraznenie sa objaví, len keď je zapnutá úprava. */
-  .editfield { outline: none; }
+  .editfield { outline: none; min-height: 1em; }
   body.editing .editfield[contenteditable="true"] { border-radius: 2px; box-shadow: 0 0 0 1px transparent; }
   body.editing .editfield[contenteditable="true"]:hover { box-shadow: 0 0 0 1px #ddd; }
   body.editing .editfield[contenteditable="true"]:focus { box-shadow: 0 0 0 1px #E30613; background: #fff8f8; }
@@ -511,6 +512,13 @@ function openPrintableServiceProtocol(p) {
   .modal-panel h3 { font-size: 18px; margin: 0 0 16px; color: #E30613; }
   .modal-panel .msg { font-size: 14px; margin-bottom: 18px; color: #1a1a1a; }
   .modal-panel .actions { display: flex; gap: 8px; }
+  .modal-panel.wide { width: 480px; }
+  .modal-panel input[type="search"] { width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #e0e0e0; font: inherit; font-size: 13px; margin-bottom: 10px; }
+  .picklist { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+  .pickitem { text-align: left; padding: 8px 10px; display: block; width: 100%; }
+  .pickitem .t { font-weight: 600; font-size: 13px; }
+  .pickitem .s { font-size: 12px; color: #6b6b6b; }
+  .pickempty { padding: 16px; text-align: center; color: #6b6b6b; font-size: 12px; }
 
   @media print {
     body { background: #fff; }
@@ -531,7 +539,7 @@ function openPrintableServiceProtocol(p) {
   <span id="saveMsg"></span>
   <button class="btn btn-accent" onclick="window.print()">Tlačiť / uložiť ako PDF</button>
   ${p.imageUrl ? `<a class="btn btn-ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">Pôvodný snapshot</a>` : ""}
-  ${!p.damageId ? `<button class="btn btn-ghost" onclick="requestAssign()">Priradiť k zákazke</button>` : ""}
+  ${!p.damageId && assignCandidates.length ? `<button id="openAssign" class="btn btn-ghost" onclick="openAssignPicker()">Priradiť k zákazke</button>` : ""}
 </div>
 
 <div id="confirmOverlay" class="modal-overlay" onclick="if(event.target===this) closeConfirmEdit()">
@@ -541,6 +549,17 @@ function openPrintableServiceProtocol(p) {
     <div class="actions">
       <button class="btn btn-ghost" onclick="closeConfirmEdit()">Zrušiť</button>
       <button class="btn btn-accent" onclick="confirmEditYes()">Upraviť</button>
+    </div>
+  </div>
+</div>
+
+<div id="assignOverlay" class="modal-overlay" onclick="if(event.target===this) closeAssignPicker()">
+  <div class="modal-panel wide">
+    <h3>Priradiť k zákazke</h3>
+    <input type="search" id="assignSearch" placeholder="Hľadať zákazníka, model, sériové číslo…" oninput="filterAssignList()">
+    <div class="picklist" id="assignList">
+      ${assignCandidates.map((c) => `<button class="btn btn-ghost pickitem" data-q="${escAttr(`${c.label || ""} ${c.sub || ""}`.toLowerCase())}" onclick="chooseAssignTarget(${escAttr(JSON.stringify(c.id))})"><div class="t">${esc(c.label) || "— bez zákazníka —"}</div><div class="s">${esc(c.sub) || "—"} · ${c.date ? esc(fmtDate(c.date)) : "—"}</div></button>`).join("")}
+      <div class="pickempty" id="assignEmpty" style="display:none">Žiadna zhoda.</div>
     </div>
   </div>
 </div>
@@ -659,13 +678,34 @@ function openPrintableServiceProtocol(p) {
     }
     lockFields();
   }
-  function requestAssign() {
+  function openAssignPicker() {
+    document.getElementById('assignSearch').value = '';
+    filterAssignList();
+    document.getElementById('assignOverlay').classList.add('open');
+  }
+  function closeAssignPicker() {
+    document.getElementById('assignOverlay').classList.remove('open');
+  }
+  function filterAssignList() {
+    var q = document.getElementById('assignSearch').value.trim().toLowerCase();
+    var items = document.querySelectorAll('#assignList .pickitem');
+    var visible = 0;
+    items.forEach(function(el) {
+      var match = !q || (el.dataset.q || '').includes(q);
+      el.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    document.getElementById('assignEmpty').style.display = visible ? 'none' : 'block';
+  }
+  function chooseAssignTarget(damageId) {
     if (!window.opener || window.opener.closed) {
       alert('Okno appky sa nenašlo — otvorte protokol znova z appky.');
       return;
     }
-    window.opener.postMessage({ type: 'mateco_protocol_request_assign', id: ${JSON.stringify(p.id)} }, '*');
-    window.opener.focus();
+    window.opener.postMessage({ type: 'mateco_protocol_assign', id: ${JSON.stringify(p.id)}, damageId: damageId }, '*');
+    closeAssignPicker();
+    var btn = document.getElementById('openAssign');
+    if (btn) { btn.disabled = true; btn.textContent = 'Priradené ✓'; }
   }
   function addWorkRow() {
     var tr = document.createElement('tr');
@@ -1963,7 +2003,6 @@ function DispatcherApp() {
   const [confirmAction, setConfirmAction] = useState(null); // { message, confirmLabel, onConfirm }
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
-  const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol na priradenie k externej zákazke — otvorené aj z náhľadu protokolu (mateco_protocol_request_assign)
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
   const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
@@ -2433,9 +2472,8 @@ function DispatcherApp() {
         }
       } else if (event.data.type === "mateco_protocol_edited") {
         updateProtocolLog(event.data.id, event.data.patch);
-      } else if (event.data.type === "mateco_protocol_request_assign") {
-        const target = protocolLogs.find((x) => x.id === event.data.id);
-        if (target) setAssignProtocolTarget(target);
+      } else if (event.data.type === "mateco_protocol_assign") {
+        assignProtocolToDamage(event.data.id, event.data.damageId);
       }
     }
     window.addEventListener("message", onMessage);
@@ -6470,17 +6508,6 @@ function DispatcherApp() {
           onClose={() => setAssignmentDetail(null)}
           onReschedule={(dmg) => { setAssignmentDetail(null); setDamageAssignTarget(dmg); }}
           onOpenMachineCard={(m) => { setAssignmentDetail(null); setMachineCard(m); }}
-        />
-      )}
-      {assignProtocolTarget && (
-        <AssignProtocolToExternalModal
-          protocol={assignProtocolTarget}
-          damages={damages.filter((d) => d.type === "externa")}
-          onClose={() => setAssignProtocolTarget(null)}
-          onAssign={(damageId) => {
-            assignProtocolToDamage(assignProtocolTarget.id, damageId);
-            setAssignProtocolTarget(null);
-          }}
         />
       )}
       {protocolModalData && (
@@ -14875,7 +14902,14 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   .map((p) => (
                     <div key={p.id} className="panel" style={{ padding: 10, display: "flex", alignItems: "center", gap: 10 }}>
                       <button
-                        onClick={() => openPrintableServiceProtocol(p)}
+                        onClick={() =>
+                          openPrintableServiceProtocol(
+                            p,
+                            history
+                              .filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa"))
+                              .map((d) => ({ id: d.id, label: d.popis, sub: d.type === "externa" ? "externá zákazka" : "poškodenie", date: d.dateReported }))
+                          )
+                        }
                         style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
                       >
                         <div style={{ fontSize: 12, color: "var(--text)", minWidth: 0 }}>
@@ -16179,7 +16213,12 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div
                     style={{ fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
-                    onClick={() => openPrintableServiceProtocol(p)}
+                    onClick={() =>
+                      openPrintableServiceProtocol(
+                        p,
+                        externaDamages.map((d) => ({ id: d.id, label: d.customer, sub: [d.model, d.serialNumber].filter(Boolean).join(" · "), date: d.dateReported }))
+                      )
+                    }
                     title="Zobraziť protokol"
                   >
                     {p.clientName || "— bez zákazníka —"}
