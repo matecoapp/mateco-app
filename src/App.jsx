@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.525";
+const APP_VERSION = "1.0.526";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7641,11 +7641,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
               vidno celkom dole, textové menu bez ikon (tie má len úzky
               ikonový pás vľavo). */}
           <div className="rail-flyout-bottom">
-            <button className="sidebar-item" onClick={onOpenPhoneDirectory}>
+            <button className="sidebar-item quick" onClick={onOpenPhoneDirectory}>
               Telefónny zoznam
             </button>
             <button
-              className="sidebar-item"
+              className="sidebar-item quick"
               onClick={() =>
                 composeMail({
                   to: "radoslav.podusel@matecoslovakia.sk",
@@ -19664,7 +19664,11 @@ function GlobalStyle() {
         padding-top: 8px;
       }
       .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
-      .rail-flyout-bottom { width: 100%; flex-shrink: 0; padding: 4px 0; box-shadow: inset 0 1px 0 var(--border); }
+      /* Riadky 34px + gap 2px + padding 6px hore / 8px dole — rovnaké čísla
+         ako .rail-bottom-actions v úzkom páse (padding-top 6, gap 2, a 8px
+         padding-bottom prevzaté z .icon-rail), nech si telefón/pripomienka
+         sadnú 1:1 s ikonami vedľa, nielen počtom riadkov. */
+      .rail-flyout-bottom { width: 100%; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 0 8px; box-shadow: inset 0 1px 0 var(--border); }
       .rail-flyout-bottom .sidebar-item { padding-left: 14px; }
 
       /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
