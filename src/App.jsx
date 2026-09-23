@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.548";
+const APP_VERSION = "1.0.549";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9077,6 +9077,122 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
 }
 
 /* ---------------------------------------------------------
+   Zjednodušený mobilný pohľad na prepravy pre šoféra — namiesto dispečerského
+   hustého zoznamu (vyhľadávanie, depo filtre, priraďovanie, rýchly prehľad,
+   ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
+   so stavom protokolu ako výraznou akciou.
+--------------------------------------------------------- */
+function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight }) {
+  useEffect(() => {
+    if (!highlightTransportId) return;
+    document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightTransportId]);
+
+  if (items.length === 0) {
+    return (
+      <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
+        Žiadne prepravy.
+      </div>
+    );
+  }
+
+  const rest = items.filter((t) => !t.overdue);
+  const buckets = [
+    { label: "Po termíne", items: items.filter((t) => t.overdue), danger: true },
+    { label: "Dnes", items: rest.filter((t) => t.date === today) },
+    { label: "Zajtra", items: rest.filter((t) => t.date === tomorrow) },
+    { label: "Neskôr", items: rest.filter((t) => t.date > tomorrow) },
+  ].filter((b) => b.items.length > 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {buckets.map((b) => (
+        <div key={b.label}>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: ".06em",
+              color: b.danger ? "var(--danger)" : "var(--text-dim)",
+              marginBottom: 10,
+            }}
+          >
+            {b.danger ? "⚠️ " : ""}
+            {b.label}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {b.items.map((t) => (
+              <DriverTransportCard
+                key={t.id}
+                t={t}
+                machineById={machineById}
+                handoverProtocols={handoverProtocols}
+                onOpenJob={onOpenJob}
+                highlighted={t.id === highlightTransportId}
+                onDismissHighlight={onDismissTransportHighlight}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DriverTransportCard({ t, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight }) {
+  const machine = machineById[t.machineId];
+  const isVyvoz = t.type === "vyvoz";
+  const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
+  // Zvoz sa dá vyplniť až po hotovom prevzatí — kým to tak nie je, karta nie je
+  // klikateľná (nemá čo šofér robiť, len čaká).
+  const missingPrevzatie = !isVyvoz && !hp?.handoverDone;
+  const clickable = !missingPrevzatie;
+  const statusLabel = isVyvoz
+    ? !hp
+      ? "📋 Vyplniť protokol"
+      : "✓ Hotovo — zobraziť protokol"
+    : missingPrevzatie
+    ? "⏳ Čaká na prevzatie"
+    : "📋 Dokončiť vrátenie";
+  const statusColor = missingPrevzatie ? "var(--text-dim)" : isVyvoz && hp ? "var(--ok)" : "var(--accent)";
+
+  return (
+    <div
+      id={`transport-${t.id}`}
+      onClick={() => {
+        if (!clickable) return;
+        if (highlighted) onDismissHighlight?.();
+        onOpenJob && onOpenJob(t.jobId, t.type);
+      }}
+      style={{
+        padding: 16,
+        borderRadius: 10,
+        border: "1px solid " + (t.overdue ? "var(--danger)" : "var(--border)"),
+        background: "var(--panel)",
+        cursor: clickable ? "pointer" : "default",
+        opacity: clickable ? 1 : 0.7,
+        outline: highlighted ? "2px solid var(--accent)" : "none",
+        boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "none",
+        transition: "box-shadow .3s, outline .3s",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`}>{isVyvoz ? "Vývoz" : "Zvoz"}</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtDate(t.date)}</span>
+      </div>
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 2 }}>{machine?.code || "—"}</div>
+      {machine?.type && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>{machine.type}</div>}
+      {t.customer && <div style={{ fontSize: 13, marginBottom: 6 }}>{t.customer}</div>}
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        {t.from} <span>→</span> {t.to}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: statusColor }}>{statusLabel}</div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
 function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand, highlightTransportId, onDismissTransportHighlight }) {
@@ -9214,6 +9330,24 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     ...(groups.unassigned ? ["unassigned"] : []),
     ...drivers.map((d) => d.id).filter((id) => groups[id]),
   ];
+
+  // Šofér nepotrebuje dispečerský hustý zoznam (vyhľadávanie, depo filtre, rýchly
+  // prehľad, priraďovanie) — vidí len svoje vlastné prepravy, zoskupené podľa dňa,
+  // ako veľké karty s jasnou akciou.
+  if (isMyselfSofer || isLockedExternalSofer) {
+    return (
+      <DriverTransportsList
+        items={filtered}
+        machineById={machineById}
+        handoverProtocols={handoverProtocols}
+        onOpenJob={onOpenJob}
+        today={today}
+        tomorrow={tomorrow}
+        highlightTransportId={highlightTransportId}
+        onDismissTransportHighlight={onDismissTransportHighlight}
+      />
+    );
+  }
 
   function transportLine(t) {
     const machine = machineById[t.machineId];
