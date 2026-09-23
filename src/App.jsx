@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.564";
+const APP_VERSION = "1.0.565";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1512,8 +1512,20 @@ function SearchInput({ value, onChange, placeholder, style }) {
 // vizuálne zvýrazní, nech nie je ľahké zabudnúť na aktívny filter.
 function FilterPopover({ activeCount, onClear, children }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  // minWidth:280 s "left:0" vedelo na užších obrazovkách vytiahnuť panel
+  // mimo pravý okraj (tlačidlo "Filtre" nie je vždy na začiatku riadku) —
+  // pri otvorení sa preto odmeria, koľko miesta ostáva doprava od tlačidla,
+  // a ak sa 280px nezmestí, panel sa namiesto toho zarovná napravo (right:0),
+  // nech vždy ostane celý na obrazovke.
+  const [alignRight, setAlignRight] = useState(false);
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setAlignRight(window.innerWidth - rect.left < 280);
+  }, [open]);
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative" }} ref={btnRef}>
       <button
         className="btn"
         onClick={() => setOpen((v) => !v)}
@@ -1543,7 +1555,19 @@ function FilterPopover({ activeCount, onClear, children }) {
       {open && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
-          <div className="panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 280, zIndex: 201, padding: 14 }}>
+          <div
+            className="panel"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: alignRight ? "auto" : 0,
+              right: alignRight ? 0 : "auto",
+              minWidth: 280,
+              maxWidth: "calc(100vw - 32px)",
+              zIndex: 201,
+              padding: 14,
+            }}
+          >
             {children}
           </div>
         </>
@@ -7093,8 +7117,11 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
   // Mobilná verzia (dole v mobile-nav-drawer, na tmavom/svetlom var(--panel)
   // pozadí namiesto červenej hlavičky) — biely text na priesvitnej bielej by
   // tam v svetlom režime zmizol, preto tu farby z premenných, na celú šírku
-  // ako ostatné riadky menu, a rozbaľovacie okno smerom HORE (tlačidlo je
-  // úplne dole v drawri, dole by sa už nezmestilo).
+  // ako ostatné riadky menu. Rozbaľovacie okno je tu (na rozdiel od
+  // desktopu) NORMÁLNA súčasť toku (nie position:absolute) — vnorené hlboko
+  // v scrollovateľnom drawri sa position:absolute vedelo správať nepredvídateľne
+  // (schované/"odlepené" mimo viditeľnú oblasť), takto sa len jednoducho
+  // vysunie pod tlačidlom a zvyšok menu sa posunie, vždy viditeľné.
   const isMobileVariant = variant === "mobile";
 
   return (
@@ -7131,12 +7158,12 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
       </button>
       {open && (
         <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          {!isMobileVariant && <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />}
           <div
             className="panel dropdown-panel"
             style={
               isMobileVariant
-                ? { position: "absolute", bottom: "calc(100% + 8px)", left: 0, width: "100%", maxWidth: "90vw", zIndex: 201, padding: 6 }
+                ? { position: "static", width: "100%", maxWidth: "none", marginTop: 6, padding: 6 }
                 : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 290, maxWidth: "90vw", zIndex: 201, padding: 6 }
             }
           >
@@ -8382,11 +8409,17 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
-          <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
-          <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
-            Interná platforma
-          </span>
-          <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
+          {/* Popis/verzia — na webe hneď vedľa loga (divider medzi nimi), na
+              mobile (viď @media) sa cez CSS "order" presunú na vlastný riadok
+              POD logo (header-brand-sub), nech na prvom riadku ostane vždy
+              dosť miesta pre vyhľadávanie a zvonček aj na užších telefónoch. */}
+          <div className="header-brand-sub" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
+            <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
+              Interná platforma
+            </span>
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
+          </div>
           <div style={{ flex: "1 1 auto", display: "flex", justifyContent: "center", minWidth: 120 }}>
             <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
           </div>
@@ -21089,13 +21122,17 @@ function GlobalStyle() {
           --gantt-plan-day-col: 46px;
         }
         .app-main { padding: 10px !important; }
-        .header-topbar { padding: 7px 10px !important; gap: 6px !important; flex-wrap: nowrap !important; }
+        /* flex-wrap ostáva "wrap" (nie nowrap) — je to poistka: ak by sa aj
+           napriek nižšiemu doplneniu niečo nezmestilo, nech sa to zalomí na
+           ďalší riadok, nie aby to odrezalo/schovalo zvonček mimo obrazovky
+           (presne to sa predtým dialo s vynúteným nowrap). */
+        .header-topbar { padding: 7px 10px !important; gap: 6px !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
-        /* Predtým sa popis platformy na mobile úplne schovával, lebo sa s
-           vyhľadávaním nezmestili do jedného riadku — teraz je vyhľadávanie
-           užšie (min-width nižšie) a UserMenu je presunuté dole do menu (viď
-           user-menu-desktop-wrap), takže v riadku ostáva dosť miesta aj naň. */
-        .header-divider { display: block !important; }
+        /* Popis platformy + verzia — na mobile vlastný (druhý) riadok POD
+           logom (order + flex-basis:100%), nech na PRVOM riadku (logo,
+           vyhľadávanie, zvonček) ostane vždy dosť miesta. */
+        .header-brand-sub { order: 3; flex-basis: 100%; margin-top: 1px; }
+        .header-divider { display: none !important; }
         .header-subtitle { display: block !important; font-size: 9px !important; white-space: nowrap; }
         .user-menu-desktop-wrap { display: none !important; }
         .header-top-actions { gap: 5px !important; }
@@ -21135,8 +21172,14 @@ function GlobalStyle() {
         /* Krížik na zatvorenie — 30px je na dotyk malé, na mobile väčší. */
         .modal-close-x { width: 40px !important; height: 40px !important; font-size: 26px !important; }
 
-        /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
-        .panel { overflow-x: auto; }
+        /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky.
+           Zámerne LEN pre panely s tabuľkou (:has), nie pre všetky .panel —
+           overflow-x:auto totiž podľa CSS špecifikácie automaticky prepne aj
+           overflow-y na "auto" (ak nie je nastavené inak), a to vedelo
+           orezať/schovať rozbaľovacie zoznamy (dropdown), ktoré vnútri iného
+           .panel (napr. filter/search panela) siahajú POD jeho okraj —
+           presne ten efekt, čo vyzeral ako "odlepený"/zmiznutý dropdown. */
+        .panel:has(table) { overflow-x: auto; }
         table { font-size: 11px; }
         th, td { padding: 6px 7px !important; }
         table th:first-child, table td:first-child {
