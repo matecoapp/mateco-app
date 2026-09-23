@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.562";
+const APP_VERSION = "1.0.564";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5366,15 +5366,52 @@ function DispatcherApp() {
           <div className="mobile-nav-overlay">
             <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
             <div className="mobile-nav-drawer">
-              <SidebarNav
-                module={module}
-                view={view}
-                effectiveUser={effectiveUser}
-                damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
-                onSelectModule={setModule}
-                onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
-                onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
-              />
+              <div className="mobile-nav-scroll">
+                {effectiveUser?.role === "admin" && (
+                  <button
+                    className="sidebar-group rail-ask"
+                    onClick={() => { setMaskotAskTick((n) => n + 1); setMobileNavOpen(false); }}
+                  >
+                    <ChatBubbleIcon size={15} />
+                    <span>Čo vyriešiť dnes?</span>
+                  </button>
+                )}
+                <SidebarNav
+                  module={module}
+                  view={view}
+                  effectiveUser={effectiveUser}
+                  damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+                  onSelectModule={setModule}
+                  onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
+                  onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
+                />
+              </div>
+              {/* Meno/nastavenia prihláseného používateľa — presunuté sem z
+                  hlavičky (tá je na mobile schovaná cez CSS, viď
+                  user-menu-desktop-wrap), nech je v hlavičke miesto na
+                  vyhľadávanie a popis platformy. */}
+              {currentUser && (
+                <div className="mobile-nav-footer">
+                  <UserMenu
+                    variant="mobile"
+                    currentUser={currentUser}
+                    onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
+                    pushEnabled={pushEnabled}
+                    onEnablePush={enablePush}
+                    onDisablePush={disablePush}
+                    viewAsRole={viewAsRole}
+                    onSetViewAsRole={setViewAsRole}
+                    darkMode={darkMode}
+                    onToggleDarkMode={() => setDarkMode((v) => { localStorage.setItem("mateco_dark_mode", !v ? "1" : "0"); return !v; })}
+                    onOpenUserAdmin={() => setShowUserAdmin(true)}
+                    onExportBackup={exportBackup}
+                    onImportBackup={importBackup}
+                    canExport={can(effectiveUser, "backup_export")}
+                    canImport={can(effectiveUser, "backup_import")}
+                    onLogout={signOut}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -7033,7 +7070,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout }) {
+function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout, variant }) {
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
   const isAdmin = isAdminUser(currentUser);
@@ -7053,19 +7090,40 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
   const sectionLabel = { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim)", padding: "8px 10px 2px" };
   const divider = { height: 1, background: "var(--border)", margin: "4px 0" };
 
+  // Mobilná verzia (dole v mobile-nav-drawer, na tmavom/svetlom var(--panel)
+  // pozadí namiesto červenej hlavičky) — biely text na priesvitnej bielej by
+  // tam v svetlom režime zmizol, preto tu farby z premenných, na celú šírku
+  // ako ostatné riadky menu, a rozbaľovacie okno smerom HORE (tlačidlo je
+  // úplne dole v drawri, dole by sa už nezmestilo).
+  const isMobileVariant = variant === "mobile";
+
   return (
     <div style={{ position: "relative" }}>
       <button
         onClick={() => setOpen((v) => !v)}
-        style={{
-          fontSize: 11,
-          color: "#fff",
-          background: "rgba(255,255,255,.12)",
-          border: "1px solid rgba(255,255,255,.25)",
-          borderRadius: 4,
-          padding: "3px 10px",
-          cursor: "pointer",
-        }}
+        style={
+          isMobileVariant
+            ? {
+                width: "100%",
+                textAlign: "left",
+                fontSize: 13,
+                color: "var(--text)",
+                background: "var(--panel-2)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                padding: "8px 10px",
+                cursor: "pointer",
+              }
+            : {
+                fontSize: 11,
+                color: "#fff",
+                background: "rgba(255,255,255,.12)",
+                border: "1px solid rgba(255,255,255,.25)",
+                borderRadius: 4,
+                padding: "3px 10px",
+                cursor: "pointer",
+              }
+        }
       >
         {currentUser.name} · {roleLabel(currentUser.role)}
         {isAdmin && viewAsRole && <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>}
@@ -7076,7 +7134,11 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
           <div
             className="panel dropdown-panel"
-            style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 290, maxWidth: "90vw", zIndex: 201, padding: 6 }}
+            style={
+              isMobileVariant
+                ? { position: "absolute", bottom: "calc(100% + 8px)", left: 0, width: "100%", maxWidth: "90vw", zIndex: 201, padding: 6 }
+                : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 290, maxWidth: "90vw", zIndex: 201, padding: 6 }
+            }
           >
             <button style={itemStyle} onClick={() => { onToggleDarkMode(); }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
               {darkMode ? "☀ Svetlý režim" : "🌙 Tmavý režim"}
@@ -7658,7 +7720,7 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
         )}
       </div>
       <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
-        <table>
+        <table className="table-cards">
           <thead>
             <tr>
               {fields.map((f) => <th key={f.key}>{f.label}</th>)}
@@ -7671,9 +7733,9 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
             )}
             {items.map((item) => (
               <tr key={item.id}>
-                {fields.map((f) => <td key={f.key}>{item[f.key] || "—"}</td>)}
+                {fields.map((f) => <td key={f.key} data-label={f.label}>{item[f.key] || "—"}</td>)}
                 {canEdit && (
-                  <td>
+                  <td className="td-actions">
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={() => onDelete(item.id)}>
                       Zmazať
                     </button>
@@ -7787,7 +7849,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
           .slice(0, 8);
 
   return (
-    <div ref={boxRef} style={{ position: "relative", width: "100%", maxWidth: 480, minWidth: 200 }}>
+    <div ref={boxRef} className="global-search-box" style={{ position: "relative", width: "100%", maxWidth: 480, minWidth: 200 }}>
       <input
         value={query}
         onChange={(e) => {
@@ -8338,23 +8400,28 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
               onNavigate={onNavigateNotification}
             />
             {currentUser && (
-              <UserMenu
-                currentUser={currentUser}
-                onSaveNotificationPrefs={onSaveNotificationPrefs}
-                pushEnabled={pushEnabled}
-                onEnablePush={onEnablePush}
-                onDisablePush={onDisablePush}
-                viewAsRole={viewAsRole}
-                onSetViewAsRole={onSetViewAsRole}
-                darkMode={darkMode}
-                onToggleDarkMode={onToggleDarkMode}
-                onOpenUserAdmin={onOpenUserAdmin}
-                onExportBackup={onExportBackup}
-                onImportBackup={onImportBackup}
-                canExport={can(effectiveUser, "backup_export")}
-                canImport={can(effectiveUser, "backup_import")}
-                onLogout={onLogout}
-              />
+              // Na mobile je táto istá <UserMenu> ešte raz dole v mobilnom
+              // výsuvnom menu (viď mobile-nav-drawer) — tu sa cez CSS schová,
+              // nech sa do úzkej hlavičky zmestí aj vyhľadávanie a popis.
+              <div className="user-menu-desktop-wrap">
+                <UserMenu
+                  currentUser={currentUser}
+                  onSaveNotificationPrefs={onSaveNotificationPrefs}
+                  pushEnabled={pushEnabled}
+                  onEnablePush={onEnablePush}
+                  onDisablePush={onDisablePush}
+                  viewAsRole={viewAsRole}
+                  onSetViewAsRole={onSetViewAsRole}
+                  darkMode={darkMode}
+                  onToggleDarkMode={onToggleDarkMode}
+                  onOpenUserAdmin={onOpenUserAdmin}
+                  onExportBackup={onExportBackup}
+                  onImportBackup={onImportBackup}
+                  canExport={can(effectiveUser, "backup_export")}
+                  canImport={can(effectiveUser, "backup_import")}
+                  onLogout={onLogout}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -8688,7 +8755,7 @@ function Dashboard({
       </div>
 
       <div className="panel" style={{ overflowX: "auto" }}>
-        <table>
+        <table className="table-cards">
           <thead>
             <tr>
               <th>Sériové číslo</th>
@@ -8730,20 +8797,20 @@ function Dashboard({
                   }}
                   onClick={() => onOpenCard(m)}
                 >
-                  <td className="mono" style={{ fontWeight: 600 }}>{m.code}{m.archived ? " (archivovaný)" : ""}</td>
-                  <td style={{ color: "var(--text-dim)" }}>{m.type || "—"}</td>
-                  <td className="mono" style={{ color: reviziaColor }}>{m.trackRevisions === false ? "Nesledované" : (m.revizia ? fmtDate(m.revizia) : "—")}</td>
-                  <td className="mono" style={{ color: reviziaEZColor }}>{m.trackRevisionsEZ === false ? "Nesledované" : (m.reviziaEZ ? fmtDate(m.reviziaEZ) : "—")}</td>
-                  <td>{m.depo || "—"}</td>
-                  <td>
+                  <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m.code}{m.archived ? " (archivovaný)" : ""}</td>
+                  <td data-label="Model" style={{ color: "var(--text-dim)" }}>{m.type || "—"}</td>
+                  <td data-label="Revízia ZZ" className="mono" style={{ color: reviziaColor }}>{m.trackRevisions === false ? "Nesledované" : (m.revizia ? fmtDate(m.revizia) : "—")}</td>
+                  <td data-label="Revízia EZ" className="mono" style={{ color: reviziaEZColor }}>{m.trackRevisionsEZ === false ? "Nesledované" : (m.reviziaEZ ? fmtDate(m.reviziaEZ) : "—")}</td>
+                  <td data-label="Depo">{m.depo || "—"}</td>
+                  <td data-label="Stav">
                     <StatusBadge status={m.status} />
                     {m.status === "overdue" && (
                       <span style={{ fontSize: 11, color: "var(--danger)", marginLeft: 6 }}>+{overdueDays} dní</span>
                     )}
                   </td>
-                  <td>{m.currentJob ? (m.currentJob.customer || m.currentJob.toLocation) : "— voľný —"}</td>
-                  <td className="mono">{m.currentJob ? (m.currentJob.endDate ? fmtDate(m.currentJob.endDate) : <span style={{ color: "var(--warn)" }}>bez konca</span>) : "—"}</td>
-                  <td style={{ color: "var(--text-dim)" }}>
+                  <td data-label="Zákazka">{m.currentJob ? (m.currentJob.customer || m.currentJob.toLocation) : "— voľný —"}</td>
+                  <td data-label="Zákazka do" className="mono">{m.currentJob ? (m.currentJob.endDate ? fmtDate(m.currentJob.endDate) : <span style={{ color: "var(--warn)" }}>bez konca</span>) : "—"}</td>
+                  <td data-label="Ďalšia zákazka" style={{ color: "var(--text-dim)" }}>
                     {m.nextJob ? `${fmtDate(m.nextJob.startDate)} → ${m.nextJob.toLocation}` : "—"}
                   </td>
                 </tr>
@@ -20774,6 +20841,9 @@ function GlobalStyle() {
            vedľa labelu, nech sa nemusí posúvať do boku ani pri dlhších
            hodnotách (popis dielu a pod.). */
         table.table-cards td input, table.table-cards td select { width: 100% !important; max-width: 200px; }
+        /* Riadkové akcie (Zmazať a pod.) v karte — väčšie dotykové pole než
+           na desktope, nech sa na mobile dá bezpečne trafiť prstom. */
+        table.table-cards td.td-actions button { min-height: 36px; padding: 6px 14px !important; }
       }
 
       /* Položka v kebab (⋮) menu — riadkové akcie skryté za jedným tlačidlom
@@ -20787,14 +20857,14 @@ function GlobalStyle() {
 
       /* "Vlajočka" prilepená na ľavom okraji obrazovky — otvorí to isté menu ako
          výsuvný panel — len na mobile (nižšie v @media). Na webe je bočné menu
-         trvalo viditeľné (IconRail), vlajočku tam netreba. Polovica šírky trčí
-         mimo obrazovky (necháva len oblý pravý okraj vidno), nech je jasné, že
-         sa to dá vytiahnuť/kliknúť, bez toho, aby to zbytočne zaberalo plochu. */
+         trvalo viditeľné (IconRail), vlajočku tam netreba. Úzka a nízka (tenká
+         šípka, nie veľké tlačidlo), väčšina trčí mimo obrazovky, nech
+         nezasahuje do plochy pod ňou. */
       .mobile-nav-edge-flag {
-        display: none; position: fixed; left: -16px; top: 50%; transform: translateY(-50%);
+        display: none; position: fixed; left: -14px; top: 50%; transform: translateY(-50%);
         align-items: center; justify-content: center;
-        width: 40px; height: 44px; padding-left: 12px; border-radius: 0 10px 10px 0;
-        background: var(--accent); border: none; color: #fff; font-size: 17px; cursor: pointer;
+        width: 22px; height: 46px; padding-left: 10px; border-radius: 0 8px 8px 0;
+        background: var(--accent); border: none; color: #fff; font-size: 13px; cursor: pointer;
         box-shadow: 2px 0 8px rgba(0,0,0,.18); z-index: 90;
       }
       .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
@@ -20805,9 +20875,18 @@ function GlobalStyle() {
          (presne ten istý problém, čo mal kedysi aj .rail-flyout — viď jeho
          komentár pri width:260px vyššie). height:auto na riadkoch je poistka
          pre prípad, že by sa aj tak zalomili na najužších telefónoch. */
-      .mobile-nav-drawer { position: relative; width: 78%; max-width: 280px; background: var(--panel); height: 100%; overflow-y: auto; box-shadow: 4px 0 16px rgba(0,0,0,.10); padding-top: env(safe-area-inset-top); }
+      .mobile-nav-drawer {
+        position: relative; width: 64%; max-width: 240px; background: var(--panel);
+        height: 100%; overflow-y: auto; box-shadow: 4px 0 16px rgba(0,0,0,.10);
+        padding-top: env(safe-area-inset-top);
+        display: flex; flex-direction: column;
+      }
+      .mobile-nav-scroll { flex: 1 1 auto; overflow-y: auto; }
+      /* Meno/nastavenia je vždy prilepené celkom dole v drawri (margin-top:
+         auto), aj keď je menu krátke a nevyplní celú výšku. */
+      .mobile-nav-footer { margin-top: auto; padding: 10px; border-top: 1px solid var(--border); }
       .mobile-nav-drawer .sidebar-nav { width: 100%; }
-      .mobile-nav-drawer .sidebar-group, .mobile-nav-drawer .sidebar-item { height: auto; min-height: 29px; white-space: normal; padding-top: 6px; padding-bottom: 6px; }
+      .mobile-nav-drawer .sidebar-group, .mobile-nav-drawer .sidebar-item { height: auto; min-height: 29px; white-space: normal; padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
          Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja), a to aj pri
@@ -21010,14 +21089,26 @@ function GlobalStyle() {
           --gantt-plan-day-col: 46px;
         }
         .app-main { padding: 10px !important; }
-        .header-topbar { padding: 7px 10px !important; gap: 6px !important; }
+        .header-topbar { padding: 7px 10px !important; gap: 6px !important; flex-wrap: nowrap !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
-        .header-divider, .header-subtitle { display: none !important; }
+        /* Predtým sa popis platformy na mobile úplne schovával, lebo sa s
+           vyhľadávaním nezmestili do jedného riadku — teraz je vyhľadávanie
+           užšie (min-width nižšie) a UserMenu je presunuté dole do menu (viď
+           user-menu-desktop-wrap), takže v riadku ostáva dosť miesta aj naň. */
+        .header-divider { display: block !important; }
+        .header-subtitle { display: block !important; font-size: 9px !important; white-space: nowrap; }
+        .user-menu-desktop-wrap { display: none !important; }
         .header-top-actions { gap: 5px !important; }
         .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
           font-size: 10px !important;
           padding: 4px 6px !important;
         }
+        /* Zvonček — samotný text/ikonový obsah je malý, ale dotykové pole
+           okolo neho nech je aspoň ~40px (odporúčaná min. veľkosť na dotyk),
+           inak sa naň na mobile ťažko trafí. */
+        .header-top-actions button { min-height: 38px; min-width: 38px; }
+        .global-search-box { min-width: 70px !important; }
+        .global-search-box input { font-size: 12px !important; padding: 4px 8px !important; }
         .panel { padding: 12px !important; }
         /* display:flex tu MUSÍ byť tiež !important — kalendár požičovne má
            túto lištu nastavenú inline ako display:"grid" (3 stĺpce vedľa
@@ -21034,9 +21125,15 @@ function GlobalStyle() {
         /* Modálne okná — takmer celá obrazovka, menší padding */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; }
         .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
-        .modal-toolbar { margin: calc(-1 * max(12px, env(safe-area-inset-top))) -12px 14px !important; }
+        /* Len -12px hore (nie aj safe-area-inset-top ako predtým) — inak sa
+           táto lišta (má v sebe zatváracie ×) vytiahla úplne až za stavový
+           riadok telefónu a × sa dala schovať za hodiny/batériu, nedalo sa
+           na ňu kliknúť. Safe-area medzera nad ňou tak ostáva zachovaná. */
+        .modal-toolbar { margin: -12px -12px 14px !important; }
         .modal-header h3 { font-size: 15px !important; }
         .modal-title-main { font-size: 15px !important; }
+        /* Krížik na zatvorenie — 30px je na dotyk malé, na mobile väčší. */
+        .modal-close-x { width: 40px !important; height: 40px !important; font-size: 26px !important; }
 
         /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky */
         .panel { overflow-x: auto; }
