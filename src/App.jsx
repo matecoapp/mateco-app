@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.539";
+const APP_VERSION = "1.0.541";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -330,8 +330,10 @@ function openPrintableHandoverProtocol(job, machine, p) {
   .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
   @media print { .toolbar { display: none; } }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 24px; }
-  h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; }
-  .sub { font-size: 11px; color: #555; margin-bottom: 16px; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
+  .logo { height: 28px; width: auto; display: block; margin-top: 2px; }
+  h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; text-align: right; }
+  .sub { font-size: 11px; color: #555; margin-bottom: 16px; text-align: right; }
   .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 16px; }
   .meta div span.l { color: #666; display: inline-block; min-width: 130px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-bottom: 16px; }
@@ -350,12 +352,19 @@ function openPrintableHandoverProtocol(job, machine, p) {
   .legal ol { margin: 4px 0; padding-left: 16px; }
   .legal li { margin-bottom: 2px; }
   .contacts { margin-top: 8px; font-size: 9.5px; color: #666; }
+  .footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
+  .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
   @media print { body { margin: 35mm 10mm 10mm 10mm; } }
 </style></head>
 <body>
   <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
-  <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
-  <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
+  <div class="head">
+    <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
+    <div>
+      <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
+      <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
+    </div>
+  </div>
   <div class="meta">
     <div><span class="l">Sériové číslo:</span>${esc(machine?.code)}</div>
     <div><span class="l">Typ / Názov:</span>${esc(machine?.type)}</div>
@@ -389,7 +398,12 @@ function openPrintableHandoverProtocol(job, machine, p) {
     <ol>${HANDOVER_LEGAL_RULES.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
     <div>${esc(HANDOVER_VOP_NOTE)}</div>
   </div>
-  <div class="contacts">${esc(HANDOVER_CONTACTS)}</div>
+  <div class="footer">
+    mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
+    <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
+  </div>
 </body></html>`;
   if (_printProtocolOpenListener) {
     _printProtocolOpenListener(docHtml);
