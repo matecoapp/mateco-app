@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.559";
+const APP_VERSION = "1.0.560";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11516,9 +11516,23 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, [noteKey]: note } : it)));
   }
 
-  const canSave = protocolNumber.trim() && customerSig && driverSig;
+  // Číslo protokolu je len evidenčný údaj (dispečer si ho dorobí neskôr, keď
+  // treba) — nič nebráni odoslaniu bez neho. Checklist ale musí byť vyplnený
+  // do posledného riadku, to sa už nesmie dať obísť.
+  const checklistComplete = checklist.every((it) => it[statusKey] === "ok" || it[statusKey] === "problem");
+  const canSave = checklistComplete && customerSig && driverSig;
+  const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
+
+  function handleSaveClick() {
+    if (isReturnPhase && returnPhotos.length === 0) {
+      setConfirmNoPhotos(true);
+      return;
+    }
+    handleSave();
+  }
 
   function handleSave() {
+    setConfirmNoPhotos(false);
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
     const isFirstHandover = !isReturnPhase && !existing?.handoverDone;
     if (isReturnPhase) {
@@ -11647,6 +11661,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   }
 
   return (
+    <>
     <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
@@ -11662,7 +11677,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       )}
 
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-        <Field label="Číslo protokolu (z ERP) *">
+        <Field label="Číslo protokolu (z ERP)">
           <input value={protocolNumber} onChange={(e) => setProtocolNumber(e.target.value)} placeholder="napr. 222493211" style={{ width: "100%" }} />
         </Field>
       </div>
@@ -11804,8 +11819,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" value={driverSig} onChange={setDriverSig} />
       </div>
 
+      {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={handleSaveClick}>
           {isCorrection ? "Uložiť opravu" : isReturnPhase ? "Dokončiť vrátenie" : "Uložiť prevzatie"}
         </button>
         {existing && (
@@ -11820,6 +11836,15 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         )}
       </div>
     </Modal>
+    {confirmNoPhotos && (
+      <ConfirmActionModal
+        message="Chýbajú fotky stavu stroja pri zvoze. Pokračovať v uložení bez fotiek?"
+        confirmLabel="Pokračovať bez fotiek"
+        onClose={() => setConfirmNoPhotos(false)}
+        onConfirm={handleSave}
+      />
+    )}
+    </>
   );
 }
 
@@ -11882,7 +11907,19 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       }
     }
   }
+  const checklistComplete = checklist.every((it) => it.checkerStatus === "ok" || it.checkerStatus === "problem");
+  const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
+
+  function handleSaveClick() {
+    if (phase === "vyvoz" && photos.length === 0) {
+      setConfirmNoPhotos(true);
+      return;
+    }
+    handleSave();
+  }
+
   function handleSave() {
+    setConfirmNoPhotos(false);
     onSave({
       checklist,
       checkerPhotos: photos,
@@ -11892,6 +11929,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   }
 
   return (
+    <>
     <Modal eyebrow={phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"} title={machine?.code || "Stroj"} onClose={onClose} wide>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
@@ -12011,11 +12049,23 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         </div>
       )}
       {showForm && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-          <button className="btn btn-accent" onClick={handleSave}>Uložiť</button>
+        <div style={{ marginTop: 14 }}>
+          {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-accent" disabled={!checklistComplete} onClick={handleSaveClick}>Uložiť</button>
+          </div>
         </div>
       )}
     </Modal>
+    {confirmNoPhotos && (
+      <ConfirmActionModal
+        message="Chýbajú fotky stroja pred vývozom. Pokračovať v uložení bez fotiek?"
+        confirmLabel="Pokračovať bez fotiek"
+        onClose={() => setConfirmNoPhotos(false)}
+        onConfirm={handleSave}
+      />
+    )}
+    </>
   );
 }
 
