@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.560";
+const APP_VERSION = "1.0.561";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2132,6 +2132,41 @@ function DispatcherApp() {
   }
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Švihnutie prstom od ľavého okraja obrazovky (mobile) otvorí to isté menu
+  // ako klik na "vlajočku"/edge-flag — sleduje sa len dotyk, ktorý ZAČAL v
+  // úzkom 24px pásiku pri okraji, nech sa gesto nebije s bežným vodorovným
+  // scrollovaním obsahu (Gantt, tabuľky) kdekoľvek inde na obrazovke.
+  useEffect(() => {
+    let startX = null, startY = null;
+    function onTouchStart(e) {
+      const t = e.touches[0];
+      if (t.clientX > 24) { startX = null; return; }
+      startX = t.clientX;
+      startY = t.clientY;
+    }
+    function onTouchMove(e) {
+      if (startX === null) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = Math.abs(t.clientY - startY);
+      if (dx > 50 && dx > dy) {
+        setMobileNavOpen(true);
+        startX = null;
+      }
+    }
+    function onTouchEnd() {
+      startX = null;
+    }
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
 
   // body nemá vlastný --bg (tá premenná sa v tmavom režime prepisuje len
   // v rámci .app-shell.dark, nie na body/html) — bez tejto triedy by pri
@@ -5247,7 +5282,6 @@ function DispatcherApp() {
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
-        onToggleMobileNav={() => setMobileNavOpen((v) => !v)}
       />
 
       {showUserAdmin && (
@@ -5325,6 +5359,9 @@ function DispatcherApp() {
           onAskDaily={() => setMaskotAskTick((n) => n + 1)}
           onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         />
+        {!mobileNavOpen && (
+          <button className="mobile-nav-edge-flag" onClick={() => setMobileNavOpen(true)} aria-label="Menu">☰</button>
+        )}
         {mobileNavOpen && (
           <div className="mobile-nav-overlay">
             <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
@@ -5334,7 +5371,7 @@ function DispatcherApp() {
                 view={view}
                 effectiveUser={effectiveUser}
                 damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
-                onSelectModule={(m) => { setModule(m); setMobileNavOpen(false); }}
+                onSelectModule={setModule}
                 onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
                 onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
               />
@@ -8277,12 +8314,11 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
   );
 }
 
-function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate, onToggleMobileNav }) {
+function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
   return (
     <div style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
-          <button className="mobile-nav-toggle" onClick={onToggleMobileNav} aria-label="Menu">☰</button>
           <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
           <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
           <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
@@ -20715,17 +20751,29 @@ function GlobalStyle() {
       }
       .kebab-item:hover { background: var(--panel-2); }
 
-      /* Hamburger na otvorenie toho istého menu ako výsuvný panel — len na
-         mobile (nižšie v @media). Na webe je bočné menu trvalo viditeľné,
-         tlačidlo tam netreba. */
-      .mobile-nav-toggle {
-        display: none; align-items: center; justify-content: center;
-        width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0;
-        background: rgba(255,255,255,.18); border: none; color: #fff; font-size: 16px; cursor: pointer;
+      /* "Vlajočka" prilepená na ľavom okraji obrazovky — otvorí to isté menu ako
+         výsuvný panel — len na mobile (nižšie v @media). Na webe je bočné menu
+         trvalo viditeľné (IconRail), vlajočku tam netreba. Polovica šírky trčí
+         mimo obrazovky (necháva len oblý pravý okraj vidno), nech je jasné, že
+         sa to dá vytiahnuť/kliknúť, bez toho, aby to zbytočne zaberalo plochu. */
+      .mobile-nav-edge-flag {
+        display: none; position: fixed; left: -16px; top: 50%; transform: translateY(-50%);
+        align-items: center; justify-content: center;
+        width: 40px; height: 44px; padding-left: 12px; border-radius: 0 10px 10px 0;
+        background: var(--accent); border: none; color: #fff; font-size: 17px; cursor: pointer;
+        box-shadow: 2px 0 8px rgba(0,0,0,.18); z-index: 90;
       }
       .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
       .mobile-nav-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+      /* width:100% (nie pevných 152px ako .sidebar-nav) — pri dlhších názvoch
+         záložiek ("Poškodenia strojov požičovne") sa inak zalamovali na 2-3
+         riadky v pevnej výške riadku a prekrývali susedný riadok pod sebou
+         (presne ten istý problém, čo mal kedysi aj .rail-flyout — viď jeho
+         komentár pri width:260px vyššie). height:auto na riadkoch je poistka
+         pre prípad, že by sa aj tak zalomili na najužších telefónoch. */
       .mobile-nav-drawer { position: relative; width: 78%; max-width: 280px; background: var(--panel); height: 100%; overflow-y: auto; box-shadow: 4px 0 16px rgba(0,0,0,.10); padding-top: env(safe-area-inset-top); }
+      .mobile-nav-drawer .sidebar-nav { width: 100%; }
+      .mobile-nav-drawer .sidebar-group, .mobile-nav-drawer .sidebar-item { height: auto; min-height: 29px; white-space: normal; padding-top: 6px; padding-bottom: 6px; }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
          Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja), a to aj pri
@@ -20916,7 +20964,7 @@ function GlobalStyle() {
            výsuvný panel (mobile-nav-drawer, mimo tohto breakpointu vyššie,
            tá istá trieda .sidebar-nav ale vnútri drawera zostáva viditeľná). */
         .icon-rail-wrap { display: none; }
-        .mobile-nav-toggle { display: inline-flex; }
+        .mobile-nav-edge-flag { display: flex; }
 
         :root {
           --gantt-name-col: 92px;
