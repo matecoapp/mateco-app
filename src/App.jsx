@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.537";
+const APP_VERSION = "1.0.539";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -252,6 +252,15 @@ let _printProtocolOpenListener = null;
 function setPrintProtocolOpenListener(fn) {
   _printProtocolOpenListener = fn;
 }
+// Náhľad fotiek (snapshoty, fotky pri odovzdaní/vrátení) — namiesto otvorenia
+// v novej karte (window.open) sa zobrazia v lightboxe priamo v appke.
+let _photoLightboxListener = null;
+function setPhotoLightboxOpenListener(fn) {
+  _photoLightboxListener = fn;
+}
+function openPhotoLightbox(url) {
+  if (_photoLightboxListener) _photoLightboxListener(url);
+}
 // Aktuálny zoznam strojov platformy (S/N + model) — platforma ho priebežne aktualizuje,
 // aby ho protokol mohol použiť namiesto vlastného natvrdo zabudovaného zoznamu.
 let _protocolMachinesList = [];
@@ -313,15 +322,13 @@ function openPrintableHandoverProtocol(job, machine, p) {
       return `<div class="checkrow"><span>${i + 1}. ${esc(label)}</span><span class="mark ${markClass}">${mark}</span></div>${note}`;
     }).join("");
   }
-  const win = window.open("", "_blank");
-  if (!win) {
-    alert("Prehliadač zablokoval otvorenie okna — povoľte vyskakovacie okná pre túto stránku.");
-    return;
-  }
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Protokol ${esc(p.protocolNumber)}</title>
 <style>
+  .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 8px 0; margin-bottom: 8px; background: #fff; }
+  .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
+  @media print { .toolbar { display: none; } }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 24px; }
   h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; }
   .sub { font-size: 11px; color: #555; margin-bottom: 16px; }
@@ -346,6 +353,7 @@ function openPrintableHandoverProtocol(job, machine, p) {
   @media print { body { margin: 35mm 10mm 10mm 10mm; } }
 </style></head>
 <body>
+  <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
   <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
   <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
   <div class="meta">
@@ -382,10 +390,12 @@ function openPrintableHandoverProtocol(job, machine, p) {
     <div>${esc(HANDOVER_VOP_NOTE)}</div>
   </div>
   <div class="contacts">${esc(HANDOVER_CONTACTS)}</div>
-  <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
-  win.document.write(docHtml);
-  win.document.close();
+  if (_printProtocolOpenListener) {
+    _printProtocolOpenListener(docHtml);
+  } else {
+    console.error("Zobrazenie protokolu ešte nie je pripravené.");
+  }
 }
 
 // Zobrazenie/tlač/úprava servisného protokolu — vzhľad presne podľa dohodnutého návrhu
@@ -549,7 +559,7 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   <button id="cancelEdit" class="btn btn-ghost" onclick="cancelEdit()">Zrušiť úpravu</button>
   <span id="saveMsg"></span>
   <button class="btn btn-accent" onclick="window.print()">Tlačiť / uložiť ako PDF</button>
-  ${p.imageUrl ? `<a class="btn btn-ghost" href="${escAttr(p.imageUrl)}" target="_blank" rel="noreferrer">Pôvodný snapshot</a>` : ""}
+  ${p.imageUrl ? `<button class="btn btn-ghost" onclick="showSnapshot()">Pôvodný snapshot</button>` : ""}
   ${!p.damageId && assignCandidates.length ? `<button id="openAssign" class="btn btn-ghost" onclick="openAssignPicker()">Priradiť k zákazke</button>` : ""}
 </div>
 
@@ -574,6 +584,13 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
     </div>
   </div>
 </div>
+
+${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-items:center" onclick="if(event.target===this) closeSnapshot()">
+  <div style="width:auto;max-width:92vw;text-align:center">
+    <img src="${escAttr(p.imageUrl)}" alt="Pôvodný snapshot" style="display:block;max-width:100%;max-height:86vh;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,.4)">
+    <button class="btn btn-ghost" style="margin-top:10px;background:#fff" onclick="closeSnapshot()">✕ Zavrieť</button>
+  </div>
+</div>` : ""}
 
 <div class="page" id="pageContent">
   <div class="body-content">
@@ -694,6 +711,14 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   }
   function closeAssignPicker() {
     document.getElementById('assignOverlay').classList.remove('open');
+  }
+  function showSnapshot() {
+    var el = document.getElementById('snapshotOverlay');
+    if (el) el.classList.add('open');
+  }
+  function closeSnapshot() {
+    var el = document.getElementById('snapshotOverlay');
+    if (el) el.classList.remove('open');
   }
   function filterAssignList() {
     var q = document.getElementById('assignSearch').value.trim().toLowerCase();
@@ -2001,6 +2026,7 @@ function DispatcherApp() {
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
   const [printProtocolHtml, setPrintProtocolHtml] = useState(null); // náhľad/tlač vyplneného protokolu (openPrintableServiceProtocol) — inline v appke, nie nová karta
+  const [lightboxUrl, setLightboxUrl] = useState(null); // náhľad fotky (snapshot, fotky pri odovzdaní/vrátení) — inline v appke, nie nová karta
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
   const [planMode, setPlanMode] = useState("gantt"); // "gantt" | "zoznam" — v Pláne servisu
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
@@ -2275,6 +2301,11 @@ function DispatcherApp() {
   useEffect(() => {
     setPrintProtocolOpenListener((html) => setPrintProtocolHtml(html));
     return () => setPrintProtocolOpenListener(null);
+  }, []);
+
+  useEffect(() => {
+    setPhotoLightboxOpenListener((url) => setLightboxUrl(url));
+    return () => setPhotoLightboxOpenListener(null);
   }, []);
 
   useEffect(() => {
@@ -6520,6 +6551,9 @@ function DispatcherApp() {
       {printProtocolHtml && (
         <PrintProtocolModal html={printProtocolHtml} onClose={() => setPrintProtocolHtml(null)} />
       )}
+      {lightboxUrl && (
+        <PhotoLightboxModal src={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      )}
       {pendingMail && <MailChoiceModal mail={pendingMail} onClose={() => setPendingMail(null)} />}
       {highlightDamageId && (() => {
         const hd = damages.find((d) => d.id === highlightDamageId);
@@ -8309,7 +8343,7 @@ function ProtocolModal({ html, params, onClose }) {
         <iframe
           title="Servisný protokol"
           srcDoc={html}
-          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin"
+          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
       </div>
@@ -8320,6 +8354,39 @@ function ProtocolModal({ html, params, onClose }) {
 // Náhľad/tlač VYPLNENÉHO servisného protokolu (openPrintableServiceProtocol) — rovnaký
 // princíp ako ProtocolModal vyššie (iframe namiesto window.open, ktoré je v appke
 // blokované), len bez "predvyplnené" odznaku, ktorý sem nepatrí.
+function PhotoLightboxModal({ src, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.85)",
+        zIndex: 300,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        cursor: "zoom-out",
+      }}
+      onClick={onClose}
+    >
+      <img
+        src={src}
+        alt="Náhľad fotky"
+        style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6, boxShadow: "0 4px 24px rgba(0,0,0,.5)", cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        className="btn"
+        style={{ position: "absolute", top: 16, right: 16, background: "#fff", color: "var(--text)" }}
+        onClick={onClose}
+      >
+        ✕ Zavrieť
+      </button>
+    </div>
+  );
+}
+
 function PrintProtocolModal({ html, onClose }) {
   return (
     <div
@@ -8345,7 +8412,7 @@ function PrintProtocolModal({ html, onClose }) {
         <iframe
           title="Servisný protokol"
           srcDoc={html}
-          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin"
+          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
       </div>
@@ -11128,7 +11195,7 @@ function HandoverProtocolViewPanel({ existing, job, myEmployee, user, onGoEditNe
                   key={i}
                   src={url}
                   alt={`Foto stavu stroja pri zvoze ${i + 1}`}
-                  onClick={() => window.open(url, "_blank")}
+                  onClick={() => openPhotoLightbox(url)}
                   style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }}
                 />
               ))}
@@ -11542,7 +11609,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {returnPhotos.map((url, i) => (
               <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-                <img src={url} alt={`Foto ${i + 1}`} onClick={() => window.open(url, "_blank")} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
+                <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
                 <button
                   type="button"
                   onClick={() => setReturnPhotos((prev) => prev.filter((_, idx) => idx !== i))}
@@ -11715,7 +11782,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         {photos.map((url, i) => (
           <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-            <img src={url} alt={`Foto ${i + 1}`} onClick={() => window.open(url, "_blank")} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
+            <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
             {!readOnly && (
               <button
                 type="button"
@@ -14861,9 +14928,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   {h.checkerPhotos && h.checkerPhotos.length > 0 ? (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {h.checkerPhotos.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noreferrer">
-                          <img src={url} alt="Foto pred vývozom" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
-                        </a>
+                        <img key={i} src={url} alt="Foto pred vývozom" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
                       ))}
                     </div>
                   ) : (
@@ -14877,9 +14942,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   {h.returnPhotos && h.returnPhotos.length > 0 ? (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {h.returnPhotos.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noreferrer">
-                          <img src={url} alt="Foto po vrátení" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
-                        </a>
+                        <img key={i} src={url} alt="Foto po vrátení" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
                       ))}
                     </div>
                   ) : (
@@ -14964,9 +15027,9 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                         </div>
                       </button>
                       {p.imageUrl && (
-                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" className="btn btn-ghost" style={{ fontSize: 11, flexShrink: 0 }}>
+                        <button onClick={() => openPhotoLightbox(p.imageUrl)} title="Zobraziť pôvodný snapshot" className="btn btn-ghost" style={{ fontSize: 11, flexShrink: 0 }}>
                           Snapshot
-                        </a>
+                        </button>
                       )}
                       {onAssignProtocolToDamage && (can(user, "damage_status") || can(user, "external_status")) && (
                         <button
@@ -15526,7 +15589,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">Pôvodný snapshot</a>
+              <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
           </div>
         </div>
@@ -17103,7 +17166,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <a className="btn btn-ghost" href={p.imageUrl} target="_blank" rel="noreferrer">Pôvodný snapshot</a>
+              <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
           </div>
         </div>
@@ -18058,9 +18121,9 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                         Protokol ({fmtDate(p.createdAt)})
                       </button>
                       {p.imageUrl && (
-                        <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Zobraziť pôvodný snapshot" style={{ fontSize: 11 }}>
+                        <button onClick={() => openPhotoLightbox(p.imageUrl)} title="Zobraziť pôvodný snapshot" style={{ fontSize: 11, color: "var(--accent)", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
                           Snapshot
-                        </a>
+                        </button>
                       )}
                     </span>
                   ))}
