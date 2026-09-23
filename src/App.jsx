@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.551";
+const APP_VERSION = "1.0.554";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -13821,7 +13821,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // kvôli tabuľkám), "prebublať" von a posunúť celú stránku vrátane
   // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
       {/* POZOR: translateZ(0)/transform na TOMTO obale (rodič sticky prvkov)
           bola zlá cesta — mobilný Safari má známu chybu, že position:sticky
           prestane fungovať úplne, keď má nadradený prvok "transform" (aj
@@ -17961,7 +17961,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         neho má tiež overflow-x:auto kvôli tabuľkám), "prebublať" von — posunie
         sa celá stránka vrátane hlavičky/tlačidiel nad kalendárom, nielen
         samotný Gantt. Toto to zastaví presne na hranici Gantt kontajnera. */}
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
+    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
           <div style={{ width: "100%", minWidth: "max-content" }}>
             <div
               style={{
@@ -18102,7 +18102,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
                           const isCheckerInspection = a.kind === "kontrolaStroja";
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
-                          const bg = isCheckerInspection ? (isReturnInspection ? "#0ea5e9" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
+                          const bg = isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
                           const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = a.kind === "udalost"
                             ? (a.poznamka || "Udalosť")
