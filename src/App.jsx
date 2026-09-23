@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.556";
+const APP_VERSION = "1.0.557";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5146,7 +5146,7 @@ function DispatcherApp() {
 
   if (showSetNewPassword) {
     return (
-      <div className="app-shell">
+      <div className={`app-shell${darkMode ? " dark" : ""}`}>
         <GlobalStyle />
         <SetNewPasswordScreen
           onDone={() => setShowSetNewPassword(false)}
@@ -5157,7 +5157,7 @@ function DispatcherApp() {
 
   if (showDataLoader) {
     return (
-      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400 }}>
+      <div className={`app-shell${darkMode ? " dark" : ""}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400 }}>
         <GlobalStyle />
         <LiftLoader label="Načítavam dáta…" />
       </div>
@@ -5166,7 +5166,7 @@ function DispatcherApp() {
 
   if (!session) {
     return (
-      <div className="app-shell">
+      <div className={`app-shell${darkMode ? " dark" : ""}`}>
         <GlobalStyle />
         <LoginScreen onLogin={attemptLogin} onSignUp={signUpNewAccount} />
       </div>
@@ -5176,7 +5176,7 @@ function DispatcherApp() {
   if (showProfileLoader || !currentUser) {
     // Prihlásený v Supabase Auth, ale profil sa ešte nenačítal (alebo bol zmazaný administrátorom)
     return (
-      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400, flexDirection: "column", gap: 14 }}>
+      <div className={`app-shell${darkMode ? " dark" : ""}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 400, flexDirection: "column", gap: 14 }}>
         <GlobalStyle />
         <LiftLoader label="Načítavam profil…" />
         <button className="btn btn-ghost" onClick={signOut}>Odhlásiť sa</button>
@@ -5186,7 +5186,7 @@ function DispatcherApp() {
 
   if (currentUser.role === "nezaradeny") {
     return (
-      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div className={`app-shell${darkMode ? " dark" : ""}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
         <GlobalStyle />
         <div className="panel" style={{ padding: 32, width: 420, maxWidth: "90vw", textAlign: "center" }}>
           <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 12, textTransform: "lowercase" }}>mateco</div>
