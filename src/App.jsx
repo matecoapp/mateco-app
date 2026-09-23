@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.541";
+const APP_VERSION = "1.0.542";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -329,41 +329,39 @@ function openPrintableHandoverProtocol(job, machine, p) {
   .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 8px 0; margin-bottom: 8px; background: #fff; }
   .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
   @media print { .toolbar { display: none; } }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 24px; }
-  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
-  .logo { height: 28px; width: auto; display: block; margin-top: 2px; }
-  h1 { font-size: 16px; color: #E30613; margin: 0 0 2px; text-align: right; }
-  .sub { font-size: 11px; color: #555; margin-bottom: 16px; text-align: right; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 16px; }
-  .meta div span.l { color: #666; display: inline-block; min-width: 130px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-bottom: 16px; }
-  .colhead { font-weight: bold; font-size: 12px; border-bottom: 2px solid #E30613; padding-bottom: 4px; margin-bottom: 6px; }
-  .checkrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
-  .mark { font-weight: bold; width: 16px; text-align: center; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; margin: 34px; }
+  .head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin-bottom: 18px; }
+  .logo { height: 40px; width: auto; display: block; }
+  h1 { font-size: 20px; color: #E30613; margin: 0; }
+  .sub { font-size: 13px; color: #555; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; margin-bottom: 22px; }
+  .meta div span.l { color: #666; display: inline-block; min-width: 150px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; margin-bottom: 22px; }
+  .colhead { font-weight: bold; font-size: 14px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin-bottom: 8px; }
+  .checkrow { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; }
+  .mark { font-weight: bold; width: 18px; text-align: center; }
   .mark.ok { color: #2f7d32; }
   .mark.bad { color: #c62828; }
-  .itemnote { font-size: 10px; color: #c62828; padding: 0 0 4px 4px; }
-  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
-  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 6px; }
-  .siglabel { font-size: 10px; color: #666; margin-bottom: 4px; }
-  .sigimg { max-width: 100%; height: 60px; }
-  .signone { font-size: 10px; color: #999; height: 60px; display: flex; align-items: center; }
-  .legal { margin-top: 24px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 9.5px; color: #444; }
-  .legal ol { margin: 4px 0; padding-left: 16px; }
-  .legal li { margin-bottom: 2px; }
+  .itemnote { font-size: 11.5px; color: #c62828; padding: 0 0 5px 4px; }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
+  .siglabel { font-size: 11.5px; color: #666; margin-bottom: 5px; }
+  .sigimg { max-width: 100%; height: 72px; }
+  .signone { font-size: 11.5px; color: #999; height: 72px; display: flex; align-items: center; }
+  .legal { margin-top: 28px; padding-top: 14px; border-top: 1px solid #ccc; font-size: 11px; color: #444; }
+  .legal ol { margin: 5px 0; padding-left: 18px; }
+  .legal li { margin-bottom: 3px; }
   .contacts { margin-top: 8px; font-size: 9.5px; color: #666; }
-  .footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
-  .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
-  @media print { body { margin: 35mm 10mm 10mm 10mm; } }
+  .footer { margin-top: 26px; padding-top: 18px; border-top: 1px solid #ccc; font-size: 12px; color: #555; line-height: 2; }
+  .footer .legal { margin-top: 10px; padding-top: 0; border-top: none; color: #888; font-size: 11px; }
+  @media print { body { margin: 12mm 14mm 12mm 14mm; } }
 </style></head>
 <body>
   <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
   <div class="head">
     <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
-    <div>
-      <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
-      <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
-    </div>
+    <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
+    <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
   </div>
   <div class="meta">
     <div><span class="l">Sériové číslo:</span>${esc(machine?.code)}</div>
