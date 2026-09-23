@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.536";
+const APP_VERSION = "1.0.537";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -425,8 +425,16 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   const faultLine = [
     p.faultCode ? `Kód poruchy ${p.faultCode}` : "",
     p.faultFullText || p.jobDesc || "",
-    p.status ? `Stav zákazky: ${p.status}` : "",
   ].filter(Boolean).join(" – ") || "—";
+  const STATUS_PILL_META = {
+    "Dokončené": "#2e7d32",
+    "Čaká na diely": "#e08a00",
+    "Nedokončené": "#e08a00",
+    "Porucha nahlásená": "#c62828",
+  };
+  const statusPill = p.status
+    ? `<span class="status-pill" style="background:${STATUS_PILL_META[p.status] || "#666"}">${esc(p.status)}</span>`
+    : "";
 
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
@@ -444,8 +452,9 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   .protnum .editfield { font-weight: bold; color: #E30613; min-width: 60px; }
 
   .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
-  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .secbody { padding: 8px 14px; }
+  .status-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 10px; font-weight: bold; text-transform: none; letter-spacing: 0; color: #fff; }
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 20px; }
   .field .l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 2px; }
@@ -595,7 +604,7 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   </div>
 
   <div class="section">
-    <div class="sechead">Nahlásené závady</div>
+    <div class="sechead"><span>Nahlásené závady</span>${statusPill}</div>
     <div class="secbody notes">${esc(faultLine)}</div>
   </div>
 
