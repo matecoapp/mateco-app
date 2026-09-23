@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.557";
+const APP_VERSION = "1.0.558";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11838,16 +11838,24 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
+  // Upravovať môže len ten checker, ktorému bola kontrola pridelená, alebo admin —
+  // ktokoľvek iný (dispečer, iný technik prezerajúci si plán) ju vidí len na náhľad.
+  const canEdit = isAdminUser(user) || (!!myEmployee && assignment.technicianId === myEmployee.id);
   // Vývoz: upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi
   // (prevzatie v odovzdávacom protokole) — potom je to NAVŽDY uzamknuté
   // (hardLocked), bez možnosti opravy, lebo stroj už fyzicky odišiel.
   // Vrátenie: žiadny takýto nezvratný krok neexistuje, takže sa dá pomýliť a
   // opraviť aj po odoslaní — len sa po odoslaní zobrazí najprv náhľad (nech
   // ďalšie kliknutie na tú istú kontrolu neskočí rovno do formulára) a checker
-  // sa do úpravy musí vedome vrátiť tlačidlom.
-  const hardLocked = phase !== "vratenie" && !!handoverDone;
-  const [editing, setEditing] = useState(!assignment.resolved);
-  const showForm = !hardLocked && editing;
+  // sa do úpravy musí vedome vrátiť tlačidlom. Po 48 hodinách od (skutočného)
+  // dátumu zvozu sa ale aj táto uzamkne navždy — admin ako jediný túto časovú
+  // uzávierku môže obísť.
+  const returnDateStr = job?.pickupDate || job?.endDate || assignment.date;
+  const daysSinceReturn = returnDateStr ? daysBetween(returnDateStr, todayISO()) : 0;
+  const timeLocked = phase === "vratenie" && daysSinceReturn >= 2 && !isAdminUser(user);
+  const hardLocked = (phase !== "vratenie" && !!handoverDone) || timeLocked;
+  const [editing, setEditing] = useState(canEdit && !assignment.resolved);
+  const showForm = canEdit && !hardLocked && editing;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -11989,10 +11997,15 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
 
       {hardLocked && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
-          Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať.
+          {phase === "vratenie" ? "Uplynulo 48 hodín od zvozu — kontrolu už nie je možné upravovať." : "Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať."}
         </div>
       )}
-      {!hardLocked && !showForm && (
+      {!hardLocked && !canEdit && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
+          Upraviť môže len pridelený checker alebo administrátor.
+        </div>
+      )}
+      {!hardLocked && canEdit && !showForm && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
           <button className="btn btn-ghost" onClick={() => setEditing(true)}>✏️ Upraviť kontrolu</button>
         </div>
