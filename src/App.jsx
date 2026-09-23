@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.549";
+const APP_VERSION = "1.0.551";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3859,6 +3859,7 @@ function DispatcherApp() {
         message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"}). Dostupné na karte zákazky.`,
         link: { module: "poziciovna", view: "jobs", jobId },
       });
+      if (job) ensureReturnCheckerAssignment({ ...job, ...data });
     } else if (data.handoverDone) {
       pushNotification({
         kind: "handover_protocol",
@@ -4853,12 +4854,12 @@ function DispatcherApp() {
   function ensureCheckerAssignment(job) {
     const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
     if (!checkerId) return;
-    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja");
+    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
     if (existing) {
       if (existing.resolved) return;
       if (existing.technicianId === checkerId && existing.date === job.startDate) return;
     }
-    const record = { id: uid(), technicianId: checkerId, date: job.startDate, kind: "kontrolaStroja", jobId: job.id, machineId: job.machineId, resolved: false };
+    const record = { id: uid(), technicianId: checkerId, date: job.startDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false };
     persistAssignments([...assignments.filter((a) => a.id !== existing?.id), record]);
     const checker = technicianByIdTop[checkerId];
     if (checker) {
@@ -4870,6 +4871,36 @@ function DispatcherApp() {
         title: "Kontrola stroja pred vývozom",
         message: `Skontrolujte stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — vývoz ${fmtDate(job.startDate)}.`,
         link: { module: "servis", view: "plan", plannerDate: job.startDate },
+      });
+    }
+  }
+  // Po dokončení šoférovho protokolu o vrátení (returnDone) dopočíta checkera
+  // pre depo vrátenia (depoCheckers + prípadná náhrada) a vytvorí mu priradenie
+  // "kontrolaStroja" (phase: "vratenie") v Pláne servisu — bez fotiek, tie robí
+  // šofér pri zvoze priamo na mieste a žijú v handoverProtocols. Rovnaká
+  // idempotentná logika ako ensureCheckerAssignment — už hotovú kontrolu nemení.
+  function ensureReturnCheckerAssignment(job) {
+    const depo = job.returnDepo || job.fromDepo;
+    const date = todayISO();
+    const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, depo, date);
+    if (!checkerId) return;
+    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
+    if (existing) {
+      if (existing.resolved) return;
+      if (existing.technicianId === checkerId) return;
+    }
+    const record = { id: uid(), technicianId: checkerId, date, kind: "kontrolaStroja", phase: "vratenie", jobId: job.id, machineId: job.machineId, resolved: false };
+    persistAssignments([...assignments.filter((a) => a.id !== existing?.id), record]);
+    const checker = technicianByIdTop[checkerId];
+    if (checker) {
+      const machine = machineById[job.machineId];
+      pushNotification({
+        kind: "assignment_transport",
+        roles: [],
+        userName: checker.name,
+        title: "Kontrola stroja po vrátení",
+        message: `Skontrolujte vrátený stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} na depe ${depo || "—"}.`,
+        link: { module: "servis", view: "plan", plannerDate: date },
       });
     }
   }
@@ -6855,13 +6886,14 @@ function DispatcherApp() {
       {checkerInspectionConfirmTarget && (() => {
         const job = jobs.find((j) => j.id === checkerInspectionConfirmTarget.jobId);
         const machine = job ? enrichedMachineById[job.machineId] : null;
+        const isReturn = checkerInspectionConfirmTarget.phase === "vratenie";
         return (
-          <Modal eyebrow="Kontrola stroja pred vývozom" title={machine?.code || "Stroj"} onClose={() => setCheckerInspectionConfirmTarget(null)}>
+          <Modal eyebrow={isReturn ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"} title={machine?.code || "Stroj"} onClose={() => setCheckerInspectionConfirmTarget(null)}>
             <div style={{ fontSize: 13, marginBottom: 6 }}>
               {machine?.type ? `${machine.type} · ` : ""}{job?.customer || "—"}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 18 }}>
-              Vývoz {job ? fmtDate(job.startDate) : "—"} · {machineCurrentLocation(machine) || job?.fromDepo || "—"}
+              {isReturn ? "Zvoz" : "Vývoz"} {(isReturn ? job?.endDate : job?.startDate) ? fmtDate(isReturn ? job.endDate : job.startDate) : "—"} · {isReturn ? (job?.returnDepo || job?.fromDepo) : (machineCurrentLocation(machine) || job?.fromDepo || "—")}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -6898,12 +6930,13 @@ function DispatcherApp() {
             onSave={(patch) => {
               persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, resolved: true } : a)));
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
+              const isReturn = checkerInspectionTarget.phase === "vratenie";
               if (hasProblem && job) {
                 pushNotification({
                   kind: "damage_new",
                   roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"],
-                  title: "Checker našiel problém pri kontrole pred vývozom",
-                  message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola pred vývozom zaznamenala problém, skontrolujte pred odovzdaním.`,
+                  title: `Checker našiel problém pri kontrole ${isReturn ? "po vrátení" : "pred vývozom"}`,
+                  message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola ${isReturn ? "po vrátení" : "pred vývozom"} zaznamenala problém.`,
                   link: { module: "poziciovna", view: "jobs", machineId: machine?.id, checklistAssignmentId: checkerInspectionTarget.id },
                 });
               }
@@ -7729,7 +7762,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         style={{
           width: "100%",
           border: "1px solid rgba(0,0,0,.1)",
-          background: "#fff",
+          background: "var(--panel-2)",
           color: "var(--text)",
           borderRadius: 6,
           padding: "5px 10px",
@@ -8436,7 +8469,7 @@ function ProtocolModal({ html, params, onClose }) {
             ? `Predvyplnené: ${entries.map(([k, v]) => `${k}=${v}`).join(" · ")}`
             : "Žiadne údaje neboli predvyplnené (prázdny formulár)"}
         </div>
-        <button className="btn" style={{ background: "#fff", color: "var(--text)" }} onClick={onClose}>
+        <button className="btn" style={{ background: "var(--panel-2)", color: "var(--text)" }} onClick={onClose}>
           ✕ Zavrieť protokol
         </button>
       </div>
@@ -8479,7 +8512,7 @@ function PhotoLightboxModal({ src, onClose }) {
       />
       <button
         className="btn"
-        style={{ position: "absolute", top: 16, right: 16, background: "#fff", color: "var(--text)" }}
+        style={{ position: "absolute", top: 16, right: 16, background: "var(--panel-2)", color: "var(--text)" }}
         onClick={onClose}
       >
         ✕ Zavrieť
@@ -8505,7 +8538,7 @@ function PrintProtocolModal({ html, onClose }) {
       }}
     >
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-        <button className="btn" style={{ background: "#fff", color: "var(--text)" }} onClick={onClose}>
+        <button className="btn" style={{ background: "var(--panel-2)", color: "var(--text)" }} onClick={onClose}>
           ✕ Zavrieť protokol
         </button>
       </div>
@@ -9728,7 +9761,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
             const isDuplicate = !e.archived && duplicateKeys.includes(e.name.trim().toLowerCase());
             return (
-              <tr key={e.id} style={isDuplicate ? { background: "#fff7e6" } : undefined}>
+              <tr key={e.id} style={isDuplicate ? { background: "#fff7e6", color: "#1a1a1a" } : undefined}>
                 <td className="td-plain" style={{ fontWeight: 600 }}>
                   {e.name}
                   {isDuplicate && (
@@ -11796,6 +11829,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
 // skôr než čokoľvek z toho).
 function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmployee, user, onClose, onSave }) {
+  const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
   const [checklist, setChecklist] = useState(() =>
     assignment.checklist
       ? assignment.checklist.map((it) => ({ ...it, checkerStatus: it.checkerStatus ?? null, checkerNote: it.checkerNote ?? "" }))
@@ -11807,8 +11841,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   // Upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi (prevzatie v
   // odovzdávacom protokole) — dovtedy si checker vie kontrolu kedykoľvek
   // doplniť/opraviť, aj keď ju už raz odoslal (assignment.resolved je len
-  // vizuálna fajočka v pláne, neuzamyká to).
-  const readOnly = !!handoverDone;
+  // vizuálna fajočka v pláne, neuzamyká to). Kontrola po vrátení nemá takýto
+  // nasledujúci krok, ktorý by ju uzamkol, preto ostáva vždy editovateľná.
+  const readOnly = phase === "vyvoz" && !!handoverDone;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -11845,12 +11880,12 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   }
 
   return (
-    <Modal eyebrow="Kontrola stroja pred vývozom" title={machine?.code || "Stroj"} onClose={onClose} wide>
+    <Modal eyebrow={phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"} title={machine?.code || "Stroj"} onClose={onClose} wide>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {job?.customer || "—"} · Vývoz {job?.startDate ? fmtDate(job.startDate) : "—"}
+        {job?.customer || "—"} · {phase === "vratenie" ? "Zvoz" : "Vývoz"} {(phase === "vratenie" ? job?.endDate : job?.startDate) ? fmtDate(phase === "vratenie" ? job.endDate : job.startDate) : "—"}
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -11911,32 +11946,41 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         </div>
       )}
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Fotky stroja pred vývozom
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        {photos.map((url, i) => (
-          <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-            <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                title="Odstrániť fotku"
-                style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--panel)", color: "var(--danger)", fontSize: 11, lineHeight: 1, cursor: "pointer" }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {!readOnly && (
+      {phase !== "vratenie" && (
         <>
-          <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
-          {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
-          {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+            Fotky stroja pred vývozom
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            {photos.map((url, i) => (
+              <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
+                <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                    title="Odstrániť fotku"
+                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--panel)", color: "var(--danger)", fontSize: 11, lineHeight: 1, cursor: "pointer" }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {!readOnly && (
+            <>
+              <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
+              {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
+              {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
+            </>
+          )}
         </>
+      )}
+      {phase === "vratenie" && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+          Fotky po vrátení robí šofér pri zvoze — nájdete ich v protokole o vrátení.
+        </div>
       )}
 
       {readOnly && (
@@ -14807,13 +14851,16 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
   // Kontroly stroja: checklist + fotky pred vývozom žijú na assignments zázname
-  // (kind: "kontrolaStroja"), fotky po vrátení na handoverProtocols zázname tej
-  // istej zákazky — spojíme ich cez jobId.
+  // (kind: "kontrolaStroja", phase: "vyvoz"), checklist po vrátení na druhom
+  // takom zázname (phase: "vratenie", vytvorenom checkerovi po dokončení
+  // šoférovho protokolu) — fotky po vrátení ostávajú šoférove, z handoverProtocols,
+  // spojíme ich cez jobId.
   const machineInspections = (assignments || [])
-    .filter((a) => a.kind === "kontrolaStroja" && a.machineId === m.id && (a.checklist || a.checkerPhotos))
+    .filter((a) => a.kind === "kontrolaStroja" && a.machineId === m.id && (a.phase || "vyvoz") === "vyvoz" && (a.checklist || a.checkerPhotos))
     .map((a) => {
       const hp = (handoverProtocols || []).find((h) => h.jobId === a.jobId);
-      return { ...a, returnPhotos: hp?.returnPhotos || [], returnChecklist: hp?.checklist || [], job: (jobs || []).find((x) => x.id === a.jobId) };
+      const returnInspection = (assignments || []).find((x) => x.kind === "kontrolaStroja" && x.phase === "vratenie" && x.jobId === a.jobId);
+      return { ...a, returnPhotos: hp?.returnPhotos || [], returnChecklist: returnInspection?.checklist || [], job: (jobs || []).find((x) => x.id === a.jobId) };
     })
     .sort((a, b) => ((a.checkerDate || "") < (b.checkerDate || "") ? 1 : -1));
   const matchedModel = isStroj
@@ -15086,7 +15133,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   )}
                 </div>
               </div>
-              {(h.returnChecklist || []).some((it) => it.returnStatus) && (
+              {(h.returnChecklist || []).some((it) => it.checkerStatus) && (
                 <div style={{ marginTop: 10 }}>
                   <button
                     type="button"
@@ -15098,7 +15145,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   </button>
                   {expandedReturnChecklistId === h.id && (
                     <div style={{ marginTop: 8 }}>
-                      <HandoverProtocolChecklistRecap checklist={h.returnChecklist || []} statusKey="returnStatus" noteKey="returnNote" />
+                      <HandoverProtocolChecklistRecap checklist={h.returnChecklist || []} statusKey="checkerStatus" noteKey="checkerNote" />
                     </div>
                   )}
                 </div>
@@ -15261,7 +15308,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
 }
 function CardField({ label, value, danger, dotColor }) {
   return (
-    <div style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "#faf9f7" }}>
+    <div style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "var(--panel-2)" }}>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
         {dotColor && <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: dotColor, flexShrink: 0 }} />}
@@ -18054,12 +18101,13 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const linkedDamage = a.damageId ? damageById[a.damageId] : null;
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
                           const isCheckerInspection = a.kind === "kontrolaStroja";
-                          const bg = isCheckerInspection ? "#8b5cf6" : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
+                          const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
+                          const bg = isCheckerInspection ? (isReturnInspection ? "#0ea5e9" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
                           const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = a.kind === "udalost"
                             ? (a.poznamka || "Udalosť")
                             : isCheckerInspection
-                            ? `Kontrola stroja pred vývozom — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
+                            ? `Kontrola stroja ${isReturnInspection ? "po vrátení" : "pred vývozom"} — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
                             : quickKind
                             ? quickKind.label
                             : `${machine?.code || a.stroj || "—"} · ${machineCurrentLocation(machine) || a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}`;
