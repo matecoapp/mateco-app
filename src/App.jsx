@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.545";
+const APP_VERSION = "1.0.547";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -307,8 +307,10 @@ function openProtocol(params) {
 // Tlačová/PDF verzia protokolu o odovzdaní a prevzatí stroja — vizuálne podľa
 // papierového vzoru (dva stĺpce Prevzatie/Vrátenie vedľa seba), s doslovným
 // právnym textom. Slúži dispečerovi ako podklad k faktúram / prípadnému vymáhaniu.
-function openPrintableHandoverProtocol(job, machine, p) {
+function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
+  const { canEdit = false, canGoReturn = false, portalLink = null, qrDataUrl = null, embedded = false } = opts;
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   function sigBlock(dataUrl, label) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -327,9 +329,21 @@ function openPrintableHandoverProtocol(job, machine, p) {
 <title>Protokol ${esc(p.protocolNumber)}</title>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-  .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 8px 0; margin-bottom: 8px; background: #fff; }
-  .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
-  @media print { .toolbar { display: none; } }
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
+  .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
+  .btn-accent { background: #E30613; color: #fff; }
+  .btn-accent:hover { background: #B5040F; }
+  .btn-ghost { background: #fff; border: 1px solid #e0e0e0; color: #1a1a1a; }
+  .btn-ghost:hover { border-color: #E30613; color: #E30613; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 500; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; font-family: 'Barlow', Arial, sans-serif; }
+  .modal-overlay.open { display: flex; }
+  .modal-overlay.center { align-items: center; }
+  .modal-panel { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 20px; width: 420px; max-width: 100%; }
+  .modal-panel h3 { font-size: 18px; margin: 0 0 16px; color: #E30613; }
+  .modal-panel .msg { font-size: 14px; margin-bottom: 18px; color: #1a1a1a; }
+  .modal-panel .actions { display: flex; gap: 8px; }
+  @media print { .toolbar, .modal-overlay { display: none !important; } }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
   .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
   .body-content { flex: 1; }
@@ -364,7 +378,32 @@ function openPrintableHandoverProtocol(job, machine, p) {
   }
 </style></head>
 <body>
-  <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
+  <div class="toolbar">
+    ${canEdit ? `<button class="btn btn-ghost" onclick="requestEdit()">✏️ Upraviť protokol</button>` : ""}
+    ${canGoReturn ? `<button class="btn btn-accent" onclick="requestGoReturn()">▶ Vykonať vrátenie</button>` : ""}
+    <button class="btn btn-accent" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button>
+    ${qrDataUrl ? `<button class="btn btn-ghost" onclick="showQr()">📱 QR pre zákazníka</button>` : ""}
+  </div>
+
+  <div id="confirmOverlay" class="modal-overlay" onclick="if(event.target===this) closeConfirmEdit()">
+    <div class="modal-panel">
+      <h3>Potvrdenie</h3>
+      <div class="msg">Naozaj chcete upraviť odoslaný protokol?</div>
+      <div class="actions">
+        <button class="btn btn-ghost" onclick="closeConfirmEdit()">Zrušiť</button>
+        <button class="btn btn-accent" onclick="confirmEditYes()">Upraviť</button>
+      </div>
+    </div>
+  </div>
+
+  ${qrDataUrl ? `<div id="qrOverlay" class="modal-overlay center" onclick="if(event.target===this) closeQr()">
+    <div style="width:auto;max-width:92vw;text-align:center">
+      <img src="${escAttr(qrDataUrl)}" alt="QR kód pre zákazníka" style="display:block;width:220px;height:220px;background:#fff;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,.4)">
+      ${portalLink ? `<div style="margin-top:10px;font-size:12px;color:#fff;word-break:break-all">${esc(portalLink)}</div>` : ""}
+      <button class="btn btn-ghost" style="margin-top:10px;background:#fff" onclick="closeQr()">✕ Zavrieť</button>
+    </div>
+  </div>` : ""}
+
   <div class="page">
   <div class="body-content">
   <div class="head">
@@ -394,12 +433,14 @@ function openPrintableHandoverProtocol(job, machine, p) {
       </div>`}
     </div>
     <div>
-      <div class="colhead">VRÁTENIE (${p.returnDate ? fmtDate(p.returnDate) : "—"})</div>
-      ${checklistCol("returnStatus", "returnNote")}
+      <div class="colhead">VRÁTENIE ${p.returnDone ? `(${p.returnDate ? fmtDate(p.returnDate) : "—"})` : ""}</div>
+      ${p.returnDone
+        ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
         ${sigBlock(p.returnCustomerSignature, "Podpis nájomcu")}
         ${sigBlock(p.returnDriverSignature, "Podpis prenajímateľa")}
-      </div>
+      </div>`
+        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
     </div>
   </div>
   <div class="legal">
@@ -415,12 +456,30 @@ function openPrintableHandoverProtocol(job, machine, p) {
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
   </div>
   </div>
+
+<script>
+  function requestEdit() { document.getElementById('confirmOverlay').classList.add('open'); }
+  function closeConfirmEdit() { document.getElementById('confirmOverlay').classList.remove('open'); }
+  function confirmEditYes() {
+    closeConfirmEdit();
+    if (window.parent === window) { alert('Okno appky sa nenašlo — otvorte protokol znova z appky.'); return; }
+    window.parent.postMessage({ type: 'mateco_handover_edit_request' }, '*');
+  }
+  function requestGoReturn() {
+    if (window.parent === window) { alert('Okno appky sa nenašlo — otvorte protokol znova z appky.'); return; }
+    window.parent.postMessage({ type: 'mateco_handover_go_return' }, '*');
+  }
+  function showQr() { var el = document.getElementById('qrOverlay'); if (el) el.classList.add('open'); }
+  function closeQr() { var el = document.getElementById('qrOverlay'); if (el) el.classList.remove('open'); }
+</script>
 </body></html>`;
+  if (embedded) return docHtml;
   if (_printProtocolOpenListener) {
     _printProtocolOpenListener(docHtml);
   } else {
     console.error("Zobrazenie protokolu ešte nie je pripravené.");
   }
+  return docHtml;
 }
 
 // Zobrazenie/tlač/úprava servisného protokolu — vzhľad presne podľa dohodnutého návrhu
@@ -2097,6 +2156,7 @@ function DispatcherApp() {
   const [completeJobTarget, setCompleteJobTarget] = useState(null); // job object being completed
   const [jobDetail, setJobDetail] = useState(null); // job object clicked from calendar
   const [showHandoverProtocol, setShowHandoverProtocol] = useState(null); // job, ktorej sa práve vypĺňa protokol o odovzdaní
+  const [handoverDirectPhase, setHandoverDirectPhase] = useState(null); // šofér klikol rovno z Prepravy — preskočí kartu zákazky aj náhľad
 
   const [assignments, setAssignments] = useState([]);
   const [showAddEmployee, setShowAddEmployee] = useState(null); // null | {} | { existing: employee } — modul Administratíva
@@ -5341,9 +5401,17 @@ function DispatcherApp() {
             technicianById={technicianByIdTop}
             technicians={technicians}
             handoverProtocols={handoverProtocols}
-            onOpenJob={(jobId) => {
+            onOpenJob={(jobId, transportType) => {
               const j = jobs.find((x) => x.id === jobId);
-              if (j) setJobDetail(j);
+              if (!j) return;
+              // Šofér klika rovno z Prepravy — nech vyplní protokol priamo, bez zbytočnej
+              // obchádzky cez kartu zákazky (dispečer aj naďalej dostane kartu zákazky).
+              if (effectiveUser?.role === "sofer" || effectiveUser?.role === "externy_sofer") {
+                setHandoverDirectPhase(transportType === "zvoz" ? "vratenie" : "prevzatie");
+                setShowHandoverProtocol(j);
+              } else {
+                setJobDetail(j);
+              }
             }}
             getTransportSendStatus={getTransportSendStatus}
             recordTransportSend={recordTransportSend}
@@ -6164,6 +6232,7 @@ function DispatcherApp() {
           }}
           onOpenHandoverProtocol={(j) => {
             pushCard("machine", machineCard);
+            setHandoverDirectPhase(null);
             setShowHandoverProtocol(j);
             setMachineCard(null);
           }}
@@ -6689,6 +6758,7 @@ function DispatcherApp() {
           handoverProtocol={handoverProtocols.find((h) => h.jobId === jobDetail.id)}
           onOpenHandoverProtocol={() => {
             pushCard("job", jobDetail);
+            setHandoverDirectPhase(null);
             setShowHandoverProtocol(jobDetail);
             setJobDetail(null);
           }}
@@ -6728,7 +6798,8 @@ function DispatcherApp() {
           myEmployee={myEmployee}
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
-          onClose={() => { setShowHandoverProtocol(null); goBackCard(); }}
+          forcePhase={handoverDirectPhase}
+          onClose={() => { setShowHandoverProtocol(null); setHandoverDirectPhase(null); goBackCard(); }}
           onSave={(patch, baseRev, showSuccessScreen) => {
             const result = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
             if (!result) return;
@@ -9149,7 +9220,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         id={`transport-${t.id}`}
         onClick={() => {
           if (highlighted) onDismissTransportHighlight?.();
-          onOpenJob && onOpenJob(t.jobId);
+          onOpenJob && onOpenJob(t.jobId, t.type);
         }}
         style={{
           padding: "8px 0",
@@ -11182,100 +11253,7 @@ function HandoverProtocolChecklistRecap({ checklist, statusKey, noteKey }) {
   );
 }
 
-function HandoverProtocolViewPanel({ existing, job, myEmployee, user, onGoEditNextPhase, onRequestCorrection }) {
-  const [confirmingCorrection, setConfirmingCorrection] = useState(false);
-  return (
-    <div>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Prevzatie · {fmtDate(existing.handoverDate)}
-      </div>
-      {existing.migratedWithoutHandover ? (
-        <div style={{ background: "var(--panel-2)", color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, fontSize: 12, marginBottom: 18 }}>
-          Táto zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie preto nie je zdokumentované s kontrolným zoznamom ani podpismi.
-        </div>
-      ) : (
-        <>
-          <HandoverProtocolChecklistRecap checklist={existing.checklist || []} statusKey="handoverStatus" noteKey="handoverNote" />
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>Podpis nájomcu</div>{existing.handoverCustomerSignature && <img src={existing.handoverCustomerSignature} alt="Podpis" style={{ maxWidth: "100%", height: 60, border: "1px solid var(--border)", borderRadius: 4 }} />}</div>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>Podpis prenajímateľa</div>{existing.handoverDriverSignature && <img src={existing.handoverDriverSignature} alt="Podpis" style={{ maxWidth: "100%", height: 60, border: "1px solid var(--border)", borderRadius: 4 }} />}</div>
-          </div>
-        </>
-      )}
-
-      {existing.returnDone ? (
-        <>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Vrátenie · {fmtDate(existing.returnDate)}
-          </div>
-          <HandoverProtocolChecklistRecap checklist={existing.checklist || []} statusKey="returnStatus" noteKey="returnNote" />
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>Podpis nájomcu</div>{existing.returnCustomerSignature && <img src={existing.returnCustomerSignature} alt="Podpis" style={{ maxWidth: "100%", height: 60, border: "1px solid var(--border)", borderRadius: 4 }} />}</div>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>Podpis prenajímateľa</div>{existing.returnDriverSignature && <img src={existing.returnDriverSignature} alt="Podpis" style={{ maxWidth: "100%", height: 60, border: "1px solid var(--border)", borderRadius: 4 }} />}</div>
-          </div>
-          {existing.returnPhotos && existing.returnPhotos.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-              {existing.returnPhotos.map((url, i) => (
-                <img
-                  key={i}
-                  src={url}
-                  alt={`Foto stavu stroja pri zvoze ${i + 1}`}
-                  onClick={() => openPhotoLightbox(url)}
-                  style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 16 }}>
-          Vrátenie ešte nie je vyplnené.
-        </div>
-      )}
-
-      {existing.editedBy && (
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>
-          Naposledy opravené: {existing.editedBy}, {fmtDate(existing.editedAt)}
-        </div>
-      )}
-
-      {confirmingCorrection ? (
-        <div style={{ background: "var(--danger-bg)", padding: 12, borderRadius: 8 }}>
-          <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10 }}>
-            Upravujete už odoslaný a podpísaný protokol. Zmena sa zaznamená (kto a kedy). Naozaj pokračovať?
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-accent" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onRequestCorrection()}>
-              Áno, upraviť
-            </button>
-            <button className="btn btn-ghost" onClick={() => setConfirmingCorrection(false)}>Zrušiť</button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {!existing.returnDone && (user?.role === "sofer" || user?.role === "externy_sofer") && (
-            canFillHandoverPhase(job, myEmployee, "vratenie") ? (
-              <button className="btn btn-accent" onClick={() => onGoEditNextPhase()}>
-                Vykonať vrátenie
-              </button>
-            ) : (
-              <button className="btn btn-ghost" disabled title="Dokončiť vie len pridelený šofér v deň zvozu" style={{ opacity: 0.5 }}>
-                Vykonať vrátenie
-              </button>
-            )
-          )}
-          {can(user, "handover_protocol_edit_locked") && (
-            <button className="btn btn-ghost" onClick={() => setConfirmingCorrection(true)}>
-              ✏️ Upraviť protokol
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete }) {
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase }) {
   const [showPortalQr, setShowPortalQr] = useState(false);
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
   const portalLink = job?.publicToken
@@ -11285,16 +11263,18 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // medzičasom (kým sme toto vypĺňali) záznam nezmenil, a nedôjde tak k jeho
   // tichému prepísaniu.
   const [baseRev] = useState(existing?._rev || 0);
-  const [screen, setScreen] = useState(existing ? "view" : "edit");
+  // Šofér prišiel rovno zo záložky Prepravy (vyvoz/zvoz) — preskočíme náhľad a
+  // otvoríme priamo formulár pre danú fázu.
+  const [screen, setScreen] = useState(forcePhase ? "edit" : existing ? "view" : "edit");
   useEffect(() => {
-    if (!portalLink || (!showPortalQr && screen !== "sent")) return;
+    if (!portalLink || (!showPortalQr && screen !== "sent" && screen !== "view")) return;
     let cancelled = false;
     QRCode.toDataURL(portalLink, { width: 220, margin: 1 })
       .then((url) => { if (!cancelled) setPortalQrDataUrl(url); })
       .catch((e) => console.error("QR generovanie zlyhalo", e));
     return () => { cancelled = true; };
   }, [showPortalQr, portalLink, screen]);
-  const startPhase = existing && !existing.returnDone ? "vratenie" : "prevzatie";
+  const startPhase = forcePhase || (existing && !existing.returnDone ? "vratenie" : "prevzatie");
   const [phase, setPhase] = useState(startPhase);
   const [protocolNumber, setProtocolNumber] = useState(existing?.protocolNumber || "");
   const [checklist, setChecklist] = useState(
@@ -11386,6 +11366,40 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     if (isFirstHandover) setScreen("sent");
   }
 
+  const canEditProtocol = !!existing && can(user, "handover_protocol_edit_locked");
+  const canGoReturn =
+    !!existing &&
+    !existing.returnDone &&
+    (user?.role === "sofer" || user?.role === "externy_sofer") &&
+    canFillHandoverPhase(job, myEmployee, "vratenie");
+  const protocolHtml = useMemo(() => {
+    if (screen !== "view" || !existing) return "";
+    return openPrintableHandoverProtocol(job, machine, existing, {
+      canEdit: canEditProtocol,
+      canGoReturn,
+      portalLink,
+      qrDataUrl: portalQrDataUrl,
+      embedded: true,
+    });
+  }, [screen, existing, job, machine, canEditProtocol, canGoReturn, portalLink, portalQrDataUrl]);
+  useEffect(() => {
+    if (screen !== "view") return;
+    function onMessage(e) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === "mateco_handover_edit_request") {
+        setPhase(existing.returnDone ? "vratenie" : "prevzatie");
+        setScreen("edit");
+      } else if (e.data?.type === "mateco_handover_go_return") {
+        setPhase("vratenie");
+        setCustomerSig(null);
+        setDriverSig(null);
+        setScreen("edit");
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [screen, existing]);
+
   if (screen === "sent") {
     return (
       <Modal eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
@@ -11426,77 +11440,43 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   if (screen === "view" && existing) {
     return (
       <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-          {machine?.type ? `${machine.type} · ` : ""}Protokol č. {existing.protocolNumber}
-        </div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-          {job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}
-        </div>
-        <HandoverProtocolViewPanel
-          existing={existing}
-          job={job}
-          myEmployee={myEmployee}
-          user={user}
-          onGoEditNextPhase={() => { setPhase("vratenie"); setCustomerSig(null); setDriverSig(null); setScreen("edit"); }}
-          onRequestCorrection={() => { setPhase(existing.returnDone ? "vratenie" : "prevzatie"); setScreen("edit"); }}
+        <iframe
+          title="Protokol o odovzdaní a prevzatí stroja"
+          srcDoc={protocolHtml}
+          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
+          style={{ width: "100%", height: "75vh", border: "1px solid var(--border)", borderRadius: 8 }}
         />
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
-          <button className="btn btn-ghost" onClick={() => openPrintableHandoverProtocol(job, machine, existing)}>
-            🖨 Tlačová verzia (PDF)
-          </button>
-          {portalLink && (
-            <button className="btn btn-ghost" onClick={() => setShowPortalQr((v) => !v)}>
-              📱 QR pre zákazníka
-            </button>
-          )}
-          {can(user, "job_email") && (
-            <button
-              className="btn btn-ghost"
-              title={
-                job?.customerEmail
-                  ? "Pripraví email zákazníkovi s odkazom na stav zákazky a protokol"
-                  : "Zákazka nemá vyplnený email zákazníka — adresu doplníte priamo v otvorenom maile"
-              }
-              onClick={() => {
-                composeMail({
-                  to: job?.customerEmail || "",
-                  subject: `Prevzatie stroja ${machine?.code || ""} — ${job?.customer || ""}`,
-                  body:
-                    `Dobrý deň,\n\npotvrdzujeme prevzatie stroja ${machine?.code || ""}${existing.protocolNumber ? ` (protokol č. ${existing.protocolNumber})` : ""}.\n\n` +
-                    (portalLink
-                      ? `Stav zákazky aj protokol o odovzdaní si môžete kedykoľvek pozrieť tu:\n${portalLink}\n\n`
-                      : "") +
-                    `S pozdravom,\nmateco Slovakia s.r.o.`,
-                });
-              }}
-            >
-              ✉️ Poslať zákazníkovi
-            </button>
-          )}
-          {canDelete && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
-              Zmazať protokol
-            </button>
-          )}
-        </div>
-        {showPortalQr && portalLink && (
-          <div style={{ marginTop: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-            {portalQrDataUrl ? (
-              <img src={portalQrDataUrl} alt="QR kód pre zákazníka" style={{ width: 140, height: 140, flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 140, height: 140, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-                Generujem…
-              </div>
-            )}
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 13, marginBottom: 6 }}>
-                Zákazník naskenovaním uvidí stav zákazky, dátumy prenájmu a tento protokol — bez prihlásenia.
-              </div>
-              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ width: "100%", fontSize: 12, marginBottom: 6 }} />
-              <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>
-                Kopírovať odkaz
+        {(can(user, "job_email") || canDelete) && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+            {can(user, "job_email") && (
+              <button
+                className="btn btn-ghost"
+                title={
+                  job?.customerEmail
+                    ? "Pripraví email zákazníkovi s odkazom na stav zákazky a protokol"
+                    : "Zákazka nemá vyplnený email zákazníka — adresu doplníte priamo v otvorenom maile"
+                }
+                onClick={() => {
+                  composeMail({
+                    to: job?.customerEmail || "",
+                    subject: `Prevzatie stroja ${machine?.code || ""} — ${job?.customer || ""}`,
+                    body:
+                      `Dobrý deň,\n\npotvrdzujeme prevzatie stroja ${machine?.code || ""}${existing.protocolNumber ? ` (protokol č. ${existing.protocolNumber})` : ""}.\n\n` +
+                      (portalLink
+                        ? `Stav zákazky aj protokol o odovzdaní si môžete kedykoľvek pozrieť tu:\n${portalLink}\n\n`
+                        : "") +
+                      `S pozdravom,\nmateco Slovakia s.r.o.`,
+                  });
+                }}
+              >
+                ✉️ Poslať zákazníkovi
               </button>
-            </div>
+            )}
+            {canDelete && (
+              <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
+                Zmazať protokol
+              </button>
+            )}
           </div>
         )}
       </Modal>

@@ -374,16 +374,23 @@ export default function CustomerPortal({ token }) {
                   driverSig={data.handoverDriverSignature}
                 />
               )}
-              {data.returnDone && (
-                <ProtocolPhase
-                  title="Vrátenie"
-                  date={data.returnDate}
-                  statusKey="returnStatus"
-                  noteKey="returnNote"
-                  checklist={data.checklist}
-                  custSig={data.returnCustomerSignature}
-                  driverSig={data.returnDriverSignature}
-                />
+              {data.handoverDone && (
+                data.returnDone ? (
+                  <ProtocolPhase
+                    title="Vrátenie"
+                    date={data.returnDate}
+                    statusKey="returnStatus"
+                    noteKey="returnNote"
+                    checklist={data.checklist}
+                    custSig={data.returnCustomerSignature}
+                    driverSig={data.returnDriverSignature}
+                  />
+                ) : (
+                  <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Vrátenie</div>
+                    <div style={{ fontSize: 12.5, color: "#6b6b6b" }}>Stroj je v prenájme — zatiaľ nebol vrátený.</div>
+                  </div>
+                )
               )}
             </div>
           </div>
