@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.542";
+const APP_VERSION = "1.0.544";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -326,42 +326,50 @@ function openPrintableHandoverProtocol(job, machine, p) {
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Protokol ${esc(p.protocolNumber)}</title>
 <style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 8px 0; margin-bottom: 8px; background: #fff; }
   .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
   @media print { .toolbar { display: none; } }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; margin: 34px; }
-  .head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin-bottom: 18px; }
-  .logo { height: 40px; width: auto; display: block; }
-  h1 { font-size: 20px; color: #E30613; margin: 0; }
-  .sub { font-size: 13px; color: #555; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; margin-bottom: 22px; }
-  .meta div span.l { color: #666; display: inline-block; min-width: 150px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; margin-bottom: 22px; }
-  .colhead { font-weight: bold; font-size: 14px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin-bottom: 8px; }
-  .checkrow { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .logo { height: 34px; width: auto; display: block; margin-top: 2px; }
+  h1 { font-size: 18px; color: #E30613; margin: 0; text-align: right; }
+  .sub { font-size: 12px; color: #555; margin-top: 4px; text-align: right; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 26px; margin-bottom: 18px; }
+  .meta div span.l { color: #666; display: inline-block; min-width: 140px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin-bottom: 18px; }
+  .colhead { font-weight: bold; font-size: 13px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin-bottom: 7px; }
+  .checkrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
   .mark { font-weight: bold; width: 18px; text-align: center; }
   .mark.ok { color: #2f7d32; }
   .mark.bad { color: #c62828; }
-  .itemnote { font-size: 11.5px; color: #c62828; padding: 0 0 5px 4px; }
-  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
-  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
-  .siglabel { font-size: 11.5px; color: #666; margin-bottom: 5px; }
-  .sigimg { max-width: 100%; height: 72px; }
-  .signone { font-size: 11.5px; color: #999; height: 72px; display: flex; align-items: center; }
-  .legal { margin-top: 28px; padding-top: 14px; border-top: 1px solid #ccc; font-size: 11px; color: #444; }
-  .legal ol { margin: 5px 0; padding-left: 18px; }
-  .legal li { margin-bottom: 3px; }
-  .contacts { margin-top: 8px; font-size: 9.5px; color: #666; }
-  .footer { margin-top: 26px; padding-top: 18px; border-top: 1px solid #ccc; font-size: 12px; color: #555; line-height: 2; }
-  .footer .legal { margin-top: 10px; padding-top: 0; border-top: none; color: #888; font-size: 11px; }
-  @media print { body { margin: 12mm 14mm 12mm 14mm; } }
+  .itemnote { font-size: 11px; color: #c62828; padding: 0 0 4px 4px; }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 7px; }
+  .siglabel { font-size: 11px; color: #666; margin-bottom: 4px; }
+  .sigimg { max-width: 100%; height: 64px; }
+  .signone { font-size: 11px; color: #999; height: 64px; display: flex; align-items: center; }
+  .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
+  .legal ol { margin: 4px 0; padding-left: 17px; }
+  .legal li { margin-bottom: 2px; }
+  .footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; }
+  .footer .legal { margin-top: 6px; padding-top: 0; border-top: none; color: #888; font-size: 10px; }
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; margin: 0; }
+    @page { size: A4; margin: 0; }
+  }
 </style></head>
 <body>
   <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
+  <div class="page">
   <div class="head">
     <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
-    <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
-    <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
+    <div>
+      <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
+      <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
+    </div>
   </div>
   <div class="meta">
     <div><span class="l">Sériové číslo:</span>${esc(machine?.code)}</div>
@@ -401,6 +409,7 @@ function openPrintableHandoverProtocol(job, machine, p) {
     T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
     IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
+  </div>
   </div>
 </body></html>`;
   if (_printProtocolOpenListener) {
@@ -11848,6 +11857,8 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
           {job.machineDisplayName || machine?.type || ""}
           {(job.machineDisplayName || machine?.type) && machine?.code ? " · " : ""}
           {machine?.code && <span style={{ color: "var(--accent)" }}>{machine.code}</span>}
+          {" "}
+          <StatusBadge status={st} />
         </>
       }
       onClose={onClose}
@@ -11907,7 +11918,6 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
           label="Email zákazníka"
           value={job.customerEmail ? <a href={`mailto:${job.customerEmail}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerEmail}</a> : null}
         />
-        <CardField label="Stav" value={{ overdue: "Po termíne", active: "Na zákazke", planned: "Naplánovaná", completed: "Ukončená" }[st]} danger={st === "overdue"} />
         <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
         <CardField label="Kam" value={job.toLocation} />
         <CardField label="Začiatok" value={fmtDate(job.startDate)} />
