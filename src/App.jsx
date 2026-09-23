@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.561";
+const APP_VERSION = "1.0.562";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12287,6 +12287,9 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
   const [machineId, setMachineId] = useState(existing?.machineId || prefillMachineId || "");
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  // Nový kontakt pre ÚPLNE NOVÉHO zákazníka (ešte bez id) — uloží sa spolu so
+  // zákazníkom pri "Vytvoriť rezerváciu" (rovnaký vzor ako AddJobModal).
+  const [pendingContacts, setPendingContacts] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
@@ -12361,7 +12364,21 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             const line = `Kontakt: ${k.name}${k.role ? ` (${k.role})` : ""}${k.phone ? ` · ${k.phone}` : ""}${k.email ? ` · ${k.email}` : ""}`;
             setNotes((n) => (n ? n + "\n" + line : line));
           }}
-          onAddNew={selectedCustomerId && onAddNewContact ? (contact) => onAddNewContact(selectedCustomerId, contact) : undefined}
+          onAddNew={
+            customer.trim()
+              ? (contact) => {
+                  if (selectedCustomerId && onAddNewContact) {
+                    onAddNewContact(selectedCustomerId, contact);
+                  } else {
+                    const withId = { id: uid(), ...contact };
+                    setPendingContacts((prev) => [...prev, withId]);
+                    setSelectedContacts((prev) => [...prev, withId]);
+                  }
+                  const line = `Kontakt: ${contact.name}${contact.role ? ` (${contact.role})` : ""}${contact.phone ? ` · ${contact.phone}` : ""}${contact.email ? ` · ${contact.email}` : ""}`;
+                  setNotes((n) => (n ? n + "\n" + line : line));
+                }
+              : undefined
+          }
         />
         <div style={{ gridColumn: "1 / -1" }}>
           <BlacklistWarning match={blacklistMatch} />
@@ -12406,7 +12423,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
         disabled={!canSave}
         onClick={() => {
           if (saveCustomer && customer.trim()) {
-            onSaveCustomer?.({ firma: customer.trim() });
+            onSaveCustomer?.({ firma: customer.trim(), contacts: pendingContacts });
           }
           onSave({
             machineId,
@@ -16695,6 +16712,9 @@ function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign })
 function ReportExternalServiceModal({ existing, today, customers, blacklist, onSaveCustomer, onAddNewContact, onClose, onSave }) {
   const [customer, setCustomer] = useState(existing?.customer || "");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  // Nový kontakt pre ÚPLNE NOVÉHO zákazníka (ešte bez id) — uloží sa spolu so
+  // zákazníkom pri nahlásení (rovnaký vzor ako AddJobModal).
+  const [pendingContacts, setPendingContacts] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
@@ -16736,7 +16756,21 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
             const line = `Kontakt: ${k.name}${k.role ? ` (${k.role})` : ""}${k.phone ? ` · ${k.phone}` : ""}${k.email ? ` · ${k.email}` : ""}`;
             setPopis((p) => (p ? p + "\n" + line : line));
           }}
-          onAddNew={selectedCustomerId && onAddNewContact ? (contact) => onAddNewContact(selectedCustomerId, contact) : undefined}
+          onAddNew={
+            customer.trim()
+              ? (contact) => {
+                  if (selectedCustomerId && onAddNewContact) {
+                    onAddNewContact(selectedCustomerId, contact);
+                  } else {
+                    const withId = { id: uid(), ...contact };
+                    setPendingContacts((prev) => [...prev, withId]);
+                    setSelectedContacts((prev) => [...prev, withId]);
+                  }
+                  const line = `Kontakt: ${contact.name}${contact.role ? ` (${contact.role})` : ""}${contact.phone ? ` · ${contact.phone}` : ""}${contact.email ? ` · ${contact.email}` : ""}`;
+                  setPopis((p) => (p ? p + "\n" + line : line));
+                }
+              : undefined
+          }
         />
         <div style={{ gridColumn: "1 / -1" }}>
           <BlacklistWarning match={blacklistMatch} />
@@ -16764,7 +16798,7 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
         className="btn btn-accent"
         disabled={!canSave}
         onClick={() => {
-          if (!existing && saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim() });
+          if (!existing && saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim(), contacts: pendingContacts });
           onSave({
             customer: customer.trim(),
             location: location.trim(),
