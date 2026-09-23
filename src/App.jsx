@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.544";
+const APP_VERSION = "1.0.545";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -331,9 +331,11 @@ function openPrintableHandoverProtocol(job, machine, p) {
   .toolbar .btn { background: #E30613; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; }
   @media print { .toolbar { display: none; } }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
-  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+  .body-content { flex: 1; }
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
   .logo { height: 34px; width: auto; display: block; margin-top: 2px; }
+  .head .titleblock { margin-top: 22px; }
   h1 { font-size: 18px; color: #E30613; margin: 0; text-align: right; }
   .sub { font-size: 12px; color: #555; margin-top: 4px; text-align: right; }
   .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 26px; margin-bottom: 18px; }
@@ -353,7 +355,7 @@ function openPrintableHandoverProtocol(job, machine, p) {
   .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
   .legal ol { margin: 4px 0; padding-left: 17px; }
   .legal li { margin-bottom: 2px; }
-  .footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; }
+  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; }
   .footer .legal { margin-top: 6px; padding-top: 0; border-top: none; color: #888; font-size: 10px; }
   @media print {
     body { background: #fff; }
@@ -364,9 +366,10 @@ function openPrintableHandoverProtocol(job, machine, p) {
 <body>
   <div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
   <div class="page">
+  <div class="body-content">
   <div class="head">
     <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
-    <div>
+    <div class="titleblock">
       <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
       <div class="sub">Protokol č.: ${esc(p.protocolNumber)}</div>
     </div>
@@ -403,6 +406,7 @@ function openPrintableHandoverProtocol(job, machine, p) {
     <strong>Zásady prenájmu pracovnej plošiny</strong>
     <ol>${HANDOVER_LEGAL_RULES.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
     <div>${esc(HANDOVER_VOP_NOTE)}</div>
+  </div>
   </div>
   <div class="footer">
     mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
