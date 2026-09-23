@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.554";
+const APP_VERSION = "1.0.556";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6903,7 +6903,7 @@ function DispatcherApp() {
                   setCheckerInspectionConfirmTarget(null);
                 }}
               >
-                Spustiť kontrolu
+                {checkerInspectionConfirmTarget.resolved ? "Zobraziť kontrolu" : "Spustiť kontrolu"}
               </button>
             </div>
           </Modal>
@@ -11838,12 +11838,16 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
-  // Upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi (prevzatie v
-  // odovzdávacom protokole) — dovtedy si checker vie kontrolu kedykoľvek
-  // doplniť/opraviť, aj keď ju už raz odoslal (assignment.resolved je len
-  // vizuálna fajočka v pláne, neuzamyká to). Kontrola po vrátení nemá takýto
-  // nasledujúci krok, ktorý by ju uzamkol, preto ostáva vždy editovateľná.
-  const readOnly = phase === "vyvoz" && !!handoverDone;
+  // Vývoz: upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi
+  // (prevzatie v odovzdávacom protokole) — potom je to NAVŽDY uzamknuté
+  // (hardLocked), bez možnosti opravy, lebo stroj už fyzicky odišiel.
+  // Vrátenie: žiadny takýto nezvratný krok neexistuje, takže sa dá pomýliť a
+  // opraviť aj po odoslaní — len sa po odoslaní zobrazí najprv náhľad (nech
+  // ďalšie kliknutie na tú istú kontrolu neskočí rovno do formulára) a checker
+  // sa do úpravy musí vedome vrátiť tlačidlom.
+  const hardLocked = phase !== "vratenie" && !!handoverDone;
+  const [editing, setEditing] = useState(!assignment.resolved);
+  const showForm = !hardLocked && editing;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -11891,7 +11895,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Predmet kontroly
       </div>
-      {readOnly ? (
+      {!showForm ? (
         <HandoverProtocolChecklistRecap checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" />
       ) : (
         <div style={{ border: "1px solid var(--border)", borderRadius: 8, marginBottom: 14, overflow: "hidden" }}>
@@ -11955,7 +11959,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
             {photos.map((url, i) => (
               <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
                 <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
-                {!readOnly && (
+                {showForm && (
                   <button
                     type="button"
                     onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
@@ -11968,7 +11972,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
               </div>
             ))}
           </div>
-          {!readOnly && (
+          {showForm && (
             <>
               <input type="file" accept="image/*" multiple onChange={(e) => { handlePhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
               {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
@@ -11983,12 +11987,17 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         </div>
       )}
 
-      {readOnly && (
+      {hardLocked && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
           Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať.
         </div>
       )}
-      {!readOnly && (
+      {!hardLocked && !showForm && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+          <button className="btn btn-ghost" onClick={() => setEditing(true)}>✏️ Upraviť kontrolu</button>
+        </div>
+      )}
+      {showForm && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
           <button className="btn btn-accent" onClick={handleSave}>Uložiť</button>
         </div>
