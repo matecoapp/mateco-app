@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.547";
+const APP_VERSION = "1.0.548";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -308,7 +308,7 @@ function openProtocol(params) {
 // papierového vzoru (dva stĺpce Prevzatie/Vrátenie vedľa seba), s doslovným
 // právnym textom. Slúži dispečerovi ako podklad k faktúram / prípadnému vymáhaniu.
 function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
-  const { canEdit = false, canGoReturn = false, portalLink = null, qrDataUrl = null, embedded = false } = opts;
+  const { canEdit = false, canGoReturn = false, canEmail = false, portalLink = null, qrDataUrl = null, embedded = false } = opts;
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   function sigBlock(dataUrl, label) {
@@ -383,6 +383,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
     ${canGoReturn ? `<button class="btn btn-accent" onclick="requestGoReturn()">▶ Vykonať vrátenie</button>` : ""}
     <button class="btn btn-accent" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button>
     ${qrDataUrl ? `<button class="btn btn-ghost" onclick="showQr()">📱 QR pre zákazníka</button>` : ""}
+    ${canEmail ? `<button class="btn btn-ghost" onclick="requestSendMail()">✉️ Poslať zákazníkovi</button>` : ""}
   </div>
 
   <div id="confirmOverlay" class="modal-overlay" onclick="if(event.target===this) closeConfirmEdit()">
@@ -471,6 +472,10 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   }
   function showQr() { var el = document.getElementById('qrOverlay'); if (el) el.classList.add('open'); }
   function closeQr() { var el = document.getElementById('qrOverlay'); if (el) el.classList.remove('open'); }
+  function requestSendMail() {
+    if (window.parent === window) { alert('Okno appky sa nenašlo — otvorte protokol znova z appky.'); return; }
+    window.parent.postMessage({ type: 'mateco_handover_send_mail' }, '*');
+  }
 </script>
 </body></html>`;
   if (embedded) return docHtml;
@@ -11264,8 +11269,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // tichému prepísaniu.
   const [baseRev] = useState(existing?._rev || 0);
   // Šofér prišiel rovno zo záložky Prepravy (vyvoz/zvoz) — preskočíme náhľad a
-  // otvoríme priamo formulár pre danú fázu.
-  const [screen, setScreen] = useState(forcePhase ? "edit" : existing ? "view" : "edit");
+  // otvoríme priamo formulár pre danú fázu. Ale len ak tá fáza ešte nie je
+  // hotová — inak (napr. znova klikne na už odoslaný vývoz) len náhľad, nie
+  // opätovné otvorenie formulára.
+  const forcePhaseDone = forcePhase === "vratenie" ? existing?.returnDone : existing?.handoverDone;
+  const [screen, setScreen] = useState(forcePhase && !forcePhaseDone ? "edit" : existing ? "view" : "edit");
   useEffect(() => {
     if (!portalLink || (!showPortalQr && screen !== "sent" && screen !== "view")) return;
     let cancelled = false;
@@ -11372,16 +11380,21 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     !existing.returnDone &&
     (user?.role === "sofer" || user?.role === "externy_sofer") &&
     canFillHandoverPhase(job, myEmployee, "vratenie");
+  // Dispečer aj šofér vedia poslať zákazníkovi odkaz/QR — nie je to viazané na
+  // úpravu protokolu (tú má len dispečer), len na to, že vôbec smie s
+  // odovzdávacím protokolom pracovať.
+  const canEmailProtocol = !!portalLink && (can(user, "job_email") || can(user, "handover_protocol_write"));
   const protocolHtml = useMemo(() => {
     if (screen !== "view" || !existing) return "";
     return openPrintableHandoverProtocol(job, machine, existing, {
       canEdit: canEditProtocol,
       canGoReturn,
+      canEmail: canEmailProtocol,
       portalLink,
       qrDataUrl: portalQrDataUrl,
       embedded: true,
     });
-  }, [screen, existing, job, machine, canEditProtocol, canGoReturn, portalLink, portalQrDataUrl]);
+  }, [screen, existing, job, machine, canEditProtocol, canGoReturn, canEmailProtocol, portalLink, portalQrDataUrl]);
   useEffect(() => {
     if (screen !== "view") return;
     function onMessage(e) {
@@ -11394,11 +11407,20 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         setCustomerSig(null);
         setDriverSig(null);
         setScreen("edit");
+      } else if (e.data?.type === "mateco_handover_send_mail") {
+        composeMail({
+          to: job?.customerEmail || "",
+          subject: `Prevzatie stroja ${machine?.code || ""} — ${job?.customer || ""}`,
+          body:
+            `Dobrý deň,\n\npotvrdzujeme prevzatie stroja ${machine?.code || ""}${existing.protocolNumber ? ` (protokol č. ${existing.protocolNumber})` : ""}.\n\n` +
+            (portalLink ? `Stav zákazky aj protokol o odovzdaní si môžete kedykoľvek pozrieť tu:\n${portalLink}\n\n` : "") +
+            `S pozdravom,\nmateco Slovakia s.r.o.`,
+        });
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [screen, existing]);
+  }, [screen, existing, job, machine, portalLink]);
 
   if (screen === "sent") {
     return (
@@ -11439,44 +11461,18 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   if (screen === "view" && existing) {
     return (
-      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
+      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
         <iframe
           title="Protokol o odovzdaní a prevzatí stroja"
           srcDoc={protocolHtml}
           sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ width: "100%", height: "75vh", border: "1px solid var(--border)", borderRadius: 8 }}
         />
-        {(can(user, "job_email") || canDelete) && (
+        {canDelete && (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-            {can(user, "job_email") && (
-              <button
-                className="btn btn-ghost"
-                title={
-                  job?.customerEmail
-                    ? "Pripraví email zákazníkovi s odkazom na stav zákazky a protokol"
-                    : "Zákazka nemá vyplnený email zákazníka — adresu doplníte priamo v otvorenom maile"
-                }
-                onClick={() => {
-                  composeMail({
-                    to: job?.customerEmail || "",
-                    subject: `Prevzatie stroja ${machine?.code || ""} — ${job?.customer || ""}`,
-                    body:
-                      `Dobrý deň,\n\npotvrdzujeme prevzatie stroja ${machine?.code || ""}${existing.protocolNumber ? ` (protokol č. ${existing.protocolNumber})` : ""}.\n\n` +
-                      (portalLink
-                        ? `Stav zákazky aj protokol o odovzdaní si môžete kedykoľvek pozrieť tu:\n${portalLink}\n\n`
-                        : "") +
-                      `S pozdravom,\nmateco Slovakia s.r.o.`,
-                  });
-                }}
-              >
-                ✉️ Poslať zákazníkovi
-              </button>
-            )}
-            {canDelete && (
-              <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
-                Zmazať protokol
-              </button>
-            )}
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
+              Zmazať protokol
+            </button>
           </div>
         )}
       </Modal>
