@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.573";
+const APP_VERSION = "1.0.574";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2900,22 +2900,51 @@ function DispatcherApp() {
     return () => window.removeEventListener("message", onMessage);
   }, [protocolLogs, damages, technicians, enrichedMachineById]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthChecked(true);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+  // Prihlásenie offline: getSession() vie skúsiť obnoviť expirovaný token na
+  // pozadí a bez signálu to zlyhá — Supabase to vtedy vyhodnotí ako
+  // "odhlásený", aj keď človek reálne len nemá signál (presne toto hlásil
+  // Rado: appka ho offline vôbec neprihlási). Preto sa posledná známa platná
+  // relácia ukladá do IndexedDB a offline sa použije NAMIESTO "null" — jediné
+  // miesto, čo session naozaj vynuluje, je explicitné odhlásenie (signOut
+  // vyššie), to platí aj offline.
+  function applySession(sess) {
+    if (sess) {
+      idbPut("tables", "session", sess);
       setSession(sess);
       setAuthChecked(true);
+    } else if (!navigator.onLine) {
+      idbGet("tables", "session").then((cached) => {
+        setSession(cached || null);
+        setAuthChecked(true);
+      });
+    } else {
+      setSession(null);
+      setAuthChecked(true);
+    }
+  }
+  useEffect(() => {
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => applySession(session))
+      .catch(() => applySession(null));
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+      applySession(sess);
       if (event === "PASSWORD_RECOVERY") setShowSetNewPassword(true);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
   const loadProfiles = useCallback(async () => {
-    const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
-    if (!error && data) setProfiles(data);
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
+      if (error) throw error;
+      setProfiles(data || []);
+      idbPut("tables", "profiles", data || []);
+    } catch (e) {
+      console.error("loadProfiles failed", e);
+      const cached = await idbGet("tables", "profiles");
+      if (cached) setProfiles(cached);
+    }
   }, []);
 
   useEffect(() => {
@@ -3092,6 +3121,7 @@ function DispatcherApp() {
   function signOut() {
     supabase.auth.signOut();
     setSession(null);
+    idbDelete("tables", "session"); // explicitné odhlásenie platí aj offline, nič to nemá "obnoviť"
     localStorage.removeItem("mateco_last_module");
     localStorage.removeItem("mateco_last_view");
   }
