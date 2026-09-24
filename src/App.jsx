@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.574";
+const APP_VERSION = "1.0.575";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11355,7 +11355,7 @@ function PhoneDirectoryModal({ employees, onClose }) {
   return (
     <Modal title="Telefónny zoznam" onClose={onClose}>
       <Field label="Hľadať meno, rolu alebo depo">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} autoFocus />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} />
       </Field>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
         {list.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "10px 0" }}>Nikto nezodpovedá hľadaniu.</div>}
