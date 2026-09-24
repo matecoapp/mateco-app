@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.568";
+const APP_VERSION = "1.0.569";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3816,29 +3816,37 @@ function DispatcherApp() {
   // ERP obrazovka (fakturant) — označenie "spracované" uloží aj snímku
   // sledovaných polí (erpSnapshot), nech vie updateProtocolLog/onSave vyššie
   // rozpoznať, že sa niečo zmenilo POTOM, čo to už bolo nahraté do ERP.
+  // id môže byť jedno ID alebo pole ID (napr. "Spracovať všetky") — musí ísť
+  // o JEDEN persist call na viac záznamov naraz, inak viac volaní v rade
+  // (forEach) počíta každé z tej istej "starej" assignments/protocolLogs
+  // premennej a druhé volanie by prepísalo zmenu prvého (stratená zmena).
   function markChecklistErpProcessed(id) {
+    const ids = new Set([].concat(id));
     persistAssignments(
       assignments.map((a) =>
-        a.id === id
+        ids.has(a.id)
           ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts } }
           : a
       )
     );
   }
   function revertChecklistErpProcessed(id) {
-    persistAssignments(assignments.map((a) => (a.id === id ? { ...a, erpProcessed: false } : a)));
+    const ids = new Set([].concat(id));
+    persistAssignments(assignments.map((a) => (ids.has(a.id) ? { ...a, erpProcessed: false } : a)));
   }
   function markProtocolErpProcessed(id) {
+    const ids = new Set([].concat(id));
     persistProtocolLogs(
       protocolLogs.map((p) =>
-        p.id === id
+        ids.has(p.id)
           ? { ...p, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
           : p
       )
     );
   }
   function revertProtocolErpProcessed(id) {
-    persistProtocolLogs(protocolLogs.map((p) => (p.id === id ? { ...p, erpProcessed: false } : p)));
+    const ids = new Set([].concat(id));
+    persistProtocolLogs(protocolLogs.map((p) => (ids.has(p.id) ? { ...p, erpProcessed: false } : p)));
   }
   // Prijme "odfotenie" vyplneného protokolu z vnoreného formulára (postMessage), uloží
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
@@ -17605,7 +17613,7 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
   const checklists = assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null);
   const hromadne = checklists.filter((a) => !(a.usedParts && a.usedParts.length));
   const solo = checklists.filter((a) => a.usedParts && a.usedParts.length);
-  const onMarkAll = (ids) => ids.forEach(onMarkChecklist);
+  const onMarkAll = onMarkChecklist; // markChecklistErpProcessed prijíma aj pole ID naraz
 
   const tabs = [
     { id: "hromadne", label: "Kontroly (hromadné)" },
