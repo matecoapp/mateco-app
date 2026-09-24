@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.570";
+const APP_VERSION = "1.0.572";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3527,6 +3527,7 @@ function DispatcherApp() {
         handoverProtocols,
         machineModels,
         spareParts,
+        portalRequests,
       },
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
@@ -3579,6 +3580,7 @@ function DispatcherApp() {
         if (Array.isArray(data.handoverProtocols)) persistHandoverProtocols(data.handoverProtocols);
         if (Array.isArray(data.machineModels)) persistMachineModels(data.machineModels);
         if (Array.isArray(data.spareParts)) persistSpareParts(data.spareParts);
+        if (Array.isArray(data.portalRequests)) persistPortalRequests(data.portalRequests);
         alert("Záloha bola úspešne načítaná.");
       } catch (e) {
         console.error("Import failed", e);
@@ -17649,7 +17651,7 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
 
   const tabs = [
     { id: "hromadne", label: "Kontroly (hromadné)" },
-    { id: "solo", label: "Kontroly (sólo)" },
+    { id: "solo", label: "Kontroly (s výmenou dielu)" },
     { id: "protokoly", label: "Servisné protokoly" },
   ];
 
