@@ -24,6 +24,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- html2canvas — potrebuje ho servisný protokol na "odfotenie" (vnorený iframe cez
+         srcDoc ho preberá odtiaľto ako window.parent.html2canvas, viď decodeProtocolHtml/
+         sendSnapshotToApp v App.jsx — spoľahlivejšie než ťahať vlastnú kópiu znova cez
+         <base> v srcDoc dokumente, čo niektoré mobilné prehliadače nerešpektujú). Načíta sa
+         s appkou vždy (nie len keď sa otvorí protokol), takže ho service worker zacachuje
+         pre offline použitie hneď pri prvom bežnom otvorení appky. -->
+    <script src="./html2canvas.min.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
