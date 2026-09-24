@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.585";
+const APP_VERSION = "1.0.586";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -263,6 +263,11 @@ function can(user, key) {
   if (user.role === "fakturant_pozicovna" && key === "reservation_add") return false;
   const allowed = PERM[key];
   if (!allowed) return false;
+  // Práva viazané na samotnú fakturantskú rolu (erp_view, erp_pozicovna_view)
+  // vymenúvajú v PERM priamo tú rolu, nie jej alias — preto sa skúša aj
+  // skutočná rola PRED aliasom (inak by ich alias vždy prekryl a fakturant by
+  // svoju vlastnú ERP záložku nikdy nevidel).
+  if (allowed.includes(user.role)) return true;
   const role = ROLE_PERM_ALIAS[user.role] || user.role;
   return allowed.includes(role);
 }
