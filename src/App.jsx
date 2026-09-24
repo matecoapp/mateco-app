@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.577";
+const APP_VERSION = "1.0.580";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1346,6 +1346,14 @@ async function compressImageToBlob(file) {
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
   return blob;
 }
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 // Priečinková štruktúra fotiek v Storage bucket-e "inspections": stroj/zákazka_dátum/ —
 // nech sa dajú fotky ľahko nájsť aj mimo appky (napr. pri budúcom exporte do iného
@@ -1464,6 +1472,19 @@ async function flushOutbox() {
 }
 if (typeof window !== "undefined") {
   window.addEventListener("online", flushOutbox);
+}
+
+// Fotky odfotené offline (checker/šofér) — fronta na dodatočné nahranie do
+// Storage, presne 1:1 s online priebehom, len s čakaním na signál. Kým sa
+// nenahrá, fotka v zázname zostáva ako dátová URL (base64), čo appka bežne
+// zobrazí rovnako ako skutočný odkaz.
+async function queuePhotoMigration(job) {
+  await idbPut("outbox", `photoMigration:${job.photoId}`, { kind: "photoMigration", ...job });
+  refreshOutboxCount();
+}
+async function dataUrlToBlob(dataUrl) {
+  const res = await fetch(dataUrl);
+  return res.blob();
 }
 
 async function loadKey(key, fallback) {
@@ -2453,6 +2474,11 @@ function DispatcherApp() {
   const [handoverDirectPhase, setHandoverDirectPhase] = useState(null); // šofér klikol rovno z Prepravy — preskočí kartu zákazky aj náhľad
 
   const [assignments, setAssignments] = useState([]);
+  // Vždy aktuálna hodnota pre asynchrónne callbacky mimo React cyklu (napr.
+  // fronta na dodatočné nahranie offline fotiek nižšie) — bez toho by po
+  // "online" evente videli starý (uzavretý) zoznam zo skoršieho renderu.
+  const assignmentsRef = useRef(assignments);
+  assignmentsRef.current = assignments;
   const [showAddEmployee, setShowAddEmployee] = useState(null); // null | {} | { existing: employee } — modul Administratíva
   const [linkAccountTarget, setLinkAccountTarget] = useState(null); // employee, ktorému sa práve prepája účet
   const [technicianCard, setTechnicianCard] = useState(null);
@@ -2473,6 +2499,8 @@ function DispatcherApp() {
   const [reservations, setReservations] = useState([]); // nezáväzné rezervácie strojov
   const [protocolLogs, setProtocolLogs] = useState([]); // uložené "odfotenia" vyplnených servisných protokolov
   const [handoverProtocols, setHandoverProtocols] = useState([]); // protokoly o odovzdaní/prevzatí stroja zákazníkovi (Požičovňa)
+  const handoverProtocolsRef = useRef(handoverProtocols);
+  handoverProtocolsRef.current = handoverProtocols;
   const [machineModels, setMachineModels] = useState([]); // knižnica modelov strojov — kategória + parametre, len Požičovňové stroje
   const [spareParts, setSpareParts] = useState([]); // náhradné diely na objednanie — technik zadá, vedúci/dispečer servisu schváli a objedná
   // Kôš — namiesto tvrdého mazania (viď persistDamages a pod.) appka záznam
@@ -4013,6 +4041,11 @@ function DispatcherApp() {
     if (!data.machineId && !data.damageId) {
       console.warn("[protokol] bez machineId aj damageId — ukladá sa ako nepriradený externý protokol.");
     }
+    // Offline (žiadny signál na mieste) — nahranie fotky do Supabase Storage
+    // hneď zlyhá. Namiesto tichého/nezrozumiteľného pádu sa celý protokol
+    // uloží do rovnakého offline outboxu ako ostatné zápisy a appka to skúsi
+    // znova sama pri návrate signálu (pozri flushProtocolOutbox nižšie).
+    const queueId = data._queueId || uid();
     try {
       const machine = data.machineId ? machineById[data.machineId] : null;
       const byteChars = atob(data.imageBase64);
@@ -4023,12 +4056,9 @@ function DispatcherApp() {
       // fotky dajú dohľadať aj mimo appky, rovnaký princíp ako photoFolder() vyššie.
       const cleanPart = (s) => String(s || "").replace(/[^a-zA-Z0-9_-]/g, "_");
       const dateStr = (data.submittedAt || new Date().toISOString()).slice(0, 10);
-      const path = `${cleanPart(machine?.code || data.machineSerial || "neznamy-stroj")}/${dateStr}_${cleanPart(data.technicianName || "technik")}_${uid()}.png`;
+      const path = `${cleanPart(machine?.code || data.machineSerial || "neznamy-stroj")}/${dateStr}_${cleanPart(data.technicianName || "technik")}_${queueId}.png`;
       const { error: uploadError } = await supabase.storage.from("protocols").upload(path, blob, { contentType: "image/png" });
-      if (uploadError) {
-        console.error("[protokol] Upload do Supabase Storage zlyhal — over, či existuje bucket 'protocols' (step6-protocol-storage.sql):", uploadError);
-        return;
-      }
+      if (uploadError) throw uploadError;
       const { data: pub } = supabase.storage.from("protocols").getPublicUrl(path);
       const record = {
         id: uid(),
@@ -4069,6 +4099,10 @@ function DispatcherApp() {
       };
       persistProtocolLogs([...protocolLogs, record]);
       console.log("[protokol] úspešne uložený a priradený:", record);
+      if (data._queueId) {
+        idbDelete("outbox", `protocol:${queueId}`);
+        refreshOutboxCount();
+      }
       // Ak protokol prišiel z ČISTÉHO vypísania (nie zo zákazky) a stroj má
       // otvorenú zákazku (poškodenie/externá) pridelenú TOMU ISTÉMU technikovi,
       // čo protokol vypísal — je to takmer isto tá istá práca, len obídená.
@@ -4111,9 +4145,61 @@ function DispatcherApp() {
         });
       }
     } catch (e) {
-      console.error("[protokol] Spracovanie protokolu zlyhalo", e);
+      console.error("[protokol] Spracovanie protokolu zlyhalo (pravdepodobne offline) — uložené do outboxu, skúsi sa znova pri návrate signálu:", e);
+      idbPut("outbox", `protocol:${queueId}`, { kind: "protocolSubmission", queueId, data: { ...data, _queueId: queueId } });
+      refreshOutboxCount();
     }
   }
+  // Rozpísané protokoly, čo sa nepodarilo odoslať offline (nahranie fotky do
+  // Supabase Storage), sa skúsia znova pri návrate signálu — presne tou istou
+  // funkciou (handleProtocolSubmission), len s pripojeným _queueId.
+  useEffect(() => {
+    async function flushProtocolOutbox() {
+      const items = await idbGetAll("outbox");
+      for (const item of items) {
+        if (item?.kind === "protocolSubmission") await handleProtocolSubmission(item.data);
+      }
+    }
+    if (loaded) flushProtocolOutbox();
+    window.addEventListener("online", flushProtocolOutbox);
+    return () => window.removeEventListener("online", flushProtocolOutbox);
+  }, [loaded]);
+  // Fotky odfotené offline (checker/šofér) — dodatočné nahranie do Storage a
+  // prepísanie dátovej URL v zázname na skutočný odkaz, presne ako pri online
+  // priebehu (viď queuePhotoMigration). Skúsi sa pri návrate signálu aj pri
+  // ďalšom otvorení appky.
+  useEffect(() => {
+    async function flushPhotoMigrations() {
+      const items = await idbGetAll("outbox");
+      for (const item of items) {
+        if (item?.kind !== "photoMigration") continue;
+        try {
+          const blob = await dataUrlToBlob(item.oldValue);
+          const path = `${item.pathPrefix}/${item.photoId}.jpg`;
+          const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
+          if (uploadError) throw uploadError;
+          const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
+          const list = item.table === "assignments" ? assignmentsRef.current : handoverProtocolsRef.current;
+          const persist = item.table === "assignments" ? persistAssignments : persistHandoverProtocols;
+          const rec = list.find((r) => r.id === item.recordId);
+          if (rec && Array.isArray(rec[item.field]) && rec[item.field].includes(item.oldValue)) {
+            persist(
+              list.map((r) =>
+                r.id === item.recordId ? { ...r, [item.field]: r[item.field].map((v) => (v === item.oldValue ? pub.publicUrl : v)) } : r
+              )
+            );
+          }
+          idbDelete("outbox", `photoMigration:${item.photoId}`);
+          refreshOutboxCount();
+        } catch (e) {
+          console.error("[fotka] Dodatočné nahranie do Storage zlyhalo (asi stále offline) — skúsi sa znova:", e);
+        }
+      }
+    }
+    if (loaded) flushPhotoMigrations();
+    window.addEventListener("online", flushPhotoMigrations);
+    return () => window.removeEventListener("online", flushPhotoMigrations);
+  }, [loaded]);
   // Dodatočné priradenie "čisto" vypísaného protokolu (bez pôvodného priradenia) ku
   // konkrétnej zákazke — napr. keď ho technik vypísal mimo zákazky a dispečer to
   // dohľadá ručne z karty stroja, alebo tesne pred ukončením zákazky bez protokolu.
@@ -11971,13 +12057,27 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       setUploadingPhotos((n) => n + 1);
       try {
         const blob = await compressImageToBlob(file);
-        const path = `${photoFolder(machine, job)}/${uid()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
-        if (uploadError) throw uploadError;
-        const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
-        setReturnPhotos((prev) => [...prev, pub.publicUrl]);
+        const pathPrefix = photoFolder(machine, job);
+        const photoId = uid();
+        try {
+          const path = `${pathPrefix}/${photoId}.jpg`;
+          const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
+          if (uploadError) throw uploadError;
+          const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
+          setReturnPhotos((prev) => [...prev, pub.publicUrl]);
+        } catch (e) {
+          // Offline — nahranie do Storage sa nedá skúsiť na počkanie, kým človek
+          // vypĺňa formulár. Fotka sa dovtedy zobrazuje ako dátová URL (base64)
+          // priamo v zázname (ten sa odošle bežnou cestou), a naviac sa zaradí
+          // do fronty — pri návrate signálu sa nahrá do Storage a v zázname sa
+          // tichým prepíše na skutočný odkaz, presne ako pri online priebehu.
+          console.error("Nahranie fotky stavu stroja do Storage zlyhalo (asi offline) — čaká vo fronte:", e);
+          const dataUrl = await blobToDataUrl(blob);
+          setReturnPhotos((prev) => [...prev, dataUrl]);
+          queuePhotoMigration({ photoId, table: "handoverProtocols", recordId: existing.id, field: "returnPhotos", oldValue: dataUrl, pathPrefix });
+        }
       } catch (e) {
-        console.error("Nahranie fotky stavu stroja zlyhalo", e);
+        console.error("Spracovanie fotky zlyhalo", e);
         setPhotoUploadError("Nahranie fotky zlyhalo, skúste to znova.");
       } finally {
         setUploadingPhotos((n) => n - 1);
@@ -12398,13 +12498,27 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       setUploadingPhotos((n) => n + 1);
       try {
         const blob = await compressImageToBlob(file);
-        const path = `${photoFolder(machine, job)}/${uid()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
-        if (uploadError) throw uploadError;
-        const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
-        setPhotos((prev) => [...prev, pub.publicUrl]);
+        const pathPrefix = photoFolder(machine, job);
+        const photoId = uid();
+        try {
+          const path = `${pathPrefix}/${photoId}.jpg`;
+          const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
+          if (uploadError) throw uploadError;
+          const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
+          setPhotos((prev) => [...prev, pub.publicUrl]);
+        } catch (e) {
+          // Offline — rovnaké riešenie ako pri zvoze (HandoverProtocolModal
+          // vyššie): fotka sa dovtedy zobrazuje ako dátová URL (base64) priamo
+          // v zázname a naviac sa zaradí do fronty — pri návrate signálu sa
+          // nahrá do Storage a v zázname sa tichým prepíše na skutočný odkaz,
+          // presne ako pri online priebehu.
+          console.error("Nahranie fotky kontroly stroja do Storage zlyhalo (asi offline) — čaká vo fronte:", e);
+          const dataUrl = await blobToDataUrl(blob);
+          setPhotos((prev) => [...prev, dataUrl]);
+          queuePhotoMigration({ photoId, table: "assignments", recordId: assignment.id, field: "checkerPhotos", oldValue: dataUrl, pathPrefix });
+        }
       } catch (e) {
-        console.error("Nahranie fotky kontroly stroja zlyhalo", e);
+        console.error("Spracovanie fotky zlyhalo", e);
         setPhotoUploadError("Nahranie fotky zlyhalo, skúste to znova.");
       } finally {
         setUploadingPhotos((n) => n - 1);
