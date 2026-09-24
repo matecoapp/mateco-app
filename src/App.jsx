@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.572";
+const APP_VERSION = "1.0.573";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1363,14 +1363,120 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+/* ---------------------------------------------------------
+   Offline cache (Fáza 2/3 offline režimu) — posledná úspešne stiahnutá kópia
+   dát a rozpracované zápisy, čo sa nepodarilo odoslať, v IndexedDB. Nutné pre
+   appku spustenú bez signálu (appshell cache v sw.js appku len otvorí,
+   dáta/zápisy rieši toto). Len malý key/value wrapper, netreba na to
+   knižnicu (idb a pod.) — dva "stores": "tables" (posledná kópia každej
+   tabuľky/kľúča) a "outbox" (zápisy čo čakajú na odoslanie).
+   ponytail: cachuje sa CELÁ tabuľka, nie len "moje dnešné záznamy" — pre
+   veľkosť dát tejto appky je to jednoduchšie a netreba nič filtrovať podľa
+   role/dátumu; ak by tabuľky časom narástli natoľko, že by to vadilo
+   úložisku telefónu, toto je miesto na zúženie.
+--------------------------------------------------------- */
+function openOfflineDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("mateco_offline", 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("tables")) db.createObjectStore("tables");
+      if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox");
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(store, key) {
+  try {
+    const db = await openOfflineDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(store, "readonly").objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.error(`idbGet(${store}) failed`, key, e);
+    return undefined;
+  }
+}
+async function idbGetAll(store) {
+  try {
+    const db = await openOfflineDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(store, "readonly").objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.error(`idbGetAll(${store}) failed`, e);
+    return [];
+  }
+}
+async function idbPut(store, key, value) {
+  try {
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error(`idbPut(${store}) failed`, key, e);
+  }
+}
+async function idbDelete(store, key) {
+  try {
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error(`idbDelete(${store}) failed`, key, e);
+  }
+}
+
+// Outbox — zápisy do tabuliek (protokoly, checklisty, ...), čo sa nepodarilo
+// odoslať ani po 4 pokusoch. Prežije zavretie appky/reštart telefónu, odošle
+// sa samo pri návrate signálu (event "online") aj pri ďalšom otvorení appky.
+// Zámerne len pre záznamy (saveRecordRow) — mazanie záznamov a appkové
+// nastavenia (saveKey/app_data) rieši v teréne offline len zriedka niekto,
+// netreba to zbytočne komplikovať.
+let _outboxCountListener = null;
+function setOutboxCountListener(fn) {
+  _outboxCountListener = fn;
+}
+async function refreshOutboxCount() {
+  const items = await idbGetAll("outbox");
+  _outboxCountListener?.(items.length);
+}
+async function flushOutbox() {
+  const items = await idbGetAll("outbox");
+  for (const { table, item } of items) {
+    const ok = await writeRecordRowWithRetry(table, item);
+    if (ok) await idbDelete("outbox", `${table}:${item.id}`);
+  }
+  refreshOutboxCount();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("online", flushOutbox);
+}
+
 async function loadKey(key, fallback) {
   try {
     const { data, error } = await supabase.from("app_data").select("value").eq("key", key).maybeSingle();
-    if (error || !data) return fallback;
-    return data.value ?? fallback;
+    if (error) throw error;
+    const value = data ? data.value ?? fallback : fallback;
+    idbPut("tables", `key:${key}`, value);
+    return value;
   } catch (e) {
     console.error("loadKey failed", key, e);
-    return fallback;
+    const cached = await idbGet("tables", `key:${key}`);
+    return cached !== undefined ? cached : fallback;
   }
 }
 const _saveQueues = {};
@@ -1435,11 +1541,14 @@ function saveKey(key, value) {
 async function loadRecordTable(table) {
   try {
     const { data, error } = await supabase.from(table).select("id, data");
-    if (error || !data) return [];
-    return data.map((row) => ({ ...row.data, id: row.id }));
+    if (error) throw error;
+    const rows = (data || []).map((row) => ({ ...row.data, id: row.id }));
+    idbPut("tables", table, rows);
+    return rows;
   } catch (e) {
     console.error(`loadRecordTable(${table}) failed`, e);
-    return [];
+    const cached = await idbGet("tables", table);
+    return cached || [];
   }
 }
 const _recordSaveQueues = {};
@@ -1486,8 +1595,10 @@ function saveRecordRow(table, item) {
     const ok = await writeRecordRowWithRetry(table, item);
     if (ok) {
       delete _retryActions[table];
+      idbDelete("outbox", `${table}:${item.id}`).then(refreshOutboxCount);
     } else {
       _retryActions[table] = () => saveRecordRow(table, item);
+      idbPut("outbox", `${table}:${item.id}`, { table, item }).then(refreshOutboxCount);
     }
     _saveStatusListener?.(ok ? "ok" : "error", table);
   });
@@ -2209,6 +2320,7 @@ function Field({ label, children }) {
 function DispatcherApp() {
   const [loaded, setLoaded] = useState(false);
   const [saveErrors, setSaveErrors] = useState([]); // keys currently failing to persist
+  const [outboxCount, setOutboxCount] = useState(0); // zápisy čakajúce v offline outboxe (Fáza 3)
   const [machines, setMachines] = useState([]);
   const [vehicles, setVehicles] = useState([]); // vozový park (STK/EK)
   const [portalRequests, setPortalRequests] = useState([]); // žiadosti zákazníka z portálu (problém / predĺženie)
@@ -2561,6 +2673,12 @@ function DispatcherApp() {
   }, []);
 
   useEffect(() => {
+    setOutboxCountListener(setOutboxCount);
+    refreshOutboxCount();
+    return () => setOutboxCountListener(null);
+  }, []);
+
+  useEffect(() => {
     setProtocolOpenListener((html, params) => setProtocolModalData({ html, params }));
     return () => setProtocolOpenListener(null);
   }, []);
@@ -2668,6 +2786,7 @@ function DispatcherApp() {
 
       setEmployees(emp);
       setLoaded(true);
+      flushOutbox(); // dáta sa práve stiahli online, skús poslať aj rozpracované zápisy z minula
     })();
   }, [authChecked, session?.user?.id]);
 
@@ -5496,7 +5615,7 @@ function DispatcherApp() {
       {saveErrors.length > 0 && (
         <div style={{ background: "var(--danger)", color: "#fff", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13 }}>
-            Niektoré zmeny sa nepodarilo uložiť ({saveErrors.join(", ")}). Skontrolujte pripojenie a skúste znova, inak sa pri zatvorení platformy stratia.
+            Niektoré zmeny sa nepodarilo uložiť ({saveErrors.join(", ")}). Skontrolujte pripojenie a skúste znova — záznamy (protokoly, checklisty...) sa odošlú aj samé pri návrate signálu, appkové nastavenia nie.
           </span>
           <button
             className="btn"
@@ -5505,6 +5624,14 @@ function DispatcherApp() {
           >
             Skúsiť znova
           </button>
+        </div>
+      )}
+
+      {outboxCount > 0 && (
+        <div style={{ background: "var(--warn-bg)", borderBottom: "2px solid var(--warn)", color: "var(--warn)", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>
+            {outboxCount} {outboxCount === 1 ? "zmena čaká" : "zmien čaká"} na odoslanie (offline) — odošle sa samo, keď sa appka pripojí. Netreba nič robiť, len appku nezmazať.
+          </span>
         </div>
       )}
 
