@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.569";
+const APP_VERSION = "1.0.570";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3820,12 +3820,12 @@ function DispatcherApp() {
   // o JEDEN persist call na viac záznamov naraz, inak viac volaní v rade
   // (forEach) počíta každé z tej istej "starej" assignments/protocolLogs
   // premennej a druhé volanie by prepísalo zmenu prvého (stratená zmena).
-  function markChecklistErpProcessed(id) {
+  function markChecklistErpProcessed(id, orderNumber) {
     const ids = new Set([].concat(id));
     persistAssignments(
       assignments.map((a) =>
         ids.has(a.id)
-          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts } }
+          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts } }
           : a
       )
     );
@@ -3834,12 +3834,12 @@ function DispatcherApp() {
     const ids = new Set([].concat(id));
     persistAssignments(assignments.map((a) => (ids.has(a.id) ? { ...a, erpProcessed: false } : a)));
   }
-  function markProtocolErpProcessed(id) {
+  function markProtocolErpProcessed(id, orderNumber) {
     const ids = new Set([].concat(id));
     persistProtocolLogs(
       protocolLogs.map((p) =>
         ids.has(p.id)
-          ? { ...p, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
+          ? { ...p, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
           : p
       )
     );
@@ -17427,6 +17427,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             <th>Technik</th>
             <th>Hodiny</th>
             {withParts && <th>Diely</th>}
+            {showHistory && <th>Objednávka/výkaz</th>}
             <th>Náhľad</th>
             <th>
               {!showHistory && onMarkAll && visible.length > 1 && (
@@ -17453,6 +17454,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
                     {(a.usedParts || []).map((p) => `${p.name}${p.partNumber ? " (" + p.partNumber + ")" : ""} × ${p.qty}`).join(", ") || "—"}
                   </td>
                 )}
+                {showHistory && <td data-label="Objednávka/výkaz">{a.erpOrderNumber || "—"}</td>}
                 <td data-label="Náhľad">
                   <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>
                 </td>
@@ -17560,6 +17562,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
             <th>Materiál</th>
             <th>Km</th>
             <th>Čas na ceste</th>
+            {showHistory && <th>Objednávka/výkaz</th>}
             <th>Náhľad</th>
             <th></th>
           </tr>
@@ -17578,6 +17581,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
                 <td data-label="Materiál">{(p.materialItems || []).map((mi) => `${mi.desc}${mi.pn ? " (" + mi.pn + ")" : ""}${mi.qty ? " × " + mi.qty : ""}`).join(", ") || "—"}</td>
                 <td data-label="Km">{p.travelKm || "—"}</td>
                 <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
+                {showHistory && <td data-label="Objednávka/výkaz">{p.erpOrderNumber || "—"}</td>}
                 <td data-label="Náhľad">
                   <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], false)}>Náhľad</button>
                 </td>
@@ -17605,15 +17609,43 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
   );
 }
 
+// Pred označením "Spracované" (jedno aj hromadne) sa vyžiada číslo servisnej
+// objednávky/výkazu práce, ktoré sa priradí k záznamu (erpOrderNumber).
+function ErpOrderNumberModal({ count, onClose, onConfirm }) {
+  const [value, setValue] = useState("");
+  return (
+    <Modal title="Číslo servisnej objednávky / výkazu práce" onClose={onClose} elevated>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
+        {count > 1 ? `Priradí sa k ${count} označeným záznamom a presunie ich do spracovaných.` : "Priradí sa k tomuto záznamu a presunie ho do spracovaných."}
+      </div>
+      <Field label="Číslo objednávky / výkazu">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          style={{ width: "100%" }}
+          onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) onConfirm(value.trim()); }}
+        />
+      </Field>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+        <button className="btn btn-accent" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>Spracované</button>
+      </div>
+    </Modal>
+  );
+}
+
 function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianById, onMarkChecklist, onRevertChecklist, onMarkProtocol, onRevertProtocol }) {
   const [tab, setTab] = useState("hromadne");
   const [showHistory, setShowHistory] = useState(false);
   const [selectedTechId, setSelectedTechId] = useState(null);
+  const [markPrompt, setMarkPrompt] = useState(null); // { ids, kind: "checklist" | "protocol" }
 
   const checklists = assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null);
   const hromadne = checklists.filter((a) => !(a.usedParts && a.usedParts.length));
   const solo = checklists.filter((a) => a.usedParts && a.usedParts.length);
-  const onMarkAll = onMarkChecklist; // markChecklistErpProcessed prijíma aj pole ID naraz
+  const requestMarkChecklist = (id) => setMarkPrompt({ ids: [].concat(id), kind: "checklist" });
+  const requestMarkProtocol = (id) => setMarkPrompt({ ids: [].concat(id), kind: "protocol" });
 
   const tabs = [
     { id: "hromadne", label: "Kontroly (hromadné)" },
@@ -17657,9 +17689,9 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
               machineById={machineById}
               technicianById={technicianById}
               showHistory={showHistory}
-              onMark={onMarkChecklist}
+              onMark={requestMarkChecklist}
               onRevert={onRevertChecklist}
-              onMarkAll={onMarkAll}
+              onMarkAll={requestMarkChecklist}
             />
           </div>
         ) : (
@@ -17672,9 +17704,19 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
         )
       )}
       {tab === "solo" && (
-        <ErpChecklistTable items={solo} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={onMarkChecklist} onRevert={onRevertChecklist} withParts />
+        <ErpChecklistTable items={solo} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={requestMarkChecklist} onRevert={onRevertChecklist} withParts />
       )}
-      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={onMarkProtocol} onRevert={onRevertProtocol} />}
+      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={requestMarkProtocol} onRevert={onRevertProtocol} />}
+      {markPrompt && (
+        <ErpOrderNumberModal
+          count={markPrompt.ids.length}
+          onClose={() => setMarkPrompt(null)}
+          onConfirm={(orderNumber) => {
+            (markPrompt.kind === "checklist" ? onMarkChecklist : onMarkProtocol)(markPrompt.ids, orderNumber);
+            setMarkPrompt(null);
+          }}
+        />
+      )}
     </div>
   );
 }
