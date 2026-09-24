@@ -1,19 +1,42 @@
-// Service worker — beží nezávisle od otvorenej appky/karty. Dve úlohy:
+// Service worker — beží nezávisle od otvorenej appky/karty. Tri úlohy:
 // 1) keď príde push správa zo servera, zobrazí ju ako notifikáciu v telefóne/PC
 // 2) keď na ňu niekto klikne, otvorí (alebo prepne na už otvorenú) appku a
 //    pošle jej presne to miesto, kam má doskočiť (appka si to prevezme sama
 //    pri načítaní — cez "?notif=" v URL, appka to sama vyčistí z adresy).
+// 3) appshell cache (Fáza 1 offline režimu) — appka sa spustí aj bez signálu,
+//    ak ju telefón už predtým aspoň raz načítal online.
 //
 // skipWaiting/clients.claim — bez tohto by nová verzia service workera (napr.
 // keď sa táto logika niekedy nabudúce upraví) čakala, kým človek úplne
 // zavrie VŠETKY otvorené karty/appku, než by sa vôbec prevzala — dovtedy by
 // ticho bežala tá stará verzia, čo o žiadnych zmenách nevie. Toto zaisťuje,
 // že sa nová verzia ujme hneď.
-self.addEventListener("install", () => {
+//
+// CACHE_VERSION sa bumpuje ručne spolu s APP_VERSION v App.jsx (pri každom
+// vydaní appky) — inak by appka po vydaní novej verzie zostala niekomu
+// natrvalo zaseknutá na starej cache aj keď má signál.
+const CACHE_VERSION = "mateco-appshell-v1";
+
+self.addEventListener("install", (event) => {
   self.skipWaiting();
+  // Appshell (vstupná stránka) sa nacachuje hneď pri inštalácii pod pevným
+  // kľúčom (scope appky), nech je k dispozícii aj pri úplne prvom offline
+  // štarte cez URL s iným query stringom (napr. "?notif=..." z notifikácie).
+  event.waitUntil(
+    fetch(self.registration.scope)
+      .then((res) => caches.open(CACHE_VERSION).then((cache) => cache.put(self.registration.scope, res)))
+      .catch(() => {})
+  );
 });
 self.addEventListener("activate", (event) => {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      // Stará appshell cache z predošlej verzie sa zahodí — nech sa nehromadí
+      // a nech nová appka vždy vie, že jediná platná cache je CACHE_VERSION.
+      caches.keys().then((names) => Promise.all(names.filter((n) => n !== CACHE_VERSION).map((n) => caches.delete(n)))),
+    ])
+  );
 });
 
 self.addEventListener("push", (event) => {
@@ -73,5 +96,29 @@ self.addEventListener("notificationclick", (event) => {
       // čo appka spracuje sama hneď po svojom (aj tak nutnom) načítaní.
       return clients.openWindow(targetUrl);
     })
+  );
+});
+
+// --- Appshell cache (Fáza 1) --------------------------------------------
+// Len GET a len vlastná doména — volania na Supabase (iná doména, živé dáta)
+// sa NIKDY necachujú, musia byť vždy naživo. Appshell je network-first: kým
+// je appka online, vždy dostane najčerstvejšiu verziu (appka má aj vlastnú
+// kontrolu novej verzie cez version.json, netreba to tu duplikovať) — cache
+// sa len potichu dopĺňa popri tom, a použije sa až keď fetch zlyhá (offline).
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+        return res;
+      })
+      .catch(
+        () =>
+          caches.match(req).then((cached) => cached || (req.mode === "navigate" ? caches.match(self.registration.scope) : undefined))
+      )
   );
 });
