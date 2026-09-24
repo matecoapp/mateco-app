@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.567";
+const APP_VERSION = "1.0.568";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -17411,11 +17411,6 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
   }
   return (
     <>
-      {!showHistory && onMarkAll && visible.length > 1 && (
-        <button className="btn" style={{ marginBottom: 10 }} onClick={() => onMarkAll(visible.map((a) => a.id))}>
-          Spracovať všetky ({visible.length} ks, {totalHours.toLocaleString("sk-SK")} h)
-        </button>
-      )}
       <table className="table-cards">
         <thead>
           <tr>
@@ -17425,7 +17420,13 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             <th>Hodiny</th>
             {withParts && <th>Diely</th>}
             <th>Náhľad</th>
-            <th></th>
+            <th>
+              {!showHistory && onMarkAll && visible.length > 1 && (
+                <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => onMarkAll(visible.map((a) => a.id))}>
+                  Spracovať všetky ({visible.length} ks, {totalHours.toLocaleString("sk-SK")} h)
+                </button>
+              )}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -17445,7 +17446,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
                   </td>
                 )}
                 <td data-label="Náhľad">
-                  <button className="btn btn-ghost" onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>
                 </td>
                 <td className="td-actions">
                   {diff && !showHistory && (
@@ -17454,7 +17455,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
                   {showHistory ? (
                     <button className="btn btn-ghost" onClick={() => onRevert(a.id)}>Vrátiť</button>
                   ) : (
-                    <button className="btn" onClick={() => onMark(a.id)}>Spracované</button>
+                    <button className="btn btn-accent" onClick={() => onMark(a.id)}>Spracované</button>
                   )}
                 </td>
               </tr>
@@ -17570,7 +17571,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
                 <td data-label="Km">{p.travelKm || "—"}</td>
                 <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
                 <td data-label="Náhľad">
-                  <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], false)}>Náhľad</button>
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], false)}>Náhľad</button>
                 </td>
                 <td className="td-actions">
                   {diff && !showHistory && (
@@ -17579,7 +17580,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
                   {showHistory ? (
                     <button className="btn btn-ghost" onClick={() => onRevert(p.id)}>Vrátiť</button>
                   ) : (
-                    <button className="btn" onClick={() => onMark(p.id)}>Spracované</button>
+                    <button className="btn btn-accent" onClick={() => onMark(p.id)}>Spracované</button>
                   )}
                 </td>
               </tr>
