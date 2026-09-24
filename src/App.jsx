@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.575";
+const APP_VERSION = "1.0.577";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6862,8 +6862,9 @@ function DispatcherApp() {
         <PhoneDirectoryModal employees={employees} onClose={() => setShowPhoneDirectory(false)} />
       )}
       {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
-          Keď sa osvedčí, rozšíriť podmienku na ďalšie role. */}
-      {effectiveUser?.role === "admin" && (
+          Keď sa osvedčí, rozšíriť podmienku na ďalšie role. Skrytý cez telefónny
+          zoznam — plávajúce tlačidlo tam prekrývalo obsah. */}
+      {effectiveUser?.role === "admin" && !showPhoneDirectory && (
         <MaskotChatWidget
           session={session}
           machines={enrichedMachines}
@@ -10734,11 +10735,21 @@ function CustomerDetailModal({
 // "---" tabuľky zobrazili doslovne, nie ako poriadna tabuľka. Kódy strojov v
 // tvare [[GS-2032]] sa navyše vykreslia ako klikateľné tlačidlo, čo priamo
 // otvorí kartu stroja (ak sa nájde v aktuálne dostupnom zozname).
+// Telefónne čísla (+421... alebo 0...) a e-maily v odpovedi sa rovno urobia
+// klikateľné (tel:/mailto:) — telefón nemá čo skopírovať a vytočiť ručne.
+const PHONE_RE = /(?:\+\d[\d ]{7,}\d|\b0\d[\d ]{7,}\d\b)/;
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}/;
 function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
-  const parts = String(text).split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g);
+  const parts = String(text).split(new RegExp(`(\\*\\*[^*]+\\*\\*|\\[\\[[^\\]]+\\]\\]|${EMAIL_RE.source}|${PHONE_RE.source})`, "g"));
   return parts.map((p, i) => {
     const key = `${keyPrefix}-${i}`;
     if (p.startsWith("**") && p.endsWith("**")) return <strong key={key}>{p.slice(2, -2)}</strong>;
+    if (new RegExp(`^${EMAIL_RE.source}$`).test(p)) {
+      return <a key={key} href={`mailto:${p}`} style={{ color: "inherit", textDecoration: "underline" }}>{p}</a>;
+    }
+    if (new RegExp(`^${PHONE_RE.source}$`).test(p)) {
+      return <a key={key} href={`tel:${p.replace(/\s+/g, "")}`} style={{ color: "inherit", textDecoration: "underline" }}>{p}</a>;
+    }
     if (p.startsWith("[[") && p.endsWith("]]")) {
       const code = p.slice(2, -2).trim();
       const machine = machineByCode?.get(norm(code));
@@ -11357,7 +11368,7 @@ function PhoneDirectoryModal({ employees, onClose }) {
       <Field label="Hľadať meno, rolu alebo depo">
         <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}>
         {list.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "10px 0" }}>Nikto nezodpovedá hľadaniu.</div>}
         {list.map((e) => (
           <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
