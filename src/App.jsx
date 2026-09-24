@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.582";
+const APP_VERSION = "1.0.584";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -82,6 +82,11 @@ const ROLES = [
     label: "Fakturant — servis",
     desc: "Vidí všetko ako Dispečer servisu, navyše obrazovku ERP — kontroly (hromadné nahrávanie checklistov a servisných protokolov do ERP).",
   },
+  {
+    id: "fakturant_pozicovna",
+    label: "Fakturant — požičovňa",
+    desc: "Vidí všetko ako Obchodník (bez nezáväzných rezervácií), navyše vlastnú obrazovku ERP podklady — ukončené protokoly o vrátení (zvoz) na fakturáciu.",
+  },
   { id: "technik", label: "Technik", desc: "" },
   {
     id: "veduci_technik_ba",
@@ -110,6 +115,7 @@ const ROLE_DEFAULT_MODULE = {
   veduci_servisu: "servis",
   dispecer_servisu: "servis",
   fakturant_servis: "servis",
+  fakturant_pozicovna: "poziciovna",
   technik: "servis",
   veduci_technik_ba: "servis",
 };
@@ -124,7 +130,7 @@ function isAdminUser(user) {
 // to je len technický stav pred pridelením role).
 function assignableRolesFor(user) {
   if (isAdminUser(user)) return ROLES.filter((r) => r.id !== "nezaradeny");
-  if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "externy_sofer", "dispecer_pozicovne"].includes(r.id));
+  if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "externy_sofer", "dispecer_pozicovne", "fakturant_pozicovna"].includes(r.id));
   if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu", "veduci_technik_ba", "fakturant_servis"].includes(r.id));
   return [];
 }
@@ -204,6 +210,9 @@ const PERM = {
   // ERP obrazovka (checklisty + servisné protokoly na hromadné nahrávanie) —
   // navyše k tomu, čo vidí dispečer servisu, preto NIE v ROLE_PERM_ALIAS.
   erp_view: ["fakturant_servis"],
+  // ERP podklady (požičovňa) — rovnaký princíp ako erp_view vyššie, len pre
+  // ukončené protokoly o vrátení (zvoz), navyše k tomu, čo vidí Obchodník.
+  erp_pozicovna_view: ["fakturant_pozicovna"],
   technician_add: ["veduci_servisu"],
   technician_edit: ["veduci_servisu"],
   technician_archive: ["veduci_servisu"],
@@ -245,10 +254,13 @@ const PERM = {
 // riešenú samostatným permission kľúčom nižšie) — namiesto kopírovania role do
 // každého jedného riadku PERM (30+ miest, ľahko sa na niektoré zabudne) sa tu
 // jednoducho posudzuje ako dispecer_servisu pre všetky ostatné práva.
-const ROLE_PERM_ALIAS = { fakturant_servis: "dispecer_servisu" };
+const ROLE_PERM_ALIAS = { fakturant_servis: "dispecer_servisu", fakturant_pozicovna: "obchodnik" };
 function can(user, key) {
   if (!user) return false;
   if (user.role === "admin") return true;
+  // Jediná výnimka z aliasu na obchodníka — fakturant požičovne nemá zadávať
+  // nezáväzné rezervácie (viď zadanie role vyššie).
+  if (user.role === "fakturant_pozicovna" && key === "reservation_add") return false;
   const allowed = PERM[key];
   if (!allowed) return false;
   const role = ROLE_PERM_ALIAS[user.role] || user.role;
@@ -4070,6 +4082,20 @@ function DispatcherApp() {
     const ids = new Set([].concat(id));
     persistProtocolLogs(protocolLogs.map((p) => (ids.has(p.id) ? { ...p, erpProcessed: false } : p)));
   }
+  // ERP podklady (požičovňa) — rovnaký princíp, len na ukončených protokoloch
+  // o vrátení (handoverProtocols.returnDone), pre fakturanta požičovne.
+  function markHandoverProtocolErpProcessed(id, orderNumber) {
+    const ids = new Set([].concat(id));
+    persistHandoverProtocols(
+      handoverProtocols.map((h) =>
+        ids.has(h.id) ? { ...h, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "" } : h
+      )
+    );
+  }
+  function revertHandoverProtocolErpProcessed(id) {
+    const ids = new Set([].concat(id));
+    persistHandoverProtocols(handoverProtocols.map((h) => (ids.has(h.id) ? { ...h, erpProcessed: false } : h)));
+  }
   // Prijme "odfotenie" vyplneného protokolu z vnoreného formulára (postMessage), uloží
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
   // priradeniu ak sa dá, inak aspoň k stroju (sekcia "Ostatné protokoly"). Externé
@@ -6037,6 +6063,17 @@ function DispatcherApp() {
             onAdd={() => setShowAddCustomer(true)}
             onImport={() => setShowImportCustomers(true)}
             onOpenCard={(c) => setCustomerCard(c)}
+          />
+        )}
+
+        {module === "poziciovna" && view === "erp_pozicovna" && can(effectiveUser, "erp_pozicovna_view") && (
+          <ErpPozicovnaView
+            handoverProtocols={handoverProtocols}
+            jobs={jobs}
+            machineById={enrichedMachineById}
+            onMark={markHandoverProtocolErpProcessed}
+            onRevert={revertHandoverProtocolErpProcessed}
+            onOpenProtocol={(job) => setShowHandoverProtocol(job)}
           />
         )}
 
@@ -8443,6 +8480,7 @@ function buildNavModules(effectiveUser, damageAlertCount) {
     { id: "dashboard", label: "Stroje" },
     { id: "drivers", label: "Šoféri" },
     { id: "customers", label: "Zákazníci" },
+    ...(can(effectiveUser, "erp_pozicovna_view") ? [{ id: "erp_pozicovna", label: "ERP podklady" }] : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
   const servisTabs = [
@@ -17945,14 +17983,14 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
 
 // Pred označením "Spracované" (jedno aj hromadne) sa vyžiada číslo servisnej
 // objednávky/výkazu práce, ktoré sa priradí k záznamu (erpOrderNumber).
-function ErpOrderNumberModal({ count, onClose, onConfirm }) {
+function ErpOrderNumberModal({ count, onClose, onConfirm, title = "Číslo servisnej objednávky / výkazu práce", label = "Číslo objednávky / výkazu" }) {
   const [value, setValue] = useState("");
   return (
-    <Modal title="Číslo servisnej objednávky / výkazu práce" onClose={onClose} elevated>
+    <Modal title={title} onClose={onClose} elevated>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
         {count > 1 ? `Priradí sa k ${count} označeným záznamom a presunie ich do spracovaných.` : "Priradí sa k tomuto záznamu a presunie ho do spracovaných."}
       </div>
-      <Field label="Číslo objednávky / výkazu">
+      <Field label={label}>
         <input
           autoFocus
           value={value}
@@ -18047,6 +18085,108 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
           onClose={() => setMarkPrompt(null)}
           onConfirm={(orderNumber) => {
             (markPrompt.kind === "checklist" ? onMarkChecklist : onMarkProtocol)(markPrompt.ids, orderNumber);
+            setMarkPrompt(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   ERP podklady (fakturant_pozicovna) — tvrdý zoznam ukončených protokolov
+   o vrátení (zvoz), podklad na fakturáciu. Rovnaká "nespracované → História"
+   mechanika ako ErpChecklistsView vyššie, len bez tabov (jeden zoznam) a
+   s vyhľadávaním (model, sériové číslo, zákazník, číslo zmluvy).
+--------------------------------------------------------- */
+function ErpPozicovnaView({ handoverProtocols, jobs, machineById, onMark, onRevert, onOpenProtocol }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [search, setSearch] = useState("");
+  const [markPrompt, setMarkPrompt] = useState(null); // { ids }
+
+  const jobById = useMemo(() => Object.fromEntries(jobs.map((j) => [j.id, j])), [jobs]);
+  const returned = useMemo(() => handoverProtocols.filter((h) => h.returnDone), [handoverProtocols]);
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return returned
+      .map((h) => ({ h, job: jobById[h.jobId], machine: machineById[h.machineId] }))
+      .filter(({ h }) => (showHistory ? h.erpProcessed : !h.erpProcessed))
+      .filter(({ job, machine }) => {
+        if (!q) return true;
+        return [machine?.type, machine?.code, job?.customer, job?.cisloZmluvy].some((v) => (v || "").toLowerCase().includes(q));
+      })
+      .sort((a, b) => (b.h.returnDate || "").localeCompare(a.h.returnDate || ""));
+  }, [returned, jobById, machineById, showHistory, search]);
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 280 }} />
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost" onClick={() => setShowHistory((v) => !v)}>
+          {showHistory ? "← Späť na nespracované" : "História spracovaných"}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+          {showHistory ? "Žiadne spracované záznamy." : "Žiadne nespracované ukončené prenájmy."}
+        </div>
+      ) : (
+        <table className="table-cards">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Sériové číslo</th>
+              <th>Zákazník</th>
+              <th>Číslo zmluvy</th>
+              <th>Vrátené</th>
+              {showHistory && <th>Faktúra</th>}
+              <th>Protokol</th>
+              <th>
+                {!showHistory && rows.length > 1 && (
+                  <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => setMarkPrompt({ ids: rows.map((r) => r.h.id) })}>
+                    Spracovať všetky ({rows.length} ks)
+                  </button>
+                )}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ h, job, machine }) => (
+              <tr key={h.id}>
+                <td data-label="Model">{machine?.type || "—"}</td>
+                <td data-label="Sériové číslo">{machine?.code || "—"}</td>
+                <td data-label="Zákazník">{job?.customer || "—"}</td>
+                <td data-label="Číslo zmluvy">{job?.cisloZmluvy || "—"}</td>
+                <td data-label="Vrátené">{h.returnDate ? fmtDate(h.returnDate) : "—"}</td>
+                {showHistory && <td data-label="Faktúra">{h.erpOrderNumber || "—"}</td>}
+                <td data-label="Protokol">
+                  {job ? (
+                    <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => onOpenProtocol(job)}>Náhľad</button>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="td-actions">
+                  {showHistory ? (
+                    <button className="btn btn-ghost" onClick={() => onRevert(h.id)}>Vrátiť</button>
+                  ) : (
+                    <button className="btn btn-accent" onClick={() => setMarkPrompt({ ids: [h.id] })}>Spracované</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {markPrompt && (
+        <ErpOrderNumberModal
+          count={markPrompt.ids.length}
+          title="Číslo faktúry"
+          label="Číslo faktúry"
+          onClose={() => setMarkPrompt(null)}
+          onConfirm={(orderNumber) => {
+            onMark(markPrompt.ids, orderNumber);
             setMarkPrompt(null);
           }}
         />
