@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.565";
+const APP_VERSION = "1.0.566";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -77,6 +77,11 @@ const ROLES = [
   { id: "sofer", label: "Šofér", desc: "" },
   { id: "externy_sofer", label: "Externý šofér", desc: "Vidí len svoje pridelené prepravy a vypĺňa odovzdávacie protokoly — nič iné." },
   { id: "dispecer_servisu", label: "Dispečer servisu", desc: "" },
+  {
+    id: "fakturant_servis",
+    label: "Fakturant — servis",
+    desc: "Vidí všetko ako Dispečer servisu, navyše obrazovku ERP — kontroly (hromadné nahrávanie checklistov a servisných protokolov do ERP).",
+  },
   { id: "technik", label: "Technik", desc: "" },
   {
     id: "veduci_technik_ba",
@@ -104,6 +109,7 @@ const ROLE_DEFAULT_MODULE = {
   externy_sofer: "poziciovna",
   veduci_servisu: "servis",
   dispecer_servisu: "servis",
+  fakturant_servis: "servis",
   technik: "servis",
   veduci_technik_ba: "servis",
 };
@@ -119,7 +125,7 @@ function isAdminUser(user) {
 function assignableRolesFor(user) {
   if (isAdminUser(user)) return ROLES.filter((r) => r.id !== "nezaradeny");
   if (user?.role === "veduci_pozicovne") return ROLES.filter((r) => ["obchodnik", "sofer", "externy_sofer", "dispecer_pozicovne"].includes(r.id));
-  if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu", "veduci_technik_ba"].includes(r.id));
+  if (user?.role === "veduci_servisu") return ROLES.filter((r) => ["technik", "dispecer_servisu", "veduci_technik_ba", "fakturant_servis"].includes(r.id));
   return [];
 }
 // Ktoré role smie daný človek v Administratíve vôbec VIDIEŤ/spravovať (pridávať,
@@ -195,6 +201,9 @@ const PERM = {
   // Servis — plán servisu / technici
   plan_assign: ["veduci_servisu", "dispecer_servisu"],
   plan_quick_events: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
+  // ERP obrazovka (checklisty + servisné protokoly na hromadné nahrávanie) —
+  // navyše k tomu, čo vidí dispečer servisu, preto NIE v ROLE_PERM_ALIAS.
+  erp_view: ["fakturant_servis"],
   technician_add: ["veduci_servisu"],
   technician_edit: ["veduci_servisu"],
   technician_archive: ["veduci_servisu"],
@@ -232,12 +241,18 @@ const PERM = {
   sparepart_manage: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
 };
 
+// "Fakturant — servis" vidí všetko ako Dispečer servisu (a navyše ERP obrazovku,
+// riešenú samostatným permission kľúčom nižšie) — namiesto kopírovania role do
+// každého jedného riadku PERM (30+ miest, ľahko sa na niektoré zabudne) sa tu
+// jednoducho posudzuje ako dispecer_servisu pre všetky ostatné práva.
+const ROLE_PERM_ALIAS = { fakturant_servis: "dispecer_servisu" };
 function can(user, key) {
   if (!user) return false;
   if (user.role === "admin") return true;
   const allowed = PERM[key];
   if (!allowed) return false;
-  return allowed.includes(user.role);
+  const role = ROLE_PERM_ALIAS[user.role] || user.role;
+  return allowed.includes(role);
 }
 
 // Protokol je zabudovaný priamo v platforme (base64) — otvára sa ako samostatná
@@ -862,6 +877,99 @@ ${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-ite
   }
 }
 
+// Tlač JEDNÉHO checklistu (kontrola stroja) s firemnou hlavičkou/pätkou — na
+// fakturáciu poškodenia stroja spôsobeného zákazníkom. Statický náhľad (bez
+// úprav, bez postMessage) — rovnaká hlavička/pätka ako servisný protokol.
+function openPrintableChecklist(assignment, machine, technicianName) {
+  const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const checklistRows = (assignment.checklist || [])
+    .map((it, i) => ({ label: HANDOVER_CHECKLIST_ITEMS[i], ...it }))
+    .filter((it) => it.label && it.checkerStatus);
+  const STATUS_LABEL = { ok: "OK", problem: "Problém" };
+  const partsRows = assignment.usedParts || [];
+  const docHtml = `<!DOCTYPE html>
+<html lang="sk"><head><meta charset="UTF-8">
+<title>Checklist ${esc(machine?.code)}</title>
+<style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+  .body-content { flex: 1; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .logo { height: 28px; width: auto; display: block; }
+  .head h1 { font-size: 17px; color: #E30613; margin: 0; text-align: right; letter-spacing: .03em; }
+  .section { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
+  .sechead { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 11px; padding: 5px 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .secbody { padding: 8px 14px; }
+  .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 7px 20px; }
+  .field .l { color: #666; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; display: block; margin-bottom: 2px; }
+  .field .v { font-size: 12.5px; font-weight: 600; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.items th { background: #f4f4f4; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left; padding: 3px 6px; font-size: 9.5px; text-transform: uppercase; color: #555; }
+  table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; }
+  table.items th:last-child, table.items td:last-child { border-right: none; }
+  table.items td.problem, table.items td.problem + td { color: #E30613; font-weight: 600; }
+  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
+  .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
+  .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .btn { padding: 7px 14px; border-radius: 6px; font-family: Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; background: #E30613; color: #fff; }
+  @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; } .toolbar { display: none; } @page { size: A4; margin: 0; } }
+</style>
+</head>
+<body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
+<div class="page">
+  <div class="body-content">
+  <div class="head">
+    <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
+    <h1>CHECKLIST — KONTROLA STROJA</h1>
+  </div>
+  <div class="section">
+    <div class="sechead">Stroj a technik</div>
+    <div class="secbody grid3">
+      <div class="field"><span class="l">Typ / Názov</span><span class="v">${esc(machine?.type) || "—"}</span></div>
+      <div class="field"><span class="l">Sériové číslo</span><span class="v">${esc(machine?.code) || "—"}</span></div>
+      <div class="field"><span class="l">Checker / Technik</span><span class="v">${esc(technicianName) || "—"}</span></div>
+      <div class="field"><span class="l">Dátum</span><span class="v">${esc((assignment.checkerDate || assignment.date || "").slice(0, 10))}</span></div>
+      <div class="field"><span class="l">Odpracované hodiny</span><span class="v">${esc(assignment.workHours)} h</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sechead">Checklist</div>
+    <div class="secbody">
+      <table class="items">
+        <thead><tr><th>Položka</th><th style="width:16%">Stav</th><th style="width:40%">Poznámka</th></tr></thead>
+        <tbody>
+          ${checklistRows.map((it) => `<tr><td>${esc(it.label)}</td><td class="${it.checkerStatus === "problem" ? "problem" : ""}">${esc(STATUS_LABEL[it.checkerStatus] || it.checkerStatus)}</td><td>${esc(it.checkerNote)}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  ${partsRows.length ? `<div class="section">
+    <div class="sechead">Použité náhradné diely</div>
+    <div class="secbody">
+      <table class="items">
+        <thead><tr><th>Diel</th><th style="width:28%">P/N</th><th style="width:14%">Ks</th></tr></thead>
+        <tbody>${partsRows.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(p.partNumber)}</td><td>${esc(p.qty)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  </div>` : ""}
+  </div>
+  <div class="footer">
+    mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
+    <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
+  </div>
+</div>
+</body></html>`;
+  if (_printProtocolOpenListener) {
+    _printProtocolOpenListener(docHtml);
+  } else {
+    console.error("Zobrazenie protokolu ešte nie je pripravené.");
+  }
+}
+
 function buildProtocolParams(d, technicians, machineById) {
   const params = {};
   const m = d.machineId ? machineById[d.machineId] : null;
@@ -1100,6 +1208,16 @@ const daysBetween = (a, b) => {
   return Math.round((d2 - d1) / 86400000);
 };
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+// ERP tok (checklisty kontrolóra aj servisné protokoly): keď je záznam už
+// označený ako spracovaný (erpProcessed) a niektoré zo sledovaných polí sa
+// zmení oproti snímke z momentu spracovania (erpSnapshot), automaticky sa
+// vráti medzi nespracované — fakturant sa to inak nedozvie a nahral by do
+// ERP staré číslo. Vracia buď {} (nič sa nemení) alebo { erpProcessed: false }.
+function revertErpIfChanged(record, patch, fields) {
+  if (!record?.erpProcessed || !record.erpSnapshot) return {};
+  const changed = fields.some((f) => JSON.stringify(patch[f] ?? record[f]) !== JSON.stringify(record.erpSnapshot[f]));
+  return changed ? { erpProcessed: false } : {};
+}
 
 function effectiveStatus(job, today) {
   if (!job) return null;
@@ -3687,7 +3805,40 @@ function DispatcherApp() {
   // "mateco_protocol_edited") — dispečer opravuje preklep/doplní pole po tom, čo bol
   // protokol už odoslaný technikom.
   function updateProtocolLog(id, patch) {
-    persistProtocolLogs(protocolLogs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    persistProtocolLogs(
+      protocolLogs.map((p) => {
+        if (p.id !== id) return p;
+        const erpPatch = revertErpIfChanged(p, patch, ["totalHours", "materialItems", "travelKm", "travelHours"]);
+        return { ...p, ...patch, ...erpPatch };
+      })
+    );
+  }
+  // ERP obrazovka (fakturant) — označenie "spracované" uloží aj snímku
+  // sledovaných polí (erpSnapshot), nech vie updateProtocolLog/onSave vyššie
+  // rozpoznať, že sa niečo zmenilo POTOM, čo to už bolo nahraté do ERP.
+  function markChecklistErpProcessed(id) {
+    persistAssignments(
+      assignments.map((a) =>
+        a.id === id
+          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts } }
+          : a
+      )
+    );
+  }
+  function revertChecklistErpProcessed(id) {
+    persistAssignments(assignments.map((a) => (a.id === id ? { ...a, erpProcessed: false } : a)));
+  }
+  function markProtocolErpProcessed(id) {
+    persistProtocolLogs(
+      protocolLogs.map((p) =>
+        p.id === id
+          ? { ...p, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
+          : p
+      )
+    );
+  }
+  function revertProtocolErpProcessed(id) {
+    persistProtocolLogs(protocolLogs.map((p) => (p.id === id ? { ...p, erpProcessed: false } : p)));
   }
   // Prijme "odfotenie" vyplneného protokolu z vnoreného formulára (postMessage), uloží
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
@@ -3968,7 +4119,11 @@ function DispatcherApp() {
     });
   }
 
-  function reportDamage(machine, popis, kontakt) {
+  // opts.silent: volá sa z iného miesta ako formulár "Nahlásiť poškodenie"
+  // (napr. priamo z checklistu checkera) — vynechá UI navigáciu, ktorá patrí
+  // len tomu formuláru, a vráti vytvorený záznam, nech ho volajúci vie
+  // prelinkovať (napr. checklist.damageId).
+  function reportDamage(machine, popis, kontakt, opts) {
     const record = {
       id: uid(),
       type: "poskodenie",
@@ -4000,8 +4155,11 @@ function DispatcherApp() {
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
     showToast("Poškodenie bolo nahlásené.");
-    setShowDamageReport(null);
-    goBackCard();
+    if (!opts?.silent) {
+      setShowDamageReport(null);
+      goBackCard();
+    }
+    return record;
   }
   // Čisté nahlásenie, keď volajúci nepozná sériové číslo stroja — vytvorí sa
   // poškodenie BEZ priradeného stroja (machineId: null). V zozname sa označí ako
@@ -5912,6 +6070,19 @@ function DispatcherApp() {
           />
         )}
 
+        {module === "servis" && view === "erp" && can(effectiveUser, "erp_view") && (
+          <ErpChecklistsView
+            assignments={assignments}
+            protocolLogs={protocolLogs}
+            machineById={enrichedMachineById}
+            technicianById={technicianByIdTop}
+            onMarkChecklist={markChecklistErpProcessed}
+            onRevertChecklist={revertChecklistErpProcessed}
+            onMarkProtocol={markProtocolErpProcessed}
+            onRevertProtocol={revertProtocolErpProcessed}
+          />
+        )}
+
         {module === "servis" && view === "dokumenty" && (
           <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
         )}
@@ -5925,6 +6096,7 @@ function DispatcherApp() {
             jobs={jobs}
             reservations={reservations}
             protocolLogs={protocolLogs}
+            assignments={assignments}
             spareParts={spareParts}
             today={today}
             onUpdateMachine={updateMachine}
@@ -7026,7 +7198,8 @@ function DispatcherApp() {
             user={effectiveUser}
             onClose={() => setCheckerInspectionTarget(null)}
             onSave={(patch) => {
-              persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, resolved: true } : a)));
+              const erpPatch = revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts"]);
+              persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true } : a)));
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
               const isReturn = checkerInspectionTarget.phase === "vratenie";
               if (hasProblem && job) {
@@ -7040,6 +7213,15 @@ function DispatcherApp() {
               }
               setCheckerInspectionTarget(null);
             }}
+            onReportServiceStatus={
+              machine
+                ? (popis) => {
+                    const record = reportDamage(machine, popis, undefined, { silent: true });
+                    persistAssignments(assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, damageId: record.id } : a)));
+                    setCheckerInspectionTarget(null);
+                  }
+                : undefined
+            }
           />
         );
       })()}
@@ -7967,6 +8149,7 @@ function buildNavModules(effectiveUser, damageAlertCount) {
     { id: "externe", label: "Externé servisné zákazky" },
     { id: "revizie", label: "Revízie" },
     { id: "uradne_skusky", label: "Úradné skúšky" },
+    ...(can(effectiveUser, "erp_view") ? [{ id: "erp", label: "ERP — kontroly" }] : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
   const administrativaTabs = [
@@ -11989,7 +12172,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
 // v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
 // skôr než čokoľvek z toho).
-function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmployee, user, onClose, onSave }) {
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmployee, user, onClose, onSave, onReportServiceStatus }) {
   const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
   const [checklist, setChecklist] = useState(() =>
     assignment.checklist
@@ -11999,6 +12182,13 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
+  // Hodiny sú POVINNÉ na každej kontrole (nie len keď je diel) — fakturant ich
+  // potrebuje na hromadné nahrávanie do ERP podľa odpracovaných hodín technika.
+  const [workHours, setWorkHours] = useState(assignment.workHours != null ? String(assignment.workHours) : "");
+  // Voliteľné diely, keď checker popri kontrole spravil aj malú opravu —
+  // taký checklist ide do ERP osobitne (nie hromadne), viď ErpChecklistsView.
+  const [usedParts, setUsedParts] = useState(assignment.usedParts || []);
+  const [confirmReportDamage, setConfirmReportDamage] = useState(false);
   // Upravovať môže len ten checker, ktorému bola kontrola pridelená, alebo admin —
   // ktokoľvek iný (dispečer, iný technik prezerajúci si plán) ju vidí len na náhľad.
   const canEdit = isAdminUser(user) || (!!myEmployee && assignment.technicianId === myEmployee.id);
@@ -12044,7 +12234,21 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
     }
   }
   const checklistComplete = checklist.every((it) => it.checkerStatus === "ok" || it.checkerStatus === "problem");
+  const hoursValid = workHours.trim() !== "" && Number(workHours) > 0;
+  const partsValid = usedParts.every((p) => p.name.trim());
+  const canSaveForm = checklistComplete && hoursValid && partsValid;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
+  const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
+
+  function addPartRow() {
+    setUsedParts((prev) => [...prev, { id: uid(), name: "", partNumber: "", qty: 1 }]);
+  }
+  function updatePartRow(id, patch) {
+    setUsedParts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+  function removePartRow(id) {
+    setUsedParts((prev) => prev.filter((p) => p.id !== id));
+  }
 
   function handleSaveClick() {
     if (phase === "vyvoz" && photos.length === 0) {
@@ -12061,6 +12265,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       checkerPhotos: photos,
       checkerBy: myEmployee?.name || user?.name || "",
       checkerDate: assignment.checkerDate || todayISO(),
+      workHours: Number(workHours),
+      usedParts,
     });
   }
 
@@ -12169,6 +12375,54 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         </div>
       )}
 
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
+        Odpracovaný čas a diely
+      </div>
+      {showForm ? (
+        <>
+          <Field label="Odpracované hodiny *">
+            <input
+              type="number"
+              min="0"
+              step="0.25"
+              value={workHours}
+              onChange={(e) => setWorkHours(e.target.value)}
+              style={{ width: 120 }}
+            />
+          </Field>
+          {usedParts.map((p) => (
+            <div key={p.id} style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <input placeholder="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} style={{ flex: "2 1 140px" }} />
+              <input placeholder="P/N" value={p.partNumber} onChange={(e) => updatePartRow(p.id, { partNumber: e.target.value })} style={{ flex: "1 1 90px" }} />
+              <input type="number" min="1" placeholder="ks" value={p.qty} onChange={(e) => updatePartRow(p.id, { qty: e.target.value })} style={{ width: 60 }} />
+              <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)", padding: "3px 8px" }} onClick={() => removePartRow(p.id)}>✕</button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 10 }} onClick={addPartRow}>+ Pridať použitý diel</button>
+        </>
+      ) : (
+        <div style={{ fontSize: 13, marginBottom: 10 }}>
+          {assignment.workHours != null ? `${assignment.workHours} h` : "— hodiny nevyplnené —"}
+          {(assignment.usedParts || []).length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
+              Diely: {assignment.usedParts.map((p) => `${p.name}${p.partNumber ? ` (${p.partNumber})` : ""} ×${p.qty}`).join(", ")}
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasProblem && canEdit && (
+        assignment.damageId ? (
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+            Z tejto kontroly už bola nahlásená servisná zákazka.
+          </div>
+        ) : (
+          <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)", marginBottom: 10 }} onClick={() => setConfirmReportDamage(true)}>
+            ⚠ Nahlásiť servisný stav
+          </button>
+        )
+      )}
+
       {hardLocked && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
           {phase === "vratenie" ? "Uplynulo 48 hodín od zvozu — kontrolu už nie je možné upravovať." : "Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať."}
@@ -12187,8 +12441,10 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       {showForm && (
         <div style={{ marginTop: 14 }}>
           {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
+          {!hoursValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte odpracované hodiny.</div>}
+          {!partsValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte názov každého pridaného dielu (alebo ho odstráňte).</div>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-accent" disabled={!checklistComplete} onClick={handleSaveClick}>Uložiť</button>
+            <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
           </div>
         </div>
       )}
@@ -12199,6 +12455,21 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         confirmLabel="Pokračovať bez fotiek"
         onClose={() => setConfirmNoPhotos(false)}
         onConfirm={handleSave}
+      />
+    )}
+    {confirmReportDamage && (
+      <ConfirmActionModal
+        message="Naozaj nahlásiť stroj do servisu? Z bodov označených ako „Problém“ sa vytvorí nová servisná zákazka."
+        confirmLabel="Nahlásiť servisný stav"
+        onClose={() => setConfirmReportDamage(false)}
+        onConfirm={() => {
+          setConfirmReportDamage(false);
+          const popis = checklist
+            .map((it, i) => (it.checkerStatus === "problem" ? `${HANDOVER_CHECKLIST_ITEMS[i]}${it.checkerNote ? ": " + it.checkerNote : ""}` : null))
+            .filter(Boolean)
+            .join("; ");
+          onReportServiceStatus?.(popis);
+        }}
       />
     )}
     </>
@@ -15321,6 +15592,16 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   >
                     {expandedChecklistId === h.id ? "Skryť checklist" : "Zobraziť checklist"}
                   </button>
+                  {h.workHours != null && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: "3px 8px", marginLeft: 6 }}
+                      onClick={() => openPrintableChecklist(h, m, h.checkerBy)}
+                    >
+                      Tlačiť checklist
+                    </button>
+                  )}
                   {expandedChecklistId === h.id && (
                     <div style={{ marginTop: 8 }}>
                       <HandoverProtocolChecklistRecap checklist={h.checklist || []} statusKey="checkerStatus" noteKey="checkerNote" />
@@ -17088,6 +17369,213 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   ERP — kontroly (fakturant_servis): 3 záložky, nespracované
+   ako default, "Spracované" -> História, "Vrátiť" -> späť.
+   Diff pri zmene po spracovaní čerpá z erpSnapshot.
+--------------------------------------------------------- */
+function erpChecklistDiff(a) {
+  if (!a.erpSnapshot) return null;
+  const diffs = [];
+  if (Number(a.erpSnapshot.workHours) !== Number(a.workHours)) {
+    diffs.push(`hodiny: ${a.erpSnapshot.workHours ?? "—"}h → ${a.workHours}h`);
+  }
+  if (JSON.stringify(a.erpSnapshot.usedParts || []) !== JSON.stringify(a.usedParts || [])) {
+    diffs.push(`diely zmenené (${(a.erpSnapshot.usedParts || []).length} → ${(a.usedParts || []).length})`);
+  }
+  return diffs.length ? diffs : null;
+}
+function erpProtocolDiff(p) {
+  if (!p.erpSnapshot) return null;
+  const diffs = [];
+  if (Number(p.erpSnapshot.totalHours) !== Number(p.totalHours)) diffs.push(`hodiny: ${p.erpSnapshot.totalHours ?? "—"}h → ${p.totalHours}h`);
+  if (Number(p.erpSnapshot.travelKm) !== Number(p.travelKm)) diffs.push(`km: ${p.erpSnapshot.travelKm ?? "—"} → ${p.travelKm}`);
+  if (Number(p.erpSnapshot.travelHours) !== Number(p.travelHours)) diffs.push(`čas na ceste: ${p.erpSnapshot.travelHours ?? "—"}h → ${p.travelHours}h`);
+  if (JSON.stringify(p.erpSnapshot.materialItems || []) !== JSON.stringify(p.materialItems || [])) diffs.push(`diely/materiál zmenené`);
+  return diffs.length ? diffs : null;
+}
+
+function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts }) {
+  const visible = items.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed));
+  const totalHours = visible.reduce((sum, a) => sum + (Number(a.workHours) || 0), 0);
+  if (!visible.length) {
+    return (
+      <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        {showHistory ? "Žiadne spracované záznamy." : "Žiadne nespracované kontroly."}
+      </div>
+    );
+  }
+  return (
+    <>
+      <table className="table-cards">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Sériové číslo</th>
+            <th>Technik</th>
+            <th>Hodiny</th>
+            {withParts && <th>Diely</th>}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((a) => {
+            const m = machineById[a.machineId];
+            const t = technicianById[a.technicianId];
+            const diff = erpChecklistDiff(a);
+            return (
+              <tr key={a.id}>
+                <td data-label="Model">{m?.type || "—"}</td>
+                <td data-label="Sériové číslo">{m?.code || "—"}</td>
+                <td data-label="Technik">{t?.name || "—"}</td>
+                <td data-label="Hodiny">{a.workHours} h</td>
+                {withParts && (
+                  <td data-label="Diely">
+                    {(a.usedParts || []).map((p) => `${p.name}${p.partNumber ? " (" + p.partNumber + ")" : ""} × ${p.qty}`).join(", ") || "—"}
+                  </td>
+                )}
+                <td className="td-actions">
+                  {diff && !showHistory && (
+                    <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 4 }}>Zmenené po spracovaní: {diff.join("; ")}</div>
+                  )}
+                  {showHistory ? (
+                    <button className="btn btn-ghost" onClick={() => onRevert(a.id)}>Vrátiť</button>
+                  ) : (
+                    <button className="btn" onClick={() => onMark(a.id)}>Spracované</button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!showHistory && (
+        <div style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
+          Súčet hodín: {totalHours.toLocaleString("sk-SK")} h
+        </div>
+      )}
+    </>
+  );
+}
+
+function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
+  const visible = items.filter((p) => (showHistory ? p.erpProcessed : !p.erpProcessed));
+  const totalHours = visible.reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
+  if (!visible.length) {
+    return (
+      <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        {showHistory ? "Žiadne spracované protokoly." : "Žiadne nespracované protokoly."}
+      </div>
+    );
+  }
+  return (
+    <>
+      <table className="table-cards">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Sériové číslo</th>
+            <th>Zákazník</th>
+            <th>Technik</th>
+            <th>Práca</th>
+            <th>Hodiny</th>
+            <th>Materiál</th>
+            <th>Km</th>
+            <th>Čas na ceste</th>
+            <th>Náhľad</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((p) => {
+            const diff = erpProtocolDiff(p);
+            return (
+              <tr key={p.id}>
+                <td data-label="Model">{p.machineModel || "—"}</td>
+                <td data-label="Sériové číslo">{p.machineSerial || "—"}</td>
+                <td data-label="Zákazník">{p.clientName || "—"}</td>
+                <td data-label="Technik">{p.technicianName || "—"}</td>
+                <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + w.hours + "h)" : ""}`).join(", ") || "—"}</td>
+                <td data-label="Hodiny">{p.totalHours} h</td>
+                <td data-label="Materiál">{(p.materialItems || []).map((mi) => `${mi.desc}${mi.pn ? " (" + mi.pn + ")" : ""}${mi.qty ? " × " + mi.qty : ""}`).join(", ") || "—"}</td>
+                <td data-label="Km">{p.travelKm || "—"}</td>
+                <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
+                <td data-label="Náhľad">
+                  {p.imageUrl ? <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Náhľad</button> : "—"}
+                </td>
+                <td className="td-actions">
+                  {diff && !showHistory && (
+                    <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 4 }}>Zmenené po spracovaní: {diff.join("; ")}</div>
+                  )}
+                  {showHistory ? (
+                    <button className="btn btn-ghost" onClick={() => onRevert(p.id)}>Vrátiť</button>
+                  ) : (
+                    <button className="btn" onClick={() => onMark(p.id)}>Spracované</button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!showHistory && (
+        <div style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
+          Súčet hodín: {totalHours.toLocaleString("sk-SK")} h
+        </div>
+      )}
+    </>
+  );
+}
+
+function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianById, onMarkChecklist, onRevertChecklist, onMarkProtocol, onRevertProtocol }) {
+  const [tab, setTab] = useState("hromadne");
+  const [showHistory, setShowHistory] = useState(false);
+
+  const checklists = assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null);
+  const hromadne = checklists.filter((a) => !(a.usedParts && a.usedParts.length));
+  const solo = checklists.filter((a) => a.usedParts && a.usedParts.length);
+
+  const tabs = [
+    { id: "hromadne", label: "Kontroly (hromadné)" },
+    { id: "solo", label: "Kontroly (sólo)" },
+    { id: "protokoly", label: "Servisné protokoly" },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            className="btn"
+            onClick={() => setTab(t.id)}
+            style={{
+              padding: "6px 12px",
+              fontSize: 12,
+              background: tab === t.id ? "var(--accent)" : "transparent",
+              color: tab === t.id ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (tab === t.id ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost" onClick={() => setShowHistory((v) => !v)}>
+          {showHistory ? "← Späť na nespracované" : "História spracovaných"}
+        </button>
+      </div>
+      {tab === "hromadne" && (
+        <ErpChecklistTable items={hromadne} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={onMarkChecklist} onRevert={onRevertChecklist} />
+      )}
+      {tab === "solo" && (
+        <ErpChecklistTable items={solo} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={onMarkChecklist} onRevert={onRevertChecklist} withParts />
+      )}
+      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={onMarkProtocol} onRevert={onRevertProtocol} />}
     </div>
   );
 }
@@ -18876,7 +19364,7 @@ function periodBounds(period, today, customStart, customEnd) {
   return { start: customStart || today, end: customEnd || today };
 }
 
-function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, spareParts, today, onUpdateMachine, onUpdateEmployee }) {
+function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, assignments, spareParts, today, onUpdateMachine, onUpdateEmployee }) {
   const defaultDomain = user?.role === "veduci_servisu" ? "servis" : "poziciovna";
   const [domain, setDomain] = useState(defaultDomain);
   const [period, setPeriod] = useState("month");
@@ -18960,6 +19448,7 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
         <ServisStatistiky
           technicians={technicians}
           protocolLogs={protocolLogs}
+          assignments={assignments}
           start={start}
           end={end}
           canEdit={canEditServis}
@@ -19192,14 +19681,23 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
   );
 }
 
-function ServisStatistiky({ technicians, protocolLogs, start, end, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
+function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
   const activeTechnicians = technicians.filter((t) => !t.archived);
   const trackedTechnicians = activeTechnicians.filter((t) => t.trackStatistics !== false);
   const trackedNames = new Set(trackedTechnicians.map((t) => t.name));
+  const technicianNameById = Object.fromEntries(technicians.map((t) => [t.id, t.name]));
 
   const periodProtocols = (protocolLogs || []).filter((p) => p.createdAt && p.createdAt.slice(0, 10) >= start && p.createdAt.slice(0, 10) <= end);
   // Do súčtov hodín/km sa počítajú len protokoly technikov, čo sú zahrnutí do štatistík.
   const trackedProtocols = periodProtocols.filter((p) => trackedNames.has(p.technicianName));
+
+  // Hodiny z checklistov (kontrola stroja) — pripočítané k technikovi/checkerovi
+  // rovnako, ako protokolové hodiny (je to ten istý človek).
+  const checklistHours = (assignments || [])
+    .filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null)
+    .map((a) => ({ technicianName: technicianNameById[a.technicianId] || "", hours: Number(a.workHours) || 0, date: (a.checkerDate || a.date || "").slice(0, 10) }));
+  const periodChecklistHours = checklistHours.filter((c) => c.date && c.date >= start && c.date <= end);
+  const trackedChecklistHours = periodChecklistHours.filter((c) => trackedNames.has(c.technicianName));
 
   const byModel = {};
   const bySerial = {};
@@ -19210,7 +19708,7 @@ function ServisStatistiky({ technicians, protocolLogs, start, end, canEdit, show
   const modelRows = Object.entries(byModel).sort((a, b) => b[1] - a[1]).slice(0, 15);
   const serialRows = Object.entries(bySerial).sort((a, b) => b[1] - a[1]).slice(0, 15);
 
-  const totalHours = trackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0);
+  const totalHours = trackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0) + trackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
   const totalTravelHours = trackedProtocols.reduce((sum, p) => sum + (p.travelHours || 0), 0);
   const totalTravelKm = trackedProtocols.reduce((sum, p) => sum + (p.travelKm || 0), 0);
 
@@ -19221,6 +19719,11 @@ function ServisStatistiky({ technicians, protocolLogs, start, end, canEdit, show
     byTechnician[key].hours += p.totalHours || 0;
     byTechnician[key].travelHours += p.travelHours || 0;
     byTechnician[key].travelKm += p.travelKm || 0;
+  });
+  trackedChecklistHours.forEach((c) => {
+    const key = c.technicianName || "— neuvedené —";
+    if (!byTechnician[key]) byTechnician[key] = { hours: 0, travelHours: 0, travelKm: 0 };
+    byTechnician[key].hours += c.hours;
   });
   const technicianRows = Object.entries(byTechnician).sort((a, b) => b[1].hours - a[1].hours);
 
@@ -19235,7 +19738,8 @@ function ServisStatistiky({ technicians, protocolLogs, start, end, canEdit, show
   const prev = previousPeriod(start, end);
   const prevPeriodProtocols = (protocolLogs || []).filter((p) => p.createdAt && p.createdAt.slice(0, 10) >= prev.start && p.createdAt.slice(0, 10) <= prev.end);
   const prevTrackedProtocols = prevPeriodProtocols.filter((p) => trackedNames.has(p.technicianName));
-  const prevTotalHours = prevTrackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0);
+  const prevTrackedChecklistHours = checklistHours.filter((c) => c.date && c.date >= prev.start && c.date <= prev.end && trackedNames.has(c.technicianName));
+  const prevTotalHours = prevTrackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0) + prevTrackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
   const prevTotalTravelHours = prevTrackedProtocols.reduce((sum, p) => sum + (p.travelHours || 0), 0);
   const prevTotalTravelKm = prevTrackedProtocols.reduce((sum, p) => sum + (p.travelKm || 0), 0);
   const protocolsDelta = statDelta(periodProtocols.length, prevPeriodProtocols.length);
