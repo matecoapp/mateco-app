@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.566";
+const APP_VERSION = "1.0.567";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -17399,7 +17399,7 @@ function erpProtocolDiff(p) {
   return diffs.length ? diffs : null;
 }
 
-function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts }) {
+function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts, onMarkAll }) {
   const visible = items.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed));
   const totalHours = visible.reduce((sum, a) => sum + (Number(a.workHours) || 0), 0);
   if (!visible.length) {
@@ -17411,6 +17411,11 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
   }
   return (
     <>
+      {!showHistory && onMarkAll && visible.length > 1 && (
+        <button className="btn" style={{ marginBottom: 10 }} onClick={() => onMarkAll(visible.map((a) => a.id))}>
+          Spracovať všetky ({visible.length} ks, {totalHours.toLocaleString("sk-SK")} h)
+        </button>
+      )}
       <table className="table-cards">
         <thead>
           <tr>
@@ -17419,6 +17424,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             <th>Technik</th>
             <th>Hodiny</th>
             {withParts && <th>Diely</th>}
+            <th>Náhľad</th>
             <th></th>
           </tr>
         </thead>
@@ -17438,6 +17444,9 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
                     {(a.usedParts || []).map((p) => `${p.name}${p.partNumber ? " (" + p.partNumber + ")" : ""} × ${p.qty}`).join(", ") || "—"}
                   </td>
                 )}
+                <td data-label="Náhľad">
+                  <button className="btn btn-ghost" onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>
+                </td>
                 <td className="td-actions">
                   {diff && !showHistory && (
                     <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 4 }}>Zmenené po spracovaní: {diff.join("; ")}</div>
@@ -17459,6 +17468,62 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
         </div>
       )}
     </>
+  );
+}
+
+// Dlaždice technikov pre záložku "Kontroly (hromadné)" — fakturant nahadzuje
+// súhrn hodín na technika jedným riadkom do ERP, takže si tu najprv vyberie
+// technika (odznak = počet nespracovaných checklistov) a až potom vidí zoznam.
+function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
+  const byTech = {};
+  items.forEach((a) => {
+    const key = a.technicianId || "—";
+    if (!byTech[key]) byTech[key] = { count: 0, hours: 0 };
+    byTech[key].count++;
+    byTech[key].hours += Number(a.workHours) || 0;
+  });
+  const rows = Object.entries(byTech).sort((a, b) => (technicianById[a[0]]?.name || "").localeCompare(technicianById[b[0]]?.name || ""));
+  if (!rows.length) {
+    return (
+      <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        {showHistory ? "Žiadni technici so spracovanými kontrolami." : "Žiadni technici s nespracovanými kontrolami."}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+      {rows.map(([techId, s]) => (
+        <button
+          key={techId}
+          className="btn btn-ghost"
+          style={{ position: "relative", padding: "14px 22px", textAlign: "left", minWidth: 160 }}
+          onClick={() => onSelect(techId)}
+        >
+          <div style={{ fontWeight: 700, fontSize: 13 }}>{technicianById[techId]?.name || "— neznámy —"}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{s.hours.toLocaleString("sk-SK")} h</div>
+          <span
+            style={{
+              position: "absolute",
+              top: -8,
+              right: -8,
+              background: "var(--accent)",
+              color: "#fff",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              minWidth: 20,
+              height: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 5px",
+            }}
+          >
+            {s.count}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -17505,7 +17570,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
                 <td data-label="Km">{p.travelKm || "—"}</td>
                 <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
                 <td data-label="Náhľad">
-                  {p.imageUrl ? <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Náhľad</button> : "—"}
+                  <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], false)}>Náhľad</button>
                 </td>
                 <td className="td-actions">
                   {diff && !showHistory && (
@@ -17534,10 +17599,12 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
 function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianById, onMarkChecklist, onRevertChecklist, onMarkProtocol, onRevertProtocol }) {
   const [tab, setTab] = useState("hromadne");
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedTechId, setSelectedTechId] = useState(null);
 
   const checklists = assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null);
   const hromadne = checklists.filter((a) => !(a.usedParts && a.usedParts.length));
   const solo = checklists.filter((a) => a.usedParts && a.usedParts.length);
+  const onMarkAll = (ids) => ids.forEach(onMarkChecklist);
 
   const tabs = [
     { id: "hromadne", label: "Kontroly (hromadné)" },
@@ -17552,7 +17619,7 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
           <button
             key={t.id}
             className="btn"
-            onClick={() => setTab(t.id)}
+            onClick={() => { setTab(t.id); setSelectedTechId(null); }}
             style={{
               padding: "6px 12px",
               fontSize: 12,
@@ -17570,7 +17637,30 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
         </button>
       </div>
       {tab === "hromadne" && (
-        <ErpChecklistTable items={hromadne} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={onMarkChecklist} onRevert={onRevertChecklist} />
+        selectedTechId ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <button className="btn btn-ghost" onClick={() => setSelectedTechId(null)}>← Späť na technikov</button>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{technicianById[selectedTechId]?.name || "— neznámy —"}</div>
+            </div>
+            <ErpChecklistTable
+              items={hromadne.filter((a) => (a.technicianId || "—") === selectedTechId)}
+              machineById={machineById}
+              technicianById={technicianById}
+              showHistory={showHistory}
+              onMark={onMarkChecklist}
+              onRevert={onRevertChecklist}
+              onMarkAll={onMarkAll}
+            />
+          </div>
+        ) : (
+          <ErpTechnicianTiles
+            items={hromadne.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed))}
+            technicianById={technicianById}
+            showHistory={showHistory}
+            onSelect={setSelectedTechId}
+          />
+        )
       )}
       {tab === "solo" && (
         <ErpChecklistTable items={solo} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={onMarkChecklist} onRevert={onRevertChecklist} withParts />
