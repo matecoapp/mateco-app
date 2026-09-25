@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.616";
+const APP_VERSION = "1.0.617";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9944,42 +9944,49 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, myTransportNotesDebug, onMarkTransportNoteDriverDone }) {
+function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlightTransportId]);
 
+  // Klik na "Prevezené" je nevratný (pošle upozornenie dispečerovi), preto ešte
+  // jedno potvrdenie navyše — rovnaký vzor ako inde v appke (ConfirmActionModal).
+  const [confirmDoneNote, setConfirmDoneNote] = useState(null);
+
   // "Prevoz" dlaždice — poznámky o presune stroja medzi depami, ktoré šoférovi
   // priradil dispečer/vedúci požičovne (samostatné od bežných vývoz/zvoz kariet
   // nižšie, viď step46 pre prístupovú logiku).
-  const transportNotesPanel = (
-    <>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>🔧 debug: {myTransportNotesDebug || "načítavam…"}</div>
-      {myTransportNotes.length > 0 && (
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>
-            🚚 Prevoz strojov medzi depami
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            {myTransportNotes.map((t) => {
-              const m = machineById[t.machineId];
-              return (
-                <div key={t.id} className="panel" style={{ padding: 16, borderRadius: 10 }}>
-                  <div style={{ fontSize: 14, marginBottom: 8 }}>
-                    Previezť stroj <strong>{m?.code || "—"}</strong> z <strong>{m?.depo || "—"}</strong> do <strong>{t.targetDepo}</strong>
-                    {t.note ? ` — ${t.note}` : ""}
-                  </div>
-                  <div style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer" }} onClick={() => onMarkTransportNoteDriverDone(t.id)}>
-                    ✓ Prevezené
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+  const transportNotesPanel = myTransportNotes.length > 0 && (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>
+        🚚 Prevoz strojov medzi depami
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+        {myTransportNotes.map((t) => {
+          const m = machineById[t.machineId];
+          return (
+            <div key={t.id} className="panel" style={{ padding: 16, borderRadius: 10 }}>
+              <div style={{ fontSize: 14, marginBottom: 8 }}>
+                Previezť stroj <strong>{m?.code || "—"}</strong> z <strong>{m?.depo || "—"}</strong> do <strong>{t.targetDepo}</strong>
+                {t.note ? ` — ${t.note}` : ""}
+              </div>
+              <div style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer" }} onClick={() => setConfirmDoneNote(t)}>
+                ✓ Prevezené
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {confirmDoneNote && (
+        <ConfirmActionModal
+          message={`Naozaj ste previezli stroj ${machineById[confirmDoneNote.machineId]?.code || "—"} do depa ${confirmDoneNote.targetDepo}?`}
+          confirmLabel="Áno, prevezené"
+          onClose={() => setConfirmDoneNote(null)}
+          onConfirm={() => onMarkTransportNoteDriverDone(confirmDoneNote.id)}
+        />
       )}
-    </>
+    </div>
   );
 
   if (items.length === 0) {
@@ -10104,22 +10111,13 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   // toku so zákazkami (isMyselfSofer nižšie), NIE podľa employees.role (to sa
   // môže od profilu líšiť). Aj tak je to len kozmetické — samotné RPC si
   // správneho šoféra overí samo cez linkedUserId, nezávisle od tejto property.
-  const isDriverRole = user?.role === "sofer" || user?.role === "externy_sofer";
   const [myTransportNotes, setMyTransportNotes] = useState([]);
-  // DOČASNÉ: viditeľná chybová hláška namiesto len console.error, nech sa dá
-  // ladiť aj na mobile bez DevTools — odstrániť, keď sa potvrdí, že to funguje.
-  const [myTransportNotesDebug, setMyTransportNotesDebug] = useState("");
   const refetchMyTransportNotes = useCallback(async () => {
     if (!user) { setMyTransportNotes([]); return; }
     const { data, error } = await supabase.rpc("get_my_transport_notes");
-    if (error) {
-      console.error("get_my_transport_notes zlyhalo", error);
-      setMyTransportNotesDebug(`RPC chyba: ${error.message || JSON.stringify(error)}`);
-      return;
-    }
-    setMyTransportNotesDebug(`RPC OK, vrátilo ${(data || []).length} záznamov`);
+    if (error) { console.error("get_my_transport_notes zlyhalo", error); return; }
     setMyTransportNotes((data || []).map((row) => ({ ...row.data, id: row.id })));
-  }, [isDriverRole]);
+  }, [user?.id]);
   useEffect(() => { refetchMyTransportNotes(); }, [refetchMyTransportNotes]);
   // Poznámka: NEvoláme tu App-level onMarkTransportNoteDriverDone (ten by
   // upozornenie postavil z lokálneho stavu "transportNotes", ktorý šofér
@@ -10287,7 +10285,6 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         highlightTransportId={highlightTransportId}
         onDismissTransportHighlight={onDismissTransportHighlight}
         myTransportNotes={myTransportNotes}
-        myTransportNotesDebug={myTransportNotesDebug}
         onMarkTransportNoteDriverDone={handleMarkTransportNoteDriverDone}
       />
     );
