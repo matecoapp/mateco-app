@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.604";
+const APP_VERSION = "1.0.605";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6042,7 +6042,13 @@ function DispatcherApp() {
             onOpenCard={(m) => setMachineCard(m)}
             onOpenJob={(j) => setJobDetail(j)}
             onOpenReservation={(r) => setReservationCardTarget(r)}
-            onAddJob={(machineId, startDate) => setShowAddJob({ machineId, startDate })}
+            // Klik na prázdnu bunku v kalendári vytváral zákazku bez ohľadu na
+            // rolu (na rozdiel od tlačidla "+ Nová zákazka", ktoré je správne
+            // schované za can(user,"job_add")) — napr. obchodník tak vedel
+            // založiť zákazku priamo z kalendára. Rovnaké oprávnenie treba aj
+            // tu; bez neho onAddJob vôbec nepošleme, bunka tak nemá click
+            // handler (rovnaký vzor ako pri tlačidle vyššie).
+            onAddJob={can(effectiveUser, "job_add") ? (machineId, startDate) => setShowAddJob({ machineId, startDate }) : undefined}
             onUpdateJob={updateJob}
             onUpdateReservation={updateReservation}
           />
