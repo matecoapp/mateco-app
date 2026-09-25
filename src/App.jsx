@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.598";
+const APP_VERSION = "1.0.599";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3022,10 +3022,20 @@ function DispatcherApp() {
     }
   }
   useEffect(() => {
-    supabase.auth
-      .getSession()
+    // getSession() vie skúsiť obnoviť token cez sieť a na pomalej/nefunkčnej
+    // sieti (napr. CATO gateway, kde je navigator.onLine stále "true", lebo
+    // wifi JE pripojená, len fakticky nič neprejde) vie visieť aj minúty bez
+    // toho, aby vôbec zlyhal — .catch() sa vtedy nikdy nespustí. Timeout tu
+    // zabezpečí, že sa po pár sekundách skúsi uložená relácia priamo, bez
+    // ohľadu na navigator.onLine (ten sa na takejto sieti nedá dôverovať).
+    withTimeout(supabase.auth.getSession(), 4000)
       .then(({ data: { session } }) => applySession(session))
-      .catch(() => applySession(null));
+      .catch(() => {
+        idbGet("tables", "session").then((cached) => {
+          setSession(cached || null);
+          setAuthChecked(true);
+        });
+      });
     const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       applySession(sess);
       if (event === "PASSWORD_RECOVERY") setShowSetNewPassword(true);
