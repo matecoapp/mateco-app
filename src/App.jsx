@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.622";
+const APP_VERSION = "1.0.623";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -18497,7 +18497,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const soon = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
-  const isEzTechnik = !!myEmployee?.alsoEzTechnik;
+  const isEzTechnik = !!myEmployee?.alsoEzTechnik || isAdminUser(user);
   const pendingEz = (ezMeasurements || []).filter((m) => !m.processed);
   const [expandedEzId, setExpandedEzId] = useState(null);
 
