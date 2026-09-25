@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.611";
+const APP_VERSION = "1.0.612";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10081,6 +10081,14 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     if (!myEmployee || (myEmployee.role !== "sofer" && myEmployee.role !== "externy_sofer")) return [];
     return (transportNotes || []).filter((t) => t.driverId === myEmployee.id && !t.driverDone);
   }, [transportNotes, myEmployee]);
+  // Dočasný prehľad pre dispečera/vedúceho — VŠETKY priradené a ešte
+  // nedokončené poznámky Prevoz, nech vedia priamo v appke overiť, že dáta
+  // reálne dorazili (bez potreby prihlásiť sa ako šofér).
+  const canManageTransportNotes = can(user, "machine_transport_note");
+  const assignedTransportNotes = useMemo(() => {
+    if (!canManageTransportNotes) return [];
+    return (transportNotes || []).filter((t) => t.driverId && !t.driverDone);
+  }, [transportNotes, canManageTransportNotes]);
   const [search, setSearch] = useState("");
   useEffect(() => {
     if (!highlightTransportId) return;
@@ -10365,6 +10373,24 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                     {t.note ? ` — ${t.note}` : ""}
                   </div>
                   <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => onMarkTransportNoteDriverDone(t.id)}>Prevezené</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {assignedTransportNotes.length > 0 && (
+        <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+            🚚 Prevozy priradené šoférom (čakajú na potvrdenie)
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {assignedTransportNotes.map((t) => {
+              const m = machineById[t.machineId];
+              const driver = (drivers || []).find((d) => d.id === t.driverId);
+              return (
+                <div key={t.id} style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                  {m?.code || "—"} → {t.targetDepo} · šofér: {driver?.name || "—"} · {t.driverDone ? "nahlásené prevezené" : "čaká na šoféra"}
                 </div>
               );
             })}
