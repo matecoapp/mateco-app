@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.615";
+const APP_VERSION = "1.0.616";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9944,16 +9944,51 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight }) {
+function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, myTransportNotesDebug, onMarkTransportNoteDriverDone }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlightTransportId]);
 
+  // "Prevoz" dlaždice — poznámky o presune stroja medzi depami, ktoré šoférovi
+  // priradil dispečer/vedúci požičovne (samostatné od bežných vývoz/zvoz kariet
+  // nižšie, viď step46 pre prístupovú logiku).
+  const transportNotesPanel = (
+    <>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>🔧 debug: {myTransportNotesDebug || "načítavam…"}</div>
+      {myTransportNotes.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>
+            🚚 Prevoz strojov medzi depami
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+            {myTransportNotes.map((t) => {
+              const m = machineById[t.machineId];
+              return (
+                <div key={t.id} className="panel" style={{ padding: 16, borderRadius: 10 }}>
+                  <div style={{ fontSize: 14, marginBottom: 8 }}>
+                    Previezť stroj <strong>{m?.code || "—"}</strong> z <strong>{m?.depo || "—"}</strong> do <strong>{t.targetDepo}</strong>
+                    {t.note ? ` — ${t.note}` : ""}
+                  </div>
+                  <div style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer" }} onClick={() => onMarkTransportNoteDriverDone(t.id)}>
+                    ✓ Prevezené
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   if (items.length === 0) {
     return (
-      <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
-        Žiadne prepravy.
+      <div>
+        {transportNotesPanel}
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
+          Žiadne prepravy.
+        </div>
       </div>
     );
   }
@@ -9968,6 +10003,7 @@ function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {transportNotesPanel}
       {buckets.map((b) => (
         <div key={b.label}>
           <div
@@ -10250,6 +10286,9 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         tomorrow={tomorrow}
         highlightTransportId={highlightTransportId}
         onDismissTransportHighlight={onDismissTransportHighlight}
+        myTransportNotes={myTransportNotes}
+        myTransportNotesDebug={myTransportNotesDebug}
+        onMarkTransportNoteDriverDone={handleMarkTransportNoteDriverDone}
       />
     );
   }
@@ -10370,32 +10409,6 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
 
   return (
     <div>
-      {isDriverRole && (
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 10, padding: "4px 8px", background: "var(--panel-2)", borderRadius: 4, display: "inline-block" }}>
-          🔧 debug: {myTransportNotesDebug || "načítavam…"}
-        </div>
-      )}
-      {myTransportNotes.length > 0 && (
-        <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            🚚 Prevoz strojov medzi depami
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {myTransportNotes.map((t) => {
-              const m = machineById[t.machineId];
-              return (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
-                  <div style={{ flex: 1, minWidth: 200, fontSize: 13 }}>
-                    Previezť stroj <strong>{m?.code || "—"}</strong> z <strong>{m?.depo || "—"}</strong> do <strong>{t.targetDepo}</strong>
-                    {t.note ? ` — ${t.note}` : ""}
-                  </div>
-                  <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => handleMarkTransportNoteDriverDone(t.id)}>Prevezené</button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
       {assignedTransportNotes.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
