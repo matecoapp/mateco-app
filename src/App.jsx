@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.610";
+const APP_VERSION = "1.0.611";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5268,6 +5268,11 @@ function DispatcherApp() {
   // upozornenie do zvončeka, po skutočnom prevoze klikne "Prevezené", čo
   // upozorní späť dispečera/vedúceho, aby to potvrdil v kalendári.
   function addTransportNote(machineId, date, targetDepo, note, driverId) {
+    // driverUserId (auth id prepojeného účtu šoféra) sa ukladá priamo na
+    // poznámku, nech RLS v DB vie šoférovi povoliť čítanie/úpravu len TOHTO
+    // riadku jednoduchým porovnaním (auth.uid() = driverUserId), bez zložitého
+    // joinu cez tabuľku employees — viď step45.
+    const driver = driverId ? driverById[driverId] : null;
     const item = {
       id: uid(),
       machineId,
@@ -5275,6 +5280,7 @@ function DispatcherApp() {
       targetDepo,
       note: note || "",
       driverId: driverId || null,
+      driverUserId: driver?.linkedUserId || null,
       driverDone: false,
       driverDoneAt: null,
       driverDoneBy: null,
@@ -5286,7 +5292,6 @@ function DispatcherApp() {
     };
     persistTransportNotes([...transportNotes, item]);
     if (driverId) {
-      const driver = driverById[driverId];
       const machine = machineById[machineId];
       if (driver) {
         pushNotification({
