@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.623";
+const APP_VERSION = "1.0.624";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -216,6 +216,11 @@ const PERM = {
   // ERP podklady (požičovňa) — rovnaký princíp ako erp_view vyššie, len pre
   // ukončené protokoly o vrátení (zvoz), navyše k tomu, čo vidí Obchodník.
   erp_pozicovna_view: ["fakturant_pozicovna"],
+  // Revízie EZ — záložka a fronta na spracovanie vidia dispečer aj vedúci
+  // servisu (len na dohľad, nesmú spracovať), samotné spracovanie (tlačidlo
+  // "Spracované") je navyše k tomu viazané na příznak employees.alsoEzTechnik
+  // (nie je to rola, appka to kontroluje osobitne, viď EzMeasurementsView).
+  ez_measurement_view: ["dispecer_servisu", "veduci_servisu"],
   technician_add: ["veduci_servisu"],
   technician_edit: ["veduci_servisu"],
   technician_archive: ["veduci_servisu"],
@@ -3451,6 +3456,27 @@ function DispatcherApp() {
       createdAt: new Date().toISOString(),
     };
     persistEzMeasurements([...ezMeasurements, item]);
+    // Dispečer/vedúci servisu len na dohľad (jedno upozornenie pre obe role),
+    // EZ technici (employees.alsoEzTechnik — nie je to rola, teda osobitne
+    // po mene za každého) navyše aj na spracovanie.
+    pushNotification({
+      roles: ["dispecer_servisu", "veduci_servisu"],
+      title: "Nové meranie VTZ EZ",
+      message: `${item.createdBy || "Technik"} zadal meranie pre stroj ${item.machineCode || "—"}.`,
+      kind: "ez_measurement",
+      link: { module: "servis", view: "ez_merania" },
+    });
+    employees
+      .filter((e) => !e.archived && e.alsoEzTechnik)
+      .forEach((e) => {
+        pushNotification({
+          userName: e.name,
+          title: "Nové meranie VTZ EZ na spracovanie",
+          message: `${item.createdBy || "Technik"} zadal meranie pre stroj ${item.machineCode || "—"} — čaká na spracovanie.`,
+          kind: "ez_measurement",
+          link: { module: "servis", view: "ez_merania" },
+        });
+      });
   }
   function markEzMeasurementProcessed(id) {
     persistEzMeasurements(
@@ -6042,6 +6068,7 @@ function DispatcherApp() {
           view={view}
           effectiveUser={effectiveUser}
           damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+          myEmployee={myEmployee}
           onSelectModule={setModule}
           onSelectView={setView}
           onPickDocumentsSubView={pickDocumentsSubView}
@@ -6072,6 +6099,7 @@ function DispatcherApp() {
                   view={view}
                   effectiveUser={effectiveUser}
                   damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+                  myEmployee={myEmployee}
                   onSelectModule={setModule}
                   onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
                   onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
@@ -6575,9 +6603,6 @@ function DispatcherApp() {
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
-            ezMeasurements={ezMeasurements}
-            myEmployee={myEmployee}
-            onProcessEzMeasurement={markEzMeasurementProcessed}
           />
         )}
 
@@ -6602,6 +6627,15 @@ function DispatcherApp() {
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
+          />
+        )}
+
+        {module === "servis" && view === "ez_merania" && (can(effectiveUser, "ez_measurement_view") || myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser)) && (
+          <EzMeasurementsView
+            measurements={ezMeasurements}
+            myEmployee={myEmployee}
+            user={effectiveUser}
+            onProcess={markEzMeasurementProcessed}
           />
         )}
 
@@ -8644,7 +8678,11 @@ const MODULE_SHORT_LABEL = { poziciovna: "POŽ", servis: "SRV", administrativa: 
 // Zoznam modulov + ich záložiek — zdieľané medzi bočným menu na mobile
 // (SidebarNav, vnútri výsuvnej zásuvky) a ikonovým pásom na webe (IconRail),
 // nech sa tabuľka záložiek nemusí udržiavať na dvoch miestach naraz.
-function buildNavModules(effectiveUser, damageAlertCount) {
+function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
+  // Revízie EZ: dispečer/vedúci servisu (ez_measurement_view) len na dohľad,
+  // EZ technik (employees.alsoEzTechnik — nie je to rola) navyše aj na
+  // spracovanie — obaja musia záložku vidieť, appka rozlíši práva až vnútri.
+  const canSeeEz = can(effectiveUser, "ez_measurement_view") || !!myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser);
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -8663,6 +8701,7 @@ function buildNavModules(effectiveUser, damageAlertCount) {
     { id: "externe", label: "Externé servisné zákazky" },
     { id: "revizie", label: "Revízie" },
     { id: "uradne_skusky", label: "Úradné skúšky" },
+    ...(canSeeEz ? [{ id: "ez_merania", label: "Revízie EZ" }] : []),
     ...(can(effectiveUser, "erp_view") ? [{ id: "erp", label: "ERP — kontroly" }] : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
@@ -8693,7 +8732,7 @@ function buildNavModules(effectiveUser, damageAlertCount) {
 // presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
 // na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
 // záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
   const [docsExpandedState, setDocsExpandedState] = useState(false);
   // V mobilnej zásuvke si tento stav drží sama (nikto ho nekontroluje zvonku).
   // V IconRail flyoute ho kontroluje IconRail (onToggleDocsExpanded je daný),
@@ -8701,7 +8740,7 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, onSelectMod
   // pridá/uberie im zodpovedajúce bodky.
   const docsExpanded = onToggleDocsExpanded ? docsExpandedProp : docsExpandedState;
   const toggleDocsExpanded = onToggleDocsExpanded || (() => setDocsExpandedState((v) => !v));
-  const modules = buildNavModules(effectiveUser, damageAlertCount);
+  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee);
   // Moduly (Požičovňa/Servis/Administratíva) sú zoskupené hore ako jeden
   // blok, oddelené jednou čiarou od záložiek AKTUÁLNE otvoreného modulu pod
   // nimi — namiesto pôvodného akordeónu (záložky priamo pod svojím modulom,
@@ -8886,11 +8925,11 @@ const RAIL_ICON_RULER = (
 // EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory }) {
+function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory }) {
   const [railHover, setRailHover] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
-  const modules = buildNavModules(effectiveUser, damageAlertCount);
+  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee);
 
   // .icon-rail-wrap je len "dištančná" medzera vo flex riadku (.app-body-row)
   // — samotný pás a vysunuté menu sú position:fixed, ukotvené priamo na
@@ -9075,6 +9114,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
               view={view}
               effectiveUser={effectiveUser}
               damageAlertCount={damageAlertCount}
+              myEmployee={myEmployee}
               onSelectModule={onSelectModule}
               onSelectView={onSelectView}
               onPickDocumentsSubView={onPickDocumentsSubView}
@@ -18430,10 +18470,88 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
   );
 }
 
+// Vlastná záložka pre merania VTZ EZ — rovnaká "nespracované → História"
+// mechanika ako ErpPozicovnaView (fakturant), len appka tu navyše rozlišuje
+// dve úrovne prístupu: dispečer/vedúci servisu (ez_measurement_view) vidia
+// zoznam a detail, ale tlačidlo "Spracované" majú schované — spracovať smie
+// len employees.alsoEzTechnik (nie je to rola, appka to overuje osobitne).
+function EzMeasurementsView({ measurements, myEmployee, user, onProcess }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const canProcess = !!myEmployee?.alsoEzTechnik || isAdminUser(user);
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (measurements || [])
+      .filter((m) => (showHistory ? m.processed : !m.processed))
+      .filter((m) => !q || (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [measurements, showHistory, search]);
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <SearchInput placeholder="Hľadať sériové číslo, zadal…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost" onClick={() => { setShowHistory((v) => !v); setExpandedId(null); }}>
+          {showHistory ? "← Späť na nespracované" : "História spracovaných"}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+          {showHistory ? "Žiadne spracované záznamy." : "Žiadne nespracované merania VTZ EZ."}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map((meas) => (
+            <div key={meas.id} className="panel" style={{ padding: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{meas.machineCode || "—"}</strong>{" "}
+                  <span style={{ color: "var(--text-dim)" }}>
+                    · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
+                    {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedId(expandedId === meas.id ? null : meas.id)}>
+                    {expandedId === meas.id ? "Skryť" : "Detail"}
+                  </button>
+                  {!showHistory && canProcess && (
+                    <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onProcess(meas.id)}>
+                      Spracované
+                    </button>
+                  )}
+                </div>
+              </div>
+              {expandedId === meas.id && (
+                <div style={{ marginTop: 10, fontSize: 12 }}>
+                  {meas.motohodiny && <div>Motohodiny: {meas.motohodiny}</div>}
+                  {!meas.skipNabijacka && meas.nabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
+                    meas.nabijacka[key] ? <div key={key}>{label}: {meas.nabijacka[key]}</div> : null
+                  ))}
+                  {!meas.skipZasuvka && meas.zasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
+                    meas.zasuvka[key] ? <div key={key}>{label}: {meas.zasuvka[key]}</div> : null
+                  ))}
+                  {meas.note && <div style={{ marginTop: 6 }}>Poznámka: {meas.note}</div>}
+                  {meas.photoUrl && (
+                    <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4, marginTop: 6, cursor: "pointer", border: "1px solid var(--border)" }} />
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId, ezMeasurements, myEmployee, onProcessEzMeasurement }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -18497,58 +18615,9 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const soon = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
-  const isEzTechnik = !!myEmployee?.alsoEzTechnik || isAdminUser(user);
-  const pendingEz = (ezMeasurements || []).filter((m) => !m.processed);
-  const [expandedEzId, setExpandedEzId] = useState(null);
 
   return (
     <div>
-      {isEzTechnik && (
-        <div className="panel" style={{ padding: 12, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
-            Fronta na spracovanie — merania VTZ EZ ({pendingEz.length})
-          </div>
-          {pendingEz.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Žiadne nespracované záznamy.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {pendingEz.map((meas) => (
-                <div key={meas.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <div style={{ fontSize: 13 }}>
-                      <strong>{meas.machineCode || "—"}</strong>{" "}
-                      <span style={{ color: "var(--text-dim)" }}>· {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedEzId(expandedEzId === meas.id ? null : meas.id)}>
-                        {expandedEzId === meas.id ? "Skryť" : "Detail"}
-                      </button>
-                      <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onProcessEzMeasurement && onProcessEzMeasurement(meas.id)}>
-                        Spracované
-                      </button>
-                    </div>
-                  </div>
-                  {expandedEzId === meas.id && (
-                    <div style={{ marginTop: 8, fontSize: 12 }}>
-                      {meas.motohodiny && <div>Motohodiny: {meas.motohodiny}</div>}
-                      {!meas.skipNabijacka && meas.nabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
-                        meas.nabijacka[key] ? <div key={key}>{label}: {meas.nabijacka[key]}</div> : null
-                      ))}
-                      {!meas.skipZasuvka && meas.zasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
-                        meas.zasuvka[key] ? <div key={key}>{label}: {meas.zasuvka[key]}</div> : null
-                      ))}
-                      {meas.note && <div style={{ marginTop: 6 }}>Poznámka: {meas.note}</div>}
-                      {meas.photoUrl && (
-                        <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4, marginTop: 6, cursor: "pointer", border: "1px solid var(--border)" }} />
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ flex: 1 }} />
