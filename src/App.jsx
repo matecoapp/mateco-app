@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.619";
+const APP_VERSION = "1.0.620";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8806,6 +8806,14 @@ function MailIcon({ size = 15 }) {
     </svg>
   );
 }
+// Vytiahne telefónne číslo z voľného textu (napr. "Kontakt na zákazníka" pri
+// poškodení/externej zákazke, kde sa meno+telefón+email píšu do jedného
+// políčka) — nech aj tam funguje "klik a zavolaj", nielen pri štruktúrovanom
+// job.customerPhone poli.
+function extractPhone(text) {
+  const m = (text || "").match(/(\+?\d[\d \/-]{6,}\d)/);
+  return m ? m[1].trim() : null;
+}
 const RAIL_ICON_WARN = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3.5L2.5 20h19L12 3.5z" />
@@ -12723,6 +12731,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         {job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}
+        {job?.customerPhone && (
+          <a href={`tel:${job.customerPhone}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
+            <PhoneIcon size={12} /> {job.customerPhone}
+          </a>
+        )}
       </div>
 
       {isCorrection && (
@@ -13028,6 +13041,11 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
         {job?.customer || "—"} · {phase === "vratenie" ? "Zvoz" : "Vývoz"} {(phase === "vratenie" ? job?.endDate : job?.startDate) ? fmtDate(phase === "vratenie" ? job.endDate : job.startDate) : "—"}
+        {job?.customerPhone && (
+          <a href={`tel:${job.customerPhone}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
+            <PhoneIcon size={12} /> {job.customerPhone}
+          </a>
+        )}
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -17180,7 +17198,14 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
               </div>
             </>
           ) : (
-            <div style={{ fontSize: 13 }}>{d.customerContact || "—"}</div>
+            <div style={{ fontSize: 13 }}>
+              {d.customerContact || "—"}
+              {extractPhone(d.customerContact) && (
+                <a href={`tel:${extractPhone(d.customerContact)}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
+                  <PhoneIcon size={12} /> Zavolať
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}
