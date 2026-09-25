@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.617";
+const APP_VERSION = "1.0.618";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1302,8 +1302,11 @@ function driverOptionsGrouped(drivers) {
   );
 }
 
-function canFillHandoverPhase(job, myEmployee, phase) {
-  if (!job || !myEmployee || (myEmployee.role !== "sofer" && myEmployee.role !== "externy_sofer")) return false;
+function canFillHandoverPhase(job, myEmployee, phase, user) {
+  // Rola sa overuje podľa profilu (user.role), nie podľa employees.role — ten
+  // sa od profilu môže rozísť (rovnaký problém, aký spôsobil, že šofér
+  // nevidel svoje priradené prevozy — viď transportNotes).
+  if (!job || !myEmployee || !user || (user.role !== "sofer" && user.role !== "externy_sofer")) return false;
   const today = todayISO();
   if (phase === "prevzatie") {
     // Skutočný deň vývozu je departureDate (dá sa prepísať nezávisle od
@@ -12543,7 +12546,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Poistka do hĺbky — nový protokol môže reálne založiť len šofér/checker,
   // pridelený na vývoz, a len v deň vývozu — aj keby sa sem niekto dostal inou
   // cestou než cez normálne (už správne strážené) tlačidlá.
-  if (!existing && !canFillHandoverPhase(job, myEmployee, "prevzatie")) {
+  if (!existing && !canFillHandoverPhase(job, myEmployee, "prevzatie", user)) {
     return (
       <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
@@ -12612,7 +12615,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     !!existing &&
     !existing.returnDone &&
     (user?.role === "sofer" || user?.role === "externy_sofer") &&
-    canFillHandoverPhase(job, myEmployee, "vratenie");
+    canFillHandoverPhase(job, myEmployee, "vratenie", user);
   // Dispečer aj šofér vedia poslať zákazníkovi odkaz/QR — nie je to viazané na
   // úpravu protokolu (tú má len dispečer), len na to, že vôbec smie s
   // odovzdávacím protokolom pracovať.
@@ -13353,14 +13356,14 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         )}
         {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
           !handoverProtocol ? (
-            canFillHandoverPhase(job, myEmployee, "prevzatie") ? (
+            canFillHandoverPhase(job, myEmployee, "prevzatie", user) ? (
               <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Vypísať protokol</button>
             ) : (
               <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér v deň vývozu" style={{ opacity: 0.5 }}>
                 📋 Vypísať protokol
               </button>
             )
-          ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie") ? (
+          ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
             <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Dokončiť vrátenie</button>
           ) : (
             <button className="btn btn-ghost" onClick={onOpenHandoverProtocol}>📋 Zobraziť protokol</button>
@@ -16714,7 +16717,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                   {(hp ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                       <span style={{ fontSize: 11, color: badgeColor }}>{badgeLabel}</span>
-                      {!hp && can(user, "handover_protocol_write") && !canFillHandoverPhase(j, myEmployee, "prevzatie") ? (
+                      {!hp && can(user, "handover_protocol_write") && !canFillHandoverPhase(j, myEmployee, "prevzatie", user) ? (
                         <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér v deň vývozu" style={{ fontSize: 11, padding: "4px 9px", opacity: 0.5 }}>
                           📋 Vypísať
                         </button>
