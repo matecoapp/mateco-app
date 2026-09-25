@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.595";
+const APP_VERSION = "1.0.596";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -3197,7 +3197,18 @@ function DispatcherApp() {
   }
   async function attemptLogin(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { ok: false, message: "Nesprávne meno alebo heslo (alebo účet ešte nie je potvrdený emailom)." };
+    if (error) {
+      // AuthRetryableFetchError = sieťová chyba (výpadok/timeout spojenia na server),
+      // NIE zlé heslo — bez tohto rozlíšenia to na pomalej/nestabilnej sieti (napr.
+      // CATO) zavádzajúco tvrdilo "nesprávne heslo" aj keď heslo bolo v poriadku.
+      const isNetworkError = error.name === "AuthRetryableFetchError" || /fetch|network/i.test(error.message || "");
+      return {
+        ok: false,
+        message: isNetworkError
+          ? "Nepodarilo sa pripojiť na server (pomalá alebo nestabilná sieť) — heslo je pravdepodobne v poriadku, skús to znova alebo na inej sieti."
+          : "Nesprávne meno alebo heslo (alebo účet ešte nie je potvrdený emailom).",
+      };
+    }
     setSession(data.session);
     return { ok: true };
   }
