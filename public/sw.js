@@ -15,7 +15,7 @@
 // CACHE_VERSION sa bumpuje ručne spolu s APP_VERSION v App.jsx (pri každom
 // vydaní appky) — inak by appka po vydaní novej verzie zostala niekomu
 // natrvalo zaseknutá na starej cache aj keď má signál.
-const CACHE_VERSION = "mateco-appshell-v1";
+const CACHE_VERSION = "mateco-appshell-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -110,15 +110,26 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(req)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-        return res;
-      })
-      .catch(
-        () =>
-          caches.match(req).then((cached) => cached || (req.mode === "navigate" ? caches.match(self.registration.scope) : undefined))
-      )
+    caches.match(req).then((cached) => {
+      const networkFetch = fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+          return res;
+        })
+        .catch(() => cached || (req.mode === "navigate" ? caches.match(self.registration.scope) : undefined));
+
+      // Bez cache (úplne prvé načítanie) sa musí počkať na sieť — niet z čoho
+      // vziať náhradu. Ak už cache niečo má, "preteká" sa so sieťou: pomalá
+      // firemná sieť (napr. CATO gateway) vie live fetch naťahovať aj
+      // minúty bez toho, aby vôbec zlyhal (.catch by sa nespustil) — appka
+      // by tak visela na "Načítavam..." zbytočne dlho, hoci mala staršiu,
+      // funkčnú verziu appshellu hneď poruke. Appka má vlastnú kontrolu
+      // novej verzie (version.json), takže krátkodobé podanie staršej cache
+      // nič nepokazí — len sa spustí hneď a novšia verzia sa dotiahne potichu.
+      if (!cached) return networkFetch;
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(cached), 3000));
+      return Promise.race([networkFetch, timeout]);
+    })
   );
 });
