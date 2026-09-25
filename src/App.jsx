@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.597";
+const APP_VERSION = "1.0.598";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1540,15 +1540,29 @@ async function dataUrlToBlob(dataUrl) {
   return res.blob();
 }
 
+// Na pomalej sieti (napr. firemný CATO gateway) vie "await supabase...select()"
+// visieť aj minúty bez toho, aby vôbec ZLYHALO — kým nezlyhá, try/catch nižšie
+// sa nikdy nedostane k záchrannej uloženej kópii z IndexedDB, hoci ju appka
+// mala poruke. Timeout tu zabezpečí, že sa po pár sekundách siahne po nej aj
+// tak — živé dáta sa aj tak potichu uložia na pozadí, keď (ak) napokon dorazia.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 async function loadKey(key, fallback) {
-  try {
-    const { data, error } = await supabase.from("app_data").select("value").eq("key", key).maybeSingle();
+  const live = supabase.from("app_data").select("value").eq("key", key).maybeSingle().then(({ data, error }) => {
     if (error) throw error;
     const value = data ? data.value ?? fallback : fallback;
     idbPut("tables", `key:${key}`, value);
     return value;
+  });
+  try {
+    return await withTimeout(live, 4000);
   } catch (e) {
-    console.error("loadKey failed", key, e);
+    console.error("loadKey pomalé/zlyhalo", key, e);
     const cached = await idbGet("tables", `key:${key}`);
     return cached !== undefined ? cached : fallback;
   }
@@ -1613,14 +1627,16 @@ function saveKey(key, value) {
    (machines, employees, assignments, damages, ...) — netreba ich opakovať.
 --------------------------------------------------------- */
 async function loadRecordTable(table) {
-  try {
-    const { data, error } = await supabase.from(table).select("id, data");
+  const live = supabase.from(table).select("id, data").then(({ data, error }) => {
     if (error) throw error;
     const rows = (data || []).map((row) => ({ ...row.data, id: row.id }));
     idbPut("tables", table, rows);
     return rows;
+  });
+  try {
+    return await withTimeout(live, 4000);
   } catch (e) {
-    console.error(`loadRecordTable(${table}) failed`, e);
+    console.error(`loadRecordTable(${table}) pomalé/zlyhalo`, e);
     const cached = await idbGet("tables", table);
     return cached || [];
   }
