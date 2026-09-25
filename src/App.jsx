@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.620";
+const APP_VERSION = "1.0.622";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -295,6 +295,17 @@ function setPhotoLightboxOpenListener(fn) {
 }
 function openPhotoLightbox(url) {
   if (_photoLightboxListener) _photoLightboxListener(url);
+}
+// Formulár na záznam z merania VTZ EZ — rovnaký princíp ako protokol/lightbox
+// vyššie (globálny listener), aby ho vedel otvoriť ktorýkoľvek riadok v appke
+// (rýchle akcie, karta zákazky, plán servisu) bez prekladania props cez celý
+// strom komponentov.
+let _ezMeasurementOpenListener = null;
+function setEzMeasurementOpenListener(fn) {
+  _ezMeasurementOpenListener = fn;
+}
+function openEzMeasurement(machine) {
+  if (_ezMeasurementOpenListener) _ezMeasurementOpenListener(machine || null);
 }
 // Aktuálny zoznam strojov platformy (S/N + model) — platforma ho priebežne aktualizuje,
 // aby ho protokol mohol použiť namiesto vlastného natvrdo zabudovaného zoznamu.
@@ -2464,6 +2475,7 @@ function DispatcherApp() {
   const [confirmAction, setConfirmAction] = useState(null); // { message, confirmLabel, onConfirm }
   const [assignmentDetail, setAssignmentDetail] = useState(null); // { assignment, machine, damage }
   const [protocolModalData, setProtocolModalData] = useState(null); // { html, params }
+  const [ezMeasurementTarget, setEzMeasurementTarget] = useState(undefined); // undefined = zatvorené, null | machine = otvorené (viď openEzMeasurement)
   const [printProtocolHtml, setPrintProtocolHtml] = useState(null); // náhľad/tlač vyplneného protokolu (openPrintableServiceProtocol) — inline v appke, nie nová karta
   const [lightboxUrl, setLightboxUrl] = useState(null); // náhľad fotky (snapshot, fotky pri odovzdaní/vrátení) — inline v appke, nie nová karta
   const [jobsQuickCategory, setJobsQuickCategory] = useState(null); // "overdue" | "endingSoon" | "noDriver" — nastavené pri prechode z Prehľadu
@@ -2590,6 +2602,12 @@ function DispatcherApp() {
   // explicitné potvrdenie (kvôli ochrane pred missclickom) zapíše nové
   // machine.depo. Viditeľnosť je zámerne aj v DB (RLS), nielen v appke.
   const [transportNotes, setTransportNotes] = useState([]);
+  // { id, machineId, motohodiny, skipNabijacka, skipZasuvka, nabijacka:{...}, zasuvka:{...},
+  //   photoUrl, note, processed, processedBy, processedAt, createdBy, createdAt } — záznam z
+  // merania VTZ EZ, vypĺňaný priamo v appke (nahrádza externý formulár). Vidí/vypĺňa
+  // ktorýkoľvek technik, frontu na spracovanie ("Spracované") vidia len EZ technici
+  // (employees.alsoEzTechnik) — viď RevisionsView.
+  const [ezMeasurements, setEzMeasurements] = useState([]);
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
@@ -2599,7 +2617,7 @@ function DispatcherApp() {
   const [viewAsRole, setViewAsRole] = useState(null); // admin-only: dočasne si pozrieť platformu ako iná rola
   const [showDamageReport, setShowDamageReport] = useState(null); // machine object
   const [showQuickDamagePicker, setShowQuickDamagePicker] = useState(false); // technik z mobilnej lišty — vyberie stroj sám, nič nie je predvyplnené
-  const [showDamageTypePicker, setShowDamageTypePicker] = useState(false); // prvý krok — "náš stroj alebo cudzí?", spoločné pre mobil aj PC
+  
   const [showPhoneDirectory, setShowPhoneDirectory] = useState(false); // telefónny zoznam zamestnancov, z mobilnej lišty
   const [showUnknownSerialReport, setShowUnknownSerialReport] = useState(false); // volajúci nepozná sériové číslo
   const [attachMachineTarget, setAttachMachineTarget] = useState(null); // poškodenie bez stroja, ktorému sa dopĺňa sériové číslo
@@ -2620,7 +2638,6 @@ function DispatcherApp() {
   const [completeRevisionTarget, setCompleteRevisionTarget] = useState(null); // revision damage object
   const [completeUradnaSkuskaTarget, setCompleteUradnaSkuskaTarget] = useState(null); // úradná skúška damage object
   const [resolveDamageTarget, setResolveDamageTarget] = useState(null); // poškodenie being resolved (date+comment form)
-  const [noProtocolTarget, setNoProtocolTarget] = useState(null); // poškodenie/externá bez priradeného protokolu — najprv upozornenie pred ukončením
   const [confirmUnassignProtocol, setConfirmUnassignProtocol] = useState(null); // { protocol, onConfirm } — dvojkrokové potvrdenie pred vyradením protokolu zo zákazky
   const [viewResolutionTarget, setViewResolutionTarget] = useState(null); // resolved damage/revision being viewed from machine card history
   // Všeobecná "história kariet" — keď sa z jednej karty (stroj/zákazka/poškodenie/
@@ -2803,6 +2820,11 @@ function DispatcherApp() {
   }, []);
 
   useEffect(() => {
+    setEzMeasurementOpenListener((machine) => setEzMeasurementTarget(machine));
+    return () => setEzMeasurementOpenListener(null);
+  }, []);
+
+  useEffect(() => {
     setMailComposeListener((mail) => setPendingMail(mail));
     return () => setMailComposeListener(null);
   }, []);
@@ -2846,11 +2868,12 @@ function DispatcherApp() {
       setSpareParts([]);
       setTrash([]);
       setTransportNotes([]);
+      setEzMeasurements([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes, ezm] = await Promise.all([
         loadRecordTable("machines"),
         loadRecordTable("jobs"),
         loadRecordTable("assignments"),
@@ -2873,6 +2896,7 @@ function DispatcherApp() {
         loadRecordTable("vehicles"),
         loadRecordTable("portal_requests"),
         loadRecordTable("transportNotes"),
+        loadRecordTable("ezMeasurements"),
       ]);
       setMachines(m);
       setVehicles(veh);
@@ -2895,6 +2919,7 @@ function DispatcherApp() {
       setSpareParts(sprts);
       setTrash(trsh);
       setTransportNotes(tnotes);
+      setEzMeasurements(ezm);
 
       setEmployees(emp);
       setLoaded(true);
@@ -2951,6 +2976,7 @@ function DispatcherApp() {
       ["spareParts", setSpareParts],
       ["trash", setTrash],
       ["transportNotes", setTransportNotes],
+      ["ezMeasurements", setEzMeasurements],
     ];
     const channels = tables.map(([table, setState]) =>
       supabase
@@ -3413,6 +3439,26 @@ function DispatcherApp() {
   const persistDamages = useCallback(makeRecordPersist("damages", setDamages), []);
   const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
   const persistTransportNotes = useCallback(makeRecordPersist("transportNotes", setTransportNotes), []);
+  const persistEzMeasurements = useCallback(makeRecordPersist("ezMeasurements", setEzMeasurements), []);
+  function addEzMeasurement(data) {
+    const item = {
+      id: uid(),
+      ...data,
+      processed: false,
+      processedBy: null,
+      processedAt: null,
+      createdBy: currentUser?.name || "",
+      createdAt: new Date().toISOString(),
+    };
+    persistEzMeasurements([...ezMeasurements, item]);
+  }
+  function markEzMeasurementProcessed(id) {
+    persistEzMeasurements(
+      ezMeasurements.map((m) =>
+        m.id === id ? { ...m, processed: true, processedBy: currentUser?.name || "", processedAt: new Date().toISOString() } : m
+      )
+    );
+  }
   // Presunie záznam do koša (namiesto toho, aby zmizol bez stopy) — appka ho
   // sem skopíruje TESNE PRED tým, než ho naozaj odstráni z jeho pôvodného
   // zoznamu. "record" je celý pôvodný objekt (nie len ID), nech sa dá neskôr
@@ -4038,6 +4084,11 @@ function DispatcherApp() {
   const persistReservations = useCallback(makeRecordPersist("reservations", setReservations), []);
   function addReservation(data) {
     const autoApproved = can(effectiveUser, "reservation_convert"); // dispečer/vedúci požičovne si schvália sami
+    // requestedAsJob — obchodník už vie, že ide o istotu, nie len o rezerváciu
+    // na vyjednávanie. Ukladá sa stále ako rezervácia (rovnaké polia, rovnaké
+    // schvaľovanie), len text upozornenia a karta to dajú dispečerovi jasne
+    // najavo, nech vie rovno konvertovať bez ďalšieho dopytovania obchodníka.
+    const requestedAsJob = !!data.requestedAsJob;
     const record = {
       id: uid(),
       machineId: data.machineId,
@@ -4047,22 +4098,24 @@ function DispatcherApp() {
       expectedStart: data.expectedStart,
       expectedEnd: data.expectedEnd || null,
       notes: data.notes || "",
+      requestedAsJob,
       status: autoApproved ? "approved" : "pending",
       createdBy: currentUser?.name || "",
       createdAt: new Date().toISOString(),
     };
     persistReservations([...reservations, record]);
     const machine = machineById[data.machineId];
+    const what = requestedAsJob ? "zákazku" : "nezáväznú rezerváciu";
     pushNotification({
       kind: "reservation",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
-      title: autoApproved ? "Nezáväzná rezervácia" : "Žiadosť o nezáväznú rezerváciu",
+      title: autoApproved ? (requestedAsJob ? "Žiadosť o zákazku" : "Nezáväzná rezervácia") : (requestedAsJob ? "Žiadosť o zákazku" : "Žiadosť o nezáväznú rezerváciu"),
       message: autoApproved
-        ? `Nová nezáväzná rezervácia: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`
-        : `${currentUser?.name || "Obchodník"} žiada o nezáväznú rezerváciu: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Čaká na schválenie.`,
+        ? `Nová ${what}: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.`
+        : `${currentUser?.name || "Obchodník"} žiada o ${what}: stroj ${machine?.code || "—"} (depo ${machine?.depo || "—"}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}.${requestedAsJob ? " Ide o istotu, nie len rezerváciu — stačí premeniť na zákazku." : " Čaká na schválenie."}`,
       link: { module: "poziciovna", view: "calendar", reservationId: record.id },
     });
-    showToast(autoApproved ? "Rezervácia bola vytvorená." : "Žiadosť o rezerváciu bola odoslaná.");
+    showToast(autoApproved ? "Rezervácia bola vytvorená." : requestedAsJob ? "Žiadosť o zákazku bola odoslaná." : "Žiadosť o rezerváciu bola odoslaná.");
     return record;
   }
   function approveReservation(id) {
@@ -4361,7 +4414,10 @@ function DispatcherApp() {
   function handleAttemptCompleteDamage(d) {
     const damageProtocols = protocolLogs.filter((p) => p.damageId === d.id);
     if (damageProtocols.length === 0) {
-      setNoProtocolTarget(d);
+      // Chýbajúci protokol už nie je samostatná medzikroková obrazovka —
+      // ResolveDamageModal si to sám zobrazí ako banner s možnosťou priradiť
+      // protokol priamo tam, formulár na ukončenie je hneď dostupný.
+      setResolveDamageTarget(d);
       return;
     }
     const hasCompleted = damageProtocols.some((p) => p.status === "Dokončené");
@@ -5904,7 +5960,7 @@ function DispatcherApp() {
         onMarkNotificationRead={markNotificationRead}
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
-        onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
+        onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
         onAddReservation={() => setShowAddReservation({})}
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
@@ -5989,7 +6045,7 @@ function DispatcherApp() {
           onSelectModule={setModule}
           onSelectView={setView}
           onPickDocumentsSubView={pickDocumentsSubView}
-          onOpenQuickDamageReport={() => setShowDamageTypePicker(true)}
+          onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
           onAddReservation={() => setShowAddReservation({})}
           onAskDaily={() => setMaskotAskTick((n) => n + 1)}
           onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
@@ -6519,6 +6575,9 @@ function DispatcherApp() {
             onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
             highlightDamageId={highlightDamageId}
             onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
+            ezMeasurements={ezMeasurements}
+            myEmployee={myEmployee}
+            onProcessEzMeasurement={markEzMeasurementProcessed}
           />
         )}
 
@@ -7003,6 +7062,7 @@ function DispatcherApp() {
           onInitialChecklistConsumed={() => setMachineCardChecklistTarget(null)}
           protocolLogs={protocolLogs}
           myEmployee={myEmployee}
+          ezMeasurements={ezMeasurements}
           user={effectiveUser}
           onClose={() => { setMachineCard(null); setCardHistory([]); }}
           onBack={cardHistory.length > 0 ? () => { goBackCard(); setMachineCard(null); } : null}
@@ -7139,19 +7199,6 @@ function DispatcherApp() {
       {showDamageReport && (
         <DamageReportModal machine={showDamageReport} today={today} onClose={() => { setShowDamageReport(null); goBackCard(); }} onSave={(popis, kontakt) => reportDamage(showDamageReport, popis, kontakt)} />
       )}
-      {showDamageTypePicker && (
-        <DamageReportTypePickerModal
-          onClose={() => setShowDamageTypePicker(false)}
-          onChooseOwn={() => {
-            setShowDamageTypePicker(false);
-            setShowQuickDamagePicker(true);
-          }}
-          onChooseExternal={() => {
-            setShowDamageTypePicker(false);
-            setShowExternalReport(true);
-          }}
-        />
-      )}
       {showQuickDamagePicker && (
         <QuickDamagePickerModal
           machines={machines}
@@ -7164,6 +7211,10 @@ function DispatcherApp() {
           onUnknownSerial={() => {
             setShowQuickDamagePicker(false);
             setShowUnknownSerialReport(true);
+          }}
+          onChooseExternal={() => {
+            setShowQuickDamagePicker(false);
+            setShowExternalReport(true);
           }}
         />
       )}
@@ -7331,33 +7382,10 @@ function DispatcherApp() {
         <ResolveDamageModal
           damage={resolveDamageTarget}
           today={today}
+          protocolLogs={protocolLogs}
+          onAssignProtocol={(protocolId) => assignProtocolToDamage(protocolId, resolveDamageTarget.id)}
           onClose={() => setResolveDamageTarget(null)}
           onSave={(stav, date, comment) => resolveDamage(resolveDamageTarget.id, stav, date, comment)}
-        />
-      )}
-      {noProtocolTarget && (
-        <NoProtocolWarningModal
-          damage={noProtocolTarget}
-          protocolLogs={protocolLogs}
-          onClose={() => setNoProtocolTarget(null)}
-          onAssign={(protocolId) => {
-            const picked = protocolLogs.find((p) => p.id === protocolId);
-            assignProtocolToDamage(protocolId, noProtocolTarget.id);
-            setNoProtocolTarget(null);
-            if (picked && picked.status !== "Dokončené") {
-              setConfirmAction({
-                message: `Podľa práve prideleného protokolu servis ešte nie je dokončený (stav: ${picked.status || "—"}). Naozaj chceš zákazku ukončiť?`,
-                confirmLabel: "Napriek tomu ukončiť →",
-                onConfirm: () => setResolveDamageTarget(noProtocolTarget),
-              });
-            } else {
-              setResolveDamageTarget(noProtocolTarget);
-            }
-          }}
-          onContinueWithoutProtocol={() => {
-            setResolveDamageTarget(noProtocolTarget);
-            setNoProtocolTarget(null);
-          }}
         />
       )}
       {confirmUnassignProtocol && (
@@ -7424,6 +7452,14 @@ function DispatcherApp() {
       )}
       {protocolModalData && (
         <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} />
+      )}
+      {ezMeasurementTarget !== undefined && (
+        <EzMeasurementModal
+          machine={ezMeasurementTarget}
+          machines={machines}
+          onClose={() => setEzMeasurementTarget(undefined)}
+          onSave={(data) => { addEzMeasurement(data); setEzMeasurementTarget(undefined); }}
+        />
       )}
       {printProtocolHtml && (
         <PrintProtocolModal html={printProtocolHtml} onClose={() => setPrintProtocolHtml(null)} />
@@ -8900,7 +8936,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, onSelectModul
         key: "vtz",
         label: "Záznam z merania VTZ EZ",
         icon: RAIL_ICON_RULER,
-        href: "https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl",
+        onClick: () => openEzMeasurement(null),
       },
       canDamage && { key: "poskodenie2", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
     ].filter(Boolean),
@@ -9157,15 +9193,10 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
             </button>
           )}
           {can(effectiveUser, "protocol_write") && (
-            <a
-              href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mobile-tech-action-btn"
-            >
+            <button onClick={() => openEzMeasurement(null)} className="mobile-tech-action-btn">
               <span className="mobile-tech-action-icon">📏</span>
               VTZ EZ
-            </a>
+            </button>
           )}
         </div>
       )}
@@ -9236,9 +9267,9 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
           <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
             Vypísať protokol
           </button>
-          <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">
-            Záznam z merania pre VTZ EZ ↗
-          </a>
+          <button className="btn btn-ghost" onClick={() => openEzMeasurement(machine)}>
+            Záznam z merania pre VTZ EZ
+          </button>
         </div>
       )}
     </Modal>
@@ -10707,7 +10738,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
                     </span>
                   )}
                 </td>
-                <td data-label="Rola">{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}</td>
+                <td data-label="Rola">{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}{e.alsoEzTechnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>EZ technik</span>}</td>
                 <td data-label="Depo">{e.depo || "—"}</td>
                 <td data-label="Telefón">{e.phone || "—"}</td>
                 <td data-label="Email">{e.email || "—"}</td>
@@ -10749,6 +10780,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
   const [email, setEmail] = useState(existing?.email || "");
   const [skratka, setSkratka] = useState(existing?.skratka || "");
   const [alsoObchodnik, setAlsoObchodnik] = useState(existing?.alsoObchodnik || false);
+  const [alsoEzTechnik, setAlsoEzTechnik] = useState(existing?.alsoEzTechnik || false);
   const [color, setColor] = useState(existing?.color || "#2563EB");
 
   const canSave = name.trim() && role && depo.trim();
@@ -10777,6 +10809,10 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
           Počítať aj ako obchodníka (objaví sa v zozname obchodníkov pri zákazkách/rezerváciách)
         </label>
       )}
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
+        <input type="checkbox" checked={alsoEzTechnik} onChange={(e) => setAlsoEzTechnik(e.target.checked)} />
+        Revízny technik EZ (vidí a spracúva frontu záznamov z merania VTZ EZ)
+      </label>
       {isSalesperson && (
         <Field label="Farba v kalendári (voliteľné)">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -10799,6 +10835,7 @@ function AddEmployeeModal({ existing, assignableRoles, onClose, onSave }) {
             email: email.trim(),
             skratka: skratka.trim(),
             alsoObchodnik: role === "obchodnik" ? false : alsoObchodnik,
+            alsoEzTechnik,
             color: isSalesperson ? color : (existing?.color || undefined),
           })
         }
@@ -12584,18 +12621,8 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // do posledného riadku, to sa už nesmie dať obísť.
   const checklistComplete = checklist.every((it) => it[statusKey] === "ok" || it[statusKey] === "problem");
   const canSave = checklistComplete && customerSig && driverSig;
-  const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
-
-  function handleSaveClick() {
-    if (isReturnPhase && returnPhotos.length === 0) {
-      setConfirmNoPhotos(true);
-      return;
-    }
-    handleSave();
-  }
 
   function handleSave() {
-    setConfirmNoPhotos(false);
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
     const isFirstHandover = !isReturnPhase && !existing?.handoverDone;
     if (isReturnPhase) {
@@ -12875,6 +12902,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <input type="file" accept="image/*" multiple onChange={(e) => { handleReturnPhotoFiles(e.target.files); e.target.value = ""; }} style={{ marginBottom: 6 }} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
+          {returnPhotos.length === 0 && (
+            <div style={{ fontSize: 12, color: "#b58a00", marginBottom: 6 }}>
+              ⚠️ Bez fotiek stavu stroja — odporúčame pridať, ale nie je to povinné.
+            </div>
+          )}
           <div style={{ marginBottom: 14 }} />
         </>
       )}
@@ -12889,7 +12921,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
       {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button className="btn btn-accent" disabled={!canSave} onClick={handleSaveClick}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
           {isCorrection ? "Uložiť opravu" : isReturnPhase ? "Dokončiť vrátenie" : "Uložiť prevzatie"}
         </button>
         {existing && (
@@ -12904,14 +12936,6 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         )}
       </div>
     </Modal>
-    {confirmNoPhotos && (
-      <ConfirmActionModal
-        message="Chýbajú fotky stavu stroja pri zvoze. Pokračovať v uložení bez fotiek?"
-        confirmLabel="Pokračovať bez fotiek"
-        onClose={() => setConfirmNoPhotos(false)}
-        onConfirm={handleSave}
-      />
-    )}
     </>
   );
 }
@@ -13439,6 +13463,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
   const [expectedEnd, setExpectedEnd] = useState(existing?.expectedEnd || "");
   const [notes, setNotes] = useState(existing?.notes || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
+  const [requestedAsJob, setRequestedAsJob] = useState(existing?.requestedAsJob || false);
 
   const machineOptions = machines.map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}` }));
 
@@ -13551,6 +13576,10 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
         </div>
       )}
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, margin: "0 0 12px" }}>
+        <input type="checkbox" checked={requestedAsJob} onChange={(e) => setRequestedAsJob(e.target.checked)} />
+        Ide o istotu, nie len o vyjednávanie — žiadam rovno o vytvorenie zákazky
+      </label>
       {customer.trim() && (
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "0 0 12px" }}>
           <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
@@ -13572,6 +13601,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             expectedStart,
             expectedEnd: expectedEnd || null,
             notes: notes.trim(),
+            requestedAsJob,
           });
         }}
       >
@@ -13592,11 +13622,16 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   const isPending = r.status === "pending";
   return (
     <Modal
-      eyebrow={isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"}
+      eyebrow={r.requestedAsJob ? "Žiadosť o zákazku" : isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"}
       title={<span style={{ color: "var(--accent)" }}>{machine?.code || "—"}</span>}
       onClose={onClose}
       wide
     >
+      {r.requestedAsJob && (
+        <div style={{ background: "var(--accent-light)", color: "var(--accent)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ✅ Obchodník žiada rovno o zákazku, nie len rezerváciu — netreba čakať, stačí premeniť.
+        </div>
+      )}
       {isPending && (
         <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
           ⏳ Čaká na schválenie — kým ju dispečer alebo vedúci požičovne neschváli, v kalendári sa nezobrazí.
@@ -16299,9 +16334,10 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, assignments, initialChecklistId, onInitialChecklistConsumed, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, assignments, initialChecklistId, onInitialChecklistConsumed, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage, ezMeasurements }) {
   const m = machine;
-  const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "kontroly"
+  const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "kontroly" | "revizieEz"
+  const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
   const [expandedChecklistId, setExpandedChecklistId] = useState(null); // id kontroly, ktorej checklist je práve rozbalený
   const [expandedReturnChecklistId, setExpandedReturnChecklistId] = useState(null); // id kontroly, ktorej checklist "po vrátení" je práve rozbalený
   useEffect(() => {
@@ -16539,7 +16575,41 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             Kontroly stroja ({machineInspections.length})
           </button>
         )}
+        <button
+          className="btn"
+          onClick={() => setExpandedSection(expandedSection === "revizieEz" ? null : "revizieEz")}
+          style={{
+            background: expandedSection === "revizieEz" ? "var(--accent-light)" : "transparent",
+            color: expandedSection === "revizieEz" ? "var(--accent)" : "var(--text)",
+            border: "1px solid " + (expandedSection === "revizieEz" ? "var(--accent)" : "var(--border)"),
+            borderRadius: 6,
+          }}
+        >
+          Revízie ({machineEzMeasurements.length})
+        </button>
       </div>
+
+      {expandedSection === "revizieEz" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <a href={DOCUMENT_SUBTABS.poziciovna[2].url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+            Platné revízie (SharePoint) ↗
+          </a>
+          {machineEzMeasurements.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Žiadne spracované meranie VTZ EZ pre tento stroj.</div>
+          ) : (
+            machineEzMeasurements.map((meas) => (
+              <div key={meas.id} className="panel" style={{ padding: 10 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
+                  {fmtDate(meas.date)} · {meas.processed ? `spracoval ${meas.processedBy || "—"}` : "čaká na spracovanie"}
+                </div>
+                {meas.photoUrl && (
+                  <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, cursor: "pointer", border: "1px solid var(--border)" }} />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {expandedSection === "kontroly" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -16802,34 +16872,10 @@ function CardField({ label, value, danger, dotColor }) {
 --------------------------------------------------------- */
 // Rýchle nahlásenie poškodenia z mobilnej lišty technika — na rozdiel od
 // bežného nahlásenia (z karty stroja) tu nie je čo predvyplniť, technik si
-// najprv sám vyhľadá a vyberie stroj.
-// Prvý, spoločný krok (mobil aj PC) — nech používateľ nemusí pri jednom
-// nahlásení riešiť viacero tlačidiel naraz, len si vyberie jednu z dvoch
-// jasných možností, a podľa toho sa otvorí ten správny formulár.
-function DamageReportTypePickerModal({ onClose, onChooseOwn, onChooseExternal }) {
-  return (
-    <Modal title="Nahlásiť poškodenie / zákazku" onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <button
-          className="btn btn-accent"
-          style={{ padding: "16px 14px", fontSize: 15, textAlign: "left" }}
-          onClick={onChooseOwn}
-        >
-          📋 Náš stroj (z požičovne)
-        </button>
-        <button
-          className="btn btn-ghost"
-          style={{ padding: "16px 14px", fontSize: 15, textAlign: "left", border: "1px solid var(--border)" }}
-          onClick={onChooseExternal}
-        >
-          🌍 Cudzí stroj (externá zákazka)
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) {
+// najprv sám vyhľadá a vyberie stroj. Voľba "náš/cudzí stroj" je teraz priamo
+// súčasťou QuickDamagePickerModal (link "Ide o cudzí stroj →"), netreba pre
+// ňu samostatnú medzikrokovú obrazovku navyše.
+function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, onChooseExternal }) {
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [showList, setShowList] = useState(false);
@@ -16843,11 +16889,21 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial }) 
       {onUnknownSerial && (
         <button
           className="btn btn-ghost"
-          style={{ width: "100%", marginBottom: 14, color: "var(--danger)" }}
+          style={{ width: "100%", marginBottom: 8, color: "var(--danger)" }}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onUnknownSerial}
         >
           Nepoznám sériové číslo →
+        </button>
+      )}
+      {onChooseExternal && (
+        <button
+          className="btn btn-ghost"
+          style={{ width: "100%", marginBottom: 14, border: "1px solid var(--border)" }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onChooseExternal}
+        >
+          🌍 Ide o cudzí stroj (externá zákazka) →
         </button>
       )}
       <Field label="Sériové číslo alebo model stroja *">
@@ -17594,15 +17650,13 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
             </button>
           )}
           {onProtocol && can(user, "protocol_write") && (
-            <a
-              href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
               className="btn btn-ghost"
               style={{ fontSize: 11, padding: "5px 10px" }}
+              onClick={() => openEzMeasurement({ id: d.machineId, code: d.code, type: d.model })}
             >
-              Záznam z merania VTZ EZ ↗
-            </a>
+              Záznam z merania VTZ EZ
+            </button>
           )}
           <KebabMenu
             actions={[
@@ -18206,10 +18260,180 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
   );
 }
 
+// Merania sú pri všetkých strojoch rovnaké (potvrdené), len nie každý stroj má
+// nabíjačku/zásuvku — odtiaľ skipNabijacka/skipZasuvka nižšie v EzMeasurementModal.
+const EZ_NABIJACKA_FIELDS = [
+  ["rpe", "Odpor ochranného vodiča Rpe nabíjačky"],
+  ["riso", "Izolačný odpor - Riso nabíjačky"],
+  ["unik", "Náhradný únikový prúd nabíjačky"],
+  ["rozdiel", "Rozdielový prúd nabíjačky"],
+  ["dotyk", "Dotykový prúd nabíjačky"],
+];
+const EZ_ZASUVKA_FIELDS = [
+  ["rpe", "Odpor ochranného vodiča Rpe zásuvky"],
+  ["riso", "Izolačný odpor - Riso zásuvky"],
+  ["rcdi", "Vypínací prúd prúdového chrániča RCDI zásuvky"],
+  ["rcdt", "Vypínací čas prúdového chrániča RCDt zásuvky"],
+  ["uc", "Dotykové napätie Uc zásuvky"],
+  ["uf", "Fázové napätie Uf zásuvky"],
+];
+
+// Náhrada externého formulára (forms.office.com) — jeden scrollovací formulár
+// (rovnaký princíp ako ostatné formuláre v appke, napr. AddReservationModal),
+// nie pôvodný 4-obrazovkový wizard. Keď appka pozná stroj z kontextu (karta
+// zákazky, plán servisu), preskočí sa výber stroja a "Typ plošiny" sa vezme
+// rovno z neho.
+function EzMeasurementModal({ machine, machines, onClose, onSave }) {
+  const [text, setText] = useState(machine?.code || "");
+  const [selectedId, setSelectedId] = useState(machine?.id || "");
+  const [showList, setShowList] = useState(false);
+  const options = (machines || []).filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const q = text.trim().toLowerCase();
+  const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
+  const selectedMachine = machine || options.find((m) => m.id === selectedId);
+
+  const [date, setDate] = useState(todayISO());
+  const [motohodiny, setMotohodiny] = useState("");
+  const [skipNabijacka, setSkipNabijacka] = useState(false);
+  const [skipZasuvka, setSkipZasuvka] = useState(false);
+  const [nabijacka, setNabijacka] = useState({});
+  const [zasuvka, setZasuvka] = useState({});
+  const [note, setNote] = useState("");
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function handlePhotoFile(file) {
+    if (!file) return;
+    setUploadError("");
+    setUploading(true);
+    try {
+      const blob = await compressImageToBlob(file);
+      const path = `${photoFolder(selectedMachine, null)}/ez_${uid()}.jpg`;
+      try {
+        const { error } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
+        if (error) throw error;
+        const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
+        setPhotoUrl(pub.publicUrl);
+      } catch (e) {
+        console.error("Nahranie fotky výrobného štítku zlyhalo (asi offline), ukladá sa ako dátová URL:", e);
+        setPhotoUrl(await blobToDataUrl(blob));
+      }
+    } catch (e) {
+      console.error("Spracovanie fotky zlyhalo", e);
+      setUploadError("Nahranie fotky zlyhalo, skúste to znova.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const canSave = selectedMachine && date && photoUrl && !uploading;
+
+  return (
+    <Modal title="Záznam z merania VTZ EZ" onClose={onClose}>
+      {!machine && (
+        <Field label="Typ plošiny a sériové číslo *">
+          <div style={{ position: "relative" }}>
+            <input
+              value={text}
+              onChange={(e) => { setText(e.target.value); setSelectedId(""); setShowList(true); }}
+              onFocus={() => setShowList(true)}
+              onBlur={() => setShowList(false)}
+              placeholder="Píš sériové číslo alebo model..."
+              style={{ width: "100%" }}
+              autoFocus
+            />
+            {showList && (
+              <div className="panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+                {filtered.length === 0 ? (
+                  <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
+                ) : (
+                  filtered.slice(0, 50).map((m) => (
+                    <div
+                      key={m.id}
+                      onClick={() => { setSelectedId(m.id); setText(m.code || ""); setShowList(false); }}
+                      style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <strong>{m.code}</strong>
+                      <span style={{ color: "var(--text-dim)" }}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </Field>
+      )}
+      {selectedMachine && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+          {selectedMachine.code}{selectedMachine.type ? ` · ${selectedMachine.type}` : ""}
+        </div>
+      )}
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label="Dátum merania *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Motohodiny"><input value={motohodiny} onChange={(e) => setMotohodiny(e.target.value)} style={{ width: "100%" }} /></Field>
+      </div>
+
+      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Nabíjačka</div>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+        <input type="checkbox" checked={skipNabijacka} onChange={(e) => setSkipNabijacka(e.target.checked)} />
+        Stroj nemá nabíjačku — vynechať
+      </label>
+      {!skipNabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
+        <Field key={key} label={label}>
+          <input value={nabijacka[key] || ""} onChange={(e) => setNabijacka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
+        </Field>
+      ))}
+
+      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Zásuvka</div>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+        <input type="checkbox" checked={skipZasuvka} onChange={(e) => setSkipZasuvka(e.target.checked)} />
+        Stroj nemá zásuvku — vynechať
+      </label>
+      {!skipZasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
+        <Field key={key} label={label}>
+          <input value={zasuvka[key] || ""} onChange={(e) => setZasuvka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
+        </Field>
+      ))}
+
+      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Prílohy</div>
+      <Field label="Foto výrobného štítku *">
+        <input type="file" accept="image/*" onChange={(e) => handlePhotoFile(e.target.files?.[0])} />
+        {uploading && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Nahrávam fotku…</div>}
+        {photoUrl && !uploading && <img src={photoUrl} alt="Výrobný štítok" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 4, marginTop: 6, border: "1px solid var(--border)" }} />}
+        {uploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{uploadError}</div>}
+      </Field>
+      <Field label="Poznámka technika"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
+
+      <button
+        className="btn btn-accent"
+        disabled={!canSave}
+        onClick={() =>
+          onSave({
+            machineId: selectedMachine?.id || null,
+            machineCode: selectedMachine?.code || text.trim(),
+            date,
+            motohodiny: motohodiny.trim(),
+            skipNabijacka,
+            skipZasuvka,
+            nabijacka: skipNabijacka ? null : nabijacka,
+            zasuvka: skipZasuvka ? null : zasuvka,
+            photoUrl,
+            note: note.trim(),
+          })
+        }
+      >
+        Uložiť záznam
+      </button>
+    </Modal>
+  );
+}
+
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId, ezMeasurements, myEmployee, onProcessEzMeasurement }) {
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
@@ -18273,9 +18497,58 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const soon = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.revizia || "") < (b.revizia || "") ? -1 : 1));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+  const isEzTechnik = !!myEmployee?.alsoEzTechnik;
+  const pendingEz = (ezMeasurements || []).filter((m) => !m.processed);
+  const [expandedEzId, setExpandedEzId] = useState(null);
 
   return (
     <div>
+      {isEzTechnik && (
+        <div className="panel" style={{ padding: 12, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+            Fronta na spracovanie — merania VTZ EZ ({pendingEz.length})
+          </div>
+          {pendingEz.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Žiadne nespracované záznamy.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pendingEz.map((meas) => (
+                <div key={meas.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ fontSize: 13 }}>
+                      <strong>{meas.machineCode || "—"}</strong>{" "}
+                      <span style={{ color: "var(--text-dim)" }}>· {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedEzId(expandedEzId === meas.id ? null : meas.id)}>
+                        {expandedEzId === meas.id ? "Skryť" : "Detail"}
+                      </button>
+                      <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onProcessEzMeasurement && onProcessEzMeasurement(meas.id)}>
+                        Spracované
+                      </button>
+                    </div>
+                  </div>
+                  {expandedEzId === meas.id && (
+                    <div style={{ marginTop: 8, fontSize: 12 }}>
+                      {meas.motohodiny && <div>Motohodiny: {meas.motohodiny}</div>}
+                      {!meas.skipNabijacka && meas.nabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
+                        meas.nabijacka[key] ? <div key={key}>{label}: {meas.nabijacka[key]}</div> : null
+                      ))}
+                      {!meas.skipZasuvka && meas.zasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
+                        meas.zasuvka[key] ? <div key={key}>{label}: {meas.zasuvka[key]}</div> : null
+                      ))}
+                      {meas.note && <div style={{ marginTop: 6 }}>Poznámka: {meas.note}</div>}
+                      {meas.photoUrl && (
+                        <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4, marginTop: 6, cursor: "pointer", border: "1px solid var(--border)" }} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div style={{ flex: 1 }} />
@@ -19183,7 +19456,7 @@ function CompleteUradnaSkuskaModal({ damage, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Resolve damage modal (Označiť ako vyriešené — dátum opravy + komentár)
 --------------------------------------------------------- */
-function ResolveDamageModal({ damage, today, onClose, onSave }) {
+function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onClose, onSave }) {
   const options = [
     { id: "opravene", label: "Opravené" },
     { id: "dalsi_zasah", label: "Potrebný ďalší servisný zásah" },
@@ -19194,9 +19467,53 @@ function ResolveDamageModal({ damage, today, onClose, onSave }) {
   const [date, setDate] = useState(damage.opravaDatum || today);
   const [comment, setComment] = useState(damage.opravaKomentar || "");
   const canSave = stav && date && comment.trim();
+  // Banner namiesto samostatnej medzikrokovej obrazovky (NoProtocolWarningModal) —
+  // ak zákazka nemá priradený protokol, ukáže sa to rovno tu s možnosťou ho
+  // priradiť, formulár na ukončenie je hneď prístupný, netreba klikať cez ďalšie okno.
+  const hasProtocol = (protocolLogs || []).some((p) => p.damageId === damage.id);
+  const [showPicker, setShowPicker] = useState(false);
+  const availableProtocols = (protocolLogs || []).filter(
+    (p) => p.machineId === damage.machineId && !p.damageId && !p.assignmentId
+  );
   return (
     <Modal eyebrow="Upraviť stav zákazky" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+      {!hasProtocol && onAssignProtocol && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14, fontWeight: 600 }}>
+          ⚠️ Zákazka nemá priradený servisný protokol.{" "}
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 4 }} onClick={() => setShowPicker((v) => !v)}>
+            📋 Prideliť protokol{availableProtocols.length ? ` (${availableProtocols.length})` : ""}
+          </button>
+        </div>
+      )}
+      {showPicker && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {availableProtocols.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
+          ) : (
+            availableProtocols.map((p) => (
+              <button
+                key={p.id}
+                className="panel"
+                style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
+                onClick={() => { onAssignProtocol(p.id); setShowPicker(false); }}
+              >
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
+                )}
+                <div style={{ fontSize: 12, color: "var(--text)" }}>
+                  <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
+                  <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {p.workDescription || "— bez popisu vykonanej práce —"}
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
       <Field label="Stav *">
         <select value={stav} onChange={(e) => setStav(e.target.value)} style={{ width: "100%" }}>
           {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -19211,69 +19528,6 @@ function ResolveDamageModal({ damage, today, onClose, onSave }) {
       <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim())}>
         Uložiť
       </button>
-    </Modal>
-  );
-}
-
-// Zobrazí sa PRED ResolveDamageModal, keď dispečer chce ukončiť zákazku (poškodenie/
-// externá), ku ktorej ešte nie je priradený žiadny servisný protokol. Ponúkne buď
-// dohľadanie a priradenie nepriradeného protokolu (z karty stroja), alebo pokračovanie
-// bez protokolu — vtedy dôvod ukončenia zadá dispečer do poľa "Čo sa zistilo / vykonalo"
-// v nasledujúcom kroku (napr. vyriešené telefonicky).
-function NoProtocolWarningModal({ damage, protocolLogs, onClose, onAssign, onContinueWithoutProtocol }) {
-  const [showPicker, setShowPicker] = useState(false);
-  const available = (protocolLogs || []).filter(
-    (p) => p.machineId === damage.machineId && !p.damageId && !p.assignmentId
-  );
-  if (showPicker) {
-    return (
-      <Modal eyebrow="Prideliť protokol" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose} onBack={() => setShowPicker(false)}>
-        {available.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-            Pre tento stroj nie sú žiadne nepriradené protokoly.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {available.map((p) => (
-              <button
-                key={p.id}
-                className="panel"
-                style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
-                onClick={() => onAssign(p.id)}
-              >
-                {p.imageUrl ? (
-                  <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
-                )}
-                <div style={{ fontSize: 12, color: "var(--text)" }}>
-                  <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
-                  <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                    {p.workDescription || "— bez popisu vykonanej práce —"}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </Modal>
-    );
-  }
-  return (
-    <Modal eyebrow="Zákazka nemá vypísaný protokol" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
-      <div style={{ fontSize: 13, marginBottom: 16 }}>
-        K tejto zákazke zatiaľ nie je priradený žiadny servisný protokol. Skôr než ju ukončíte, buď jej pridelíte
-        existujúci protokol z ostatných protokolov na karte stroja, alebo zadáte iný dôvod ukončenia
-        (napr. vyriešené telefonicky).
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <button className="btn btn-accent" onClick={() => setShowPicker(true)}>
-          📋 Prideliť protokol z ostatných protokolov{available.length ? ` (${available.length})` : ""}
-        </button>
-        <button className="btn btn-ghost" onClick={onContinueWithoutProtocol}>
-          Zadať iný dôvod →
-        </button>
-      </div>
     </Modal>
   );
 }
@@ -20325,9 +20579,9 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   )}
                   {!a.kind && can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
                   {!a.kind && can(user, "protocol_write") && (
-                    <a href="https://forms.office.com/pages/responsepage.aspx?id=VyzKKthAIk-gD59zTsx8S-jjeV0bGbNLnmZKwCQmWAtUOTQwMTU4SFdBNlJXREtXN1haWjQxU0YwSi4u&route=shorturl" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }}>
-                      Meranie VTZ EZ ↗
-                    </a>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openEzMeasurement(machine)}>
+                      Meranie VTZ EZ
+                    </button>
                   )}
                   {can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(a.id)}>Zmazať</button>}
                 </div>
