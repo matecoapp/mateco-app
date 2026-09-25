@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.613";
+const APP_VERSION = "1.0.615";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -10064,12 +10064,24 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   // dispečera/vedúceho (žiadny iný SELECT) — šofér preto svoje vlastné
   // priradenia číta cez samostatnú RPC funkciu (get_my_transport_notes,
   // security definer — viď step46), nie z bežného React stavu.
-  const isDriverRole = myEmployee && (myEmployee.role === "sofer" || myEmployee.role === "externy_sofer");
+  // Rola sa overuje podľa profilu (user.role) — presne ako pri existujúcom
+  // toku so zákazkami (isMyselfSofer nižšie), NIE podľa employees.role (to sa
+  // môže od profilu líšiť). Aj tak je to len kozmetické — samotné RPC si
+  // správneho šoféra overí samo cez linkedUserId, nezávisle od tejto property.
+  const isDriverRole = user?.role === "sofer" || user?.role === "externy_sofer";
   const [myTransportNotes, setMyTransportNotes] = useState([]);
+  // DOČASNÉ: viditeľná chybová hláška namiesto len console.error, nech sa dá
+  // ladiť aj na mobile bez DevTools — odstrániť, keď sa potvrdí, že to funguje.
+  const [myTransportNotesDebug, setMyTransportNotesDebug] = useState("");
   const refetchMyTransportNotes = useCallback(async () => {
-    if (!isDriverRole) { setMyTransportNotes([]); return; }
+    if (!user) { setMyTransportNotes([]); return; }
     const { data, error } = await supabase.rpc("get_my_transport_notes");
-    if (error) { console.error("get_my_transport_notes zlyhalo", error); return; }
+    if (error) {
+      console.error("get_my_transport_notes zlyhalo", error);
+      setMyTransportNotesDebug(`RPC chyba: ${error.message || JSON.stringify(error)}`);
+      return;
+    }
+    setMyTransportNotesDebug(`RPC OK, vrátilo ${(data || []).length} záznamov`);
     setMyTransportNotes((data || []).map((row) => ({ ...row.data, id: row.id })));
   }, [isDriverRole]);
   useEffect(() => { refetchMyTransportNotes(); }, [refetchMyTransportNotes]);
@@ -10358,6 +10370,11 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
 
   return (
     <div>
+      {isDriverRole && (
+        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 10, padding: "4px 8px", background: "var(--panel-2)", borderRadius: 4, display: "inline-block" }}>
+          🔧 debug: {myTransportNotesDebug || "načítavam…"}
+        </div>
+      )}
       {myTransportNotes.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
