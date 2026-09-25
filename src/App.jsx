@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.605";
+const APP_VERSION = "1.0.606";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -158,6 +158,9 @@ const PERM = {
 
   // Požičovňa — zákazky
   job_add: ["veduci_pozicovne", "dispecer_pozicovne"],
+  // Interná poznámka o prevoze stroja medzi depami — zámerne prísne SÚKROMNÁ
+  // (aj RLS v DB, nielen appka), obchodník ani nikto iný ju nesmie vidieť.
+  machine_transport_note: ["veduci_pozicovne", "dispecer_pozicovne"],
   job_import_csv: [],
   job_clear_all: [],
   customer_add: ["obchodnik", "dispecer_pozicovne", "dispecer_servisu", "veduci_pozicovne", "veduci_servisu"],
@@ -2578,6 +2581,12 @@ function DispatcherApp() {
   // miesto bokom, nikde inde sa netreba starať o filtrovanie zmazaného.
   const [trash, setTrash] = useState([]);
   const [weeklyDuty, setWeeklyDuty] = useState([]); // { id, technicianId, weekStart, weekEnd } — "Služba na telefóne"
+  // { id, machineId, date, targetDepo, note, confirmed, confirmedAt, confirmedBy, createdBy, createdAt }
+  // — súkromná poznámka dispečera/vedúceho požičovne o plánovanom prevoze
+  // stroja medzi depami. Samotné vytvorenie stroj ešte NEPRESUNIE — až
+  // explicitné potvrdenie (kvôli ochrane pred missclickom) zapíše nové
+  // machine.depo. Viditeľnosť je zámerne aj v DB (RLS), nielen v appke.
+  const [transportNotes, setTransportNotes] = useState([]);
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
@@ -2833,11 +2842,12 @@ function DispatcherApp() {
       setMachineModels([]);
       setSpareParts([]);
       setTrash([]);
+      setTransportNotes([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes] = await Promise.all([
         loadRecordTable("machines"),
         loadRecordTable("jobs"),
         loadRecordTable("assignments"),
@@ -2859,6 +2869,7 @@ function DispatcherApp() {
         loadRecordTable("trash"),
         loadRecordTable("vehicles"),
         loadRecordTable("portal_requests"),
+        loadRecordTable("transportNotes"),
       ]);
       setMachines(m);
       setVehicles(veh);
@@ -2880,6 +2891,7 @@ function DispatcherApp() {
       setMachineModels(mmodels);
       setSpareParts(sprts);
       setTrash(trsh);
+      setTransportNotes(tnotes);
 
       setEmployees(emp);
       setLoaded(true);
@@ -2935,6 +2947,7 @@ function DispatcherApp() {
       ["machineModels", setMachineModels],
       ["spareParts", setSpareParts],
       ["trash", setTrash],
+      ["transportNotes", setTransportNotes],
     ];
     const channels = tables.map(([table, setState]) =>
       supabase
@@ -3396,6 +3409,7 @@ function DispatcherApp() {
   const persistAssignments = useCallback(makeRecordPersist("assignments", setAssignments), []);
   const persistDamages = useCallback(makeRecordPersist("damages", setDamages), []);
   const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
+  const persistTransportNotes = useCallback(makeRecordPersist("transportNotes", setTransportNotes), []);
   // Presunie záznam do koša (namiesto toho, aby zmizol bez stopy) — appka ho
   // sem skopíruje TESNE PRED tým, než ho naozaj odstráni z jeho pôvodného
   // zoznamu. "record" je celý pôvodný objekt (nie len ID), nech sa dá neskôr
@@ -5248,6 +5262,38 @@ function DispatcherApp() {
   function updateMachine(id, patch) {
     persistMachines(machines.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   }
+  // Súkromná poznámka "Prevoz" v kalendári (dispečer/vedúci požičovne) —
+  // vytvorenie ešte NEPRESUNIE stroj, len si to poznačí (viď addTransportNote).
+  function addTransportNote(machineId, date, targetDepo, note) {
+    const item = {
+      id: uid(),
+      machineId,
+      date,
+      targetDepo,
+      note: note || "",
+      confirmed: false,
+      confirmedAt: null,
+      confirmedBy: null,
+      createdBy: currentUser?.name || "",
+      createdAt: new Date().toISOString(),
+    };
+    persistTransportNotes([...transportNotes, item]);
+  }
+  function deleteTransportNote(id) {
+    persistTransportNotes(transportNotes.filter((t) => t.id !== id));
+  }
+  // Skutočné potvrdenie prevozu — až TERAZ sa reálne prehodí depo stroja,
+  // samotné vytvorenie poznámky vyššie to nerobí (ochrana pred missclickom).
+  function confirmTransportNote(id) {
+    const note = transportNotes.find((t) => t.id === id);
+    if (!note) return;
+    updateMachine(note.machineId, { depo: note.targetDepo });
+    persistTransportNotes(
+      transportNotes.map((t) =>
+        t.id === id ? { ...t, confirmed: true, confirmedAt: new Date().toISOString(), confirmedBy: currentUser?.name || "" } : t
+      )
+    );
+  }
   function saveMachineModal(data, prepareForRental) {
     if (data.objekt === "Požičovňový stroj" && data.type) ensureMachineModel(data.type);
     if (showAddMachine?.existing) {
@@ -6051,6 +6097,10 @@ function DispatcherApp() {
             onAddJob={can(effectiveUser, "job_add") ? (machineId, startDate) => setShowAddJob({ machineId, startDate }) : undefined}
             onUpdateJob={updateJob}
             onUpdateReservation={updateReservation}
+            transportNotes={transportNotes}
+            onAddTransportNote={addTransportNote}
+            onConfirmTransportNote={confirmTransportNote}
+            onDeleteTransportNote={deleteTransportNote}
           />
         )}
 
@@ -14635,6 +14685,80 @@ function GanttDragConfirmModal({ pending, onConfirm, onCancel }) {
   );
 }
 
+// Založenie súkromnej poznámky "Prevoz" (dispečer/vedúci požičovne) — toto
+// ešte nič nepresúva, len si to poznačí (viď TransportNoteDetailModal nižšie,
+// kde je samotné potvrdenie presunu).
+function TransportNoteModal({ machine, date, onClose, onSave }) {
+  const [targetDepo, setTargetDepo] = useState("");
+  const [note, setNote] = useState("Prevoz");
+  return (
+    <Modal title="Nová poznámka: Prevoz" onClose={onClose}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        {machine?.code} · {fmtDate(date)} · súčasné depo {machine?.depo || "—"}
+      </div>
+      <Field label="Cieľové depo">
+        <select value={targetDepo} onChange={(e) => setTargetDepo(e.target.value)} style={{ width: "100%" }}>
+          <option value="">— vybrať depo —</option>
+          {DEPO_OPTIONS.filter((d) => d !== machine?.depo).map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Poznámka">
+        <input value={note} onChange={(e) => setNote(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "10px 0" }}>
+        Toto stroj ešte nepresunie — len si to poznačí. Depo sa reálne zmení až po samostatnom potvrdení.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+        <button className="btn btn-accent" disabled={!targetDepo} onClick={() => onSave(targetDepo, note)}>Uložiť poznámku</button>
+      </div>
+    </Modal>
+  );
+}
+
+// Detail existujúcej poznámky "Prevoz" — potvrdenie (s druhým, výslovným
+// krokom kvôli ochrane pred missclickom) skutočne zapíše nové depo stroja.
+function TransportNoteDetailModal({ note, machine, onClose, onConfirm, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <Modal title="🚚 Prevoz stroja" onClose={onClose}>
+      <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{machine?.code}</strong> · {fmtDate(note.date)}</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
+        Súčasné depo: {machine?.depo || "—"} → Cieľové depo: <strong>{note.targetDepo}</strong>
+      </div>
+      {note.note && <div style={{ fontSize: 13, marginBottom: 10 }}>📝 {note.note}</div>}
+      {note.confirmed ? (
+        <div style={{ fontSize: 13, color: "var(--ok)", marginBottom: 4 }}>
+          ✓ Prevoz potvrdený{note.confirmedBy ? ` — ${note.confirmedBy}` : ""}{note.confirmedAt ? `, ${fmtDate(note.confirmedAt.slice(0, 10))}` : ""}
+        </div>
+      ) : confirming ? (
+        <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 4, fontWeight: 600 }}>
+          Naozaj presunúť stroj {machine?.code} do depa {note.targetDepo}? Toto reálne zmení depo stroja.
+        </div>
+      ) : null}
+      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
+        {!note.confirmed && !confirming && (
+          <>
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDelete}>Zmazať poznámku</button>
+            <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={() => setConfirming(true)}>Potvrdiť prevezenie</button>
+          </>
+        )}
+        {!note.confirmed && confirming && (
+          <>
+            <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Späť</button>
+            <button className="btn btn-accent" style={{ marginLeft: "auto", background: "var(--danger)", borderColor: "var(--danger)" }} onClick={onConfirm}>
+              Áno, presunúť stroj
+            </button>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 const CalendarGrid = React.memo(function CalendarGrid({
   scrollContainerRef,
   handleCalendarScroll,
@@ -14651,6 +14775,10 @@ const CalendarGrid = React.memo(function CalendarGrid({
   jobsByMachine,
   onOpenCard,
   onAddJob,
+  onCellClick,
+  transportNotesByMachine,
+  canTransportNote,
+  onOpenTransportDetail,
   reservationsByMachine,
   colForDate,
   measureBarRef,
@@ -15053,12 +15181,32 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 const transportJob = mJobs.find(
                   (j) => (j.departureDate === iso && j.departureDate !== j.startDate) || (j.pickupDate === iso && j.pickupDate !== j.endDate)
                 );
+                // Súkromná poznámka "Prevoz" — len pre dispečera/vedúceho
+                // požičovne (canTransportNote), inak sa map ani nenapočíta
+                // (viď transportNotesByMachine v CalendarView vyššie).
+                const transportNote = canTransportNote ? transportNotesByMachine[m.id]?.[iso] : null;
+                const clickHandler = transportJob
+                  ? () => onOpenJob(transportJob)
+                  : transportNote
+                  ? () => onOpenTransportDetail(transportNote)
+                  : onCellClick
+                  ? () => onCellClick(m.id, iso)
+                  : undefined;
                 return (
                   <div
                     key={`bg-${iso}`}
-                    onClick={transportJob ? () => onOpenJob(transportJob) : onAddJob ? () => onAddJob(m.id, iso) : undefined}
-                    title={transportJob ? "Otvoriť zákazku (návoz/zvoz na tento deň)" : onAddJob ? "Vytvoriť zákazku na tento deň" : undefined}
+                    onClick={clickHandler}
+                    title={
+                      transportJob
+                        ? "Otvoriť zákazku (návoz/zvoz na tento deň)"
+                        : transportNote
+                        ? `🚚 Prevoz → ${transportNote.targetDepo}${transportNote.confirmed ? " (potvrdené)" : ""}`
+                        : onCellClick
+                        ? "Vytvoriť zákazku na tento deň"
+                        : undefined
+                    }
                     style={{
+                      position: "relative",
                       gridColumn: i + 2,
                       gridRow: 1,
                       alignSelf: "stretch",
@@ -15066,9 +15214,22 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       borderRight: "1px solid var(--border)",
                       boxSizing: "border-box",
                       background: isWeekend ? "var(--warn-bg)" : "transparent",
-                      cursor: transportJob || onAddJob ? "pointer" : "default",
+                      cursor: clickHandler ? "pointer" : "default",
                     }}
-                  />
+                  >
+                    {transportNote && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 2,
+                          borderRadius: 3,
+                          background: transportNote.confirmed ? "var(--ok)" : "var(--warn, #b07e00)",
+                          opacity: transportNote.confirmed ? 0.35 : 0.55,
+                          outline: transportNote.confirmed ? "none" : "1px dashed var(--warn, #b07e00)",
+                        }}
+                      />
+                    )}
+                  </div>
                 );
               })}
               {mJobs.map((j) => {
@@ -15337,7 +15498,27 @@ const CalendarGrid = React.memo(function CalendarGrid({
   );
 });
 
-function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation }) {
+function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation, transportNotes, onAddTransportNote, onConfirmTransportNote, onDeleteTransportNote }) {
+  // "Prevoz" — súkromná poznámka dispečera/vedúceho požičovne o plánovanom
+  // presune stroja medzi depami, viditeľná len tejto dvojici rolí (aj v DB).
+  const canTransportNote = can(user, "machine_transport_note");
+  const transportNotesByMachine = useMemo(() => {
+    if (!canTransportNote) return {};
+    const map = {};
+    transportNotes.forEach((t) => {
+      (map[t.machineId] = map[t.machineId] || {})[t.date] = t;
+    });
+    return map;
+  }, [transportNotes, canTransportNote]);
+  const [cellChoice, setCellChoice] = useState(null); // { machineId, date } — klik na prázdnu bunku, keď má rola obe možnosti
+  const [newTransport, setNewTransport] = useState(null); // { machineId, date } — formulár na založenie poznámky
+  const [transportDetail, setTransportDetail] = useState(null); // existujúca poznámka — potvrdiť/zmazať
+  function handleCellClick(machineId, date) {
+    const hasJob = !!onAddJob;
+    if (hasJob && canTransportNote) setCellChoice({ machineId, date });
+    else if (canTransportNote) setNewTransport({ machineId, date });
+    else if (hasJob) onAddJob(machineId, date);
+  }
   // Fullscreen gantt — namiesto pevných "65vh" (zbytočná prázdna plocha pod
   // tabuľkou na vyšších oknách) sa výška dopočíta na zvyšok viditeľnej
   // obrazovky od miesta, kde kalendár začína, nech vyplní čo najviac.
@@ -15722,6 +15903,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   }, [monthOffset]);
 
   return (
+    <>
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: availH ? `${availH}px` : undefined }}>
       <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -15822,6 +16004,10 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             jobsByMachine={jobsByMachine}
             onOpenCard={onOpenCard}
             onAddJob={onAddJob}
+            onCellClick={onAddJob || canTransportNote ? handleCellClick : undefined}
+            transportNotesByMachine={transportNotesByMachine}
+            canTransportNote={canTransportNote}
+            onOpenTransportDetail={(note) => setTransportDetail(note)}
             reservationsByMachine={reservationsByMachine}
             colForDate={colForDate}
             measureBarRef={measureBarRef}
@@ -15851,6 +16037,42 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         ))}
       </div>
     </div>
+    {cellChoice && (
+      <Modal title="Čo chceš vytvoriť?" onClose={() => setCellChoice(null)}>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+          {machines.find((m) => m.id === cellChoice.machineId)?.code} · {fmtDate(cellChoice.date)}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn btn-accent" style={{ flex: 1 }} onClick={() => { const c = cellChoice; setCellChoice(null); onAddJob(c.machineId, c.date); }}>
+            Zákazka
+          </button>
+          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { const c = cellChoice; setCellChoice(null); setNewTransport(c); }}>
+            🚚 Prevoz
+          </button>
+        </div>
+      </Modal>
+    )}
+    {newTransport && (
+      <TransportNoteModal
+        machine={machines.find((m) => m.id === newTransport.machineId)}
+        date={newTransport.date}
+        onClose={() => setNewTransport(null)}
+        onSave={(targetDepo, note) => {
+          onAddTransportNote(newTransport.machineId, newTransport.date, targetDepo, note);
+          setNewTransport(null);
+        }}
+      />
+    )}
+    {transportDetail && (
+      <TransportNoteDetailModal
+        note={transportDetail}
+        machine={machines.find((m) => m.id === transportDetail.machineId)}
+        onClose={() => setTransportDetail(null)}
+        onConfirm={() => { onConfirmTransportNote(transportDetail.id); setTransportDetail(null); }}
+        onDelete={() => { onDeleteTransportNote(transportDetail.id); setTransportDetail(null); }}
+      />
+    )}
+    </>
   );
 }
 
