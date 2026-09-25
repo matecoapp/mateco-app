@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.612";
+const APP_VERSION = "1.0.613";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5308,26 +5308,11 @@ function DispatcherApp() {
   function deleteTransportNote(id) {
     persistTransportNotes(transportNotes.filter((t) => t.id !== id));
   }
-  // Šofér potvrdzuje, že stroj skutočne previezol — ešte NEPRESUNIE depo (to
-  // až dispečer/vedúci v kalendári, viď confirmTransportNote nižšie), len
-  // upozorní ich, že môžu prevoz uzavrieť.
-  function markTransportNoteDriverDone(id) {
-    const note = transportNotes.find((t) => t.id === id);
-    if (!note) return;
-    persistTransportNotes(
-      transportNotes.map((t) =>
-        t.id === id ? { ...t, driverDone: true, driverDoneAt: new Date().toISOString(), driverDoneBy: currentUser?.name || "" } : t
-      )
-    );
-    const machine = machineById[note.machineId];
-    pushNotification({
-      roles: ["dispecer_pozicovne", "veduci_pozicovne"],
-      title: "Prevoz stroja dokončený",
-      message: `${currentUser?.name || "Šofér"} previezol stroj ${machine?.code || "—"} do depa ${note.targetDepo} — potvrďte v kalendári.`,
-      kind: "transport_note_done",
-      link: { module: "poziciovna", view: "calendar" },
-    });
-  }
+  // Šofér si "Prevezené" vybavuje priamo cez RPC (get_my_transport_notes /
+  // mark_transport_note_driver_done, viď step46) v TransportsOverview —
+  // driver kvôli zamknutej tabuľke nemá lokálny stav transportNotes, z ktorého
+  // by táto funkcia mohla vychádzať, takže tu na úrovni App žiadny náprotivok
+  // nie je.
   // Skutočné potvrdenie prevozu — až TERAZ sa reálne prehodí depo stroja,
   // samotné vytvorenie poznámky vyššie to nerobí (ochrana pred missclickom).
   function confirmTransportNote(id) {
@@ -6186,7 +6171,6 @@ function DispatcherApp() {
             highlightTransportId={highlightTransportId}
             onDismissTransportHighlight={() => setHighlightTransportId(null)}
             transportNotes={transportNotes}
-            onMarkTransportNoteDriverDone={markTransportNoteDriverDone}
           />
         )}
 
@@ -10073,17 +10057,33 @@ function DriverTransportCard({ t, machineById, handoverProtocols, onOpenJob, hig
 /* ---------------------------------------------------------
    Transports overview (Prepravy) — future vývoz/zvoz by driver
 --------------------------------------------------------- */
-function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand, highlightTransportId, onDismissTransportHighlight, transportNotes, onMarkTransportNoteDriverDone }) {
+function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, depoCheckers, checkerSubstitutions, technicianById, technicians, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, onExpand, highlightTransportId, onDismissTransportHighlight, transportNotes }) {
   // Šoférovi patriace "Prevoz" dlaždice — poznámky o presune stroja medzi
   // depami, ktoré mu priradil dispečer/vedúci požičovne, ešte nenahlásené
-  // ako hotové. Bežná zákazka nič nemení — toto je len navyše pre šoféra.
-  const myTransportNotes = useMemo(() => {
-    if (!myEmployee || (myEmployee.role !== "sofer" && myEmployee.role !== "externy_sofer")) return [];
-    return (transportNotes || []).filter((t) => t.driverId === myEmployee.id && !t.driverDone);
-  }, [transportNotes, myEmployee]);
-  // Dočasný prehľad pre dispečera/vedúceho — VŠETKY priradené a ešte
-  // nedokončené poznámky Prevoz, nech vedia priamo v appke overiť, že dáta
-  // reálne dorazili (bez potreby prihlásiť sa ako šofér).
+  // ako hotové. Tabuľka "transportNotes" ostáva v DB prísne zamknutá len na
+  // dispečera/vedúceho (žiadny iný SELECT) — šofér preto svoje vlastné
+  // priradenia číta cez samostatnú RPC funkciu (get_my_transport_notes,
+  // security definer — viď step46), nie z bežného React stavu.
+  const isDriverRole = myEmployee && (myEmployee.role === "sofer" || myEmployee.role === "externy_sofer");
+  const [myTransportNotes, setMyTransportNotes] = useState([]);
+  const refetchMyTransportNotes = useCallback(async () => {
+    if (!isDriverRole) { setMyTransportNotes([]); return; }
+    const { data, error } = await supabase.rpc("get_my_transport_notes");
+    if (error) { console.error("get_my_transport_notes zlyhalo", error); return; }
+    setMyTransportNotes((data || []).map((row) => ({ ...row.data, id: row.id })));
+  }, [isDriverRole]);
+  useEffect(() => { refetchMyTransportNotes(); }, [refetchMyTransportNotes]);
+  // Poznámka: NEvoláme tu App-level onMarkTransportNoteDriverDone (ten by
+  // upozornenie postavil z lokálneho stavu "transportNotes", ktorý šofér
+  // kvôli zamknutej tabuľke vôbec nemá) — RPC funkcia v DB si upozornenie aj
+  // aktualizáciu poznámky rieši sama (viď step46).
+  async function handleMarkTransportNoteDriverDone(id) {
+    const { error } = await supabase.rpc("mark_transport_note_driver_done", { note_id: id });
+    if (error) { console.error("mark_transport_note_driver_done zlyhalo", error); return; }
+    setMyTransportNotes((prev) => prev.filter((t) => t.id !== id));
+  }
+  // Prehľad pre dispečera/vedúceho — VŠETKY priradené a ešte nedokončené
+  // poznámky Prevoz (tí majú na "transportNotes" plný RLS prístup, viď step44).
   const canManageTransportNotes = can(user, "machine_transport_note");
   const assignedTransportNotes = useMemo(() => {
     if (!canManageTransportNotes) return [];
@@ -10372,7 +10372,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                     Previezť stroj <strong>{m?.code || "—"}</strong> z <strong>{m?.depo || "—"}</strong> do <strong>{t.targetDepo}</strong>
                     {t.note ? ` — ${t.note}` : ""}
                   </div>
-                  <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => onMarkTransportNoteDriverDone(t.id)}>Prevezené</button>
+                  <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => handleMarkTransportNoteDriverDone(t.id)}>Prevezené</button>
                 </div>
               );
             })}
