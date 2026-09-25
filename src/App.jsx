@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.606";
+const APP_VERSION = "1.0.607";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9209,9 +9209,20 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
 --------------------------------------------------------- */
 function ProtocolModal({ html, params, onClose }) {
   const entries = Object.entries(params || {}).filter(([, v]) => v);
+  // Odznak o (ne)predvyplnení je len informatívny — nemá zmysel držať ho na
+  // obrazovke natrvalo a uberať tým miesto, sám zmizne po pár sekundách.
+  const [showBadge, setShowBadge] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowBadge(false), 2800);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <div className="protocol-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, overflow: "hidden" }}>
-      <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, background: "#fff" }}>
+      {/* Obal iframe začína AŽ pod stavovým riadkom telefónu (nie súčasť
+          protokolu samotného — appka beží na celú výšku obrazovky, takže inak
+          by hlavička protokolu (aj náš odznak/✕ nižšie) skončila pod hodinami/
+          signálom). */}
+      <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, top: "env(safe-area-inset-top)", background: "#fff" }}>
         <iframe
           title="Servisný protokol"
           srcDoc={html}
@@ -9219,41 +9230,50 @@ function ProtocolModal({ html, params, onClose }) {
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
       </div>
-      {/* Plávajúci pás (nie súčasť layoutu) — nech má protokol k dispozícii
-          celú výšku obrazovky namiesto toho, aby mu hornú časť odhryzol
-          pevný riadok s odznakom/tlačidlom. */}
-      <div
-        style={{
-          position: "absolute",
-          top: "max(8px, env(safe-area-inset-top))",
-          left: 8,
-          right: 8,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 8,
-          pointerEvents: "none",
-        }}
-      >
+      {showBadge && (
         <div
           style={{
+            position: "absolute",
+            top: "calc(env(safe-area-inset-top) + 8px)",
+            left: 8,
             fontSize: 12,
             color: "#fff",
             background: entries.length ? "rgba(34,139,34,.85)" : "rgba(180,60,60,.85)",
             padding: "4px 10px",
             borderRadius: 4,
-            pointerEvents: "auto",
+            pointerEvents: "none",
+            transition: "opacity .4s",
           }}
         >
           {entries.length > 0
             ? `Predvyplnené: ${entries.map(([k, v]) => `${k}=${v}`).join(" · ")}`
             : "Žiadne údaje neboli predvyplnené (prázdny formulár)"}
         </div>
-        <button className="btn" style={{ background: "var(--panel-2)", color: "var(--text)", pointerEvents: "auto" }} onClick={onClose}>
-          ✕ Zavrieť protokol
-        </button>
-      </div>
+      )}
+      {/* Len "✕", nie plné tlačidlo s textom — sedí do rovnakého riadku ako
+          názov/adresa firmy v hlavičke samotného protokolu (tá je vykreslená
+          v iframe pod ním), nie ako samostatný pás navyše. */}
+      <button
+        className="btn"
+        title="Zavrieť protokol"
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 6px)",
+          right: 8,
+          width: 32,
+          height: 32,
+          padding: 0,
+          borderRadius: "50%",
+          background: "var(--panel-2)",
+          color: "var(--text)",
+          fontSize: 16,
+          lineHeight: "32px",
+          textAlign: "center",
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -9297,7 +9317,7 @@ function PhotoLightboxModal({ src, onClose }) {
 function PrintProtocolModal({ html, onClose }) {
   return (
     <div className="protocol-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, overflow: "hidden" }}>
-      <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, background: "#fff" }}>
+      <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, top: "env(safe-area-inset-top)", background: "#fff" }}>
         <iframe
           title="Servisný protokol"
           srcDoc={html}
@@ -9305,11 +9325,27 @@ function PrintProtocolModal({ html, onClose }) {
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
       </div>
-      <div style={{ position: "absolute", top: "max(8px, env(safe-area-inset-top))", right: 8, pointerEvents: "none" }}>
-        <button className="btn" style={{ background: "var(--panel-2)", color: "var(--text)", pointerEvents: "auto" }} onClick={onClose}>
-          ✕ Zavrieť protokol
-        </button>
-      </div>
+      <button
+        className="btn"
+        title="Zavrieť protokol"
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 6px)",
+          right: 8,
+          width: 32,
+          height: 32,
+          padding: 0,
+          borderRadius: "50%",
+          background: "var(--panel-2)",
+          color: "var(--text)",
+          fontSize: 16,
+          lineHeight: "32px",
+          textAlign: "center",
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -12248,7 +12284,7 @@ function SignatureOverlay({ label, initialValue, fieldAspect, onCancel, onDone }
       {/* Plávajúci pás (nie súčasť flex výšky) — nech má canvas na podpis k
           dispozícii celú výšku obrazovky namiesto toho, aby mu hornú časť
           odhryzol pevný riadok s nadpisom/tipom. */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "rgba(255,255,255,0.88)", pointerEvents: "none" }}>
+      <div style={{ position: "absolute", top: "env(safe-area-inset-top)", left: 0, right: 0, zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "rgba(255,255,255,0.88)", pointerEvents: "none" }}>
         <strong style={{ fontSize: 17, color: "var(--red, #c0392b)" }}>✍️ {label}</strong>
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Otočte telefón pre viac miesta</span>
       </div>
@@ -22736,7 +22772,10 @@ function GlobalStyle() {
 
         /* Vypísanie protokolu — na mobile naozaj cez celú obrazovku, žiadny okraj
            navyše, nech je čo najviac miesta na samotné vypĺňanie. */
-        .protocol-overlay { padding: 0 !important; padding-top: env(safe-area-inset-top) !important; }
+        /* Odsadenie od stavového riadku telefónu si dnes rieši priamo
+           ProtocolModal/PrintProtocolModal (inline štýl na .protocol-frame-wrap),
+           .protocol-overlay samotný už žiadny padding navyše nepotrebuje/nesmie
+           mať (zdvojilo by odsadenie). */
         .protocol-frame-wrap { border-radius: 0 !important; }
       }
 
