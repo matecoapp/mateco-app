@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.618";
+const APP_VERSION = "1.0.619";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -20932,17 +20932,20 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
   const modelRows = Object.entries(byModel).sort((a, b) => b[1] - a[1]).slice(0, 15);
   const serialRows = Object.entries(bySerial).sort((a, b) => b[1] - a[1]).slice(0, 15);
 
-  const totalHours = trackedProtocols.reduce((sum, p) => sum + (p.totalHours || 0), 0) + trackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
-  const totalTravelHours = trackedProtocols.reduce((sum, p) => sum + (p.travelHours || 0), 0);
-  const totalTravelKm = trackedProtocols.reduce((sum, p) => sum + (p.travelKm || 0), 0);
+  // p.totalHours/travelHours/travelKm vedia v dátach byť aj string (staršie
+  // protokoly) — Number(...) tu je nutný, inak "sum + string" spraví reťazenie
+  // textu namiesto súčtu a .toFixed() na výsledku nižšie zhodí appku.
+  const totalHours = trackedProtocols.reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0) + trackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
+  const totalTravelHours = trackedProtocols.reduce((sum, p) => sum + (Number(p.travelHours) || 0), 0);
+  const totalTravelKm = trackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0), 0);
 
   const byTechnician = {};
   trackedProtocols.forEach((p) => {
     const key = p.technicianName || "— neuvedené —";
     if (!byTechnician[key]) byTechnician[key] = { hours: 0, travelHours: 0, travelKm: 0 };
-    byTechnician[key].hours += p.totalHours || 0;
-    byTechnician[key].travelHours += p.travelHours || 0;
-    byTechnician[key].travelKm += p.travelKm || 0;
+    byTechnician[key].hours += Number(p.totalHours) || 0;
+    byTechnician[key].travelHours += Number(p.travelHours) || 0;
+    byTechnician[key].travelKm += Number(p.travelKm) || 0;
   });
   trackedChecklistHours.forEach((c) => {
     const key = c.technicianName || "— neuvedené —";
