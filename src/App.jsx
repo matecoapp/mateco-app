@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.631";
+const APP_VERSION = "1.0.632";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -54,12 +54,14 @@ const DOCUMENT_SUBTABS = {
     { id: "blacklist", label: "BLACKLIST zákazníkov" },
     { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
     { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx" },
+    { id: "export-foto", label: "Export fotiek (ZIP)" },
   ],
   servis: [
     { id: "protokoly", label: "Odoslané protokoly", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FProtokoly&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4&newTargetListUrl=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty&viewpath=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FForms%2FAllItems%2Easpx" },
     { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
     { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx" },
     { id: "navody", label: "Návody k strojom", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/_layouts/15/Doc.aspx?sourcedoc={d1a06eda-b8a0-4ac9-9373-aecf45a09eb0}&action=edit&wd=target%28Sekcia%20bez%20n%C3%A1zvu.one%7C966b76c2-f607-43eb-b36a-6570b2199fd8%2FKatal%C3%B3gy%20dod%C3%A1vate%C4%BEov%7C0174beec-8e55-4bb2-b983-b4233b5a924a%2F%29&wdorigin=NavigationUrl" },
+    { id: "export-foto", label: "Export fotiek (ZIP)" },
   ],
 };
 
@@ -1407,6 +1409,84 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
+
+// Export fotiek priamo z appky do jedného ZIP súboru (záloha zo Storage bez
+// externého skriptu/API) — minimalistický ZIP writer bez kompresie (metóda
+// "store"): fotky sú aj tak už JPEG/PNG, dodatočná kompresia by nič
+// nepridala, a takto netreba do appky ťahať novú knižnicu na zip.
+function crc32(bytes) {
+  let crc = ~0;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+    for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return ~crc >>> 0;
+}
+function zipDosDateTime(d = new Date()) {
+  const time = ((d.getHours() & 0x1f) << 11) | ((d.getMinutes() & 0x3f) << 5) | ((d.getSeconds() >> 1) & 0x1f);
+  const date = (((d.getFullYear() - 1980) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+  return { time, date };
+}
+function u16(n) { return new Uint8Array([n & 0xff, (n >> 8) & 0xff]); }
+function u32(n) { return new Uint8Array([n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff]); }
+function concatBytes(chunks) {
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+function buildZipBlob(entries) {
+  // entries: [{ name, data: Uint8Array }]
+  const { time, date } = zipDosDateTime();
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const { name, data } of entries) {
+    const nameBytes = enc.encode(name);
+    const crc = crc32(data);
+    const localHeader = concatBytes([
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(time), u16(date),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0),
+    ]);
+    parts.push(localHeader, nameBytes, data);
+    central.push(concatBytes([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(time), u16(date),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset),
+    ]), nameBytes);
+    offset += localHeader.length + nameBytes.length + data.length;
+  }
+  const centralSize = central.reduce((s, c) => s + c.length, 0);
+  const end = concatBytes([
+    u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length), u32(centralSize), u32(offset), u16(0),
+  ]);
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
+async function listBucketFilesRecursive(bucket, prefix = "") {
+  const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (error) throw error;
+  let files = [];
+  for (const item of data || []) {
+    const p = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item.id === null) files = files.concat(await listBucketFilesRecursive(bucket, p));
+    else files.push(p);
+  }
+  return files;
+}
+async function exportBucketsAsZip(buckets, onProgress) {
+  const entries = [];
+  for (const bucket of buckets) {
+    const paths = await listBucketFilesRecursive(bucket);
+    for (const path of paths) {
+      const { data: blob, error } = await supabase.storage.from(bucket).download(path);
+      if (error) { console.error("Export fotiek: preskočený súbor", bucket, path, error); continue; }
+      entries.push({ name: `${bucket}/${path}`, data: new Uint8Array(await blob.arrayBuffer()) });
+      onProgress?.(entries.length);
+    }
+  }
+  return buildZipBlob(entries);
+}
 
 /* ---------------------------------------------------------
    Offline cache (Fáza 2/3 offline režimu) — posledná úspešne stiahnutá kópia
@@ -6359,6 +6439,7 @@ function DispatcherApp() {
             onImportBlacklist={importBlacklist}
             onDeleteBlacklist={(id) => askDelete("tento záznam z blacklistu", () => deleteBlacklistEntry(id))}
             canEdit={can(effectiveUser, "documents_edit")}
+            canExportPhotos={isAdminUser(effectiveUser)}
           />
         )}
 
@@ -6739,7 +6820,11 @@ function DispatcherApp() {
         })()}
 
         {module === "servis" && view === "dokumenty" && (
-          <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
+          <DocumentsView
+            subView={documentsSubView}
+            subTabs={DOCUMENT_SUBTABS.servis}
+            canExportPhotos={isAdminUser(effectiveUser)}
+          />
         )}
 
         {module === "administrativa" && view === "statistiky" && can(effectiveUser, "statistics_view") && (
@@ -8608,6 +8693,55 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
 /* ---------------------------------------------------------
    Dokumenty — obsah
 --------------------------------------------------------- */
+// Tlačidlo "Export fotiek (ZIP)" v Dokumentoch — stiahne celý obsah oboch
+// Storage bucketov (protocols, inspections) rovno v prehliadači a ponúkne
+// jeden ZIP na uloženie/presun (napr. na SharePoint), bez potreby skriptu
+// alebo API mimo appky. Len admin, kvôli objemu aj citlivosti dát.
+function ExportPhotosPanel() {
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function run() {
+    setRunning(true);
+    setError("");
+    setDone(false);
+    setProgress(0);
+    try {
+      const blob = await exportBucketsAsZip(["protocols", "inspections"], setProgress);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mateco-fotky-export-${todayISO()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setDone(true);
+    } catch (e) {
+      setError("Export zlyhal: " + (e?.message || String(e)));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="panel" style={{ padding: 24, maxWidth: 520 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>Export fotiek (ZIP)</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
+        Stiahne všetky fotky a protokoly zo Supabase Storage do jedného ZIP súboru — na zálohu, napr.
+        na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút, nezatvárajte
+        počas toho túto kartu.
+      </div>
+      {!running && !done && (
+        <button className="btn btn-primary" onClick={run}>Spustiť export</button>
+      )}
+      {running && <div style={{ fontSize: 13 }}>Sťahujem… {progress} súborov spracovaných</div>}
+      {done && <div style={{ fontSize: 13, color: "var(--ok)" }}>Hotovo — {progress} súborov, ZIP sa stiahol do Downloads.</div>}
+      {error && <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 8 }}>{error}</div>}
+    </div>
+  );
+}
+
 function DocumentsView({
   subView,
   subTabs,
@@ -8621,8 +8755,19 @@ function DocumentsView({
   onImportBlacklist,
   onDeleteBlacklist,
   canEdit,
+  canExportPhotos,
 }) {
   const active = subTabs.find((s) => s.id === subView);
+
+  if (subView === "export-foto") {
+    return canExportPhotos ? (
+      <ExportPhotosPanel />
+    ) : (
+      <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
+        Export fotiek môže spustiť len administrátor.
+      </div>
+    );
+  }
 
   if (subView === "ramcove-zmluvy") {
     return (
