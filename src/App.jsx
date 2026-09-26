@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.632";
+const APP_VERSION = "1.0.633";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1463,27 +1463,37 @@ function buildZipBlob(entries) {
   ]);
   return new Blob([...parts, ...central, end], { type: "application/zip" });
 }
-async function listBucketFilesRecursive(bucket, prefix = "") {
-  const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+// Storage list() ide cez Storage API a vie byť obmedzené politikami na
+// listovanie priečinkov, aj keď čítanie konkrétneho súboru funguje bez
+// problémov — preto sa fotky nehľadajú listovaním bucketu, ale presne tak
+// ako appka fotky aj tak zobrazuje: ich verejné odkazy sú uložené priamo v
+// app_data (tá istá tabuľka/hodnoty, čo appka číta pri načítaní), stiahnutie
+// je potom obyčajný verejný fetch(), rovnaký princíp ako <img src="...">.
+async function collectStoredPhotoUrls() {
+  const { data: rows, error } = await supabase.from("app_data").select("value");
   if (error) throw error;
-  let files = [];
-  for (const item of data || []) {
-    const p = prefix ? `${prefix}/${item.name}` : item.name;
-    if (item.id === null) files = files.concat(await listBucketFilesRecursive(bucket, p));
-    else files.push(p);
+  const base = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/`;
+  const re = new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:protocols|inspections)/[^\"'\\\\]+", "g");
+  const urls = new Set();
+  for (const row of rows || []) {
+    const matches = JSON.stringify(row.value).match(re);
+    if (matches) for (const m of matches) urls.add(m);
   }
-  return files;
+  return [...urls];
 }
-async function exportBucketsAsZip(buckets, onProgress) {
+async function exportPhotosAsZip(onProgress) {
+  const urls = await collectStoredPhotoUrls();
   const entries = [];
-  for (const bucket of buckets) {
-    const paths = await listBucketFilesRecursive(bucket);
-    for (const path of paths) {
-      const { data: blob, error } = await supabase.storage.from(bucket).download(path);
-      if (error) { console.error("Export fotiek: preskočený súbor", bucket, path, error); continue; }
-      entries.push({ name: `${bucket}/${path}`, data: new Uint8Array(await blob.arrayBuffer()) });
-      onProgress?.(entries.length);
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      entries.push({ name: url.split("/storage/v1/object/public/")[1], data: bytes });
+    } catch (e) {
+      console.error("Export fotiek: preskočený súbor", url, e);
     }
+    onProgress?.(entries.length, urls.length);
   }
   return buildZipBlob(entries);
 }
@@ -8699,7 +8709,7 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
 // alebo API mimo appky. Len admin, kvôli objemu aj citlivosti dát.
 function ExportPhotosPanel() {
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
@@ -8707,9 +8717,9 @@ function ExportPhotosPanel() {
     setRunning(true);
     setError("");
     setDone(false);
-    setProgress(0);
+    setProgress({ done: 0, total: 0 });
     try {
-      const blob = await exportBucketsAsZip(["protocols", "inspections"], setProgress);
+      const blob = await exportPhotosAsZip((n, total) => setProgress({ done: n, total }));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -8728,15 +8738,25 @@ function ExportPhotosPanel() {
     <div className="panel" style={{ padding: 24, maxWidth: 520 }}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Export fotiek (ZIP)</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
-        Stiahne všetky fotky a protokoly zo Supabase Storage do jedného ZIP súboru — na zálohu, napr.
-        na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút, nezatvárajte
-        počas toho túto kartu.
+        Stiahne všetky fotky a protokoly (tie, na ktoré appka niekde odkazuje) do jedného ZIP súboru —
+        na zálohu, napr. na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút,
+        nezatvárajte počas toho túto kartu.
       </div>
       {!running && !done && (
         <button className="btn btn-primary" onClick={run}>Spustiť export</button>
       )}
-      {running && <div style={{ fontSize: 13 }}>Sťahujem… {progress} súborov spracovaných</div>}
-      {done && <div style={{ fontSize: 13, color: "var(--ok)" }}>Hotovo — {progress} súborov, ZIP sa stiahol do Downloads.</div>}
+      {running && (
+        <div style={{ fontSize: 13 }}>
+          {progress.total ? `Sťahujem… ${progress.done} / ${progress.total} súborov` : "Hľadám fotky v dátach…"}
+        </div>
+      )}
+      {done && (
+        <div style={{ fontSize: 13, color: progress.total ? "var(--ok)" : "var(--warn)" }}>
+          {progress.total
+            ? `Hotovo — ${progress.done} súborov, ZIP sa stiahol do Downloads.`
+            : "Nenašla sa žiadna fotka na export."}
+        </div>
+      )}
       {error && <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 8 }}>{error}</div>}
     </div>
   );
