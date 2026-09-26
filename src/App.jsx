@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.634";
+const APP_VERSION = "1.0.635";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1469,22 +1469,30 @@ function buildZipBlob(entries) {
 // ako appka fotky aj tak zobrazuje: ich verejné odkazy sú uložené priamo v
 // app_data (tá istá tabuľka/hodnoty, čo appka číta pri načítaní), stiahnutie
 // je potom obyčajný verejný fetch(), rovnaký princíp ako <img src="...">.
+// Fotky NIE sÚ v app_data (tá drží len pár drobných nastavení) — každý
+// zoznam (jobs, damages, assignments, handoverProtocols…) má vlastnú
+// tabuľku, jeden riadok na záznam, dáta v stĺpci "data" (viď loadRecordTable
+// vyššie). Prejdú sa všetky, aby netreba vedieť, v ktorej presne fotky sú.
+const RECORD_TABLES = [
+  "machines", "jobs", "assignments", "damages", "weeklyDuty", "notifications", "transportSendLog",
+  "customers", "framoveZmluvy", "blacklist", "checkerSubstitutions", "reservations", "employees",
+  "protocolLogs", "handoverProtocols", "machineModels", "spareParts", "trash", "vehicles",
+  "portal_requests", "transportNotes", "ezMeasurements",
+];
 async function collectStoredPhotoUrls() {
-  const { data: rows, error } = await supabase.from("app_data").select("value");
-  if (error) throw error;
-  // Nezávisí od presného tvaru VITE_SUPABASE_URL (predošlá verzia si tým
-  // pravdepodobne rozbila zhodu) — nájde akýkoľvek odkaz s touto cestou, na
-  // akomkoľvek hostiteľovi.
   const re = /https?:\/\/[^"'\\]+\/storage\/v1\/object\/public\/(?:protocols|inspections)\/[^"'\\]+/g;
   const urls = new Set();
-  let sawStorageMention = false;
-  for (const row of rows || []) {
-    const text = JSON.stringify(row.value);
-    if (!sawStorageMention && text.includes("/storage/v1/")) sawStorageMention = true;
-    const matches = text.match(re);
-    if (matches) for (const m of matches) urls.add(m);
+  let rowCount = 0;
+  for (const table of RECORD_TABLES) {
+    const { data: rows, error } = await supabase.from(table).select("data");
+    if (error) { console.error(`Export fotiek: tabuľka ${table} zlyhala`, error); continue; }
+    rowCount += rows?.length || 0;
+    for (const row of rows || []) {
+      const matches = JSON.stringify(row.data).match(re);
+      if (matches) for (const m of matches) urls.add(m);
+    }
   }
-  console.log(`Export fotiek: ${rows?.length || 0} riadkov v app_data, storage odkaz spomenutý: ${sawStorageMention}, nájdených fotiek: ${urls.size}`);
+  console.log(`Export fotiek: ${rowCount} záznamov prehľadaných, nájdených fotiek: ${urls.size}`);
   return [...urls];
 }
 async function exportPhotosAsZip(onProgress) {
