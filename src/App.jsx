@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.629";
+const APP_VERSION = "1.0.630";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8790,7 +8790,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
     { id: "plan", label: "Plán servisu" },
     { id: "diely", label: "Náhradné diely" },
     { id: "poskodenia", label: "Zákazky", group: ["poskodenia", "externe"] },
-    { id: "revizie", label: "Revízie", group: ["revizie", "uradne_skusky"] },
+    { id: "revizie", label: "Revízie/Úradné skúšky", group: ["revizie", "uradne_skusky"] },
     ...(podkladySubs.length > 0
       ? [{ id: podkladySubs[0], label: podkladySubs.length > 1 ? "Podklady" : podkladySubs[0] === "ez_merania" ? "Revízie EZ" : "ERP — kontroly", group: podkladySubs }]
       : []),
