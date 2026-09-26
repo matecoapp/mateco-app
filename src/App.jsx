@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.630";
+const APP_VERSION = "1.0.631";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -54,14 +54,12 @@ const DOCUMENT_SUBTABS = {
     { id: "blacklist", label: "BLACKLIST zákazníkov" },
     { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
     { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx" },
-    { id: "foto", label: "Foto strojov", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FFotky%20strojov&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
   ],
   servis: [
     { id: "protokoly", label: "Odoslané protokoly", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FProtokoly&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4&newTargetListUrl=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty&viewpath=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FForms%2FAllItems%2Easpx" },
     { id: "revizie", label: "Platné revízie", url: "https://matecocloud.sharepoint.com/sites/SK01-pozicovna/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dpozicovna%2FZdielane%20dokumenty%2FRev%C3%ADzie%20pdf&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
     { id: "sharepoint", label: "SharePoint dokumenty", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx" },
     { id: "navody", label: "Návody k strojom", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/_layouts/15/Doc.aspx?sourcedoc={d1a06eda-b8a0-4ac9-9373-aecf45a09eb0}&action=edit&wd=target%28Sekcia%20bez%20n%C3%A1zvu.one%7C966b76c2-f607-43eb-b36a-6570b2199fd8%2FKatal%C3%B3gy%20dod%C3%A1vate%C4%BEov%7C0174beec-8e55-4bb2-b983-b4233b5a924a%2F%29&wdorigin=NavigationUrl" },
-    { id: "foto", label: "Foto strojov", url: "https://matecocloud.sharepoint.com/sites/SK01-servis/Zdielane%20dokumenty/Forms/AllItems.aspx?id=%2Fsites%2FSK01%2Dservis%2FZdielane%20dokumenty%2FFotky%20strojov&viewid=d4ac582c%2D3d45%2D4d3a%2D9f83%2D06de72e400a4" },
   ],
 };
 
@@ -12684,7 +12682,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       try {
         const blob = await compressImageToBlob(file);
         const pathPrefix = photoFolder(machine, job);
-        const photoId = uid();
+        // Logický názov namiesto holého UUID (časová pečiatka, dá sa dohľadať a
+        // zoradiť aj mimo appky) — rovnaký princíp ako pri protokoloch vyššie.
+        const photoId = String(Date.now());
         try {
           const path = `${pathPrefix}/${photoId}.jpg`;
           const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
@@ -13117,7 +13117,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
       try {
         const blob = await compressImageToBlob(file);
         const pathPrefix = photoFolder(machine, job);
-        const photoId = uid();
+        const photoId = String(Date.now());
         try {
           const path = `${pathPrefix}/${photoId}.jpg`;
           const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
@@ -18432,7 +18432,7 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
     setUploading(true);
     try {
       const blob = await compressImageToBlob(file);
-      const path = `${photoFolder(selectedMachine, null)}/ez_${uid()}.jpg`;
+      const path = `${photoFolder(selectedMachine, null)}/ez_${Date.now()}.jpg`;
       try {
         const { error } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
         if (error) throw error;
