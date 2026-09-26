@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.635";
+const APP_VERSION = "1.0.636";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1479,12 +1479,17 @@ const RECORD_TABLES = [
   "protocolLogs", "handoverProtocols", "machineModels", "spareParts", "trash", "vehicles",
   "portal_requests", "transportNotes", "ezMeasurements",
 ];
-async function collectStoredPhotoUrls() {
+async function collectStoredPhotoUrls(sinceIso) {
   const re = /https?:\/\/[^"'\\]+\/storage\/v1\/object\/public\/(?:protocols|inspections)\/[^"'\\]+/g;
   const urls = new Set();
   let rowCount = 0;
   for (const table of RECORD_TABLES) {
-    const { data: rows, error } = await supabase.from(table).select("data");
+    // Filter podľa updated_at riadku, nie podľa jednotlivej fotky — záznam
+    // môže mať fotky pridané postupne, ale toto stačí ako rozumné priblíženie
+    // (v horšom prípade sa fotka exportuje raz navyše, nič sa nestratí).
+    let q = supabase.from(table).select("data");
+    if (sinceIso) q = q.gte("updated_at", sinceIso);
+    const { data: rows, error } = await q;
     if (error) { console.error(`Export fotiek: tabuľka ${table} zlyhala`, error); continue; }
     rowCount += rows?.length || 0;
     for (const row of rows || []) {
@@ -1495,8 +1500,8 @@ async function collectStoredPhotoUrls() {
   console.log(`Export fotiek: ${rowCount} záznamov prehľadaných, nájdených fotiek: ${urls.size}`);
   return [...urls];
 }
-async function exportPhotosAsZip(onProgress) {
-  const urls = await collectStoredPhotoUrls();
+async function exportPhotosAsZip(sinceIso, onProgress) {
+  const urls = await collectStoredPhotoUrls(sinceIso);
   const entries = [];
   for (const url of urls) {
     try {
@@ -8726,6 +8731,13 @@ function ExportPhotosPanel() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("all"); // "all" | "since" | "last"
+  const [sinceDate, setSinceDate] = useState("");
+  const [lastExportAt, setLastExportAt] = useState(undefined); // undefined = ešte sa nenačítalo
+
+  useEffect(() => {
+    loadKey("lastPhotoExportAt", null).then(setLastExportAt);
+  }, []);
 
   async function run() {
     setRunning(true);
@@ -8733,13 +8745,17 @@ function ExportPhotosPanel() {
     setDone(false);
     setProgress({ done: 0, total: 0 });
     try {
-      const blob = await exportPhotosAsZip((n, total) => setProgress({ done: n, total }));
+      const sinceIso = mode === "since" && sinceDate ? new Date(sinceDate).toISOString() : mode === "last" ? lastExportAt || null : null;
+      const blob = await exportPhotosAsZip(sinceIso, (n, total) => setProgress({ done: n, total }));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `mateco-fotky-export-${todayISO()}.zip`;
       a.click();
       URL.revokeObjectURL(url);
+      const now = new Date().toISOString();
+      saveKey("lastPhotoExportAt", now);
+      setLastExportAt(now);
       setDone(true);
     } catch (e) {
       setError("Export zlyhal: " + (e?.message || String(e)));
@@ -8752,12 +8768,37 @@ function ExportPhotosPanel() {
     <div className="panel" style={{ padding: 24, maxWidth: 520 }}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Export fotiek (ZIP)</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
-        Stiahne všetky fotky a protokoly (tie, na ktoré appka niekde odkazuje) do jedného ZIP súboru —
-        na zálohu, napr. na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút,
+        Stiahne fotky a protokoly (tie, na ktoré appka niekde odkazuje) do jedného ZIP súboru — na
+        zálohu, napr. na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút,
         nezatvárajte počas toho túto kartu.
       </div>
+
       {!running && !done && (
-        <button className="btn btn-primary" onClick={run}>Spustiť export</button>
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />
+              Exportovať všetko
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <input type="radio" checked={mode === "last"} onChange={() => setMode("last")} disabled={!lastExportAt} />
+              Len od posledného exportu{lastExportAt ? ` (${new Date(lastExportAt).toLocaleString("sk-SK")})` : " (zatiaľ žiadny)"}
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <input type="radio" checked={mode === "since"} onChange={() => setMode("since")} />
+              Od dátumu:
+              <input
+                type="date"
+                value={sinceDate}
+                onChange={(e) => { setSinceDate(e.target.value); setMode("since"); }}
+                style={{ marginLeft: 4 }}
+              />
+            </label>
+          </div>
+          <button className="btn btn-primary" onClick={run} disabled={mode === "since" && !sinceDate}>
+            Spustiť export
+          </button>
+        </>
       )}
       {running && (
         <div style={{ fontSize: 13 }}>
@@ -8772,6 +8813,11 @@ function ExportPhotosPanel() {
         </div>
       )}
       {error && <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 8 }}>{error}</div>}
+      {done && (
+        <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setDone(false)}>
+          Spustiť ďalší export
+        </button>
+      )}
     </div>
   );
 }
