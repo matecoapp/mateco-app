@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.633";
+const APP_VERSION = "1.0.634";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1472,13 +1472,19 @@ function buildZipBlob(entries) {
 async function collectStoredPhotoUrls() {
   const { data: rows, error } = await supabase.from("app_data").select("value");
   if (error) throw error;
-  const base = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/`;
-  const re = new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:protocols|inspections)/[^\"'\\\\]+", "g");
+  // Nezávisí od presného tvaru VITE_SUPABASE_URL (predošlá verzia si tým
+  // pravdepodobne rozbila zhodu) — nájde akýkoľvek odkaz s touto cestou, na
+  // akomkoľvek hostiteľovi.
+  const re = /https?:\/\/[^"'\\]+\/storage\/v1\/object\/public\/(?:protocols|inspections)\/[^"'\\]+/g;
   const urls = new Set();
+  let sawStorageMention = false;
   for (const row of rows || []) {
-    const matches = JSON.stringify(row.value).match(re);
+    const text = JSON.stringify(row.value);
+    if (!sawStorageMention && text.includes("/storage/v1/")) sawStorageMention = true;
+    const matches = text.match(re);
     if (matches) for (const m of matches) urls.add(m);
   }
+  console.log(`Export fotiek: ${rows?.length || 0} riadkov v app_data, storage odkaz spomenutý: ${sawStorageMention}, nájdených fotiek: ${urls.size}`);
   return [...urls];
 }
 async function exportPhotosAsZip(onProgress) {
