@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.626";
+const APP_VERSION = "1.0.629";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1990,42 +1990,51 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
 }
 
 /* ---------------------------------------------------------
-   Prepínač "zakladač" — nad zlúčenými záložkami (Zákazky, Revízie,
-   Podklady, Dáta požičovne) prepína celé okno pod sebou, žiadne
-   miešanie obsahu (viď mockup https://claude.ai/artifact/FLVz3CVjJovsjdXp4bBGJH).
+   Prepínač záložiek nad zlúčenými pohľadmi (Zákazky, Revízie, Podklady,
+   Dáta požičovne) — rovné "karty" nad panelom (nie zakladač): aktívna
+   karta splýva s panelom pod ňou (biela, hore červený prúžok), neaktívna
+   je sivšia a nižšie. Panel pod kartami (rovnaký .panel štýl ako všade
+   inde v appke) jasne orámuje, čo pod aktívnu záložku spadá. Prepína
+   celé okno pod sebou, žiadne miešanie obsahu.
 --------------------------------------------------------- */
-function FolderTabs({ options, active, onSelect }) {
+function TabSwitcher({ options, active, onSelect, children }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", marginBottom: -1 }}>
-      {options.map((o, i) => {
-        const isActive = o.id === active;
-        return (
-          <button
-            key={o.id}
-            onClick={() => onSelect(o.id)}
-            style={{
-              position: "relative",
-              zIndex: isActive ? 2 : 1,
-              marginLeft: i === 0 ? 0 : -18,
-              clipPath: isActive
-                ? "polygon(0 100%, 0 18%, 16px 0, calc(100% - 16px) 0, 100% 18%, 100% 100%)"
-                : "polygon(0 100%, 0 22%, 16px 0, 100% 0, 100% 100%)",
-              background: isActive ? "var(--panel)" : "var(--border)",
-              border: "none",
-              borderTop: isActive ? "3px solid var(--accent)" : "none",
-              height: isActive ? 44 : 36,
-              padding: "0 22px",
-              fontSize: isActive ? 14 : 13.5,
-              fontWeight: isActive ? 700 : 500,
-              color: isActive ? "var(--accent)" : "var(--text-dim)",
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
+    <div>
+      <div style={{ display: "flex", gap: 4 }}>
+        {options.map((o) => {
+          const isActive = o.id === active;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onSelect(o.id)}
+              style={{
+                position: "relative",
+                zIndex: isActive ? 2 : 1,
+                marginTop: isActive ? 0 : 4,
+                background: isActive ? "var(--panel)" : "var(--panel-2)",
+                border: "1px solid var(--border)",
+                borderBottom: "none",
+                borderTop: isActive ? "3px solid var(--accent)" : "3px solid transparent",
+                borderRadius: "10px 10px 0 0",
+                padding: "12px 22px 14px",
+                fontSize: isActive ? 14 : 13.5,
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? "var(--accent)" : "var(--text-dim)",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        className="panel"
+        style={{ borderRadius: "0 10px 10px 10px", marginTop: -1, position: "relative", zIndex: 2, padding: 20 }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -2794,9 +2803,9 @@ function DispatcherApp() {
     })();
   }, [loaded, reservations, today]);
 
-  // Pripomienka STK/EK áut — rovnaký vzor ako pripomienka pri rezerváciách vyššie:
-  // spustí sa raz denne (per pole, per auto), rešpektuje prípadné odloženie
-  // (stkSnoozeUntil/ekSnoozeUntil) a nepošle to isté upozornenie dvakrát za deň.
+  // Pripomienka STK/EK áut — jeden dátum, jedno upozornenie (v praxi sa STK aj EK
+  // vždy robia naraz, na tú istú platnosť). Spustí sa raz denne per auto, rešpektuje
+  // prípadné odloženie (stkEkSnoozeUntil) a nepošle to isté upozornenie dvakrát za deň.
   const VEHICLE_REMINDER_DAYS = 30;
   useEffect(() => {
     if (!loaded || vehicles.length === 0) return;
@@ -2805,30 +2814,23 @@ function DispatcherApp() {
         if (!v.assignedEmployeeId) continue;
         const employee = employees.find((e) => e.id === v.assignedEmployeeId);
         if (!employee) continue;
-        let base = v;
-        for (const { field, date, snoozeUntil, notifiedDate, label } of [
-          { field: "stk", date: v.stkDate, snoozeUntil: v.stkSnoozeUntil, notifiedDate: v.stkNotifiedDate, label: "STK" },
-          { field: "ek", date: v.ekDate, snoozeUntil: v.ekSnoozeUntil, notifiedDate: v.ekNotifiedDate, label: "emisnú kontrolu (EK)" },
-        ]) {
-          if (!date) continue;
-          if (notifiedDate === today) continue; // dnes už bolo poslané
-          if (snoozeUntil && today < snoozeUntil) continue; // odložené
-          const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-          if (daysLeft > VEHICLE_REMINDER_DAYS) continue;
-          const notifiedField = field === "stk" ? "stkNotifiedDate" : "ekNotifiedDate";
-          const won = await claimReminder("vehicles", base, { [notifiedField]: today }, notifiedField, today);
-          if (!won) continue;
-          base = { ...base, [notifiedField]: today };
-          setVehicles((prev) => prev.map((vv) => (vv.id === v.id ? { ...vv, [notifiedField]: today } : vv)));
-          pushNotification({
-            kind: "vehicle_stk_ek",
-            roles: [],
-            userName: employee.name,
-            title: daysLeft < 0 ? `${label} auta po termíne` : `Blíži sa ${label} auta`,
-            message: `${v.spz || "Auto"}${v.znacka ? " (" + v.znacka + ")" : ""} — ${label} ${daysLeft < 0 ? "bola splatná" : "je splatná"} ${fmtDate(date)}.`,
-            link: { module: "administrativa", view: "auta", vehicleId: v.id },
-          });
-        }
+        const date = v.stkEkDate;
+        if (!date) continue;
+        if (v.stkEkNotifiedDate === today) continue; // dnes už bolo poslané
+        if (v.stkEkSnoozeUntil && today < v.stkEkSnoozeUntil) continue; // odložené
+        const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+        if (daysLeft > VEHICLE_REMINDER_DAYS) continue;
+        const won = await claimReminder("vehicles", v, { stkEkNotifiedDate: today }, "stkEkNotifiedDate", today);
+        if (!won) continue;
+        setVehicles((prev) => prev.map((vv) => (vv.id === v.id ? { ...vv, stkEkNotifiedDate: today } : vv)));
+        pushNotification({
+          kind: "vehicle_stk_ek",
+          roles: [],
+          userName: employee.name,
+          title: daysLeft < 0 ? "STK/EK auta po termíne" : "Blíži sa STK/EK auta",
+          message: `${v.spz || "Auto"}${v.znacka ? " (" + v.znacka + ")" : ""} — STK/EK ${daysLeft < 0 ? "bola splatná" : "je splatná"} ${fmtDate(date)}.`,
+          link: { module: "administrativa", view: "auta", vehicleId: v.id },
+        });
       }
     })();
   }, [loaded, vehicles, employees, today]);
@@ -5558,7 +5560,7 @@ function DispatcherApp() {
      Autá (vozový park) — STK/EK sledovanie s priradením a pripomienkami
   --------------------------------------------------------- */
   function addVehicle(data) {
-    persistVehicles([...vehicles, { id: uid(), stkSnoozeUntil: null, ekSnoozeUntil: null, stkNotifiedDate: null, ekNotifiedDate: null, ...data }]);
+    persistVehicles([...vehicles, { id: uid(), stkEkSnoozeUntil: null, stkEkNotifiedDate: null, ...data }]);
     setShowAddVehicle(null);
   }
   function updateVehicle(id, patch) {
@@ -5578,23 +5580,18 @@ function DispatcherApp() {
     persistVehicles(vehicles.filter((v) => v.id !== id));
   }
   // Zadanie nového dátumu STK/EK — zruší aj prípadné odloženie a "už upozornené
-  // dnes" značku pre dané pole, nech sa prepočet spraví úplne odznova.
-  function setVehicleDate(id, field, date) {
-    const snoozeField = field === "stk" ? "stkSnoozeUntil" : "ekSnoozeUntil";
-    const notifiedField = field === "stk" ? "stkNotifiedDate" : "ekNotifiedDate";
-    const changedField = field === "stk" ? "stkChangedAt" : "ekChangedAt";
-    const changedByField = field === "stk" ? "stkChangedBy" : "ekChangedBy";
+  // dnes" značku, nech sa prepočet spraví úplne odznova.
+  function setVehicleDate(id, date) {
     updateVehicle(id, {
-      [field === "stk" ? "stkDate" : "ekDate"]: date,
-      [snoozeField]: null,
-      [notifiedField]: null,
-      [changedField]: new Date().toISOString(),
-      [changedByField]: myEmployee?.name || effectiveUser?.name || "",
+      stkEkDate: date,
+      stkEkSnoozeUntil: null,
+      stkEkNotifiedDate: null,
+      stkEkChangedAt: new Date().toISOString(),
+      stkEkChangedBy: myEmployee?.name || effectiveUser?.name || "",
     });
   }
-  function snoozeVehicleReminder(id, field, days) {
-    const snoozeField = field === "stk" ? "stkSnoozeUntil" : "ekSnoozeUntil";
-    updateVehicle(id, { [snoozeField]: addDaysISO(today, days) });
+  function snoozeVehicleReminder(id, days) {
+    updateVehicle(id, { stkEkSnoozeUntil: addDaysISO(today, days) });
     setVehicleCardTarget(null);
   }
   function setMachineTrackRevisions(id, track) {
@@ -6187,16 +6184,15 @@ function DispatcherApp() {
         style={{ padding: "12px 24px 20px", flex: 1, minWidth: 0, boxSizing: "border-box" }}
       >
         {module === "poziciovna" && (view === "dashboard" || view === "drivers" || view === "customers") && (
-          <div>
-            <FolderTabs
-              options={[
-                { id: "dashboard", label: "Stroje" },
-                { id: "drivers", label: "Šoféri" },
-                { id: "customers", label: "Zákazníci" },
-              ]}
-              active={view}
-              onSelect={setView}
-            />
+          <TabSwitcher
+            options={[
+              { id: "dashboard", label: "Stroje" },
+              { id: "drivers", label: "Šoféri" },
+              { id: "customers", label: "Zákazníci" },
+            ]}
+            active={view}
+            onSelect={setView}
+          >
             {view === "dashboard" && (
               <Dashboard
                 stats={stats}
@@ -6244,7 +6240,7 @@ function DispatcherApp() {
                 onOpenCard={(c) => setCustomerCard(c)}
               />
             )}
-          </div>
+          </TabSwitcher>
         )}
 
         {module === "poziciovna" && view === "jobs" && (
@@ -6486,15 +6482,14 @@ function DispatcherApp() {
         )}
 
         {module === "servis" && (view === "poskodenia" || view === "externe") && (
-          <div>
-            <FolderTabs
-              options={[
-                { id: "poskodenia", label: "Poškodenia požičovne" },
-                { id: "externe", label: "Externé zákazky" },
-              ]}
-              active={view}
-              onSelect={setView}
-            />
+          <TabSwitcher
+            options={[
+              { id: "poskodenia", label: "Poškodenia požičovne" },
+              { id: "externe", label: "Externé zákazky" },
+            ]}
+            active={view}
+            onSelect={setView}
+          >
             {view === "poskodenia" && (
               <DamagesView
                 damages={damages}
@@ -6543,7 +6538,7 @@ function DispatcherApp() {
                 onImport={() => setShowImportExterna(true)}
               />
             )}
-          </div>
+          </TabSwitcher>
         )}
 
         {module === "servis" && view === "diely" && (
@@ -6649,15 +6644,14 @@ function DispatcherApp() {
         )}
 
         {module === "servis" && (view === "revizie" || view === "uradne_skusky") && (
-          <div>
-            <FolderTabs
-              options={[
-                { id: "revizie", label: "Revízie" },
-                { id: "uradne_skusky", label: "Úradné skúšky" },
-              ]}
-              active={view}
-              onSelect={setView}
-            />
+          <TabSwitcher
+            options={[
+              { id: "revizie", label: "Revízie" },
+              { id: "uradne_skusky", label: "Úradné skúšky" },
+            ]}
+            active={view}
+            onSelect={setView}
+          >
             {view === "revizie" && (
               <RevisionsView
                 damages={damages}
@@ -6703,19 +6697,18 @@ function DispatcherApp() {
                 onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
               />
             )}
-          </div>
+          </TabSwitcher>
         )}
 
         {module === "servis" && (view === "ez_merania" || view === "erp") && (() => {
-          const canEz = can(effectiveUser, "ez_measurement_view") || myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser);
+          const canEz = can(effectiveUser, "ez_measurement_view") || (myEmployee?.alsoEzTechnik && myEmployee.role === effectiveUser?.role) || isAdminUser(effectiveUser);
           const canErpView = can(effectiveUser, "erp_view");
           const options = [
             ...(canEz ? [{ id: "ez_merania", label: "Revízie EZ" }] : []),
             ...(canErpView ? [{ id: "erp", label: "ERP — kontroly" }] : []),
           ];
-          return (
-            <div>
-              {options.length > 1 && <FolderTabs options={options} active={view} onSelect={setView} />}
+          const content = (
+            <>
               {view === "ez_merania" && canEz && (
                 <EzMeasurementsView
                   measurements={ezMeasurements}
@@ -6736,7 +6729,14 @@ function DispatcherApp() {
                   onRevertProtocol={revertProtocolErpProcessed}
                 />
               )}
-            </div>
+            </>
+          );
+          return options.length > 1 ? (
+            <TabSwitcher options={options} active={view} onSelect={setView}>
+              {content}
+            </TabSwitcher>
+          ) : (
+            content
           );
         })()}
 
@@ -8770,7 +8770,11 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
   // Revízie EZ: dispečer/vedúci servisu (ez_measurement_view) len na dohľad,
   // EZ technik (employees.alsoEzTechnik — nie je to rola) navyše aj na
   // spracovanie — obaja musia záložku vidieť, appka rozlíši práva až vnútri.
-  const canSeeEz = can(effectiveUser, "ez_measurement_view") || !!myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser);
+  // myEmployee.role === effectiveUser.role: keď admin simuluje inú rolu
+  // ("Zobraziť ako"), jeho VLASTNÝ príznak alsoEzTechnik sa nemá premietnuť
+  // do toho, čo simulovaná rola vidí — inak by fakturant servisu (ktorý
+  // reálne prístup nemá) videl záložku len preto, že ju má admin.
+  const canSeeEz = can(effectiveUser, "ez_measurement_view") || !!(myEmployee?.alsoEzTechnik && myEmployee.role === effectiveUser?.role) || isAdminUser(effectiveUser);
   const poziciovnaTabs = [
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
@@ -12253,7 +12257,7 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
   return (
     <div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        Vozový park — STK a emisná kontrola. Priradená osoba dostane upozornenie 30 dní vopred a klikom naň otvorí kartu auta (aj bez prístupu do Administratívy).
+        Vozový park — STK a emisná kontrola (jeden spoločný termín, robia sa vždy naraz). Priradená osoba dostane upozornenie 30 dní vopred a klikom naň otvorí kartu auta (aj bez prístupu do Administratívy).
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
         <button className="btn btn-accent" onClick={onAdd}>+ Pridať auto</button>
@@ -12265,25 +12269,22 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
               <th>ŠPZ</th>
               <th>Značka / model</th>
               <th>Priradená osoba</th>
-              <th>STK</th>
-              <th>EK</th>
+              <th>STK/EK</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {vehicles.length === 0 && (
-              <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne autá.</td></tr>
+              <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne autá.</td></tr>
             )}
             {vehicles.map((v) => {
-              const stk = vehicleDateStatus(v.stkDate, today);
-              const ek = vehicleDateStatus(v.ekDate, today);
+              const stkEk = vehicleDateStatus(v.stkEkDate, today);
               return (
                 <tr key={v.id}>
                   <td className="td-plain" style={{ fontWeight: 600, cursor: "pointer" }} onClick={() => onOpenCard(v)}>{v.spz || "—"}</td>
                   <td data-label="Značka / model">{v.znacka || "—"}</td>
                   <td data-label="Priradená osoba">{employeeById[v.assignedEmployeeId]?.name || "— nepriradené —"}</td>
-                  <td data-label="STK">{v.stkDate ? (stk.cls ? <span className={`badge ${stk.cls}`}>{fmtDate(v.stkDate)}{stk.label ? " · " + stk.label : ""}</span> : fmtDate(v.stkDate)) : "—"}</td>
-                  <td data-label="EK">{v.ekDate ? (ek.cls ? <span className={`badge ${ek.cls}`}>{fmtDate(v.ekDate)}{ek.label ? " · " + ek.label : ""}</span> : fmtDate(v.ekDate)) : "—"}</td>
+                  <td data-label="STK/EK">{v.stkEkDate ? (stkEk.cls ? <span className={`badge ${stkEk.cls}`}>{fmtDate(v.stkEkDate)}{stkEk.label ? " · " + stkEk.label : ""}</span> : fmtDate(v.stkEkDate)) : "—"}</td>
                   <td className="td-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(v)}>Upraviť</button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(v)}>Zmazať</button>
@@ -12301,8 +12302,7 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
   const [spz, setSpz] = useState(existing?.spz || "");
   const [znacka, setZnacka] = useState(existing?.znacka || "");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState(existing?.assignedEmployeeId || "");
-  const [stkDate, setStkDate] = useState(existing?.stkDate || "");
-  const [ekDate, setEkDate] = useState(existing?.ekDate || "");
+  const [stkEkDate, setStkEkDate] = useState(existing?.stkEkDate || existing?.stkDate || existing?.ekDate || "");
   const canSave = spz.trim();
   return (
     <Modal title={existing ? "Upraviť auto" : "Pridať auto"} onClose={onClose}>
@@ -12316,12 +12316,11 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
           ))}
         </select>
       </Field>
-      <Field label="Dátum platnosti STK"><input type="date" value={stkDate} onChange={(e) => setStkDate(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Dátum platnosti EK"><input type="date" value={ekDate} onChange={(e) => setEkDate(e.target.value)} style={{ width: "100%" }} /></Field>
+      <Field label="Dátum platnosti STK/EK"><input type="date" value={stkEkDate} onChange={(e) => setStkEkDate(e.target.value)} style={{ width: "100%" }} /></Field>
       <button
         className="btn btn-accent"
         disabled={!canSave}
-        onClick={() => onSave({ spz: spz.trim(), znacka: znacka.trim(), assignedEmployeeId: assignedEmployeeId || null, stkDate: stkDate || null, ekDate: ekDate || null })}
+        onClick={() => onSave({ spz: spz.trim(), znacka: znacka.trim(), assignedEmployeeId: assignedEmployeeId || null, stkEkDate: stkEkDate || null })}
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
       </button>
@@ -12331,19 +12330,23 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
 // Karta jedného auta — otvára sa buď zo zoznamu v Administratíve, alebo priamo
 // z notifikácie (klik na upozornenie), a to aj bez prístupu do Administratívy.
 function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose, onSetDate, onSnooze }) {
-  const [editingField, setEditingField] = useState(null); // "stk" | "ek" | null
+  const [editing, setEditing] = useState(false);
   const [newDate, setNewDate] = useState("");
   const employee = employees.find((e) => e.id === vehicle.assignedEmployeeId);
   // Karta sa dá otvoriť aj priamo odkazom z notifikácie (aj cez URL pri studenom
   // štarte) — bez tejto poistky by na zápis dosiahol ktokoľvek, kto sa k
   // takémuto odkazu dostane, nielen ten, komu je auto naozaj pridelené.
   const canEdit = can(user, "vehicle_manage") || (myEmployee && myEmployee.id === vehicle.assignedEmployeeId);
+  const date = vehicle.stkEkDate;
+  const status = vehicleDateStatus(date, today);
 
-  function renderField(field, label, date) {
-    const status = vehicleDateStatus(date, today);
-    return (
+  return (
+    <Modal eyebrow="Auto" title={<span style={{ color: "var(--accent)" }}>{vehicle.spz || "—"}</span>} onClose={onClose}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+        {vehicle.znacka || "—"} · priradené: {employee?.name || "— nikto —"}
+      </div>
       <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>STK/EK</div>
         <div style={{ marginBottom: 4 }}>
           {date ? (
             status.cls ? (
@@ -12355,37 +12358,27 @@ function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose
             "— nezadané —"
           )}
         </div>
-        {vehicle[`${field}ChangedAt`] && (
+        {vehicle.stkEkChangedAt && (
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>
-            Naposledy zmenené {fmtDate(vehicle[`${field}ChangedAt`].slice(0, 10))}{vehicle[`${field}ChangedBy`] ? ` · ${vehicle[`${field}ChangedBy`]}` : ""}
+            Naposledy zmenené {fmtDate(vehicle.stkEkChangedAt.slice(0, 10))}{vehicle.stkEkChangedBy ? ` · ${vehicle.stkEkChangedBy}` : ""}
           </div>
         )}
         {!canEdit ? (
           <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Len na čítanie — zadať nový dátum smie priradený zamestnanec alebo vedúci.</div>
-        ) : editingField === field ? (
+        ) : editing ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-            <button className="btn btn-accent" disabled={!newDate} onClick={() => { onSetDate(vehicle.id, field, newDate); setEditingField(null); setNewDate(""); }}>Uložiť</button>
-            <button className="btn btn-ghost" onClick={() => setEditingField(null)}>Zrušiť</button>
+            <button className="btn btn-accent" disabled={!newDate} onClick={() => { onSetDate(vehicle.id, newDate); setEditing(false); setNewDate(""); }}>Uložiť</button>
+            <button className="btn btn-ghost" onClick={() => setEditing(false)}>Zrušiť</button>
           </div>
         ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn btn-accent" onClick={() => { setEditingField(field); setNewDate(""); }}>Hotovo — nový dátum</button>
-            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, field, 1)}>Odložiť o 24 h</button>
-            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, field, 7)}>Odložiť o 7 dní</button>
+            <button className="btn btn-accent" onClick={() => { setEditing(true); setNewDate(""); }}>Hotovo — nový dátum</button>
+            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 1)}>Odložiť o 24 h</button>
+            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 7)}>Odložiť o 7 dní</button>
           </div>
         )}
       </div>
-    );
-  }
-
-  return (
-    <Modal eyebrow="Auto" title={<span style={{ color: "var(--accent)" }}>{vehicle.spz || "—"}</span>} onClose={onClose}>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {vehicle.znacka || "—"} · priradené: {employee?.name || "— nikto —"}
-      </div>
-      {renderField("stk", "STK", vehicle.stkDate)}
-      {renderField("ek", "Emisná kontrola (EK)", vehicle.ekDate)}
     </Modal>
   );
 }
@@ -18569,7 +18562,7 @@ function EzMeasurementsView({ measurements, myEmployee, user, onProcess }) {
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
-  const canProcess = !!myEmployee?.alsoEzTechnik || isAdminUser(user);
+  const canProcess = !!(myEmployee?.alsoEzTechnik && myEmployee.role === user?.role) || isAdminUser(user);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
