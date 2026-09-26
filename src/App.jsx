@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.636";
+const APP_VERSION = "1.0.637";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2645,7 +2645,7 @@ function DispatcherApp() {
   const [planTechnicianFilter, setPlanTechnicianFilter] = useState(""); // zdieľané medzi Kalendárom a Prehľadom v Pláne servisu
   const [planDepoFilter, setPlanDepoFilter] = useState(null);
   const [planShowArchived, setPlanShowArchived] = useState(false);
-  const [documentsSubView, setDocumentsSubView] = useState(null);
+  const [documentsSubView, setDocumentsSubView] = useState(() => localStorage.getItem("mateco_last_documents_subview") || null);
   function pickDocumentsSubView(subTab) {
     if (subTab.url) {
       window.open(subTab.url, "_blank", "noopener,noreferrer");
@@ -2839,6 +2839,10 @@ function DispatcherApp() {
   useEffect(() => {
     localStorage.setItem("mateco_last_view", view);
   }, [view]);
+  useEffect(() => {
+    if (documentsSubView) localStorage.setItem("mateco_last_documents_subview", documentsSubView);
+    else localStorage.removeItem("mateco_last_documents_subview");
+  }, [documentsSubView]);
 
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
@@ -3441,6 +3445,7 @@ function DispatcherApp() {
     idbDelete("tables", "session"); // explicitné odhlásenie platí aj offline, nič to nemá "obnoviť"
     localStorage.removeItem("mateco_last_module");
     localStorage.removeItem("mateco_last_view");
+    localStorage.removeItem("mateco_last_documents_subview");
   }
   function updateProfileInfo(id, patch) {
     supabase
