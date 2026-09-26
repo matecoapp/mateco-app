@@ -256,7 +256,11 @@ export default function CustomerPortal({ token }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f0f0f0", fontFamily: "'Barlow', Arial, sans-serif" }}>
-      <header style={{ background: "#E30613", padding: "10px 16px" }}>
+      {/* Tlač/uloženie do PDF ide cez natívne window.print() (Ctrl+P/Cmd+P uloží ako PDF) —
+          protokol už neposielame mailom, zákazník si ho takto vie kedykoľvek stiahnuť sám.
+          Skryje sa v tlači všetko okrem samotného protokolu. */}
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <header className="no-print" style={{ background: "#E30613", padding: "10px 16px" }}>
         <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>
           mateco
           <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: 10 }}>Stav vašej zákazky</span>
@@ -317,46 +321,59 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
-              <RequestHistory requests={data.requests} />
+              <div className="no-print">
+                <RequestHistory requests={data.requests} />
 
-              {!data.returnDone && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                  <RequestForm
-                    type="problem"
-                    jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
-                    onSubmit={submitRequest}
-                  />
-                  <RequestForm
-                    type="extension"
-                    jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
-                    onSubmit={submitRequest}
-                  />
-                </div>
-              )}
+                {!data.returnDone && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                    <RequestForm
+                      type="problem"
+                      jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
+                      onSubmit={submitRequest}
+                    />
+                    <RequestForm
+                      type="extension"
+                      jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
+                      onSubmit={submitRequest}
+                    />
+                  </div>
+                )}
 
-              <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Kontakty</div>
-              {data.salespersonName && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{data.salespersonName}</div>
-                  {data.salespersonPhone && (
-                    <div style={{ fontSize: 13 }}>
-                      <a href={`tel:${data.salespersonPhone}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonPhone}</a>
-                    </div>
-                  )}
-                  {data.salespersonEmail && (
-                    <div style={{ fontSize: 13 }}>
-                      <a href={`mailto:${data.salespersonEmail}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonEmail}</a>
-                    </div>
-                  )}
+                <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Kontakty</div>
+                {data.salespersonName && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{data.salespersonName}</div>
+                    {data.salespersonPhone && (
+                      <div style={{ fontSize: 13 }}>
+                        <a href={`tel:${data.salespersonPhone}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonPhone}</a>
+                      </div>
+                    )}
+                    {data.salespersonEmail && (
+                      <div style={{ fontSize: 13 }}>
+                        <a href={`mailto:${data.salespersonEmail}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonEmail}</a>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: "#999", fontWeight: 600, marginBottom: 2 }}>Nahlasovanie porúch</div>
+                <div style={{ fontSize: 13, marginBottom: 14 }}>
+                  <div><a href="tel:+421905979484" style={{ color: "#B3131D", textDecoration: "none" }}>+421 905 979 484</a></div>
+                  <div><a href="mailto:servis@matecoslovakia.sk" style={{ color: "#B3131D", textDecoration: "none" }}>servis@matecoslovakia.sk</a></div>
                 </div>
-              )}
-              <div style={{ fontSize: 11, color: "#999", fontWeight: 600, marginBottom: 2 }}>Nahlasovanie porúch</div>
-              <div style={{ fontSize: 13, marginBottom: 14 }}>
-                <div><a href="tel:+421905979484" style={{ color: "#B3131D", textDecoration: "none" }}>+421 905 979 484</a></div>
-                <div><a href="mailto:servis@matecoslovakia.sk" style={{ color: "#B3131D", textDecoration: "none" }}>servis@matecoslovakia.sk</a></div>
               </div>
 
-              <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, color: "#999", fontWeight: 600 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
+                {data.handoverDone && !data.migratedWithoutHandover && (
+                  <button
+                    className="no-print"
+                    onClick={() => window.print()}
+                    style={{ border: "1px solid #B3131D", background: "#fff", color: "#B3131D", fontWeight: 600, fontSize: 12, padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}
+                  >
+                    🖨️ Vytlačiť / uložiť ako PDF
+                  </button>
+                )}
+              </div>
               {!data.handoverDone ? (
                 <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>Zatiaľ nevypísaný.</div>
               ) : data.migratedWithoutHandover ? (

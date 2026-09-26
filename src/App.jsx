@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.624";
+const APP_VERSION = "1.0.626";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1985,6 +1985,47 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Prepínač "zakladač" — nad zlúčenými záložkami (Zákazky, Revízie,
+   Podklady, Dáta požičovne) prepína celé okno pod sebou, žiadne
+   miešanie obsahu (viď mockup https://claude.ai/artifact/FLVz3CVjJovsjdXp4bBGJH).
+--------------------------------------------------------- */
+function FolderTabs({ options, active, onSelect }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", marginBottom: -1 }}>
+      {options.map((o, i) => {
+        const isActive = o.id === active;
+        return (
+          <button
+            key={o.id}
+            onClick={() => onSelect(o.id)}
+            style={{
+              position: "relative",
+              zIndex: isActive ? 2 : 1,
+              marginLeft: i === 0 ? 0 : -18,
+              clipPath: isActive
+                ? "polygon(0 100%, 0 18%, 16px 0, calc(100% - 16px) 0, 100% 18%, 100% 100%)"
+                : "polygon(0 100%, 0 22%, 16px 0, 100% 0, 100% 100%)",
+              background: isActive ? "var(--panel)" : "var(--border)",
+              border: "none",
+              borderTop: isActive ? "3px solid var(--accent)" : "none",
+              height: isActive ? 44 : 36,
+              padding: "0 22px",
+              fontSize: isActive ? 14 : 13.5,
+              fontWeight: isActive ? 700 : 500,
+              color: isActive ? "var(--accent)" : "var(--text-dim)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -5830,12 +5871,14 @@ function DispatcherApp() {
   }
   function mailtoCustomer(job) {
     const machine = machineById[job.machineId];
+    const portalLink = job.publicToken ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}` : "";
     const subject = `Potvrdenie zákazky — stroj ${machine?.code}`;
     const body =
       `Dobrý deň,\n\n` +
       `potvrdzujeme dodanie stroja ${machine?.code} na adresu: ${job.toLocation}.\n` +
       `Termín: ${fmtDate(job.startDate)} — ${job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}\n` +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
+      (portalLink ? `\nStav zákazky aj odovzdávací protokol si môžete kedykoľvek pozrieť tu:\n${portalLink}\n` : "") +
       `\nS pozdravom,\nDispečing`;
     return { to: job.customerEmail || "", subject, body };
   }
@@ -6143,29 +6186,65 @@ function DispatcherApp() {
         }`}
         style={{ padding: "12px 24px 20px", flex: 1, minWidth: 0, boxSizing: "border-box" }}
       >
-        {module === "poziciovna" && view === "dashboard" && (
-          <Dashboard
-            stats={stats}
-            filteredMachines={filteredMachines}
-            search={search}
-            setSearch={setSearch}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            depoFilter={dashboardDepoFilter}
-            setDepoFilter={setDashboardDepoFilter}
-            user={effectiveUser}
-            onAddMachine={() => setShowAddMachine({})}
-            onImport={() => setShowImport(true)}
-            onExportCsv={exportMachinesCsv}
-            onOpenCard={(m) => setMachineCard(m)}
-            onClearAll={() =>
-              askDelete(
-                `VŠETKY stroje (${machines.length}), ich zákazky a poškodenia/revízie — pripravené na nový import z CSV`,
-                clearAllMachines
-              )
-            }
-            today={today}
-          />
+        {module === "poziciovna" && (view === "dashboard" || view === "drivers" || view === "customers") && (
+          <div>
+            <FolderTabs
+              options={[
+                { id: "dashboard", label: "Stroje" },
+                { id: "drivers", label: "Šoféri" },
+                { id: "customers", label: "Zákazníci" },
+              ]}
+              active={view}
+              onSelect={setView}
+            />
+            {view === "dashboard" && (
+              <Dashboard
+                stats={stats}
+                filteredMachines={filteredMachines}
+                search={search}
+                setSearch={setSearch}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                depoFilter={dashboardDepoFilter}
+                setDepoFilter={setDashboardDepoFilter}
+                user={effectiveUser}
+                onAddMachine={() => setShowAddMachine({})}
+                onImport={() => setShowImport(true)}
+                onExportCsv={exportMachinesCsv}
+                onOpenCard={(m) => setMachineCard(m)}
+                onClearAll={() =>
+                  askDelete(
+                    `VŠETKY stroje (${machines.length}), ich zákazky a poškodenia/revízie — pripravené na nový import z CSV`,
+                    clearAllMachines
+                  )
+                }
+                today={today}
+              />
+            )}
+            {view === "drivers" && (
+              <DriversView
+                drivers={drivers}
+                jobs={jobs}
+                today={today}
+                vehicleByEmployeeId={vehicleByEmployeeId}
+                onOpenCard={(d) => setDriverCard(d)}
+              />
+            )}
+            {view === "customers" && (
+              <CustomersView
+                customers={customers}
+                jobs={jobs}
+                reservations={reservations}
+                damages={damages}
+                blacklist={blacklist}
+                framoveZmluvy={framoveZmluvy}
+                user={effectiveUser}
+                onAdd={() => setShowAddCustomer(true)}
+                onImport={() => setShowImportCustomers(true)}
+                onOpenCard={(c) => setCustomerCard(c)}
+              />
+            )}
+          </div>
         )}
 
         {module === "poziciovna" && view === "jobs" && (
@@ -6258,31 +6337,6 @@ function DispatcherApp() {
             highlightTransportId={highlightTransportId}
             onDismissTransportHighlight={() => setHighlightTransportId(null)}
             transportNotes={transportNotes}
-          />
-        )}
-
-        {module === "poziciovna" && view === "drivers" && (
-          <DriversView
-            drivers={drivers}
-            jobs={jobs}
-            today={today}
-            vehicleByEmployeeId={vehicleByEmployeeId}
-            onOpenCard={(d) => setDriverCard(d)}
-          />
-        )}
-
-        {module === "poziciovna" && view === "customers" && (
-          <CustomersView
-            customers={customers}
-            jobs={jobs}
-            reservations={reservations}
-            damages={damages}
-            blacklist={blacklist}
-            framoveZmluvy={framoveZmluvy}
-            user={effectiveUser}
-            onAdd={() => setShowAddCustomer(true)}
-            onImport={() => setShowImportCustomers(true)}
-            onOpenCard={(c) => setCustomerCard(c)}
           />
         )}
 
@@ -6431,54 +6485,65 @@ function DispatcherApp() {
           </div>
         )}
 
-        {module === "servis" && view === "poskodenia" && (
-          <DamagesView
-            damages={damages}
-            technicians={technicians}
-            machineById={enrichedMachineById}
-            user={effectiveUser}
-            onAssign={(d) => setDamageAssignTarget(d)}
-            onDelete={(id) => {
-              const d = damages.find((x) => x.id === id);
-              askDelete(`hlásenie poškodenia ${d?.code || ""}`, () => deleteDamage(id));
-            }}
-            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
-            onResolve={setDamageResolved}
-            onComplete={handleAttemptCompleteDamage}
-            onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onAttachMachine={(d) => setAttachMachineTarget(d)}
-            highlightDamageId={highlightDamageId}
-            onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
-            onOpenSummary={() => setDamagesSummaryOpen(true)}
-            onBulkAssign={assignDamagesBulk}
-            today={today}
-            onImport={() => setShowImportDamages(true)}
-          />
-        )}
-
-        {module === "servis" && view === "externe" && (
-          <ExternalServiceView
-            damages={damages}
-            protocolLogs={protocolLogs}
-            technicians={technicians}
-            user={effectiveUser}
-            onAdd={() => setShowExternalReport(true)}
-            onAssign={(d) => setDamageAssignTarget(d)}
-            onDelete={(id) => {
-              const d = damages.find((x) => x.id === id);
-              askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
-            }}
-            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
-            onResolve={setDamageResolved}
-            onComplete={handleAttemptCompleteDamage}
-            onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onAssignProtocol={assignProtocolToDamage}
-            onToggleProtocolInvoiced={toggleProtocolInvoiced}
-            highlightDamageId={highlightDamageId}
-            onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
-            onOpenSummary={() => setExternaSummaryOpen(true)}
-            onImport={() => setShowImportExterna(true)}
-          />
+        {module === "servis" && (view === "poskodenia" || view === "externe") && (
+          <div>
+            <FolderTabs
+              options={[
+                { id: "poskodenia", label: "Poškodenia požičovne" },
+                { id: "externe", label: "Externé zákazky" },
+              ]}
+              active={view}
+              onSelect={setView}
+            />
+            {view === "poskodenia" && (
+              <DamagesView
+                damages={damages}
+                technicians={technicians}
+                machineById={enrichedMachineById}
+                user={effectiveUser}
+                onAssign={(d) => setDamageAssignTarget(d)}
+                onDelete={(id) => {
+                  const d = damages.find((x) => x.id === id);
+                  askDelete(`hlásenie poškodenia ${d?.code || ""}`, () => deleteDamage(id));
+                }}
+                onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+                onResolve={setDamageResolved}
+                onComplete={handleAttemptCompleteDamage}
+                onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+                onAttachMachine={(d) => setAttachMachineTarget(d)}
+                highlightDamageId={highlightDamageId}
+                onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia)}
+                onOpenSummary={() => setDamagesSummaryOpen(true)}
+                onBulkAssign={assignDamagesBulk}
+                today={today}
+                onImport={() => setShowImportDamages(true)}
+              />
+            )}
+            {view === "externe" && (
+              <ExternalServiceView
+                damages={damages}
+                protocolLogs={protocolLogs}
+                technicians={technicians}
+                user={effectiveUser}
+                onAdd={() => setShowExternalReport(true)}
+                onAssign={(d) => setDamageAssignTarget(d)}
+                onDelete={(id) => {
+                  const d = damages.find((x) => x.id === id);
+                  askDelete(`externú zákazku ${d?.code || ""}`, () => deleteDamage(id));
+                }}
+                onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+                onResolve={setDamageResolved}
+                onComplete={handleAttemptCompleteDamage}
+                onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+                onAssignProtocol={assignProtocolToDamage}
+                onToggleProtocolInvoiced={toggleProtocolInvoiced}
+                highlightDamageId={highlightDamageId}
+                onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
+                onOpenSummary={() => setExternaSummaryOpen(true)}
+                onImport={() => setShowImportExterna(true)}
+              />
+            )}
+          </div>
         )}
 
         {module === "servis" && view === "diely" && (
@@ -6583,74 +6648,97 @@ function DispatcherApp() {
           />
         )}
 
-        {module === "servis" && view === "revizie" && (
-          <RevisionsView
-            damages={damages}
-            technicians={technicians}
-            machineById={enrichedMachineById}
-            user={effectiveUser}
-            onAssign={(d) => setDamageAssignTarget(d)}
-            onComplete={(d) => setCompleteRevisionTarget(d)}
-            onResolve={(id, resolved) => {
-              if (resolved === false) {
-                const d = damages.find((x) => x.id === id);
-                if (d) setReopenTarget({ damage: d, label: `revíziu ${d.code || ""}` });
-              } else {
-                setDamageResolved(id, resolved);
-              }
-            }}
-            onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
-            highlightDamageId={highlightDamageId}
-            onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
-          />
+        {module === "servis" && (view === "revizie" || view === "uradne_skusky") && (
+          <div>
+            <FolderTabs
+              options={[
+                { id: "revizie", label: "Revízie" },
+                { id: "uradne_skusky", label: "Úradné skúšky" },
+              ]}
+              active={view}
+              onSelect={setView}
+            />
+            {view === "revizie" && (
+              <RevisionsView
+                damages={damages}
+                technicians={technicians}
+                machineById={enrichedMachineById}
+                user={effectiveUser}
+                onAssign={(d) => setDamageAssignTarget(d)}
+                onComplete={(d) => setCompleteRevisionTarget(d)}
+                onResolve={(id, resolved) => {
+                  if (resolved === false) {
+                    const d = damages.find((x) => x.id === id);
+                    if (d) setReopenTarget({ damage: d, label: `revíziu ${d.code || ""}` });
+                  } else {
+                    setDamageResolved(id, resolved);
+                  }
+                }}
+                onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+                onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+                highlightDamageId={highlightDamageId}
+                onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
+              />
+            )}
+            {view === "uradne_skusky" && (
+              <UradneSkuskyView
+                damages={damages}
+                technicians={technicians}
+                machineById={enrichedMachineById}
+                today={today}
+                user={effectiveUser}
+                onAssign={(d) => setDamageAssignTarget(d)}
+                onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
+                onResolve={(id, resolved) => {
+                  if (resolved === false) {
+                    const d = damages.find((x) => x.id === id);
+                    if (d) setReopenTarget({ damage: d, label: `úradnú skúšku ${d.code || ""}` });
+                  } else {
+                    setDamageResolved(id, resolved);
+                  }
+                }}
+                onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
+                onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
+                highlightDamageId={highlightDamageId}
+                onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
+              />
+            )}
+          </div>
         )}
 
-        {module === "servis" && view === "uradne_skusky" && (
-          <UradneSkuskyView
-            damages={damages}
-            technicians={technicians}
-            machineById={enrichedMachineById}
-            today={today}
-            user={effectiveUser}
-            onAssign={(d) => setDamageAssignTarget(d)}
-            onComplete={(d) => setCompleteUradnaSkuskaTarget(d)}
-            onResolve={(id, resolved) => {
-              if (resolved === false) {
-                const d = damages.find((x) => x.id === id);
-                if (d) setReopenTarget({ damage: d, label: `úradnú skúšku ${d.code || ""}` });
-              } else {
-                setDamageResolved(id, resolved);
-              }
-            }}
-            onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
-            onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
-            highlightDamageId={highlightDamageId}
-            onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
-          />
-        )}
-
-        {module === "servis" && view === "ez_merania" && (can(effectiveUser, "ez_measurement_view") || myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser)) && (
-          <EzMeasurementsView
-            measurements={ezMeasurements}
-            myEmployee={myEmployee}
-            user={effectiveUser}
-            onProcess={markEzMeasurementProcessed}
-          />
-        )}
-
-        {module === "servis" && view === "erp" && can(effectiveUser, "erp_view") && (
-          <ErpChecklistsView
-            assignments={assignments}
-            protocolLogs={protocolLogs}
-            machineById={enrichedMachineById}
-            technicianById={technicianByIdTop}
-            onMarkChecklist={markChecklistErpProcessed}
-            onRevertChecklist={revertChecklistErpProcessed}
-            onMarkProtocol={markProtocolErpProcessed}
-            onRevertProtocol={revertProtocolErpProcessed}
-          />
-        )}
+        {module === "servis" && (view === "ez_merania" || view === "erp") && (() => {
+          const canEz = can(effectiveUser, "ez_measurement_view") || myEmployee?.alsoEzTechnik || isAdminUser(effectiveUser);
+          const canErpView = can(effectiveUser, "erp_view");
+          const options = [
+            ...(canEz ? [{ id: "ez_merania", label: "Revízie EZ" }] : []),
+            ...(canErpView ? [{ id: "erp", label: "ERP — kontroly" }] : []),
+          ];
+          return (
+            <div>
+              {options.length > 1 && <FolderTabs options={options} active={view} onSelect={setView} />}
+              {view === "ez_merania" && canEz && (
+                <EzMeasurementsView
+                  measurements={ezMeasurements}
+                  myEmployee={myEmployee}
+                  user={effectiveUser}
+                  onProcess={markEzMeasurementProcessed}
+                />
+              )}
+              {view === "erp" && canErpView && (
+                <ErpChecklistsView
+                  assignments={assignments}
+                  protocolLogs={protocolLogs}
+                  machineById={enrichedMachineById}
+                  technicianById={technicianByIdTop}
+                  onMarkChecklist={markChecklistErpProcessed}
+                  onRevertChecklist={revertChecklistErpProcessed}
+                  onMarkProtocol={markProtocolErpProcessed}
+                  onRevertProtocol={revertProtocolErpProcessed}
+                />
+              )}
+            </div>
+          );
+        })()}
 
         {module === "servis" && view === "dokumenty" && (
           <DocumentsView subView={documentsSubView} subTabs={DOCUMENT_SUBTABS.servis} />
@@ -8687,22 +8775,21 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
     { id: "calendar", label: "Kalendár" },
     { id: "jobs", label: "Zákazky" },
     { id: "prepravy", label: "Prepravy" },
-    { id: "dashboard", label: "Stroje" },
-    { id: "drivers", label: "Šoféri" },
-    { id: "customers", label: "Zákazníci" },
+    { id: "dashboard", label: "Dáta požičovne", group: ["dashboard", "drivers", "customers"] },
     ...(can(effectiveUser, "erp_pozicovna_view") ? [{ id: "erp_pozicovna", label: "ERP podklady" }] : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
+  const canErp = can(effectiveUser, "erp_view");
+  const podkladySubs = [...(canSeeEz ? ["ez_merania"] : []), ...(canErp ? ["erp"] : [])];
   const servisTabs = [
     { id: "prehlad", label: "Prehľad" },
     { id: "plan", label: "Plán servisu" },
     { id: "diely", label: "Náhradné diely" },
-    { id: "poskodenia", label: "Poškodenia strojov požičovne" },
-    { id: "externe", label: "Externé servisné zákazky" },
-    { id: "revizie", label: "Revízie" },
-    { id: "uradne_skusky", label: "Úradné skúšky" },
-    ...(canSeeEz ? [{ id: "ez_merania", label: "Revízie EZ" }] : []),
-    ...(can(effectiveUser, "erp_view") ? [{ id: "erp", label: "ERP — kontroly" }] : []),
+    { id: "poskodenia", label: "Zákazky", group: ["poskodenia", "externe"] },
+    { id: "revizie", label: "Revízie", group: ["revizie", "uradne_skusky"] },
+    ...(podkladySubs.length > 0
+      ? [{ id: podkladySubs[0], label: podkladySubs.length > 1 ? "Podklady" : podkladySubs[0] === "ez_merania" ? "Revízie EZ" : "ERP — kontroly", group: podkladySubs }]
+      : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
   const administrativaTabs = [
@@ -8789,14 +8876,14 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, myEmployee,
             ) : (
               <button
                 key={t.id}
-                className={`sidebar-item${view === t.id ? " active" : ""}`}
+                className={`sidebar-item${(t.group || [t.id]).includes(view) ? " active" : ""}`}
                 onClick={() => {
                   onSelectModule(activeModule.id);
                   onSelectView(t.id);
                 }}
               >
                 {t.label}
-                {t.id === "poskodenia" && activeModule.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{activeModule.badge}</span>}
+                {(t.group || [t.id]).includes("poskodenia") && activeModule.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{activeModule.badge}</span>}
               </button>
             )
           )}
@@ -8996,7 +9083,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
         kind: "dot",
         key: `dot-${activeModule.id}-${t.id}`,
         label: t.label,
-        active: !t.dropdown && view === t.id,
+        active: !t.dropdown && (t.group || [t.id]).includes(view),
         onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(activeModule.id); onSelectView(t.id); },
       });
       // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
@@ -10001,10 +10088,13 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
                     style={{ fontSize: 11, padding: "4px 8px", marginLeft: "auto" }}
                     title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
                     onClick={() => {
+                      const portalLink = j.publicToken ? `${window.location.origin}${window.location.pathname}?portal=${j.publicToken}` : "";
                       composeMail({
                         to: j.customerEmail || "",
                         subject: `Blížiaci sa koniec prenájmu — ${m?.code || ""}`,
-                        body: `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${m?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.`,
+                        body:
+                          `Dobrý deň,\n\nradi by sme Vás upozornili, že prenájom stroja ${m?.code || ""}${j.toLocation ? " na adrese " + j.toLocation : ""} sa blíži ku koncu (${fmtDate(j.endDate)}).\n\nAk máte záujem o predĺženie, prosím kontaktujte nás. V opačnom prípade si Vás dovoľujeme požiadať o súčinnosť pri príprave stroja na zvoz.\n\nĎakujeme.` +
+                          (portalLink ? `\n\nStav zákazky aj odovzdávací protokol si môžete kedykoľvek pozrieť tu:\n${portalLink}` : ""),
                       });
                     }}
                   >
