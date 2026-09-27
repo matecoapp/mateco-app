@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.637";
+const APP_VERSION = "1.0.639";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -409,7 +409,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   .colhead { font-weight: bold; font-size: 13px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin-bottom: 7px; }
   .checkrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
   .mark { font-weight: bold; width: 18px; text-align: center; }
-  .mark.ok { color: #2f7d32; }
+  .mark.ok { color: #2e7d32; }
   .mark.bad { color: #c62828; }
   .itemnote { font-size: 11px; color: #c62828; padding: 0 0 4px 4px; }
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
@@ -899,7 +899,7 @@ ${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-ite
       return;
     }
     window.parent.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
-    msg.style.color = '#2f7d32';
+    msg.style.color = '#2e7d32';
     msg.textContent = 'Uložené ✓';
     lockFields();
     setTimeout(function() { msg.textContent = ''; }, 2500);
@@ -2161,6 +2161,22 @@ function StatusBadge({ status }) {
   return <span className={`badge ${m.cls}`}>{m.label}</span>;
 }
 
+// Skeleton riadky — namiesto textu "Načítavam…" počas async načítania (napr.
+// audit log zo Supabase). Len šedé pruhy v tvare tabuľky.
+function SkeletonRows({ rows = 5, cols = 4 }) {
+  return (
+    <div style={{ padding: "4px 0" }}>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} style={{ display: "flex", gap: 16, padding: "10px 14px", borderBottom: r < rows - 1 ? "1px solid var(--border)" : "none" }}>
+          {Array.from({ length: cols }).map((__, c) => (
+            <div key={c} className="skeleton-bar" style={{ height: 12, borderRadius: 4, flex: c === 0 ? 1.4 : 1, opacity: 1 - r * 0.08 }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Kebab menu (⋮) pre riadky s viacerými akciami — namiesto radu tlačidiel v
 // riadku tabuľky/karty. actions: [{ label, onClick, href?, danger? }, ...] —
 // falsy položky (napr. akcia skrytá podľa práv) sa preskočia.
@@ -2218,6 +2234,17 @@ function KebabMenu({ actions }) {
    Modal shell
 --------------------------------------------------------- */
 function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerExtra, elevated }) {
+  // Esc zatvorí — jedno miesto, všetky okná postavené na Modal ho tým pádom
+  // dostanú automaticky. Zámerne len na Escape (nie iné klávesy) a len
+  // onClose (nie onBack) — Esc má vždy znamenať "zavrieť celé okno", nie
+  // "krok späť v histórii kariet".
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   return (
     <div
       className="modal-overlay"
@@ -2280,7 +2307,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {onBack && (
                 <button className="btn btn-ghost" onClick={onBack}>
-                  Späť
+                  ← Späť
                 </button>
               )}
               {headerExtra}
@@ -2703,6 +2730,23 @@ function DispatcherApp() {
   // Jednoduchý zdieľaný "toast" na potvrdenie odoslania (nahlásenie
   // poškodenia, nová zákazka/rezervácia, kontaktná osoba a pod.) — predtým
   // sa formulár len potichu zatvoril a odosielajúci nevedel, či to prešlo.
+  // Backspace mimo naozaj upraviteľného poľa (input/textarea/contentEditable)
+  // je v niektorých prehliadačoch stále natívne "späť v histórii" — ak
+  // klik do poľa nestihne/nemôže dostať fokus (napr. po prekreslení),
+  // ďalší stlačený Backspace appku vyhodí o krok späť namiesto mazania.
+  // Táto poistka to celkom vypne, nech sa to nestane nikdy, nezávisle od
+  // toho, čo presne fokus stratilo.
+  useEffect(() => {
+    function blockBackspaceNav(e) {
+      if (e.key !== "Backspace") return;
+      const el = document.activeElement;
+      const editable = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (!editable) e.preventDefault();
+    }
+    document.addEventListener("keydown", blockBackspaceNav);
+    return () => document.removeEventListener("keydown", blockBackspaceNav);
+  }, []);
+
   const [toast, setToast] = useState(null); // string | null
   const toastTimer = useRef(null);
   function showToast(message) {
@@ -9925,7 +9969,7 @@ function Dashboard({
                   onClick={() => onOpenCard(m)}
                 >
                   <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m.code}{m.archived ? " (archivovaný)" : ""}</td>
-                  <td data-label="Model" style={{ color: "var(--text-dim)" }}>{m.type || "—"}</td>
+                  <td data-label="Model" style={{ fontWeight: 600 }}>{m.type || "—"}</td>
                   <td data-label="Revízia ZZ" className="mono" style={{ color: reviziaColor }}>{m.trackRevisions === false ? "Nesledované" : (m.revizia ? fmtDate(m.revizia) : "—")}</td>
                   <td data-label="Revízia EZ" className="mono" style={{ color: reviziaEZColor }}>{m.trackRevisionsEZ === false ? "Nesledované" : (m.reviziaEZ ? fmtDate(m.reviziaEZ) : "—")}</td>
                   <td data-label="Depo">{m.depo || "—"}</td>
@@ -11033,8 +11077,12 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
 --------------------------------------------------------- */
 function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchive, onDelete, onLinkAccount }) {
   const [showArchived, setShowArchived] = useState(false);
+  const [search, setSearch] = useState("");
   const manageableRoles = manageableEmployeeRoles(user);
-  const visible = employees.filter((e) => manageableRoles.includes(e.role) && (showArchived || !e.archived));
+  const q = search.trim().toLowerCase();
+  const visible = employees.filter(
+    (e) => manageableRoles.includes(e.role) && (showArchived || !e.archived) && (!q || e.name.toLowerCase().includes(q))
+  );
   const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
 
   // Kontrola duplicitných zamestnancov — rovnaké meno (bez ohľadu na veľkosť
@@ -11063,10 +11111,13 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
         </div>
       )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          Zobraziť archivovaných
-        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <SearchInput placeholder="Hľadať zamestnanca…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Zobraziť archivovaných
+          </label>
+        </div>
         <button className="btn btn-accent" onClick={onAdd}>+ Pridať zamestnanca</button>
       </div>
       <div className="panel">
@@ -11713,6 +11764,10 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
 
 function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
   const [open, setOpen] = useState(false);
+  // Namiesto natívneho window.confirm (jediné miesto v appke, čo ho ešte
+  // používalo) — rovnaký dvojkrokový vzor ako inde (klik → červené
+  // upozornenie + druhé tlačidlo na potvrdenie).
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
   // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
   // viazané na konkrétneho prihláseného, nie zdieľané medzi ľuďmi na tom istom
@@ -12095,14 +12150,32 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
               maSKot (beta)
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {messages.length > 0 && (
+              {messages.length > 0 && !confirmingClear && (
                 <button
-                  onClick={() => { if (window.confirm("Vymazať celý rozhovor?")) clearConversation(); }}
+                  onClick={() => setConfirmingClear(true)}
                   title="Vymazať rozhovor"
                   style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 13, opacity: 0.85 }}
                 >
                   🗑️
                 </button>
+              )}
+              {confirmingClear && (
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    onClick={() => { clearConversation(); setConfirmingClear(false); }}
+                    title="Naozaj vymazať celý rozhovor"
+                    style={{ background: "#fff", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "3px 8px" }}
+                  >
+                    Vymazať?
+                  </button>
+                  <button
+                    onClick={() => setConfirmingClear(false)}
+                    title="Zrušiť"
+                    style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 13, opacity: 0.85 }}
+                  >
+                    ✕
+                  </button>
+                </span>
               )}
               {SpeechRecognitionApi && canSpeak && (
                 <button
@@ -19102,8 +19175,8 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             const diff = erpChecklistDiff(a);
             return (
               <tr key={a.id}>
-                <td data-label="Model">{m?.type || "—"}</td>
-                <td data-label="Sériové číslo">{m?.code || "—"}</td>
+                <td data-label="Model" style={{ fontWeight: 600 }}>{m?.type || "—"}</td>
+                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m?.code || "—"}</td>
                 <td data-label="Technik">{t?.name || "—"}</td>
                 <td data-label="Hodiny">{a.workHours} h</td>
                 {withParts && (
@@ -19229,8 +19302,8 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
             const diff = erpProtocolDiff(p);
             return (
               <tr key={p.id}>
-                <td data-label="Model">{p.machineModel || "—"}</td>
-                <td data-label="Sériové číslo">{p.machineSerial || "—"}</td>
+                <td data-label="Model" style={{ fontWeight: 600 }}>{p.machineModel || "—"}</td>
+                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{p.machineSerial || "—"}</td>
                 <td data-label="Zákazník">{p.clientName || "—"}</td>
                 <td data-label="Technik">{p.technicianName || "—"}</td>
                 <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + w.hours + "h)" : ""}`).join(", ") || "—"}</td>
@@ -19439,8 +19512,8 @@ function ErpPozicovnaView({ handoverProtocols, jobs, machineById, onMark, onReve
           <tbody>
             {rows.map(({ h, job, machine }) => (
               <tr key={h.id}>
-                <td data-label="Model">{machine?.type || "—"}</td>
-                <td data-label="Sériové číslo">{machine?.code || "—"}</td>
+                <td data-label="Model" style={{ fontWeight: 600 }}>{machine?.type || "—"}</td>
+                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{machine?.code || "—"}</td>
                 <td data-label="Zákazník">{job?.customer || "—"}</td>
                 <td data-label="Číslo zmluvy">{job?.cisloZmluvy || "—"}</td>
                 <td data-label="Vrátené">{h.returnDate ? fmtDate(h.returnDate) : "—"}</td>
@@ -22900,7 +22973,9 @@ function AuditLogView({ profiles }) {
         </div>
       )}
       {!error && entries === null && (
-        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>Načítavam…</div>
+        <div className="panel">
+          <SkeletonRows rows={6} cols={5} />
+        </div>
       )}
       {!error && entries !== null && (
         <div className="panel">
@@ -23407,6 +23482,12 @@ function GlobalStyle() {
         animation: app-toast-in .2s ease;
       }
       @keyframes app-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+      .skeleton-bar {
+        background: linear-gradient(90deg, var(--panel-2) 25%, var(--border) 50%, var(--panel-2) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.4s ease-in-out infinite;
+      }
+      @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
       /* Karty s "eyebrow" titulkom (identita — zákazka, rezervácia, stroj,
          zákazník, auto) — horný toolbar riadok oddelený čiarou, mierne
          záporný margin nech siaha až po okraj panelu ako pri iných kartách. */
