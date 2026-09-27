@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.654";
+const APP_VERSION = "1.0.655";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2323,9 +2323,21 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   // dostanú automaticky. Zámerne len na Escape (nie iné klávesy) a len
   // onClose (nie onBack) — Esc má vždy znamenať "zavrieť celé okno", nie
   // "krok späť v histórii kariet".
+  // Enter v ľubovoľnom textovom poli klikne na hlavné (btn-accent) tlačidlo
+  // okna — nie je treba siahať na myš po vyplnení formulára. Polia, ktoré si
+  // Enter riešia samé (napr. prompt-dialógy), volajú e.stopPropagation() a
+  // sem sa vôbec nedostanú. Vynechané: textarea (Enter = nový riadok),
+  // checkbox/radio/file/select a už odoslaný/disabled stav.
+  const panelRef = useRef(null);
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Enter" && !e.shiftKey && !e.defaultPrevented && e.target.tagName === "INPUT") {
+        const skipTypes = ["checkbox", "radio", "file", "button", "submit", "reset", "range", "color"];
+        if (skipTypes.includes(e.target.type)) return;
+        const btn = panelRef.current?.querySelector(".btn-accent:not(:disabled)");
+        if (btn) { e.preventDefault(); btn.click(); }
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -2372,6 +2384,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         className="panel modal-panel"
         onClick={(e) => e.stopPropagation()}
         style={{ width: xwide ? 980 : wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
@@ -9695,8 +9708,21 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
 }
 
 function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+  // Skutočná výška hlavičky sa mení (mobile zalomenie na 2 riadky, rôzne
+  // zoom/rozlíšenie) — meria sa a ukladá do --header-h, aby sa podľa nej
+  // vedeli "prilepiť" hlavičky tabuliek presne POD hlavičku, nie pod ňu.
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--header-h", el.offsetHeight + "px");
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
+    <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           {/* Logo je z tlačového watermarku — kreslené na biele pozadie, na
@@ -19693,7 +19719,7 @@ function ErpOrderNumberModal({ count, onClose, onConfirm, title = "Číslo servi
           value={value}
           onChange={(e) => setValue(e.target.value)}
           style={{ width: "100%" }}
-          onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) onConfirm(value.trim()); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); if (value.trim()) onConfirm(value.trim()); } }}
         />
       </Field>
       <div style={{ display: "flex", gap: 8 }}>
@@ -21262,7 +21288,7 @@ function QuickEventNoteModal({ onClose, onSave }) {
           placeholder="napr. Auto do servisu o 8:00"
           style={{ width: "100%" }}
           autoFocus
-          onKeyDown={(e) => e.key === "Enter" && text.trim() && onSave(text.trim())}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); if (text.trim()) onSave(text.trim()); } }}
         />
       </Field>
       <button className="btn btn-accent" disabled={!text.trim()} onClick={() => onSave(text.trim())}>
@@ -23842,7 +23868,11 @@ function GlobalStyle() {
       input, select, textarea { background: #fff; border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
       input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
       table { width: 100%; border-collapse: collapse; }
-      th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); }
+      th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); position: sticky; top: var(--header-h, 62px); z-index: 40; }
+      /* V okne (Modal) sa nescrolluje celá stránka pod hlavičkou appky, ale
+         samotný .modal-overlay — tabuľky vnútri sa preto lepia na vrch OKNA
+         (0), nie o výšku hlavičky nižšie (tam by zbytočne visela medzera). */
+      .modal-panel th { top: 0; }
       td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
       tr:hover td { background: var(--accent-light); }
 
