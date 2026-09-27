@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.680";
+const APP_VERSION = "1.0.681";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5481,9 +5481,14 @@ function DispatcherApp() {
     const movedInspections = substituteId
       ? assignments.filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === technicianId && a.date >= startDate && a.date <= endDate)
       : [];
+    // originalTechnicianId sa nastaví len raz — ak tu táto kontrola už bola
+    // presunutá skôr (technicianId je sám náhradník niekoho iného, tzv. náhrada
+    // za náhradu), ostáva zapísaný PÔVODNÝ (anchor) checker, nie tento
+    // medzičlánok — inak by sa pri zrušení anchor-ovej dovolenky (nižšie,
+    // releaseCheckerVacation) nemala kontrola kam vrátiť.
     const reassigned = substituteId
       ? assignments.map((a) =>
-          movedInspections.includes(a) ? { ...a, technicianId: substituteId, originalTechnicianId: technicianId } : a
+          movedInspections.includes(a) ? { ...a, technicianId: substituteId, originalTechnicianId: a.originalTechnicianId || technicianId } : a
         )
       : assignments;
     persistAssignments([...reassigned, ...newAssignments]);
@@ -5574,6 +5579,10 @@ function DispatcherApp() {
     if (subs.length === 0) return remainingAssignments;
     let nextAssignments = remainingAssignments;
     const keptSubs = [];
+    // Uvoľnené okná (depo + dni), čo touto dovolenkou už nie sú kryté — patrí sem
+    // aj hlbšia "náhrada za náhradu" (pozri quickVacationWithSubstitute vyššie),
+    // lebo tá existovala len preto, že tento (anchor) checker bol preč.
+    const freedRanges = [];
     subs.forEach((s) => {
       const vacationDates = remainingAssignments
         .filter((x) => x.technicianId === technicianId && (x.kind === "dovolenka" || x.kind === "pn") && x.date >= s.startDate && x.date <= s.endDate)
@@ -5581,17 +5590,34 @@ function DispatcherApp() {
         .sort();
       const newStart = vacationDates[0];
       const newEnd = vacationDates[vacationDates.length - 1];
-      if (vacationDates.length > 0) keptSubs.push(newStart === s.startDate && newEnd === s.endDate ? s : { ...s, startDate: newStart, endDate: newEnd });
-      // Otvorená kontrola presunutá na náhradníka počas tejto dovolenky, ktorej deň
-      // (po zmazaní/skrátení) už dovolenkou nie je krytý, sa vráti pôvodnému checkerovi.
+      if (vacationDates.length > 0) {
+        keptSubs.push(newStart === s.startDate && newEnd === s.endDate ? s : { ...s, startDate: newStart, endDate: newEnd });
+        if (newStart !== s.startDate) freedRanges.push({ depo: s.depo, start: s.startDate, end: addDaysISO(newStart, -1) });
+        if (newEnd !== s.endDate) freedRanges.push({ depo: s.depo, start: addDaysISO(newEnd, 1), end: s.endDate });
+      } else {
+        freedRanges.push({ depo: s.depo, start: s.startDate, end: s.endDate });
+      }
+      // Otvorená kontrola presunutá (čo aj cez viacero medzičlánkov — pozri
+      // originalTechnicianId vyššie) v dňoch, ktoré už dovolenkou nie sú krytý,
+      // sa vráti rovno pôvodnému (anchor) checkerovi, nech ju medzitým držal
+      // ktokoľvek v reťazci náhrad.
       nextAssignments = nextAssignments.map((x) =>
-        x.kind === "kontrolaStroja" && !x.resolved && x.originalTechnicianId === technicianId && x.technicianId === s.substituteTechnicianId &&
+        x.kind === "kontrolaStroja" && !x.resolved && x.originalTechnicianId === technicianId &&
         x.date >= s.startDate && x.date <= s.endDate && (vacationDates.length === 0 || x.date < newStart || x.date > newEnd)
           ? { ...x, technicianId, originalTechnicianId: null }
           : x
       );
     });
-    persistCheckerSubstitutions([...checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId), ...keptSubs]);
+    // Hlbšie substitúcie pre to isté depo, celé spadajúce do uvoľneného okna
+    // (náhrada za náhradu, prípadne aj ďalšia za ňu), strácajú zmysel spolu s
+    // ňou — nemá sa už za koho zastupovať. Čiastočné presahy (napr. keď má
+    // náhradník vlastnú dovolenku aj mimo pôvodného okna) sa neorezávajú —
+    // zriedkavý okrajový prípad, netreba ho tu riešiť.
+    const otherSubs = checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId);
+    const survivingOtherSubs = otherSubs.filter(
+      (s) => !freedRanges.some((r) => r.depo === s.depo && s.startDate >= r.start && s.endDate <= r.end)
+    );
+    persistCheckerSubstitutions([...survivingOtherSubs, ...keptSubs]);
     return nextAssignments;
   }
   function deleteAssignment(id) {
@@ -6848,6 +6874,7 @@ function DispatcherApp() {
                 onQuickWeeklyDuty={toggleWeeklyDuty}
                 onQuickVacationWithSubstitute={quickVacationWithSubstitute}
                 depoCheckers={depoCheckers}
+                checkerSubstitutions={checkerSubstitutions}
                 onOpenTechnician={(t) => setTechnicianCard(t)}
                 onOpenCheckerInspection={(a) => setCheckerInspectionConfirmTarget(a)}
                 plannerTargetDate={plannerTargetDate}
@@ -8197,6 +8224,7 @@ function DispatcherApp() {
               goBackCard();
             });
           }}
+          onReportTransportIssue={() => setReportTransportIssueTarget(showHandoverProtocol)}
         />
       )}
       {technicianCard && (
@@ -13344,7 +13372,7 @@ function HandoverProtocolChecklistRecap({ checklist, statusKey, noteKey }) {
   );
 }
 
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase }) {
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue }) {
   const [showPortalQr, setShowPortalQr] = useState(false);
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
   const portalLink = job?.publicToken
@@ -13564,9 +13592,27 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     );
   }
 
+  // Šofér prišiel rovno z Prepravy a inde v appke (karta zákazky) sa nedostane —
+  // nahlásenie problému s prepravou preto musí byť dostupné aj priamo tu.
+  const transportIssueBlock = (
+    <>
+      {job?.transportIssueNote && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, fontWeight: 600 }}>
+          🚨 Problém s prepravou ({job.transportIssueBy || "šofér"}): {job.transportIssueNote}
+        </div>
+      )}
+      {onReportTransportIssue && can(user, "transport_issue_report") && !job?.transportIssueNote && (
+        <button className="btn btn-ghost" style={{ color: "var(--danger)", marginBottom: 14 }} onClick={onReportTransportIssue}>
+          🚨 Nahlásiť problém s prepravou
+        </button>
+      )}
+    </>
+  );
+
   if (screen === "view" && existing) {
     return (
       <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
+        {transportIssueBlock}
         <iframe
           title="Protokol o odovzdaní a prevzatí stroja"
           srcDoc={protocolHtml}
@@ -13587,6 +13633,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   return (
     <>
     <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide>
+      {transportIssueBlock}
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
       </div>
@@ -14126,7 +14173,7 @@ function ApprovePortalExtensionModal({ request, job, onClose, onConfirm }) {
 }
 function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem }) {
   const [showPortalPanel, setShowPortalPanel] = useState(false);
-  const [expandedChecklist, setExpandedChecklist] = useState(null); // null | "vyvoz" | "vratenie"
+  const [expandedChecklist, setExpandedChecklist] = useState(null); // null | "chooser" — výber, ktorý z dvoch checklistov zobraziť ako náhľad
   const portalLink = job.publicToken
     ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
     : null;
@@ -14139,6 +14186,8 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
   // rovnako, ako je vidieť na karte stroja, len tu naviac s odkazom rovno na zákazku.
   const inspectionVyvoz = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
   const inspectionVratenie = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
+  const checklistVyvozReady = (inspectionVyvoz?.checklist || []).some((it) => it.checkerStatus);
+  const checklistVratenieReady = (inspectionVratenie?.checklist || []).some((it) => it.checkerStatus);
   function inspectionField(inspection) {
     if (!inspection) return "— zatiaľ nevytvorená —";
     const techName = technicianById?.[inspection.technicianId]?.name || "—";
@@ -14292,7 +14341,29 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
             🔗 Odkaz pre zákazníka
           </button>
         )}
+        {(checklistVyvozReady || checklistVratenieReady) && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              if (checklistVyvozReady && checklistVratenieReady) setExpandedChecklist((v) => (v === "chooser" ? null : "chooser"));
+              else if (checklistVyvozReady) openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy);
+              else openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy);
+            }}
+          >
+            🔍 Kontroly
+          </button>
+        )}
       </div>
+      {expandedChecklist === "chooser" && checklistVyvozReady && checklistVratenieReady && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setExpandedChecklist(null); openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy); }}>
+            Pred vývozom
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setExpandedChecklist(null); openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy); }}>
+            Po vrátení
+          </button>
+        </div>
+      )}
       {showPortalPanel && (
         <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
@@ -14314,10 +14385,10 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
           )}
         </div>
       )}
-      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || inspectionVyvoz?.checklist?.length > 0 || inspectionVratenie?.checklist?.length > 0) && (
+      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0) && (
         <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Kontrola stroja — checklisty a fotky
+            Kontrola stroja — fotky
           </div>
           <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
             <div>
@@ -14349,35 +14420,6 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
               )}
             </div>
           </div>
-          {(inspectionVyvoz?.checklist || []).some((it) => it.checkerStatus) && (
-            <div style={{ marginBottom: 10 }}>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setExpandedChecklist((v) => (v === "vyvoz" ? null : "vyvoz"))}>
-                {expandedChecklist === "vyvoz" ? "Skryť checklist pred vývozom" : "Zobraziť checklist pred vývozom"}
-              </button>
-              {inspectionVyvoz.workHours != null && machine && (
-                <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 6 }} onClick={() => openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy)}>
-                  Tlačiť checklist
-                </button>
-              )}
-              {expandedChecklist === "vyvoz" && (
-                <div style={{ marginTop: 8 }}>
-                  <HandoverProtocolChecklistRecap checklist={inspectionVyvoz.checklist || []} statusKey="checkerStatus" noteKey="checkerNote" />
-                </div>
-              )}
-            </div>
-          )}
-          {(inspectionVratenie?.checklist || []).some((it) => it.checkerStatus) && (
-            <div>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setExpandedChecklist((v) => (v === "vratenie" ? null : "vratenie"))}>
-                {expandedChecklist === "vratenie" ? "Skryť checklist po vrátení" : "Zobraziť checklist po vrátení"}
-              </button>
-              {expandedChecklist === "vratenie" && (
-                <div style={{ marginTop: 8 }}>
-                  <HandoverProtocolChecklistRecap checklist={inspectionVratenie.checklist || []} statusKey="checkerStatus" noteKey="checkerNote" />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </Modal>
@@ -21095,7 +21137,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, showArchived, setShowArchived, onOpenCheckerInspection, plannerTargetDate, onPlannerTargetDateConsumed }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, setShowArchived, onOpenCheckerInspection, plannerTargetDate, onPlannerTargetDateConsumed }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
@@ -21453,9 +21495,17 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                     if (quickMode === "udalost" && canQuickEvents) return setPendingEventCell({ technicianId: t.id, date: iso });
                     if (quickMode === "sluzba" && canQuickEvents) return onQuickWeeklyDuty(t.id, iso);
                     if ((quickMode === "dovolenka" || quickMode === "pn") && canQuickEvents) {
-                      const depos = Object.entries(depoCheckers || {})
+                      // Depá, kde je t. ANCHOR checker...
+                      const anchorDepos = Object.entries(depoCheckers || {})
                         .filter(([, techId]) => techId === t.id)
                         .map(([depo]) => depo);
+                      // ...a depá, kde t. práve zastupuje niekoho iného (náhrada za
+                      // náhradu — inak by sa mu dovolenka len tak zapísala a check
+                      // by ostal viesť naňho, hoci je tiež preč).
+                      const substitutingDepos = (checkerSubstitutions || [])
+                        .filter((s) => s.substituteTechnicianId === t.id && iso >= s.startDate && iso <= s.endDate)
+                        .map((s) => s.depo);
+                      const depos = [...new Set([...anchorDepos, ...substitutingDepos])];
                       if (depos.length > 0) {
                         return setPendingVacationCell({ technician: t, date: iso, depos, kind: quickMode });
                       }
@@ -21600,7 +21650,7 @@ function CheckerVacationModal({ technician, depos, clickedDate, kind, technician
   return (
     <Modal eyebrow={label} title={technician.name} onClose={onClose}>
       <div style={{ fontSize: 13, marginBottom: 14 }}>
-        {technician.name} je checker pre depo <strong>{depos.join(", ")}</strong>. Na toto obdobie treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť na pôvodného.
+        {technician.name} zabezpečuje checking pre depo <strong>{depos.join(", ")}</strong>. Na toto obdobie treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť (aj keby išlo o náhradu za náhradu).
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label={`${label} od *`}><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
