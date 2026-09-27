@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.667";
+const APP_VERSION = "1.0.669";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5381,6 +5381,12 @@ function DispatcherApp() {
   }
   const QUICK_KIND_LABELS = { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" };
   function addQuickAssignment(technicianId, date, kind) {
+    // Pohotovosť/dovolenka/PN majú zmysel len raz na deň — bez tejto poistky sa dala
+    // tá istá rýchla udalosť omylom pridať na ten istý deň opakovane (aj mnohokrát).
+    if (assignments.some((a) => a.technicianId === technicianId && a.date === date && a.kind === kind)) {
+      showToast(`${QUICK_KIND_LABELS[kind] || kind} má tento deň už zapísanú.`);
+      return;
+    }
     persistAssignments([
       ...assignments,
       { id: uid(), technicianId, date, kind, stroj: QUICK_KIND_LABELS[kind] || kind, umiestnenie: "", firma: "", poznamka: QUICK_KIND_LABELS[kind] || kind },
@@ -5405,17 +5411,20 @@ function DispatcherApp() {
       { id: uid(), technicianId, date, kind: "udalost", stroj: text, umiestnenie: "", firma: "", poznamka: text },
     ]);
   }
-  function quickVacationWithSubstitute(technicianId, startDate, endDate, substituteId, depos) {
-    // Vytvorí "Dovolenka" pre každý deň v zvolenom rozsahu...
+  function quickVacationWithSubstitute(technicianId, startDate, endDate, substituteId, depos, kind = "dovolenka") {
+    const label = QUICK_KIND_LABELS[kind] || kind;
+    // Vytvorí záznam neprítomnosti pre každý deň v zvolenom rozsahu, okrem dní, čo
+    // ju už majú (rovnaká poistka ako pri addQuickAssignment — proti duplicitám).
     const dayCount = daysBetween(startDate, endDate) + 1;
     const newAssignments = [];
     for (let i = 0; i < dayCount; i++) {
       const date = addDaysISO(startDate, i);
-      newAssignments.push({ id: uid(), technicianId, date, kind: "dovolenka", stroj: "Dovolenka", umiestnenie: "", firma: "", poznamka: "Dovolenka" });
+      if (assignments.some((a) => a.technicianId === technicianId && a.date === date && a.kind === kind)) continue;
+      newAssignments.push({ id: uid(), technicianId, date, kind, stroj: label, umiestnenie: "", firma: "", poznamka: label });
     }
-    // Otvorené (nedokončené) kontroly stroja tohto checkera v termíne dovolenky sa
+    // Otvorené (nedokončené) kontroly stroja tohto checkera v termíne neprítomnosti sa
     // presunú rovno na náhradníka — ukončené sa nedotýkajú. originalTechnicianId
-    // (pôvodný checker) sa uloží nech ich vieme pri zrušení dovolenky vrátiť späť.
+    // (pôvodný checker) sa uloží nech ich vieme pri zrušení neprítomnosti vrátiť späť.
     const movedInspections = substituteId
       ? assignments.filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === technicianId && a.date >= startDate && a.date <= endDate)
       : [];
@@ -5442,8 +5451,8 @@ function DispatcherApp() {
         kind: "assignment_service",
         roles: [],
         userName: tech.name,
-        title: "Dovolenka zapísaná",
-        message: `Máte zapísanú dovolenku od ${fmtDate(startDate)} do ${fmtDate(endDate)}.`,
+        title: `${label} zapísaná`,
+        message: `Máte zapísané: ${label}, od ${fmtDate(startDate)} do ${fmtDate(endDate)}.`,
         link: { module: "servis", view: "plan", plannerDate: startDate },
       });
     }
@@ -5467,7 +5476,7 @@ function DispatcherApp() {
             roles: [],
             userName: substitute.name,
             title: "Prevzatá kontrola stroja (zastupovanie)",
-            message: `Prevzali ste kontrolu stroja ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} (${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}, ${fmtDate(a.date)}) po ${tech?.name || "kolegovi"} na dobu dovolenky.`,
+            message: `Prevzali ste kontrolu stroja ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} (${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}, ${fmtDate(a.date)}) po ${tech?.name || "kolegovi"} na dobu zastupovania.`,
             link: { module: "servis", view: "plan", plannerDate: a.date },
           });
         });
@@ -5514,7 +5523,7 @@ function DispatcherApp() {
     const keptSubs = [];
     subs.forEach((s) => {
       const vacationDates = remainingAssignments
-        .filter((x) => x.technicianId === technicianId && x.kind === "dovolenka" && x.date >= s.startDate && x.date <= s.endDate)
+        .filter((x) => x.technicianId === technicianId && (x.kind === "dovolenka" || x.kind === "pn") && x.date >= s.startDate && x.date <= s.endDate)
         .map((x) => x.date)
         .sort();
       const newStart = vacationDates[0];
@@ -5535,7 +5544,7 @@ function DispatcherApp() {
   function deleteAssignment(id) {
     const a = assignments.find((x) => x.id === id);
     let remaining = assignments.filter((x) => x.id !== id);
-    if (a?.kind === "dovolenka") remaining = releaseCheckerVacation(a.technicianId, remaining);
+    if (a?.kind === "dovolenka" || a?.kind === "pn") remaining = releaseCheckerVacation(a.technicianId, remaining);
     persistAssignments(remaining);
     if (a?.damageId) {
       const stillAssigned = remaining.filter((x) => x.damageId === a.damageId);
@@ -17243,12 +17252,14 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   }, [initialChecklistId]);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol z "Ostatné protokoly", ktorý sa práve prideľuje ku zákazke
+  // Sledovaná revízia/skúška bez zapísaného dátumu je reálne rovnako po termíne
+  // ako keby mala dávno uplynutý dátum (nikdy sa nevykonala) — nie neutrálny stav.
   const notTracked = m.trackRevisions === false;
-  const reviziaOverdue = !notTracked && m.revizia && daysBetween(todayISO(), m.revizia) < 0;
+  const reviziaOverdue = !notTracked && (!m.revizia || daysBetween(todayISO(), m.revizia) < 0);
   const notTrackedEZ = m.trackRevisionsEZ === false;
-  const reviziaEZOverdue = !notTrackedEZ && m.reviziaEZ && daysBetween(todayISO(), m.reviziaEZ) < 0;
+  const reviziaEZOverdue = !notTrackedEZ && (!m.reviziaEZ || daysBetween(todayISO(), m.reviziaEZ) < 0);
   const skuskaNotTracked = m.trackUradnaSkuska === false;
-  const skuskaOverdue = !skuskaNotTracked && m.uradnaSkuska && daysBetween(todayISO(), m.uradnaSkuska) < 0;
+  const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
   // Kontroly stroja: checklist + fotky pred vývozom žijú na assignments zázname
   // (kind: "kontrolaStroja", phase: "vyvoz"), checklist po vrátení na druhom
@@ -17306,17 +17317,17 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
         <CardField
           label="Platnosť revízie ZZ"
-          value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : null)}
+          value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : "chýba dátum — po termíne")}
           danger={reviziaOverdue}
         />
         <CardField
           label="Platnosť revízie EZ"
-          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : null)}
+          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : "chýba dátum — po termíne")}
           danger={reviziaEZOverdue}
         />
         <CardField
           label="Dátum najbližšej úradnej skúšky"
-          value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : null)}
+          value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : "chýba dátum — po termíne")}
           danger={skuskaOverdue}
         />
         <CardField label="Depo" value={m.depo} />
@@ -20862,7 +20873,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
-  const [pendingVacationCell, setPendingVacationCell] = useState(null); // { technician, date, depos } — technik-checker ide na dovolenku, treba náhradu
+  const [pendingVacationCell, setPendingVacationCell] = useState(null); // { technician, date, depos, kind } — technik-checker ide na dovolenku/PN, treba náhradu
   const QUICK_KINDS = [
     { id: "udalost", label: "Udalosť", color: "#0EA5E9", freeText: true },
     { id: "pohotovost", label: "Pohotovosť", color: "var(--danger)" },
@@ -21215,12 +21226,12 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                   const handleClick = () => {
                     if (quickMode === "udalost" && canQuickEvents) return setPendingEventCell({ technicianId: t.id, date: iso });
                     if (quickMode === "sluzba" && canQuickEvents) return onQuickWeeklyDuty(t.id, iso);
-                    if (quickMode === "dovolenka" && canQuickEvents) {
+                    if ((quickMode === "dovolenka" || quickMode === "pn") && canQuickEvents) {
                       const depos = Object.entries(depoCheckers || {})
                         .filter(([, techId]) => techId === t.id)
                         .map(([depo]) => depo);
                       if (depos.length > 0) {
-                        return setPendingVacationCell({ technician: t, date: iso, depos });
+                        return setPendingVacationCell({ technician: t, date: iso, depos, kind: quickMode });
                       }
                       return onQuickAssign(t.id, iso, quickMode);
                     }
@@ -21340,10 +21351,11 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           technician={pendingVacationCell.technician}
           depos={pendingVacationCell.depos}
           clickedDate={pendingVacationCell.date}
+          kind={pendingVacationCell.kind}
           technicians={technicians}
           onClose={() => setPendingVacationCell(null)}
           onSave={({ startDate, endDate, substituteId }) => {
-            onQuickVacationWithSubstitute(pendingVacationCell.technician.id, startDate, endDate, substituteId, pendingVacationCell.depos);
+            onQuickVacationWithSubstitute(pendingVacationCell.technician.id, startDate, endDate, substituteId, pendingVacationCell.depos, pendingVacationCell.kind);
             setPendingVacationCell(null);
           }}
         />
@@ -21352,20 +21364,21 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
   );
 }
 
-function CheckerVacationModal({ technician, depos, clickedDate, technicians, onClose, onSave }) {
+function CheckerVacationModal({ technician, depos, clickedDate, kind, technicians, onClose, onSave }) {
+  const label = kind === "pn" ? "PN / Doktor" : "Dovolenka";
   const [startDate, setStartDate] = useState(clickedDate);
   const [endDate, setEndDate] = useState(clickedDate);
   const [substituteId, setSubstituteId] = useState("");
   const canSave = startDate && endDate && startDate <= endDate && substituteId;
 
   return (
-    <Modal eyebrow="Dovolenka" title={technician.name} onClose={onClose}>
+    <Modal eyebrow={label} title={technician.name} onClose={onClose}>
       <div style={{ fontSize: 13, marginBottom: 14 }}>
-        {technician.name} je checker pre depo <strong>{depos.join(", ")}</strong>. Na obdobie dovolenky treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť na pôvodného.
+        {technician.name} je checker pre depo <strong>{depos.join(", ")}</strong>. Na toto obdobie treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť na pôvodného.
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Dovolenka od *"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
-        <Field label="Dovolenka do *"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label={`${label} od *`}><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label={`${label} do *`}><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
       <Field label="Náhradný checker *">
         <select value={substituteId} onChange={(e) => setSubstituteId(e.target.value)} style={{ width: "100%" }}>
@@ -21376,7 +21389,7 @@ function CheckerVacationModal({ technician, depos, clickedDate, technicians, onC
         </select>
       </Field>
       <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ startDate, endDate, substituteId })}>
-        Uložiť dovolenku a náhradu
+        Uložiť a nastaviť náhradu
       </button>
     </Modal>
   );
