@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.666";
+const APP_VERSION = "1.0.667";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5416,11 +5416,12 @@ function DispatcherApp() {
     // Otvorené (nedokončené) kontroly stroja tohto checkera v termíne dovolenky sa
     // presunú rovno na náhradníka — ukončené sa nedotýkajú. originalTechnicianId
     // (pôvodný checker) sa uloží nech ich vieme pri zrušení dovolenky vrátiť späť.
+    const movedInspections = substituteId
+      ? assignments.filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === technicianId && a.date >= startDate && a.date <= endDate)
+      : [];
     const reassigned = substituteId
       ? assignments.map((a) =>
-          a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === technicianId && a.date >= startDate && a.date <= endDate
-            ? { ...a, technicianId: substituteId, originalTechnicianId: technicianId }
-            : a
+          movedInspections.includes(a) ? { ...a, technicianId: substituteId, originalTechnicianId: technicianId } : a
         )
       : assignments;
     persistAssignments([...reassigned, ...newAssignments]);
@@ -5456,6 +5457,19 @@ function DispatcherApp() {
           title: "Ste náhradný checker",
           message: `Od ${fmtDate(startDate)} do ${fmtDate(endDate)} zastupujete ${tech?.name || "kolegu"} ako checker (${depos.join(", ") || "—"}).`,
           link: { module: "servis", view: "plan", plannerDate: startDate },
+        });
+        // Náhradník musí vedieť aj o konkrétnych rozrobených kontrolách, čo mu
+        // pribudli — bez upozornenia by o nich vedel, len keď by si sám otvoril plán.
+        movedInspections.forEach((a) => {
+          const machine = machineById[a.machineId];
+          pushNotification({
+            kind: "assignment_transport",
+            roles: [],
+            userName: substitute.name,
+            title: "Prevzatá kontrola stroja (zastupovanie)",
+            message: `Prevzali ste kontrolu stroja ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} (${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}, ${fmtDate(a.date)}) po ${tech?.name || "kolegovi"} na dobu dovolenky.`,
+            link: { module: "servis", view: "plan", plannerDate: a.date },
+          });
         });
       }
     }
