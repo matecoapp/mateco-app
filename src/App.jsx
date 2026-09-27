@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.669";
+const APP_VERSION = "1.0.670";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5999,12 +5999,16 @@ function DispatcherApp() {
   function ensureCheckerAssignment(job) {
     const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
     if (!checkerId) return;
+    // Kontrola stroja sa robí vždy vopred, deň pred vývozom — ale len ak je vývoz
+    // naplánovaný do budúcna. Keď je vývoz už dnes (alebo v minulosti pri dodatočnom
+    // zápise), deň vopred by bol včera, čo sa nedá — zostáva teda v ten istý deň.
+    const inspectionDate = job.startDate > todayISO() ? addDaysISO(job.startDate, -1) : job.startDate;
     const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
     if (existing) {
       if (existing.resolved) return;
-      if (existing.technicianId === checkerId && existing.date === job.startDate) return;
+      if (existing.technicianId === checkerId && existing.date === inspectionDate) return;
     }
-    const record = { id: uid(), technicianId: checkerId, date: job.startDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false };
+    const record = { id: uid(), technicianId: checkerId, date: inspectionDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false };
     persistAssignments([...assignments.filter((a) => a.id !== existing?.id), record]);
     const checker = technicianByIdTop[checkerId];
     if (checker) {
@@ -6014,8 +6018,8 @@ function DispatcherApp() {
         roles: [],
         userName: checker.name,
         title: "Kontrola stroja pred vývozom",
-        message: `Skontrolujte stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — vývoz ${fmtDate(job.startDate)}.`,
-        link: { module: "servis", view: "plan", plannerDate: job.startDate },
+        message: `Skontrolujte stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — vývoz ${fmtDate(job.startDate)} (kontrola ${fmtDate(inspectionDate)}).`,
+        link: { module: "servis", view: "plan", plannerDate: inspectionDate },
       });
     }
   }
