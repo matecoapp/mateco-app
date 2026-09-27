@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.641";
+const APP_VERSION = "1.0.642";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6301,32 +6301,9 @@ function DispatcherApp() {
                   onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
                 />
               </div>
-              {/* Meno/nastavenia prihláseného používateľa — presunuté sem z
-                  hlavičky (tá je na mobile schovaná cez CSS, viď
-                  user-menu-desktop-wrap), nech je v hlavičke miesto na
-                  vyhľadávanie a popis platformy. */}
-              {currentUser && (
-                <div className="mobile-nav-footer">
-                  <UserMenu
-                    variant="mobile"
-                    currentUser={currentUser}
-                    onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
-                    pushEnabled={pushEnabled}
-                    onEnablePush={enablePush}
-                    onDisablePush={disablePush}
-                    viewAsRole={viewAsRole}
-                    onSetViewAsRole={setViewAsRole}
-                    darkMode={darkMode}
-                    onToggleDarkMode={() => setDarkMode((v) => { localStorage.setItem("mateco_dark_mode", !v ? "1" : "0"); return !v; })}
-                    onOpenUserAdmin={() => setShowUserAdmin(true)}
-                    onExportBackup={exportBackup}
-                    onImportBackup={importBackup}
-                    canExport={can(effectiveUser, "backup_export")}
-                    canImport={can(effectiveUser, "backup_import")}
-                    onLogout={signOut}
-                  />
-                </div>
-              )}
+              {/* Meno/nastavenia prihláseného používateľa je teraz naspäť v
+                  hlavičke (avatar s iniciálami, user-menu-mobile-wrap) aj na
+                  mobile, nie je preto potrebné tu v zásuvke duplicitne. */}
             </div>
           </div>
         )}
@@ -8123,11 +8100,24 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
   // (schované/"odlepené" mimo viditeľnú oblasť), takto sa len jednoducho
   // vysunie pod tlačidlom a zvyšok menu sa posunie, vždy viditeľné.
   const isMobileVariant = variant === "mobile";
+  // "mobile-compact" — malé kolieskové tlačidlo s iniciálami namiesto celého
+  // mena, pre úzku hlavičku (na rozdiel od "mobile", ktoré je celá šírka
+  // riadku dole vo výsuvnom menu). Rozbaľovací panel je rovnaký ako na webe.
+  const isCompactVariant = variant === "mobile-compact";
+  const initials = (currentUser.name || "")
+    .trim()
+    .split(/\s+/)
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   return (
     <div style={{ position: "relative" }}>
       <button
         onClick={() => setOpen((v) => !v)}
+        title={`${currentUser.name} · ${roleLabel(currentUser.role)}`}
         style={
           isMobileVariant
             ? {
@@ -8141,6 +8131,22 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
                 padding: "8px 10px",
                 cursor: "pointer",
               }
+            : isCompactVariant
+            ? {
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#fff",
+                background: "rgba(255,255,255,.2)",
+                border: "1px solid rgba(255,255,255,.35)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+              }
             : {
                 fontSize: 11,
                 color: "#fff",
@@ -8152,9 +8158,15 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
               }
         }
       >
-        {currentUser.name} · {roleLabel(currentUser.role)}
-        {isAdmin && viewAsRole && <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>}
-        <span style={{ marginLeft: 6 }}>▾</span>
+        {isCompactVariant ? (
+          initials || "?"
+        ) : (
+          <>
+            {currentUser.name} · {roleLabel(currentUser.role)}
+            {isAdmin && viewAsRole && <span style={{ color: "#ffe08a" }}> · zobrazujem ako: {roleLabel(viewAsRole)}</span>}
+            <span style={{ marginLeft: 6 }}>▾</span>
+          </>
+        )}
       </button>
       {open && (
         <>
@@ -8167,6 +8179,12 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
                 : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 290, maxWidth: "90vw", zIndex: 201, padding: 6 }
             }
           >
+            {isCompactVariant && (
+              <div style={{ padding: "6px 10px 8px", fontSize: 12, fontWeight: 600, color: "var(--text)", borderBottom: "1px solid var(--border)", marginBottom: 4 }}>
+                {currentUser.name} · {roleLabel(currentUser.role)}
+                {isAdmin && viewAsRole && <div style={{ color: "var(--warn, #b8860b)", fontWeight: 500 }}>zobrazujem ako: {roleLabel(viewAsRole)}</div>}
+              </div>
+            )}
             <button style={itemStyle} onClick={() => { onToggleDarkMode(); }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
               {darkMode ? "☀ Svetlý režim" : "🌙 Tmavý režim"}
             </button>
@@ -8968,11 +8986,19 @@ function DocumentsView({
 function GlobalSearch({ searchIndex, onNavigate }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  // Na mobile (viď @media) je pole hľadania cez CSS schované a namiesto
+  // neho je vidno len lupu — kliknutím sa "mobileExpanded" prepne na true a
+  // CSS potom pole zobrazí ako pevný pruh cez celú šírku pod hlavičkou
+  // (na webe sa mobileExpanded nikdy nepoužije, tam je input vidno vždy).
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const boxRef = useRef(null);
 
   useEffect(() => {
     function onDocClick(e) {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+      if (boxRef.current && !boxRef.current.contains(e.target)) {
+        setOpen(false);
+        setMobileExpanded(false);
+      }
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -8987,68 +9013,95 @@ function GlobalSearch({ searchIndex, onNavigate }) {
           .slice(0, 8);
 
   return (
-    <div ref={boxRef} className="global-search-box" style={{ position: "relative", width: "100%", maxWidth: 480, minWidth: 200 }}>
-      <input
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie..."
-        style={{
-          width: "100%",
-          border: "1px solid rgba(0,0,0,.1)",
-          background: "var(--panel-2)",
-          color: "var(--text)",
-          borderRadius: 6,
-          padding: "5px 10px",
-          fontSize: 13,
-          outline: "none",
-        }}
-      />
-      {open && q.length >= 2 && (
-        <div
-          className="panel"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            width: 340,
-            maxWidth: "80vw",
-            maxHeight: 380,
-            overflowY: "auto",
-            zIndex: 200,
-            padding: 6,
+    <div
+      ref={boxRef}
+      className={`global-search-box${mobileExpanded ? " global-search-mobile-open" : ""}`}
+      style={{ position: "relative", width: "100%", maxWidth: 480, minWidth: 200, display: "flex", justifyContent: "center" }}
+    >
+      <button
+        type="button"
+        className="global-search-mobile-trigger"
+        onClick={() => setMobileExpanded(true)}
+        aria-label="Hľadať"
+        style={{ display: "none", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, color: "#fff", cursor: "pointer" }}
+      >
+        🔍
+      </button>
+      <div className="global-search-input-wrap" style={{ position: "relative", width: "100%" }}>
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
           }}
-        >
-          {results.length === 0 ? (
-            <div style={{ padding: 10, fontSize: 13, color: "var(--text-dim)" }}>Žiadne výsledky.</div>
-          ) : (
-            results.map((r) => (
-              <div
-                key={r.type + r.id}
-                onClick={() => {
-                  onNavigate(r);
-                  setQuery("");
-                  setOpen(false);
-                }}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  borderBottom: "1px solid var(--border)",
-                }}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase" }}>{r.kindLabel}</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</div>
-                {r.subtitle && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.subtitle}</div>}
-              </div>
-            ))
-          )}
-        </div>
-      )}
+          onFocus={() => setOpen(true)}
+          placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie..."
+          style={{
+            width: "100%",
+            border: "1px solid rgba(0,0,0,.1)",
+            background: "var(--panel-2)",
+            color: "var(--text)",
+            borderRadius: 6,
+            padding: "5px 10px",
+            fontSize: 13,
+            outline: "none",
+          }}
+        />
+        {mobileExpanded && (
+          <button
+            type="button"
+            className="global-search-mobile-close"
+            onClick={() => { setMobileExpanded(false); setOpen(false); setQuery(""); }}
+            aria-label="Zavrieť hľadanie"
+            style={{ display: "none", position: "absolute", right: -34, top: 0, bottom: 0, background: "transparent", border: "none", color: "#fff", fontSize: 16, cursor: "pointer" }}
+          >
+            ✕
+          </button>
+        )}
+        {open && q.length >= 2 && (
+          <div
+            className="panel"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              width: 340,
+              maxWidth: "80vw",
+              maxHeight: 380,
+              overflowY: "auto",
+              zIndex: 200,
+              padding: 6,
+            }}
+          >
+            {results.length === 0 ? (
+              <div style={{ padding: 10, fontSize: 13, color: "var(--text-dim)" }}>Žiadne výsledky.</div>
+            ) : (
+              results.map((r) => (
+                <div
+                  key={r.type + r.id}
+                  onClick={() => {
+                    onNavigate(r);
+                    setQuery("");
+                    setOpen(false);
+                    setMobileExpanded(false);
+                  }}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase" }}>{r.kindLabel}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</div>
+                  {r.subtitle && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.subtitle}</div>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -9538,7 +9591,7 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
     <div style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
-          <span className="label-font" style={{ fontSize: 20, fontWeight: 700, color: "#fff", textTransform: "lowercase" }}>mateco</span>
+          <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" className="header-logo-img" style={{ height: 24, display: "block" }} />
           {/* Popis/verzia — na webe hneď vedľa loga (divider medzi nimi), na
               mobile (viď @media) sa cez CSS "order" presunú na vlastný riadok
               POD logo (header-brand-sub), nech na prvom riadku ostane vždy
@@ -9563,28 +9616,51 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
               onNavigate={onNavigateNotification}
             />
             {currentUser && (
-              // Na mobile je táto istá <UserMenu> ešte raz dole v mobilnom
-              // výsuvnom menu (viď mobile-nav-drawer) — tu sa cez CSS schová,
-              // nech sa do úzkej hlavičky zmestí aj vyhľadávanie a popis.
-              <div className="user-menu-desktop-wrap">
-                <UserMenu
-                  currentUser={currentUser}
-                  onSaveNotificationPrefs={onSaveNotificationPrefs}
-                  pushEnabled={pushEnabled}
-                  onEnablePush={onEnablePush}
-                  onDisablePush={onDisablePush}
-                  viewAsRole={viewAsRole}
-                  onSetViewAsRole={onSetViewAsRole}
-                  darkMode={darkMode}
-                  onToggleDarkMode={onToggleDarkMode}
-                  onOpenUserAdmin={onOpenUserAdmin}
-                  onExportBackup={onExportBackup}
-                  onImportBackup={onImportBackup}
-                  canExport={can(effectiveUser, "backup_export")}
-                  canImport={can(effectiveUser, "backup_import")}
-                  onLogout={onLogout}
-                />
-              </div>
+              <>
+                {/* Na mobile sa táto celá-menom verzia cez CSS schová a
+                    namiesto nej je vidno len malé kolieskové tlačidlo s
+                    iniciálami (user-menu-mobile-wrap nižšie) — nech sa meno
+                    zmestí do jedného riadku s logom, vyhľadávaním a zvončekom. */}
+                <div className="user-menu-desktop-wrap">
+                  <UserMenu
+                    currentUser={currentUser}
+                    onSaveNotificationPrefs={onSaveNotificationPrefs}
+                    pushEnabled={pushEnabled}
+                    onEnablePush={onEnablePush}
+                    onDisablePush={onDisablePush}
+                    viewAsRole={viewAsRole}
+                    onSetViewAsRole={onSetViewAsRole}
+                    darkMode={darkMode}
+                    onToggleDarkMode={onToggleDarkMode}
+                    onOpenUserAdmin={onOpenUserAdmin}
+                    onExportBackup={onExportBackup}
+                    onImportBackup={onImportBackup}
+                    canExport={can(effectiveUser, "backup_export")}
+                    canImport={can(effectiveUser, "backup_import")}
+                    onLogout={onLogout}
+                  />
+                </div>
+                <div className="user-menu-mobile-wrap" style={{ display: "none" }}>
+                  <UserMenu
+                    variant="mobile-compact"
+                    currentUser={currentUser}
+                    onSaveNotificationPrefs={onSaveNotificationPrefs}
+                    pushEnabled={pushEnabled}
+                    onEnablePush={onEnablePush}
+                    onDisablePush={onDisablePush}
+                    viewAsRole={viewAsRole}
+                    onSetViewAsRole={onSetViewAsRole}
+                    darkMode={darkMode}
+                    onToggleDarkMode={onToggleDarkMode}
+                    onOpenUserAdmin={onOpenUserAdmin}
+                    onExportBackup={onExportBackup}
+                    onImportBackup={onImportBackup}
+                    canExport={can(effectiveUser, "backup_export")}
+                    canImport={can(effectiveUser, "backup_import")}
+                    onLogout={onLogout}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -23621,16 +23697,19 @@ function GlobalStyle() {
            napriek nižšiemu doplneniu niečo nezmestilo, nech sa to zalomí na
            ďalší riadok, nie aby to odrezalo/schovalo zvonček mimo obrazovky
            (presne to sa predtým dialo s vynúteným nowrap). */
-        .header-topbar { padding: 7px 10px !important; gap: 6px !important; }
+        /* Logo, názov+verzia, lupa, zvonček a avatar používateľa musia na
+           mobile vyjsť do JEDNÉHO riadku (nowrap) — preto: lupa namiesto
+           celého vyhľadávacieho poľa, iniciály namiesto celého mena, a
+           flex-wrap sa tu (na rozdiel od zvyšku appky) vypína. */
+        .header-topbar { padding: 6px 10px !important; gap: 6px !important; flex-wrap: nowrap !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
-        /* Popis platformy + verzia — na mobile vlastný (druhý) riadok POD
-           logom (order + flex-basis:100%), nech na PRVOM riadku (logo,
-           vyhľadávanie, zvonček) ostane vždy dosť miesta. */
-        .header-brand-sub { order: 3; flex-basis: 100%; margin-top: 1px; }
+        .header-logo-img { height: 20px !important; flex: 0 0 auto; }
+        .header-brand-sub { flex: 0 1 auto; overflow: hidden; gap: 6px !important; }
         .header-divider { display: none !important; }
-        .header-subtitle { display: block !important; font-size: 9px !important; white-space: nowrap; }
+        .header-subtitle { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-menu-desktop-wrap { display: none !important; }
-        .header-top-actions { gap: 5px !important; }
+        .user-menu-mobile-wrap { display: block !important; }
+        .header-top-actions { gap: 5px !important; flex: 0 0 auto; flex-wrap: nowrap !important; }
         .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
           font-size: 10px !important;
           padding: 4px 6px !important;
@@ -23639,8 +23718,22 @@ function GlobalStyle() {
            okolo neho nech je aspoň ~40px (odporúčaná min. veľkosť na dotyk),
            inak sa naň na mobile ťažko trafí. */
         .header-top-actions button { min-height: 38px; min-width: 38px; }
-        .global-search-box { min-width: 70px !important; }
-        .global-search-box input { font-size: 12px !important; padding: 4px 8px !important; }
+        .global-search-box { min-width: 0 !important; width: auto !important; flex: 0 0 auto; }
+        /* Pole hľadania je na mobile schované, vidno len lupu — kliknutím
+           na ňu sa (global-search-mobile-open) zobrazí ako pruh cez celú
+           šírku pripnutý pod hlavičku. */
+        .global-search-mobile-trigger { display: flex !important; }
+        .global-search-input-wrap { display: none; }
+        .global-search-box.global-search-mobile-open .global-search-mobile-trigger { display: none !important; }
+        .global-search-box.global-search-mobile-open .global-search-input-wrap {
+          display: block !important;
+          position: fixed;
+          left: 10px;
+          right: 44px;
+          top: 8px;
+          z-index: 250;
+        }
+        .global-search-mobile-close { display: flex !important; align-items: center; justify-content: center; }
         .panel { padding: 12px !important; }
         /* display:flex tu MUSÍ byť tiež !important — kalendár požičovne má
            túto lištu nastavenú inline ako display:"grid" (3 stĺpce vedľa
@@ -23710,10 +23803,6 @@ function GlobalStyle() {
            .protocol-overlay samotný už žiadny padding navyše nepotrebuje/nesmie
            mať (zdvojilo by odsadenie). */
         .protocol-frame-wrap { border-radius: 0 !important; }
-      }
-
-      @media (max-width: 480px) {
-        .header-topbar span.label-font { font-size: 17px !important; }
       }
 
     `}</style>
