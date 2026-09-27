@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.682";
+const APP_VERSION = "1.0.684";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5179,6 +5179,12 @@ function DispatcherApp() {
             : r
         )
       );
+      // To isté pre problém s prepravou, ak z neho bolo založené toto poškodenie
+      // (pozri reportTransportIssue) — stroj je opravený, banner na karte
+      // zákazky sa už nemá čo nezmizne (skúsiť vyviezť/zviezť má znova zmysel).
+      persistJobs(
+        jobs.map((j) => (j.transportIssueDamageId === damageId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null, transportIssueDamageId: null } : j))
+      );
     }
     setResolveDamageTarget(null);
   }
@@ -6204,22 +6210,27 @@ function DispatcherApp() {
       // ďalším upozornením navyše.
     }
   }
-  function reportTransportIssue(jobId, note) {
+  function reportTransportIssue(jobId, note, createDamage) {
     const job = jobs.find((j) => j.id === jobId);
     if (!job) return;
-    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: note, transportIssueAt: new Date().toISOString(), transportIssueBy: currentUser?.name || null } : j)));
     const machine = machineById[job.machineId];
+    // Ak ide o poruchu stroja (nie napr. meškanie/neprítomný zákazník), rovno sa
+    // z toho založí aj poškodenie do servisu — nech sa stroj ide opraviť, aby sa
+    // dal vyviezť/zviezť (opts.silent, nech to nezatvára/neprepína kartu, kde
+    // šofér práve je).
+    const linkedDamage = createDamage && machine ? reportDamage(machine, `Porucha pri prevoze — ${note}`, undefined, { silent: true }) : null;
+    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: note, transportIssueAt: new Date().toISOString(), transportIssueBy: currentUser?.name || null, transportIssueDamageId: linkedDamage?.id || null } : j)));
     pushNotification({
       kind: "assignment_transport",
       roles: ["dispecer_pozicovne", "veduci_pozicovne"],
       title: "Problém s prepravou",
-      message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}`,
+      message: `${currentUser?.name || "Šofér"} hlási problém (stroj ${machine?.code || "—"}, ${job.customer || "—"}): ${note}${linkedDamage ? " — založené poškodenie do servisu" : ""}`,
       link: { module: "poziciovna", view: "jobs", jobId },
     });
     showToast("Problém s prepravou bol odoslaný.");
   }
   function resolveTransportIssue(jobId) {
-    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : j)));
+    persistJobs(jobs.map((j) => (j.id === jobId ? { ...j, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null, transportIssueDamageId: null } : j)));
   }
   // Poistka aj tu, nielen skryté tlačidlo vo formulári — zákazka so zaznamenaným
   // vývozom stroja (protokol o prevzatí) sa nedá zmazať, nech to skúsi odkiaľkoľvek.
@@ -8194,8 +8205,8 @@ function DispatcherApp() {
           job={reportTransportIssueTarget}
           machine={machineById[reportTransportIssueTarget.machineId]}
           onClose={() => setReportTransportIssueTarget(null)}
-          onConfirm={(note) => {
-            reportTransportIssue(reportTransportIssueTarget.id, note);
+          onConfirm={(note, isDamage) => {
+            reportTransportIssue(reportTransportIssueTarget.id, note, isDamage);
             setReportTransportIssueTarget(null);
             setJobDetail(null);
           }}
@@ -13605,6 +13616,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       {job?.transportIssueNote && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, fontWeight: 600 }}>
           🚨 Problém s prepravou ({job.transportIssueBy || "šofér"}): {job.transportIssueNote}
+          {job.transportIssueDamageId && " — založené poškodenie do servisu"}
         </div>
       )}
       {onReportTransportIssue && can(user, "transport_issue_report") && !job?.transportIssueNote && (
@@ -14234,6 +14246,7 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>
             🚨 <strong>Problém s prepravou</strong> ({job.transportIssueBy || "šofér"}): {job.transportIssueNote}
+            {job.transportIssueDamageId && " — založené poškodenie do servisu"}
           </span>
           {can(user, "transport_issue_resolve") && onResolveTransportIssue && (
             <button className="btn btn-ghost" onClick={onResolveTransportIssue}>
@@ -22943,12 +22956,19 @@ function RejectReservationModal({ onClose, onConfirm }) {
 
 function ReportTransportIssueModal({ job, machine, onClose, onConfirm }) {
   const [note, setNote] = useState("");
+  const [isDamage, setIsDamage] = useState(false);
   return (
     <Modal eyebrow="Problém s prepravou" title={<span style={{ color: "var(--accent)" }}>{machine?.code || job.customer || ""}</span>} onClose={onClose}>
       <Field label="Čo sa deje (dispečer to uvidí hneď) *">
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný" style={{ width: "100%" }} />
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný, porucha stroja" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!note.trim()} onClick={() => onConfirm(note.trim())}>
+      {machine && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
+          <input type="checkbox" checked={isDamage} onChange={(e) => setIsDamage(e.target.checked)} />
+          Ide o poruchu stroja — rovno založiť aj poškodenie do servisu, nech sa stroj ide opraviť
+        </label>
+      )}
+      <button className="btn btn-accent" disabled={!note.trim()} onClick={() => onConfirm(note.trim(), isDamage)}>
         Odoslať dispečerovi
       </button>
     </Modal>
