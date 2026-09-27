@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.656";
+const APP_VERSION = "1.0.657";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -15617,7 +15617,9 @@ function TransportNoteModal({ machine, date, drivers, onClose, onSave }) {
 // krokom kvôli ochrane pred missclickom) skutočne zapíše nové depo stroja.
 function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, onDelete }) {
   const [confirming, setConfirming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
+    <>
     <Modal title="🚚 Prevoz stroja" onClose={onClose}>
       <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{machine?.code}</strong> · {fmtDate(note.date)}</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
@@ -15647,7 +15649,7 @@ function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, o
         <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
         {!note.confirmed && !confirming && (
           <>
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDelete}>Zmazať poznámku</button>
+            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => setConfirmingDelete(true)}>Zmazať poznámku</button>
             <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={() => setConfirming(true)}>Potvrdiť prevezenie</button>
           </>
         )}
@@ -15661,6 +15663,10 @@ function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, o
         )}
       </div>
     </Modal>
+    {confirmingDelete && (
+      <ConfirmDeleteModal label="túto poznámku o prevoze" onClose={() => setConfirmingDelete(false)} onConfirm={onDelete} />
+    )}
+    </>
   );
 }
 
