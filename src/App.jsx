@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.653";
+const APP_VERSION = "1.0.654";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -16389,6 +16389,72 @@ const CalendarGrid = React.memo(function CalendarGrid({
   );
 });
 
+function MachineDayList({ machines, jobs, reservations, today, onOpenCard, onOpenJob, onOpenReservation }) {
+  const days = useMemo(() => {
+    const list = [];
+    let d = today;
+    for (let i = 0; i < 5; i++) { list.push(d); d = addDaysISO(d, 1); }
+    return list;
+  }, [today]);
+
+  function occupancyFor(m, iso) {
+    const job = jobs.find((j) => j.machineId === m.id && j.status !== "completed" && j.startDate <= iso && (!j.endDate || j.endDate >= iso));
+    if (job) return { type: "job", item: job };
+    const res = (reservations || []).find((r) => r.machineId === m.id && r.status === "approved" && r.expectedStart <= iso && (!r.expectedEnd || r.expectedEnd >= iso));
+    if (res) return { type: "reservation", item: res };
+    return null;
+  }
+
+  if (machines.length === 0) {
+    return (
+      <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
+        Žiadne stroje nezodpovedajú filtru.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {machines.map((m) => (
+        <div key={m.id} className="panel" style={{ overflow: "hidden" }}>
+          <div
+            onClick={() => onOpenCard(m)}
+            style={{ background: "#1a1a1a", color: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+          >
+            <span className="label-font" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em" }}>{m.code}</span>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>{m.type}</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,.7)" }}>{m.depo}</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${days.length}, 1fr)`, overflowX: "auto" }}>
+            {days.map((iso, i) => {
+              const occ = occupancyFor(m, iso);
+              const dow = new Date(iso + "T00:00:00").getDay();
+              return (
+                <div key={iso} style={{ padding: 12, borderRight: i < days.length - 1 ? "1px solid var(--border)" : "none", minWidth: 120 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+                    {DOW_NAMES_FULL[dow]} — {fmtDate(iso)}
+                  </div>
+                  {!occ ? (
+                    <div style={{ fontSize: 12, color: "var(--ok)" }}>Voľné</div>
+                  ) : occ.type === "job" ? (
+                    <div onClick={() => onOpenJob(occ.item)} style={{ fontSize: 12, cursor: "pointer", borderLeft: "2px solid var(--accent)", paddingLeft: 8 }}>
+                      <div style={{ fontWeight: 600, color: "var(--accent)" }}>{occ.item.customer || "— bez zákazníka —"}</div>
+                    </div>
+                  ) : (
+                    <div onClick={() => onOpenReservation(occ.item)} style={{ fontSize: 12, cursor: "pointer", borderLeft: "2px solid var(--info)", paddingLeft: 8, color: "var(--text-dim)" }}>
+                      Rezervácia — {occ.item.customer || "—"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, drivers, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation, transportNotes, onAddTransportNote, onConfirmTransportNote, onDeleteTransportNote }) {
   // "Prevoz" — súkromná poznámka dispečera/vedúceho požičovne o plánovanom
   // presune stroja medzi depami, viditeľná len tejto dvojici rolí (aj v DB).
@@ -16434,6 +16500,11 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   useEffect(() => {
     localStorage.setItem("mateco_calendar_compact", compactMode ? "1" : "0");
   }, [compactMode]);
+  // Alternatíva ku Gantt mriežke — zoznam kariet (stroj + najbližších 5 dní),
+  // rovnaký vzor ako "Prehľad najbližších 5 dní" v Pláne servisu. Vodorovná
+  // mriežka je na mobile aj tak nutne stiesnená (viac stroj­ov = viac dní
+  // naraz), toto je pre rýchly pohľad "čo je voľné/obsadené" bez scrollovania.
+  const [viewMode, setViewMode] = useState("gantt"); // gantt | zoznam
   const depoOptions = DEPO_OPTIONS;
   // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
   // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
@@ -16801,6 +16872,38 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     <>
       <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
         <button
+          onClick={() => setViewMode("gantt")}
+          style={{
+            fontSize: 11,
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "none",
+            cursor: "pointer",
+            background: viewMode === "gantt" ? "var(--panel)" : "transparent",
+            color: viewMode === "gantt" ? "var(--text)" : "var(--text-dim)",
+            fontWeight: viewMode === "gantt" ? 600 : 400,
+          }}
+        >
+          Gantt
+        </button>
+        <button
+          onClick={() => setViewMode("zoznam")}
+          style={{
+            fontSize: 11,
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "none",
+            cursor: "pointer",
+            background: viewMode === "zoznam" ? "var(--panel)" : "transparent",
+            color: viewMode === "zoznam" ? "var(--text)" : "var(--text-dim)",
+            fontWeight: viewMode === "zoznam" ? 600 : 400,
+          }}
+        >
+          Zoznam
+        </button>
+      </div>
+      <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
+        <button
           onClick={() => setCompactMode(false)}
           style={{
             fontSize: 11,
@@ -16882,6 +16985,19 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
       </div>
 
+      {viewMode === "zoznam" && (
+        <MachineDayList
+          machines={relevantMachines}
+          jobs={jobs}
+          reservations={reservations}
+          today={today}
+          onOpenCard={onOpenCard}
+          onOpenJob={onOpenJob}
+          onOpenReservation={onOpenReservation}
+        />
+      )}
+      {viewMode === "gantt" && (
+      <>
       <div className="panel" style={{ padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {relevantMachines.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
@@ -16938,6 +17054,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
         ))}
       </div>
+      </>
+      )}
     </div>
     {cellChoice && (
       <Modal title="Čo chceš vytvoriť?" onClose={() => setCellChoice(null)}>
