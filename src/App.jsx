@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.661";
+const APP_VERSION = "1.0.663";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -11706,6 +11706,7 @@ function AddCustomerModal({ onClose, onSave }) {
 
 function CustomerContactRow({ contact, canEdit, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [name, setName] = useState(contact.name || "");
   const [role, setRole] = useState(contact.role || "");
   const [phone, setPhone] = useState(contact.phone || "");
@@ -11757,8 +11758,11 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete }) {
       {canEdit && (
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px" }} onClick={() => setEditing(true)}>Upraviť</button>
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={onDelete}>Zmazať</button>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={() => setConfirmingDelete(true)}>Zmazať</button>
         </div>
+      )}
+      {confirmingDelete && (
+        <ConfirmDeleteModal label={`kontaktnú osobu${contact.name ? ` "${contact.name}"` : ""}`} onClose={() => setConfirmingDelete(false)} onConfirm={onDelete} />
       )}
     </div>
   );
@@ -14395,6 +14399,17 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
+  // Pri premene rezervácie na zákazku treba selectedCustomerId dopočítať rovnako
+  // ako pri úprave existujúcej — inak appka nevie, že zákazník z rezervácie je už
+  // v databáze, a kontaktné osoby sa nenatiahnu (kým sa zákazník znova neodklikne).
+  useEffect(() => {
+    if (existing || !prefillReservation) return;
+    const match = (customers || []).find((c) => c.firma.trim().toLowerCase() === (prefillReservation.customer || "").trim().toLowerCase());
+    if (match) {
+      setSelectedCustomerId(match.id);
+      setSelectedContacts(match.contacts || []);
+    }
+  }, []);
   const [selectedContacts, setSelectedContacts] = useState([]);
   // Kontakty pridané cez "+ Nová kontaktná osoba" pre ÚPLNE NOVÉHO zákazníka
   // (ešte nemá selectedCustomerId, takže sa nedajú uložiť rovno k nemu) — uložia
