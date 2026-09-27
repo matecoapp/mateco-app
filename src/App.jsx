@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.651";
+const APP_VERSION = "1.0.652";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8815,8 +8815,8 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
           Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.
         </div>
       </div>
-      <div className="panel" style={{ overflowX: "auto" }}>
-        <table className="mono" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div className="panel" style={{ overflowX: "auto", padding: 0 }}>
+        <table className="mono table-cards" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
               <th style={{ padding: 10 }}>Typ</th>
@@ -8830,14 +8830,14 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
           <tbody>
             {visible.map((t) => (
               <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: 10, color: "var(--text-dim)" }}>{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
-                <td style={{ padding: 10, fontWeight: 600 }}>{t.label || "—"}</td>
-                <td style={{ padding: 10 }}>{t.deletedByName || "—"}</td>
-                <td style={{ padding: 10 }}>{fmtDate(t.deletedAt.slice(0, 10))}</td>
-                <td style={{ padding: 10, color: daysLeft(t.deletedAt) <= 3 ? "var(--danger)" : "var(--text-dim)" }}>
+                <td style={{ padding: 10, color: "var(--text-dim)" }} data-label="Typ">{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
+                <td style={{ padding: 10, fontWeight: 600 }} data-label="Záznam">{t.label || "—"}</td>
+                <td style={{ padding: 10 }} data-label="Kto zmazal">{t.deletedByName || "—"}</td>
+                <td style={{ padding: 10 }} data-label="Kedy">{fmtDate(t.deletedAt.slice(0, 10))}</td>
+                <td style={{ padding: 10, color: daysLeft(t.deletedAt) <= 3 ? "var(--danger)" : "var(--text-dim)" }} data-label="Zostáva">
                   {daysLeft(t.deletedAt)} {daysLeft(t.deletedAt) === 1 ? "deň" : daysLeft(t.deletedAt) < 5 ? "dni" : "dní"}
                 </td>
-                <td style={{ padding: 10, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <td style={{ padding: 10, display: "flex", gap: 6, justifyContent: "flex-end" }} className="td-actions">
                   <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => onRestore(t)}>
                     Obnoviť
                   </button>
@@ -18106,11 +18106,11 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
         {depoOptions.map((dep) => (
           <button
             key={dep}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(dep)}
             style={{ padding: "5px 10px", fontSize: 11, background: depoFilter === dep ? "var(--accent)" : "transparent", color: depoFilter === dep ? "#fff" : "var(--text-dim)", border: "1px solid " + (depoFilter === dep ? "var(--accent)" : "var(--border)") }}
           >
-            {dep}
+            <span className="depo-chip-full">{dep}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[dep] || dep}</span>
           </button>
         ))}
       </div>
@@ -19227,15 +19227,6 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 
   return (
     <div>
-      <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <div style={{ flex: 1 }} />
-        {can(user, "revision_clear_all") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-            Vymazať všetky revízie
-          </button>
-        )}
-      </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
           <button
@@ -19254,7 +19245,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
           </button>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         {depoOptions.map((d) => (
           <button
             key={d}
@@ -19271,6 +19262,13 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
             <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+        <div style={{ flex: 1 }} />
+        {can(user, "revision_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky revízie
+          </button>
+        )}
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
@@ -19845,15 +19843,6 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 
   return (
     <div>
-      <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <div style={{ flex: 1 }} />
-        {can(user, "uradnaskuska_clear_all") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-            Vymazať všetky úradné skúšky
-          </button>
-        )}
-      </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {filterButtons.map((f) => (
           <button
@@ -19872,7 +19861,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
           </button>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         {depoOptions.map((d) => (
           <button
             key={d}
@@ -19889,6 +19878,13 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
             <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+        <div style={{ flex: 1 }} />
+        {can(user, "uradnaskuska_clear_all") && (
+          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
+            Vymazať všetky úradné skúšky
+          </button>
+        )}
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
@@ -21790,7 +21786,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
         {obchodnikRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne rezervácie v tomto období.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Obchodník</th>
@@ -21805,10 +21801,10 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
                 const pct = count ? Math.round((converted / count) * 100) : 0;
                 return (
                   <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{name}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13 }}>{count}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13 }}>{converted}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct >= 50 ? "var(--ok)" : "var(--text-dim)" }}>{pct}%</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Obchodník">{name}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Počet rezervácií">{count}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Premenené na zákazku">{converted}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct >= 50 ? "var(--ok)" : "var(--text-dim)" }} data-label="Úspešnosť">{pct}%</td>
                   </tr>
                 );
               })}
@@ -21824,7 +21820,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
         {rentabilityRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
@@ -21840,16 +21836,16 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
                   <React.Fragment key={`${row.category}||${row.model}`}>
                     {showCategoryHeader && (
                       <tr>
-                        <td colSpan={4} style={{ padding: "8px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", background: "var(--bg)", color: "var(--accent)", borderTop: "1px solid var(--border)" }}>
+                        <td colSpan={4} className="td-plain" style={{ padding: "8px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", background: "var(--bg)", color: "var(--accent)", borderTop: "1px solid var(--border)" }}>
                           {row.category}
                         </td>
                       </tr>
                     )}
                     <tr style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{row.model}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13 }}>{row.count}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13 }}>{row.busyDays} / {row.totalDays}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: row.pct < 30 ? "var(--danger)" : row.pct < 60 ? "#b58a00" : "var(--ok)" }}>{row.pct}%</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Model">{row.model}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Počet strojov">{row.count}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Dní na zákazke">{row.busyDays} / {row.totalDays}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: row.pct < 30 ? "var(--danger)" : row.pct < 60 ? "#b58a00" : "var(--ok)" }} data-label="Vyťaženosť">{row.pct}%</td>
                     </tr>
                   </React.Fragment>
                 );
@@ -21989,7 +21985,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
         {technicianRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Technik</th>
@@ -22001,10 +21997,10 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
             <tbody>
               {technicianRows.map(([name, v]) => (
                 <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{name}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{v.hours.toFixed(1)}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{v.travelHours.toFixed(1)}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }}>{v.travelKm.toFixed(0)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Technik">{name}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Odpracované hodiny">{v.hours.toFixed(1)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Čas na ceste">{v.travelHours.toFixed(1)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Km">{v.travelKm.toFixed(0)}</td>
                 </tr>
               ))}
             </tbody>
@@ -22035,7 +22031,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
           </button>
           {showExclusions && (
             <div className="panel" style={{ padding: 0, overflow: "hidden", marginTop: 10, maxHeight: 400, overflowY: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Technik</th>
@@ -22045,8 +22041,8 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
                 <tbody>
                   {activeTechnicians.map((t) => (
                     <tr key={t.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{t.name}</td>
-                      <td style={{ padding: "6px 12px" }}>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Technik">{t.name}</td>
+                      <td style={{ padding: "6px 12px" }} data-label="Zahrnúť do štatistík">
                         <input
                           type="checkbox"
                           checked={t.trackStatistics !== false}
@@ -22267,15 +22263,9 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
           {missingCount} {missingCount === 1 ? "model nemá" : "modelov nemá"} zatiaľ doplnenú kategóriu.
         </div>
       )}
-      <input
-        type="text"
-        placeholder="Hľadať model..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
+      <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ width: "100%", marginBottom: 10 }} />
       <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
@@ -22297,8 +22287,8 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
             ) : (
               sorted.map((mm) => (
                 <tr key={mm.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "6px 12px", fontSize: 13, fontWeight: 600 }}>{mm.name}</td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px", fontSize: 13, fontWeight: 600 }} data-label="Model">{mm.name}</td>
+                  <td style={{ padding: "6px 12px" }} data-label="Kategória">
                     <select
                       value={mm.category || ""}
                       onChange={(e) => onUpdate(mm.id, { category: e.target.value })}
@@ -22308,7 +22298,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       {MACHINE_CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Pracovná výška">
                     <input
                       type="number"
                       value={mm.liftHeight || ""}
@@ -22317,7 +22307,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Stranový dosah">
                     <input
                       type="number"
                       value={mm.outreach || ""}
@@ -22326,7 +22316,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Šírka">
                     <input
                       type="number"
                       value={mm.width || ""}
@@ -22335,7 +22325,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Nosnosť">
                     <input
                       type="number"
                       value={mm.capacity || ""}
@@ -22344,7 +22334,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Podpery">
                     <select
                       value={mm.outriggers === true ? "ano" : mm.outriggers === false ? "nie" : ""}
                       onChange={(e) => onUpdate(mm.id, { outriggers: e.target.value === "ano" ? true : e.target.value === "nie" ? false : null })}
@@ -22355,7 +22345,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       <option value="nie">Nie</option>
                     </select>
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} data-label="Hmotnosť">
                     <input
                       type="number"
                       value={mm.weight || ""}
@@ -22364,7 +22354,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
                       style={{ width: 70, fontSize: 12 }}
                     />
                   </td>
-                  <td style={{ padding: "6px 12px" }}>
+                  <td style={{ padding: "6px 12px" }} className="td-actions">
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)" }} onClick={() => onDelete(mm.id)}>
                       Zmazať
                     </button>
@@ -22601,7 +22591,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
           )}
         </div>
         <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {columns.map((c) => (
@@ -22635,7 +22625,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     {columns.map((c) =>
                       canManage ? (
-                        <td key={c.key} style={{ padding: "4px 12px" }}>
+                        <td key={c.key} style={{ padding: "4px 12px" }} data-label={c.label}>
                           <input
                             type={c.key === "pocetKusov" ? "number" : "text"}
                             value={p[c.key] || ""}
@@ -22644,11 +22634,11 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                           />
                         </td>
                       ) : (
-                        <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>
+                        <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>
                       )
                     )}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px" }}>
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td style={{ padding: "6px 12px" }} data-label="Stav objednania">
                       {canManage ? (
                         <select
                           value={p.stav}
@@ -22676,14 +22666,14 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: "6px 12px" }}>
+                    <td style={{ padding: "6px 12px" }} data-label="Dátum objednania">
                       {canManage ? (
                         <input type="date" value={p.datumObjednania || ""} onChange={(e) => onUpdate(p.id, { datumObjednania: e.target.value })} style={{ fontSize: 12 }} />
                       ) : (
                         <span style={{ fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
                       )}
                     </td>
-                    <td style={{ padding: "6px 12px" }}>
+                    <td style={{ padding: "6px 12px" }} data-label="Nákupná objednávka">
                       {canManage ? (
                         <input value={p.nakupnaObjednavka || ""} onChange={(e) => onUpdate(p.id, { nakupnaObjednavka: e.target.value })} style={{ fontSize: 12, width: 110 }} />
                       ) : (
@@ -22691,7 +22681,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                       )}
                     </td>
                     {canManage && (
-                      <td style={{ padding: "6px 12px" }}>
+                      <td style={{ padding: "6px 12px" }} className="td-actions">
                         <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
                       </td>
                     )}
@@ -22744,14 +22734,8 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <input
-          type="text"
-          placeholder="Hľadať v histórii podľa čísla alebo popisu dielu (naprieč všetkými depami a celým časom)..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1, maxWidth: 480 }}
-        />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <SearchInput placeholder="Hľadať v histórii podľa čísla alebo popisu dielu (naprieč všetkými depami a celým časom)…" value={searchQuery} onChange={setSearchQuery} style={{ flex: 1, maxWidth: 480 }} />
         {q && <button className="btn btn-ghost" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
       </div>
 
@@ -22768,7 +22752,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             )}
           </div>
           <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
@@ -22788,9 +22772,9 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                 ) : (
                   searchResults.map((p) => (
                     <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.depo}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
-                      <td style={{ padding: "6px 12px" }}>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Depo">{p.depo}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                      <td style={{ padding: "6px 12px" }} data-label="Stav">
                         <span
                           style={{
                             fontSize: 12, fontWeight: 600, borderRadius: 5, padding: "3px 8px", color: "#fff",
@@ -22800,12 +22784,12 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                           {p.stav}
                         </span>
                       </td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.nakupnaObjednavka || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.dodavatel || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.pocetKusov || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.cisloDielu}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }}>{p.popisDielu}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Dátum objednania">{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Nákupná objednávka">{p.nakupnaObjednavka || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Dodávateľ">{p.dodavatel || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Počet kusov">{p.pocetKusov || "—"}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Číslo dielu">{p.cisloDielu}</td>
+                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Popis dielu">{p.popisDielu}</td>
                     </tr>
                   ))
                 )}
@@ -22860,7 +22844,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             )}
           </div>
           <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   {pending.length > 1 && <th></th>}
@@ -22873,7 +22857,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                 {pending.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     {pending.length > 1 && (
-                      <td style={{ padding: "6px 12px" }}>
+                      <td style={{ padding: "6px 12px" }} data-label="Vybrať">
                         <input
                           type="checkbox"
                           checked={!uncheckedPendingIds.has(p.id)}
@@ -22887,9 +22871,9 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                         />
                       </td>
                     )}
-                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
+                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>)}
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td style={{ padding: "6px 12px", display: "flex", gap: 6 }} className="td-actions">
                       <button className="btn btn-accent" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onApprove(p.id)}>Schváliť</button>
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)" }} onClick={() => setRejectingId(p.id)}>Zamietnuť</button>
                     </td>
@@ -22909,7 +22893,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             Zamietnuté ({zamietnute.length})
           </div>
           <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
@@ -22921,11 +22905,11 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               <tbody>
                 {zamietnute.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }}>{p[c.key] || "—"}</td>)}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px", fontSize: 13, color: "var(--danger)" }}>{p.rejectionReason}</td>
+                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>)}
+                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td style={{ padding: "6px 12px", fontSize: 13, color: "var(--danger)" }} data-label="Dôvod">{p.rejectionReason}</td>
                     {canManage && (
-                      <td style={{ padding: "6px 12px", display: "flex", gap: 6 }}>
+                      <td style={{ padding: "6px 12px", display: "flex", gap: 6 }} className="td-actions">
                         <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => onRestore(p.id)}>Obnoviť</button>
                         <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
                       </td>
@@ -23202,7 +23186,7 @@ function AuditLogView({ profiles }) {
       )}
       {!error && entries !== null && (
         <div className="panel">
-          <table>
+          <table className="table-cards">
             <thead>
               <tr>
                 <th>Kedy</th>
@@ -23222,15 +23206,15 @@ function AuditLogView({ profiles }) {
                 const label = data?.code || data?.name || data?.customer || data?.cisloDielu || e.record_id;
                 return (
                   <tr key={e.id}>
-                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
-                    <td>{who}</td>
-                    <td>{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
-                    <td>
+                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }} data-label="Kedy">{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
+                    <td data-label="Kto">{who}</td>
+                    <td data-label="Tabuľka">{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
+                    <td data-label="Akcia">
                       <span className={`badge ${e.action === "delete" ? "badge-danger" : e.action === "insert" ? "badge-ok" : "badge-info"}`}>
                         {AUDIT_ACTION_LABELS[e.action] || e.action}
                       </span>
                     </td>
-                    <td className="mono" style={{ fontSize: 12 }}>{label}</td>
+                    <td className="mono" style={{ fontSize: 12 }} data-label="Záznam">{label}</td>
                   </tr>
                 );
               })}
