@@ -359,7 +359,15 @@ export default function CustomerPortal({ token }) {
   // v inej záložke).
   useEffect(() => {
     let cancelled = false;
-    function refetch(showLoading) {
+    // Odkaz sa vygeneruje na strane dispečerskej appky (zápis publicToken do
+    // "jobs") a odošle sa zákazníkovi (SMS/mail/QR) prakticky hneď — appka to
+    // ale posiela na pozadí (fronta so zopakovaním pri zlyhaní), takže zápis
+    // do databázy vie chvíľu meškať, hlavne na slabšom signáli v teréne. Prvé
+    // otvorenie odkazu by tak vedelo omylom ukázať "neplatný", hoci ide len o
+    // pretek — kým sa zápis nestihol prejaviť. Pár rýchlych opakovaní hneď na
+    // začiatku (namiesto čakania na 20-sekundový interval nižšie) tento
+    // bežný prípad prekryje a "naozaj neplatný" odkaz ukáže len o pár sekúnd neskôr.
+    function refetch(showLoading, attemptsLeft = 0) {
       if (showLoading) setState("loading");
       supabase
         .rpc("get_portal_job", { p_token: token })
@@ -371,6 +379,10 @@ export default function CustomerPortal({ token }) {
             return;
           }
           if (!result) {
+            if (showLoading && attemptsLeft > 0) {
+              setTimeout(() => { if (!cancelled) refetch(true, attemptsLeft - 1); }, 1500);
+              return;
+            }
             if (showLoading) setState("invalid");
             return;
           }
@@ -378,7 +390,7 @@ export default function CustomerPortal({ token }) {
           setState("ok");
         });
     }
-    refetch(true);
+    refetch(true, 4);
     const interval = setInterval(() => refetch(false), 20000);
     function onVisible() {
       if (document.visibilityState === "visible") refetch(false);
