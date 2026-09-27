@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.655";
+const APP_VERSION = "1.0.656";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8828,7 +8828,7 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
           Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.
         </div>
       </div>
-      <div className="panel" style={{ overflowX: "auto", padding: 0 }}>
+      <div className="panel" style={{ overflowX: "clip", padding: 0 }}>
         <table className="mono table-cards" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
@@ -8885,7 +8885,7 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
           </div>
         )}
       </div>
-      <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
+      <div className="panel" style={{ padding: 0, overflowX: "clip" }}>
         <table className="table-cards">
           <thead>
             <tr>
@@ -10163,7 +10163,7 @@ function Dashboard({
         )}
       </div>
 
-      <div className="panel" style={{ overflowX: "auto" }}>
+      <div className="panel" style={{ overflowX: "clip" }}>
         <table className="table-cards">
           <thead>
             <tr>
@@ -11124,7 +11124,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
       </div>
 
       {summaryDriverIds.length > 0 && (
-        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
+        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "clip" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes / zajtra / pozajtra{effectiveDriverFilter ? " (len vybraný šofér)" : ""}
           </div>
@@ -11614,7 +11614,7 @@ function CustomersView({ customers, jobs, reservations, damages, blacklist, fram
           </div>
         )}
       </div>
-      <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
+      <div className="panel" style={{ padding: 0, overflowX: "clip" }}>
         <table className="table-cards">
           <thead>
             <tr>
@@ -20501,7 +20501,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Checkeri podľa depa — dnes ({fmtDate(today)})
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -21813,7 +21813,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Objednávky podľa depa
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             {depoRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
             ) : (
@@ -21830,7 +21830,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie objednávaný diel
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             {dielRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
             ) : (
@@ -21926,7 +21926,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Rezervácie podľa obchodníka
       </div>
-      <div className="panel" style={{ padding: 0, overflow: "hidden", marginBottom: 20 }}>
+      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {obchodnikRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne rezervácie v tomto období.</div>
         ) : (
@@ -21960,7 +21960,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Rentabilita podľa modelu — % dní v období na zákazke
       </div>
-      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="panel" style={{ padding: 0, overflow: "clip" }}>
         {rentabilityRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
         ) : (
@@ -22090,7 +22090,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najviac servisované modely
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             {modelRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
             ) : (
@@ -22107,7 +22107,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie servisovaný stroj
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             {serialRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
             ) : (
@@ -22125,7 +22125,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Vyťaženosť podľa technika
       </div>
-      <div className="panel" style={{ padding: 0, overflow: "hidden", marginBottom: 20 }}>
+      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {technicianRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
         ) : (
@@ -22155,7 +22155,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Stav servisu za obdobie
       </div>
-      <div className="panel" style={{ padding: 0, overflow: "hidden", marginBottom: 20 }}>
+      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {statusRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
         ) : (
@@ -22174,7 +22174,7 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
             {showExclusions ? "Skryť" : "Upraviť"} zoznam technikov v štatistikách
           </button>
           {showExclusions && (
-            <div className="panel" style={{ padding: 0, overflow: "hidden", marginTop: 10, maxHeight: 400, overflowY: "auto" }}>
+            <div className="panel table-scroll-inner" style={{ padding: 0, overflow: "hidden", marginTop: 10, maxHeight: 400, overflowY: "auto" }}>
               <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -22408,7 +22408,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
         </div>
       )}
       <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ width: "100%", marginBottom: 10 }} />
-      <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+      <div className="panel" style={{ padding: 0, overflow: "clip" }}>
         <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -22734,7 +22734,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             </button>
           )}
         </div>
-        <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+        <div className="panel" style={{ padding: 0, overflow: "clip" }}>
           <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -22895,7 +22895,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </button>
             )}
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -22987,7 +22987,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </button>
             )}
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -23036,7 +23036,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--danger)", marginBottom: 8 }}>
             Zamietnuté ({zamietnute.length})
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "auto" }}>
+          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -23873,6 +23873,9 @@ function GlobalStyle() {
          samotný .modal-overlay — tabuľky vnútri sa preto lepia na vrch OKNA
          (0), nie o výšku hlavičky nižšie (tam by zbytočne visela medzera). */
       .modal-panel th { top: 0; }
+      /* Rovnaký prípad ako vyššie — tabuľka vo vlastnom vnútornom scrolli
+         (maxHeight + overflow), nie v okne (Modal). */
+      .table-scroll-inner th { top: 0; }
       td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
       tr:hover td { background: var(--accent-light); }
 
