@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.652";
+const APP_VERSION = "1.0.653";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -9717,7 +9717,7 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
             </span>
             <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
           </div>
-          <div style={{ flex: "1 1 auto", display: "flex", justifyContent: "center", minWidth: 120 }}>
+          <div className="header-search-wrap" style={{ flex: "1 1 auto", display: "flex", justifyContent: "center", minWidth: 120 }}>
             <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />
           </div>
           <div className="header-top-actions" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
@@ -23845,6 +23845,11 @@ function GlobalStyle() {
         .user-menu-desktop-wrap { display: none !important; }
         .user-menu-mobile-wrap { display: block !important; }
         .header-top-actions { gap: 6px !important; flex: 0 0 auto; flex-wrap: nowrap !important; }
+        /* Lupa (zbalená na ikonu) predtým sedela vo vlastnom, na stred
+           zarovnanom "1 1 auto" bloku medzi nadpisom a zvončekom — v úzkej
+           hlavičke to vyzeralo ako osamotená ikona uprostred prázdna. Bez
+           roztiahnutia/centrovania sa "prisunie" hneď vedľa zvončeka. */
+        .header-search-wrap { flex: 0 0 auto !important; justify-content: flex-start !important; min-width: 0 !important; margin-left: auto; }
         /* Lupa, zvonček a avatar používateľa — rovnaké kolieskové tlačidlo
            (veľkosť, tvar, priehľadné biele pozadie), nech na seba v hlavičke
            vizuálne sedia a nevyzerajú ako z inej appky. */
