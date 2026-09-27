@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.648";
+const APP_VERSION = "1.0.649";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6655,7 +6655,7 @@ function DispatcherApp() {
                 📋 Prehľad najbližších 5 dní
               </button>
             </div>
-            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div className="quick-filters" style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
               <select
                 value={planTechnicianFilter}
                 onChange={(e) => setPlanTechnicianFilter(e.target.value)}
@@ -6666,16 +6666,9 @@ function DispatcherApp() {
                   <option key={t.id} value={t.id}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</option>
                 ))}
               </select>
-              {planMode === "gantt" && (
-                <select
-                  value={planDepoFilter || ""}
-                  onChange={(e) => setPlanDepoFilter(e.target.value || null)}
-                  style={{ minWidth: 140, fontSize: 11, padding: "3px 6px" }}
-                >
-                  <option value="">— všetky depá —</option>
-                  {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              )}
+              {/* Depo select tu bol duplicitný s chipmi depa priamo v Gantte
+                  (TechnicianPlanner) — jedno a to isté filtrovanie na dvoch
+                  miestach, odstránené. */}
               {planMode === "gantt" && can(effectiveUser, "technician_archive") && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
                   <input type="checkbox" checked={planShowArchived} onChange={(e) => setPlanShowArchived(e.target.checked)} />
@@ -10107,7 +10100,7 @@ function Dashboard({
               {depoOptions.map((d) => (
                 <button
                   key={d}
-                  className="btn"
+                  className="btn depo-chip-btn"
                   onClick={() => setDepoFilter(depoFilter === d ? null : d)}
                   style={{
                     padding: "5px 10px",
@@ -10117,7 +10110,7 @@ function Dashboard({
                     border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
                   }}
                 >
-                  {d}
+                  <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
                 </button>
               ))}
             </div>
@@ -10408,7 +10401,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -10418,7 +10411,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -11193,7 +11186,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -11203,7 +11196,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -18414,7 +18407,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
             {depoOptions.map((d) => (
               <button
                 key={d}
-                className="btn"
+                className="btn depo-chip-btn"
                 onClick={() => setDepoFilter(depoFilter === d ? null : d)}
                 style={{
                   padding: "5px 10px",
@@ -18424,7 +18417,7 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
                   border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
                 }}
               >
-                {d}
+                <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
               </button>
             ))}
           </div>
@@ -18624,7 +18617,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
               {depoOptions.map((d) => (
                 <button
                   key={d}
-                  className="btn"
+                  className="btn depo-chip-btn"
                   onClick={() => setDepoFilter(depoFilter === d ? null : d)}
                   style={{
                     padding: "5px 10px",
@@ -18634,7 +18627,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                     border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
                   }}
                 >
-                  {d}
+                  <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
                 </button>
               ))}
             </div>
@@ -19265,7 +19258,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -19275,7 +19268,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -19883,7 +19876,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -19893,7 +19886,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -20334,7 +20327,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -20344,7 +20337,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -20506,7 +20499,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -20516,7 +20509,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -20813,7 +20806,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 14, gap: 10 }}>
+      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 14, gap: 10 }}>
         {can(user, "plan_quick_events") ? (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
@@ -20850,11 +20843,11 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         </div>
         <div />
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {depoOptions.map((d) => (
           <button
             key={d}
-            className="btn"
+            className="btn depo-chip-btn"
             onClick={() => setDepoFilter(depoFilter === d ? null : d)}
             style={{
               padding: "5px 10px",
@@ -20864,7 +20857,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
               border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
             }}
           >
-            {d}
+            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
           </button>
         ))}
       </div>
@@ -22720,7 +22713,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             {depoOptions.map((d) => (
               <button
                 key={d}
-                className="btn"
+                className="btn depo-chip-btn"
                 onClick={() => { setActiveDepo(d); setDodavatelFilter(null); }}
                 style={{
                   fontSize: 12, padding: "5px 12px",
@@ -22729,7 +22722,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                   border: "1px solid " + (activeDepo === d ? "var(--accent)" : "var(--border)"),
                 }}
               >
-                {d}
+                <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
               </button>
             ))}
           </div>
@@ -23698,6 +23691,8 @@ function GlobalStyle() {
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
       .mobile-tech-actions { display: none; }
       .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
+      /* Depo filter chipy — na desktope plný názov, na mobile skratka (BA/NR/ZV/ZA/PO/EXT), nech je to jednotné so ganttom. */
+      .depo-chip-short { display: none; }
       .btn-accent { background: var(--accent); color: #fff; }
       .btn-accent:hover { background: var(--accent-dark); }
       .btn-accent:disabled { opacity: .4; cursor: not-allowed; }
@@ -23918,6 +23913,12 @@ function GlobalStyle() {
         .quick-filters > div:nth-child(2) { width: 100%; justify-content: center; }
         .gantt-desktop-settings { display: none !important; }
         .gantt-mobile-settings { display: inline-block !important; }
+
+        /* Depo filter chipy skrátené na mobile (BA/NR/ZV/ZA/PO/EXT) — jednotné
+           so skratkami, čo už mal gantt Kalendára/Požičovne. */
+        .depo-chip-full { display: none !important; }
+        .depo-chip-short { display: inline !important; }
+        .depo-chip-btn { padding: 5px 8px !important; }
 
         /* Lupa namiesto trvalo otvoreného poľa vyhľadávania — v zoznamoch
            (Stroje, Zamestnanci, Diely...) rovnaký vzor ako vyhľadávanie v
