@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.639";
+const APP_VERSION = "1.0.640";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -22996,7 +22996,7 @@ function AuditLogView({ profiles }) {
               {filtered.map((e) => {
                 const who = e.changed_by ? profileById[e.changed_by]?.name || "— neznámy účet —" : "— systém —";
                 const data = e.action === "delete" ? e.old_data : e.new_data;
-                const label = data?.code || data?.name || data?.customer || e.record_id;
+                const label = data?.code || data?.name || data?.customer || data?.cisloDielu || e.record_id;
                 return (
                   <tr key={e.id}>
                     <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
