@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.681";
+const APP_VERSION = "1.0.682";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5579,10 +5579,14 @@ function DispatcherApp() {
     if (subs.length === 0) return remainingAssignments;
     let nextAssignments = remainingAssignments;
     const keptSubs = [];
-    // Uvoľnené okná (depo + dni), čo touto dovolenkou už nie sú kryté — patrí sem
-    // aj hlbšia "náhrada za náhradu" (pozri quickVacationWithSubstitute vyššie),
-    // lebo tá existovala len preto, že tento (anchor) checker bol preč.
-    const freedRanges = [];
+    // Uvoľnené okná (depo + KTO bol náhradník + dni), čo touto dovolenkou už nie
+    // sú kryté — z každého sa nižšie rekurzívne hľadá ďalšia "náhrada za
+    // náhradu" (pozri quickVacationWithSubstitute vyššie), čo existovala len
+    // preto, že TENTO náhradník bol tiež preč. Ide sa vždy len SMEROM DOLE v
+    // reťazci (cez substituteTechnicianId), nikdy naspäť k plytším/rodičovským
+    // substitúciám — inak by zrušenie dovolenky náhradníka vedelo omylom
+    // zmazať aj substitúciu jeho anchor-a (presne to bol nahlásený bug).
+    let frontier = [];
     subs.forEach((s) => {
       const vacationDates = remainingAssignments
         .filter((x) => x.technicianId === technicianId && (x.kind === "dovolenka" || x.kind === "pn") && x.date >= s.startDate && x.date <= s.endDate)
@@ -5592,10 +5596,10 @@ function DispatcherApp() {
       const newEnd = vacationDates[vacationDates.length - 1];
       if (vacationDates.length > 0) {
         keptSubs.push(newStart === s.startDate && newEnd === s.endDate ? s : { ...s, startDate: newStart, endDate: newEnd });
-        if (newStart !== s.startDate) freedRanges.push({ depo: s.depo, start: s.startDate, end: addDaysISO(newStart, -1) });
-        if (newEnd !== s.endDate) freedRanges.push({ depo: s.depo, start: addDaysISO(newEnd, 1), end: s.endDate });
+        if (newStart !== s.startDate) frontier.push({ depo: s.depo, substituteTechnicianId: s.substituteTechnicianId, start: s.startDate, end: addDaysISO(newStart, -1) });
+        if (newEnd !== s.endDate) frontier.push({ depo: s.depo, substituteTechnicianId: s.substituteTechnicianId, start: addDaysISO(newEnd, 1), end: s.endDate });
       } else {
-        freedRanges.push({ depo: s.depo, start: s.startDate, end: s.endDate });
+        frontier.push({ depo: s.depo, substituteTechnicianId: s.substituteTechnicianId, start: s.startDate, end: s.endDate });
       }
       // Otvorená kontrola presunutá (čo aj cez viacero medzičlánkov — pozri
       // originalTechnicianId vyššie) v dňoch, ktoré už dovolenkou nie sú krytý,
@@ -5608,16 +5612,18 @@ function DispatcherApp() {
           : x
       );
     });
-    // Hlbšie substitúcie pre to isté depo, celé spadajúce do uvoľneného okna
-    // (náhrada za náhradu, prípadne aj ďalšia za ňu), strácajú zmysel spolu s
-    // ňou — nemá sa už za koho zastupovať. Čiastočné presahy (napr. keď má
-    // náhradník vlastnú dovolenku aj mimo pôvodného okna) sa neorezávajú —
-    // zriedkavý okrajový prípad, netreba ho tu riešiť.
-    const otherSubs = checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId);
-    const survivingOtherSubs = otherSubs.filter(
-      (s) => !freedRanges.some((r) => r.depo === s.depo && s.startDate >= r.start && s.endDate <= r.end)
-    );
-    persistCheckerSubstitutions([...survivingOtherSubs, ...keptSubs]);
+    let remainingSubs = checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId);
+    while (frontier.length > 0) {
+      const range = frontier.pop();
+      const nextFrontier = [];
+      remainingSubs = remainingSubs.filter((s) => {
+        const isChild = s.depo === range.depo && s.originalTechnicianId === range.substituteTechnicianId && s.startDate >= range.start && s.endDate <= range.end;
+        if (isChild) nextFrontier.push({ depo: s.depo, substituteTechnicianId: s.substituteTechnicianId, start: s.startDate, end: s.endDate });
+        return !isChild;
+      });
+      frontier.push(...nextFrontier);
+    }
+    persistCheckerSubstitutions([...remainingSubs, ...keptSubs]);
     return nextAssignments;
   }
   function deleteAssignment(id) {
