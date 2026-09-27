@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.649";
+const APP_VERSION = "1.0.650";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -23945,13 +23945,20 @@ function GlobalStyle() {
            WebKit chybu, keď pri rýchlom scrolle ostane "zamrznutý" starý
            vykreslený obsah cez novší (vyzerá to ako zle poskladané/prekryté
            texty, aj keď telefón už dávno nescrolluje).
-           Predošlý pokus dal vlastnú GPU vrstvu len na .modal-overlay (rodič,
-           čo sa scrolluje) — chyba pretrvávala, lebo pozadie, čo sa
-           nedokresľuje, patrí .modal-panel (dieťa — samotná karta s
-           obsahom). Teraz je vlastná vrstva priamo na .modal-panel, nech
-           WebKit repaintuje TENTO prvok samostatne. */
-        .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; transform: translateZ(0); }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; transform: translateZ(0); -webkit-backface-visibility: hidden; isolation: isolate; }
+           Predošlé pokusy (GPU vrstva na .modal-overlay aj na .modal-panel)
+           nepomohli — stále sa spoliehali na to, že WebKit správne
+           PREKRESLÍ pozadie karty pri scrolle. Namiesto opravy prekreslenia
+           je tu teraz jednoduchší, spoľahlivejší prístup: na mobile je karta
+           (.modal-panel) VŽDY presne cez celú obrazovku (šírka 100%, žiadny
+           padding okolo, žiadne zaoblenie) — takže .modal-overlay pod ňou nie
+           je normálne vidno ANI KUS. Keď teda .modal-overlay dostane rovnakú
+           plnú (nepriehľadnú) farbu pozadia ako samotná karta namiesto
+           tmavého priesvitného scrimu, je jedno, či sa kartička v nejakej
+           oblasti nedokreslí — pod ňou nie je "diera" do stránky za modálom,
+           len tá istá farba pozadia. Chyba tak zostáva neviditeľná, aj keď
+           nastane. */
+        .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; background: var(--panel) !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
         /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
            scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
            iOS pri dotiahnutí na koniec obsahu "gumovo" preťahovalo ZA vlastný
