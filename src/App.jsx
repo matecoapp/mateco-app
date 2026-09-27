@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.645";
+const APP_VERSION = "1.0.646";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2314,6 +2314,10 @@ function KebabMenu({ actions }) {
 /* ---------------------------------------------------------
    Modal shell
 --------------------------------------------------------- */
+// Počet aktuálne otvorených <Modal> okien naraz (nie React state — potrebné
+// vidieť aj cez viac súčasne pripojených inštancií, napr. potvrdzovací
+// dialóg nad kartou). Viď použitie nižšie (has-open-modal na body).
+let openModalCount = 0;
 function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerExtra, elevated }) {
   // Esc zatvorí — jedno miesto, všetky okná postavené na Modal ho tým pádom
   // dostanú automaticky. Zámerne len na Escape (nie iné klávesy) a len
@@ -2326,6 +2330,23 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  // Mobilná spodná lišta (mobile-tech-actions, z-index 150) sa napriek
+  // vyššiemu z-indexu tohto okna (160/170) na iOS niekedy vedela prekresliť
+  // NAD spodok otvorenej karty — z-index totiž platí len v rámci JEDNÉHO
+  // stacking kontextu a lišta je v inej časti stromu (vykresľuje ju
+  // <Header>) než táto karta. Namiesto lovenia presnej príčiny sa lišta
+  // počas otvoreného okna (počítadlo — okien môže byť otvorených naraz
+  // viac, napr. potvrdenie nad kartou) rovno schová celá, nech sa s ničím
+  // nemá šancu prekrývať.
+  useEffect(() => {
+    openModalCount++;
+    document.body.classList.add("has-open-modal");
+    return () => {
+      openModalCount--;
+      if (openModalCount <= 0) document.body.classList.remove("has-open-modal");
+    };
+  }, []);
   return (
     <div
       className="modal-overlay"
@@ -23760,6 +23781,12 @@ function GlobalStyle() {
           border-top: 1px solid var(--border);
           box-shadow: 0 -2px 8px rgba(0,0,0,.08);
         }
+        /* Táto lišta vedela na iOS presvitať/prekrývať sa s tlačidlami na
+           spodku otvorenej karty aj napriek nižšiemu z-indexu (stacking
+           kontext karty a hlavičky sú inde v strome, z-index medzi nimi
+           nič nerieši) — kým je otvorené čo i len jedno okno, lišta sa
+           radšej rovno schová celá. */
+        body.has-open-modal .mobile-tech-actions { display: none !important; }
         .mobile-tech-action-btn {
           flex: 1;
           display: flex;
