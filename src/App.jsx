@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.670";
+const APP_VERSION = "1.0.672";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -14254,7 +14254,10 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
     return null;
   }, [machineId, expectedStart, expectedEnd, jobs, reservations, existing]);
 
-  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict;
+  // Predpokladaný koniec logicky nemôže byť pred predpokladaným začiatkom.
+  const dateOrderInvalid = expectedEnd && expectedEnd < expectedStart;
+
+  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict && !dateOrderInvalid;
 
   return (
     <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} wide>
@@ -14327,9 +14330,13 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
           <input
             type="date"
             value={expectedEnd}
+            min={expectedStart || undefined}
             onChange={(e) => setExpectedEnd(e.target.value)}
-            style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+            style={{ width: "100%", borderColor: conflict || dateOrderInvalid ? "var(--danger)" : undefined, outline: conflict || dateOrderInvalid ? "2px solid var(--danger)" : undefined }}
           />
+          {dateOrderInvalid && (
+            <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>Koniec nemôže byť pred začiatkom.</div>
+          )}
         </Field>
       </div>
       {conflict && (
@@ -14498,6 +14505,12 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   // spája s iným dňom.
   const [departureDate, setDepartureDate] = useState(existing?.departureDate || existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
   const [pickupDate, setPickupDate] = useState(existing?.pickupDate || existing?.endDate || "");
+  // Pri novej zákazke sa "Koniec" (zmluvný) na záložke Zákazka typicky vyplní až
+  // po otvorení okna — zvoz preto naťahuje jeho hodnotu priebežne, kým ho niekto
+  // v Prepravách ručne neprepíše (rovnaká myšlienka ako pri departureDate/startDate).
+  useEffect(() => {
+    if (!existing && !pickupDate) setPickupDate(endDate);
+  }, [endDate]);
   const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
   const [machineDisplayName, setMachineDisplayName] = useState(existing?.machineDisplayName || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
@@ -14537,7 +14550,10 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   // nie len upozornenie.
   const pendingPrep = machineId ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
 
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && obchodnik && startDate && !conflict && !pendingPrep;
+  // Koniec zákazky logicky nemôže byť pred jej začiatkom.
+  const dateOrderInvalid = endDate && endDate < startDate;
+
+  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && obchodnik && startDate && !conflict && !pendingPrep && !dateOrderInvalid;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -14638,10 +14654,15 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
             <input
               type="date"
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
-              style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
+              style={{ width: "100%", borderColor: conflict || dateOrderInvalid ? "var(--danger)" : undefined, outline: conflict || dateOrderInvalid ? "2px solid var(--danger)" : undefined }}
             />
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
+            {dateOrderInvalid ? (
+              <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>Koniec zákazky nemôže byť pred jej začiatkom.</div>
+            ) : (
+              <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
+            )}
           </Field>
           <Field label="Obchodník *">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -14732,7 +14753,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               startDate,
               endDate: endDate || null,
               departureDate: departureDate || startDate,
-              pickupDate: pickupDate || null,
+              pickupDate: pickupDate || endDate || null,
               notes: notes.trim(),
             });
           }}
