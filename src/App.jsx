@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.642";
+const APP_VERSION = "1.0.643";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -8118,6 +8118,7 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
       <button
         onClick={() => setOpen((v) => !v)}
         title={`${currentUser.name} · ${roleLabel(currentUser.role)}`}
+        className={isCompactVariant ? "header-icon-btn" : undefined}
         style={
           isMobileVariant
             ? {
@@ -8139,8 +8140,8 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
                 fontSize: 12,
                 fontWeight: 700,
                 color: "#fff",
-                background: "rgba(255,255,255,.2)",
-                border: "1px solid rgba(255,255,255,.35)",
+                background: "rgba(255,255,255,.16)",
+                border: "1px solid rgba(255,255,255,.3)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -8441,11 +8442,12 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
     <div style={{ position: "relative" }}>
       <button
         onClick={() => setOpen((v) => !v)}
+        className="header-icon-btn"
         style={{
           fontSize: 13,
           color: "#fff",
-          background: unreadCount > 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.12)",
-          border: "1px solid rgba(255,255,255,.25)",
+          background: unreadCount > 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.16)",
+          border: "1px solid rgba(255,255,255,.3)",
           borderRadius: 4,
           padding: "3px 9px",
           cursor: "pointer",
@@ -9020,10 +9022,10 @@ function GlobalSearch({ searchIndex, onNavigate }) {
     >
       <button
         type="button"
-        className="global-search-mobile-trigger"
+        className="global-search-mobile-trigger header-icon-btn"
         onClick={() => setMobileExpanded(true)}
         aria-label="Hľadať"
-        style={{ display: "none", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 4, color: "#fff", cursor: "pointer" }}
+        style={{ display: "none", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
       >
         🔍
       </button>
@@ -9050,10 +9052,10 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         {mobileExpanded && (
           <button
             type="button"
-            className="global-search-mobile-close"
+            className="global-search-mobile-close header-icon-btn"
             onClick={() => { setMobileExpanded(false); setOpen(false); setQuery(""); }}
             aria-label="Zavrieť hľadanie"
-            style={{ display: "none", position: "absolute", right: -34, top: 0, bottom: 0, background: "transparent", border: "none", color: "#fff", fontSize: 16, cursor: "pointer" }}
+            style={{ display: "none", flex: "0 0 auto", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
           >
             ✕
           </button>
@@ -9591,7 +9593,13 @@ function Header({ alertCount, damageAlertCount, darkMode, onToggleDarkMode, onEx
     <div style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
-          <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" className="header-logo-img" style={{ height: 24, display: "block" }} />
+          {/* Logo je z tlačového watermarku — kreslené na biele pozadie, na
+              červenej hlavičke bez neho vyzeralo rozmazane/nekontrastne.
+              Biela "pilulka" okolo je preto rovnaká vo svetlom aj tmavom
+              režime appky (hlavička je vždy červená, nie je to podľa témy appky). */}
+          <span className="header-logo-pill" style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px", flex: "0 0 auto" }}>
+            <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" className="header-logo-img" style={{ height: 20, display: "block" }} />
+          </span>
           {/* Popis/verzia — na webe hneď vedľa loga (divider medzi nimi), na
               mobile (viď @media) sa cez CSS "order" presunú na vlastný riadok
               POD logo (header-brand-sub), nech na prvom riadku ostane vždy
@@ -23703,37 +23711,47 @@ function GlobalStyle() {
            flex-wrap sa tu (na rozdiel od zvyšku appky) vypína. */
         .header-topbar { padding: 6px 10px !important; gap: 6px !important; flex-wrap: nowrap !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
-        .header-logo-img { height: 20px !important; flex: 0 0 auto; }
+        .header-logo-img { height: 20px !important; }
         .header-brand-sub { flex: 0 1 auto; overflow: hidden; gap: 6px !important; }
         .header-divider { display: none !important; }
         .header-subtitle { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-menu-desktop-wrap { display: none !important; }
         .user-menu-mobile-wrap { display: block !important; }
-        .header-top-actions { gap: 5px !important; flex: 0 0 auto; flex-wrap: nowrap !important; }
-        .header-top-actions button, .header-top-actions label, .header-top-actions select, .header-top-actions > div {
-          font-size: 10px !important;
-          padding: 4px 6px !important;
+        .header-top-actions { gap: 6px !important; flex: 0 0 auto; flex-wrap: nowrap !important; }
+        /* Lupa, zvonček a avatar používateľa — rovnaké kolieskové tlačidlo
+           (veľkosť, tvar, priehľadné biele pozadie), nech na seba v hlavičke
+           vizuálne sedia a nevyzerajú ako z inej appky. */
+        .header-icon-btn {
+          width: 34px !important;
+          height: 34px !important;
+          min-width: 34px !important;
+          min-height: 34px !important;
+          border-radius: 50% !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          font-size: 15px !important;
         }
-        /* Zvonček — samotný text/ikonový obsah je malý, ale dotykové pole
-           okolo neho nech je aspoň ~40px (odporúčaná min. veľkosť na dotyk),
-           inak sa naň na mobile ťažko trafí. */
-        .header-top-actions button { min-height: 38px; min-width: 38px; }
-        .global-search-box { min-width: 0 !important; width: auto !important; flex: 0 0 auto; }
         /* Pole hľadania je na mobile schované, vidno len lupu — kliknutím
-           na ňu sa (global-search-mobile-open) zobrazí ako pruh cez celú
-           šírku pripnutý pod hlavičku. */
+           naň (global-search-mobile-open) sa zobrazí ako riadok cez celú
+           šírku POD prvým riadkom hlavičky (bežný tok, nie position:fixed —
+           to na iOS pri otvorení klávesnice vedelo "poskakovať"/vykresliť sa
+           na náhodnom mieste). */
+        .header-topbar:has(.global-search-mobile-open) { flex-wrap: wrap !important; }
+        .global-search-box { min-width: 0 !important; width: auto !important; flex: 0 0 auto; }
+        .global-search-box.global-search-mobile-open { flex-basis: 100% !important; order: 5; margin-top: 4px; }
         .global-search-mobile-trigger { display: flex !important; }
         .global-search-input-wrap { display: none; }
         .global-search-box.global-search-mobile-open .global-search-mobile-trigger { display: none !important; }
         .global-search-box.global-search-mobile-open .global-search-input-wrap {
-          display: block !important;
-          position: fixed;
-          left: 10px;
-          right: 44px;
-          top: 8px;
-          z-index: 250;
+          display: flex !important;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
         }
-        .global-search-mobile-close { display: flex !important; align-items: center; justify-content: center; }
+        .global-search-box.global-search-mobile-open .global-search-input-wrap input { flex: 1 1 auto; }
+        .global-search-mobile-close { display: flex !important; }
         .panel { padding: 12px !important; }
         /* display:flex tu MUSÍ byť tiež !important — kalendár požičovne má
            túto lištu nastavenú inline ako display:"grid" (3 stĺpce vedľa
@@ -23748,8 +23766,19 @@ function GlobalStyle() {
         .resp-grid { grid-template-columns: 1fr !important; }
 
         /* Modálne okná — takmer celá obrazovka, menší padding */
-        .modal-overlay { padding: 0 !important; align-items: stretch !important; }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
+           scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
+           iOS pri dotiahnutí na koniec obsahu "gumovo" preťahovalo ZA vlastný
+           obsah a cez tú medzeru bolo krátko vidno, čo je pod modálom
+           (vyzeralo to, akoby modálu na chvíľu zmizlo pozadie/prekrývalo sa
+           to s obsahom pod ním). "contain" zastaví ten gumový efekt len na
+           tomto kontajneri, nemení scrollovanie zvyšku appky. 100dvh namiesto
+           100vh — na mobile Safari sa 100vh počíta podľa výšky BEZ schovanej
+           adresovej lišty, takže po jej schovaní (počas scrollu) bola pod
+           kartou viditeľná medzera bez pozadia. */
+        .app-main { overscroll-behavior: contain; }
         /* Len -12px hore (nie aj safe-area-inset-top ako predtým) — inak sa
            táto lišta (má v sebe zatváracie ×) vytiahla úplne až za stavový
            riadok telefónu a × sa dala schovať za hodiny/batériu, nedalo sa
