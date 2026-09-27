@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.674";
+const APP_VERSION = "1.0.675";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1787,6 +1787,21 @@ async function loadRecordTable(table) {
     const cached = await idbGet("tables", table);
     return cached || [];
   }
+}
+// Nahranie fotky/obrázka do Supabase Storage malo len JEDEN pokus — jediný
+// krátky výpadok siete (bežné napr. na slabom mobilnom signáli v teréne) sa
+// tak nerozlíšil od skutočného "offline" a fotka sa hneď zaradila do offline
+// frontu, hoci šofér/technik boli celý čas pripojení. Rovnaký vzor ako
+// writeRecordRowWithRetry nižšie — 3 pokusy s rastúcim čakaním, až potom sa to
+// naozaj vzdá a nechá na offline frontu.
+async function uploadToStorageWithRetry(bucket, path, blob, contentType, attempt = 1) {
+  const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType });
+  if (!error) return true;
+  if (attempt < 3) {
+    await sleep(attempt * 800);
+    return uploadToStorageWithRetry(bucket, path, blob, contentType, attempt + 1);
+  }
+  throw error;
 }
 const _recordSaveQueues = {};
 async function writeRecordRowWithRetry(table, item, attempt = 1) {
@@ -4602,8 +4617,7 @@ function DispatcherApp() {
         const cleanPart = (s) => String(s || "").replace(/[^a-zA-Z0-9_-]/g, "_");
         const dateStr = (data.submittedAt || new Date().toISOString()).slice(0, 10);
         const path = `${cleanPart(machine?.code || data.machineSerial || "neznamy-stroj")}/${dateStr}_${cleanPart(data.technicianName || "technik")}_${queueId}.png`;
-        const { error: uploadError } = await supabase.storage.from("protocols").upload(path, blob, { contentType: "image/png" });
-        if (uploadError) throw uploadError;
+        await uploadToStorageWithRetry("protocols", path, blob, "image/png");
         const { data: pub } = supabase.storage.from("protocols").getPublicUrl(path);
         imageUrl = pub.publicUrl;
       }
@@ -4650,46 +4664,54 @@ function DispatcherApp() {
         idbDelete("outbox", `protocol:${queueId}`);
         refreshOutboxCount();
       }
-      // Ak protokol prišiel z ČISTÉHO vypísania (nie zo zákazky) a stroj má
-      // otvorenú zákazku (poškodenie/externá) pridelenú TOMU ISTÉMU technikovi,
-      // čo protokol vypísal — je to takmer isto tá istá práca, len obídená.
-      // Namiesto všeobecného upozornenia pošli dispečerovi rovno odkaz na
-      // konkrétnu zákazku, nech ju vie skontrolovať a zavrieť.
-      let matchedOpenTicket = null;
-      if (!data.damageId && data.machineId) {
-        const submittedName = (data.technicianName || "").trim().toLowerCase();
-        matchedOpenTicket = submittedName
-          ? damages.find((d) => {
-              if (d.resolved) return false;
-              if (d.type !== "poskodenie" && d.type !== "externa") return false;
-              if (d.machineId !== data.machineId) return false;
-              const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
-              return techIds.some((id) => (technicianByIdTop[id]?.name || "").trim().toLowerCase() === submittedName);
-            }) || null
-          : null;
-      }
-      if (matchedOpenTicket) {
-        pushNotification({
-          kind: "damage_new",
-          roles: ["dispecer_servisu", "veduci_servisu"],
-          title: "Protokol vypísaný mimo zákazky — pravdepodobne ju rieši",
-          message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"} bez toho, aby ho vypísal zo zákazky ${matchedOpenTicket.code} (pridelená tomu istému technikovi). Skontrolujte a v prípade potreby zákazku zavrite.`,
-          link: { module: "servis", view: matchedOpenTicket.type === "externa" ? "externe" : "poskodenia", damageId: matchedOpenTicket.id },
-        });
-      } else {
-        pushNotification({
-          kind: "damage_resolved",
-          roles: ["dispecer_servisu", "veduci_servisu"],
-          title: "Protokol odoslaný — servis pravdepodobne ukončený",
-          message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"}. Skontrolujte a v prípade potreby ukončite zákazku.`,
-          link: data.damageId
-            ? { module: "servis", view: "poskodenia", damageId: data.damageId }
-            : data.machineId
-              ? { module: "poziciovna", view: "dashboard", machineId: data.machineId }
-              : data.assignmentId
-                ? { module: "servis", view: "plan", assignmentId: data.assignmentId }
-                : { module: "servis", view: "externe" },
-        });
+      // Notifikácia je len doplnok k už uloženému protokolu — chyba tu (napr. v
+      // párovaní na otvorenú zákazku) nesmie protokol znova zaradiť do frontu
+      // (to by pri ďalšom pokuse vytvorilo DUPLICITNÝ záznam, keďže record.id sa
+      // generuje nanovo). Preto vlastný try/catch, mimo toho hlavného vyššie.
+      try {
+        // Ak protokol prišiel z ČISTÉHO vypísania (nie zo zákazky) a stroj má
+        // otvorenú zákazku (poškodenie/externá) pridelenú TOMU ISTÉMU technikovi,
+        // čo protokol vypísal — je to takmer isto tá istá práca, len obídená.
+        // Namiesto všeobecného upozornenia pošli dispečerovi rovno odkaz na
+        // konkrétnu zákazku, nech ju vie skontrolovať a zavrieť.
+        let matchedOpenTicket = null;
+        if (!data.damageId && data.machineId) {
+          const submittedName = (data.technicianName || "").trim().toLowerCase();
+          matchedOpenTicket = submittedName
+            ? damages.find((d) => {
+                if (d.resolved) return false;
+                if (d.type !== "poskodenie" && d.type !== "externa") return false;
+                if (d.machineId !== data.machineId) return false;
+                const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
+                return techIds.some((id) => (technicianByIdTop[id]?.name || "").trim().toLowerCase() === submittedName);
+              }) || null
+            : null;
+        }
+        if (matchedOpenTicket) {
+          pushNotification({
+            kind: "damage_new",
+            roles: ["dispecer_servisu", "veduci_servisu"],
+            title: "Protokol vypísaný mimo zákazky — pravdepodobne ju rieši",
+            message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"} bez toho, aby ho vypísal zo zákazky ${matchedOpenTicket.code} (pridelená tomu istému technikovi). Skontrolujte a v prípade potreby zákazku zavrite.`,
+            link: { module: "servis", view: matchedOpenTicket.type === "externa" ? "externe" : "poskodenia", damageId: matchedOpenTicket.id },
+          });
+        } else {
+          pushNotification({
+            kind: "damage_resolved",
+            roles: ["dispecer_servisu", "veduci_servisu"],
+            title: "Protokol odoslaný — servis pravdepodobne ukončený",
+            message: `${data.technicianName || "Technik"} odoslal protokol pre stroj ${machine?.code || data.machineSerial || "—"}. Skontrolujte a v prípade potreby ukončite zákazku.`,
+            link: data.damageId
+              ? { module: "servis", view: "poskodenia", damageId: data.damageId }
+              : data.machineId
+                ? { module: "poziciovna", view: "dashboard", machineId: data.machineId }
+                : data.assignmentId
+                  ? { module: "servis", view: "plan", assignmentId: data.assignmentId }
+                  : { module: "servis", view: "externe" },
+          });
+        }
+      } catch (e) {
+        console.error("[protokol] Notifikácia po uložení protokolu zlyhala (protokol je už uložený, toto sa neopakuje):", e);
       }
     } catch (e) {
       console.error("[protokol] Spracovanie protokolu zlyhalo (pravdepodobne offline) — uložené do outboxu, skúsi sa znova pri návrate signálu:", e);
@@ -13324,8 +13346,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         const photoId = String(Date.now());
         try {
           const path = `${pathPrefix}/${photoId}.jpg`;
-          const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
-          if (uploadError) throw uploadError;
+          await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
           const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
           setReturnPhotos((prev) => [...prev, pub.publicUrl]);
         } catch (e) {
@@ -13757,8 +13778,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         const photoId = String(Date.now());
         try {
           const path = `${pathPrefix}/${photoId}.jpg`;
-          const { error: uploadError } = await supabase.storage.from("inspections").upload(path, blob, { contentType: "image/jpeg" });
-          if (uploadError) throw uploadError;
+          await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
           const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
           setPhotos((prev) => [...prev, pub.publicUrl]);
         } catch (e) {
