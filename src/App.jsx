@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.679";
+const APP_VERSION = "1.0.680";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2804,6 +2804,7 @@ function DispatcherApp() {
   const [reservationCardTarget, setReservationCardTarget] = useState(null); // rezervácia zobrazená v karte
   const [rejectReservationTarget, setRejectReservationTarget] = useState(null); // rezervácia čakajúca na dôvod zmazania
   const [reportTransportIssueTarget, setReportTransportIssueTarget] = useState(null); // zákazka čakajúca na popis problému s prepravou
+  const [approveExtensionTarget, setApproveExtensionTarget] = useState(null); // { request, job } — žiadosť o zmenu termínu čakajúca na potvrdenie so zvozom
   const [showImport, setShowImport] = useState(false);
   const [showImportJobs, setShowImportJobs] = useState(false);
   const [showImportCustomers, setShowImportCustomers] = useState(false);
@@ -5184,9 +5185,19 @@ function DispatcherApp() {
   // Žiadosť o predĺženie z portálu — Schváliť upraví koniec zákazky, Zamietnuť
   // len uzavrie žiadosť s dôvodom. V oboch prípadoch to zákazník uvidí pri
   // ďalšom otvorení portálu (get_portal_job vracia históriu žiadostí).
-  function resolvePortalExtension(request, approve, note) {
+  function resolvePortalExtension(request, approve, note, pickupDate) {
     if (approve) {
-      updateJob(request.jobId, { endDate: request.requestedEndDate });
+      // Zvoz (pickupDate) sa posunie spolu s koncom zákazky len vtedy, keď bol
+      // doteraz presne zosynchronizovaný so zmluvným koncom — rovnaké pravidlo
+      // ako pri presune zákazky v Gantte (handleBarDrop) a v AddJobModal. Ak ho
+      // dispečer pri schválení sám zadal (pickupDate arg), má to prednosť.
+      const job = jobs.find((j) => j.id === request.jobId);
+      let nextPickup = job?.pickupDate;
+      if (job && request.requestedEndDate !== job.endDate && job.pickupDate === job.endDate) {
+        nextPickup = request.requestedEndDate;
+      }
+      if (pickupDate !== undefined) nextPickup = pickupDate;
+      updateJob(request.jobId, { endDate: request.requestedEndDate, pickupDate: nextPickup || null });
     }
     persistPortalRequests(
       portalRequests.map((r) =>
@@ -8129,9 +8140,20 @@ function DispatcherApp() {
             setJobDetail((prev) => (prev ? { ...prev, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : prev));
           }}
           portalRequests={portalRequests.filter((r) => r.jobId === jobDetail.id && (r.status === "pending" || r.status === "in_progress"))}
-          onApprovePortalExtension={(r) => resolvePortalExtension(r, true)}
+          onApprovePortalExtension={(r, j) => setApproveExtensionTarget({ request: r, job: j })}
           onRejectPortalRequest={(r) => rejectPortalRequest(r)}
           onConvertPortalProblem={(r) => convertPortalRequestToDamage(r)}
+        />
+      )}
+      {approveExtensionTarget && (
+        <ApprovePortalExtensionModal
+          request={approveExtensionTarget.request}
+          job={approveExtensionTarget.job}
+          onClose={() => setApproveExtensionTarget(null)}
+          onConfirm={(pickupDate) => {
+            resolvePortalExtension(approveExtensionTarget.request, true, null, pickupDate);
+            setApproveExtensionTarget(null);
+          }}
         />
       )}
       {reportTransportIssueTarget && (
@@ -14079,6 +14101,29 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
   );
 }
 
+// Potvrdenie schválenia žiadosti o zmenu termínu vrátenia z portálu — zvoz sa
+// predvyplní podľa rovnakého pravidla ako inde (posunie sa, len ak bol
+// doteraz zosynchronizovaný so zmluvným koncom), ale dispečer si ho tu ešte
+// môže sám upraviť ("upraviť zvoz"), napr. keď je iný ako nový zmluvný koniec.
+function ApprovePortalExtensionModal({ request, job, onClose, onConfirm }) {
+  const defaultPickup =
+    job && job.pickupDate === job.endDate ? request.requestedEndDate : job?.pickupDate || request.requestedEndDate;
+  const [pickupDate, setPickupDate] = useState(defaultPickup || "");
+  return (
+    <Modal title="Schváliť zmenu termínu vrátenia" onClose={onClose}>
+      <div style={{ fontSize: 14, marginBottom: 16 }}>
+        Nový zmluvný koniec zákazky: <strong>{fmtDate(request.requestedEndDate)}</strong>
+      </div>
+      <Field label="Dátum zvozu">
+        <input type="date" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
+      </Field>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+        <button className="btn btn-accent" onClick={() => onConfirm(pickupDate || null)}>Schváliť</button>
+      </div>
+    </Modal>
+  );
+}
 function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem }) {
   const [showPortalPanel, setShowPortalPanel] = useState(false);
   const [expandedChecklist, setExpandedChecklist] = useState(null); // null | "vyvoz" | "vratenie"
@@ -14145,14 +14190,14 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
       {(portalRequests || []).map((r) => (
         <div key={r.id} style={{ background: "var(--warn-bg, #fff8e1)", color: "var(--warn, #b07e00)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>
-            📩 <strong>{r.type === "problem" ? "Zákazník nahlásil problém" : "Žiadosť o predĺženie"}</strong>
+            📩 <strong>{r.type === "problem" ? "Zákazník nahlásil problém" : "Žiadosť o zmenu termínu vrátenia"}</strong>
             {r.status === "in_progress" ? " (v riešení)" : ""}:{" "}
-            {r.type === "problem" ? r.message : `do ${fmtDate(r.requestedEndDate)}`}
+            {r.type === "problem" ? r.message : `nový termín ${fmtDate(r.requestedEndDate)}`}
           </span>
           <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {r.type === "extension" && r.status === "pending" && can(user, "job_edit") && onApprovePortalExtension && (
               <>
-                <button className="btn btn-ghost" onClick={() => onApprovePortalExtension(r)}>Schváliť</button>
+                <button className="btn btn-ghost" onClick={() => onApprovePortalExtension(r, job)}>Schváliť</button>
                 <button className="btn btn-ghost" onClick={() => onRejectPortalRequest(r)}>Zamietnuť</button>
               </>
             )}

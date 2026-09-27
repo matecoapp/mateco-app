@@ -231,7 +231,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
   if (jobLocked) {
     return (
       <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "8px 0" }}>
-        {type === "problem" ? "Problém je už nahlásený, čaká na vybavenie." : "Žiadosť o predĺženie už čaká na vybavenie."}
+        {type === "problem" ? "Problém je už nahlásený, čaká na vybavenie." : "Žiadosť o zmenu termínu vrátenia už čaká na vybavenie."}
       </div>
     );
   }
@@ -263,7 +263,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
         onClick={() => setOpen(true)}
         style={{ width: "100%", padding: "9px 12px", borderRadius: 6, border: "1px solid #B3131D", background: "#fff", color: "#B3131D", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
       >
-        {type === "problem" ? "Nahlásiť problém so strojom" : "Požiadať o predĺženie"}
+        {type === "problem" ? "Nahlásiť problém so strojom" : "Zmeniť dátum vrátenia"}
       </button>
     );
   }
@@ -279,12 +279,17 @@ function RequestForm({ type, jobLocked, onSubmit }) {
           style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
         />
       ) : (
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
-        />
+        <>
+          <div style={{ fontSize: 12, color: "#6b6b6b", marginBottom: 6 }}>
+            Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.
+          </div>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
+          />
+        </>
       )}
       {error && <div style={{ fontSize: 12, color: "#c62828", marginBottom: 8 }}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -317,7 +322,7 @@ function RequestHistory({ requests }) {
           <div key={i} style={{ border: "1px solid #eee", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-                {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o predĺženie do ${fmtDate(r.requestedEndDate)}`}
+                {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o zmenu termínu vrátenia na ${fmtDate(r.requestedEndDate)}`}
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
             </div>
