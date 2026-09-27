@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.647";
+const APP_VERSION = "1.0.648";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -23943,9 +23943,14 @@ function GlobalStyle() {
            GPU vrstvu pre scrollovanie dlhých kariet, čo je známa oprava pre
            WebKit chybu, keď pri rýchlom scrolle ostane "zamrznutý" starý
            vykreslený obsah cez novší (vyzerá to ako zle poskladané/prekryté
-           texty, aj keď telefón už dávno nescrolluje). */
+           texty, aj keď telefón už dávno nescrolluje).
+           Predošlý pokus dal vlastnú GPU vrstvu len na .modal-overlay (rodič,
+           čo sa scrolluje) — chyba pretrvávala, lebo pozadie, čo sa
+           nedokresľuje, patrí .modal-panel (dieťa — samotná karta s
+           obsahom). Teraz je vlastná vrstva priamo na .modal-panel, nech
+           WebKit repaintuje TENTO prvok samostatne. */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; transform: translateZ(0); }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; transform: translateZ(0); -webkit-backface-visibility: hidden; isolation: isolate; }
         /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
            scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
            iOS pri dotiahnutí na koniec obsahu "gumovo" preťahovalo ZA vlastný
