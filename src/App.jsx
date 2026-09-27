@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.659";
+const APP_VERSION = "1.0.661";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1186,6 +1186,24 @@ const addDaysISO = (iso, days) => {
   const shifted = new Date(d.getTime() + days * 86400000);
   return toLocalISO(shifted);
 };
+// Dátumy pri importoch (Excel/CSV) — prijme aj bežný slovenský zápis
+// dd-mm-rrrr / dd.mm.rrrr, aj samotný rok (revízie/skúšky bývajú niekedy
+// evidované len na rok — berie sa ako 1.1. toho roka), a vždy vráti ISO
+// rrrr-mm-dd, v ktorom appka dátumy interne porovnáva a triedi. Už-ISO
+// vstup aj čokoľvek nerozpoznané prejde bez zmeny (nič sa nepokazí).
+function parseImportDate(raw) {
+  const v = (raw || "").toString().trim();
+  if (!v) return "";
+  if (/^\d{4}$/.test(v)) return `${v}-01-01`;
+  // Rok vpredu (rrrr.mm.dd / rrrr/mm/dd / rrrr-mm-dd) — ľubovoľný z bežných
+  // oddeľovačov, nech nezáleží, ktorý má kto zvyknutý v Exceli.
+  let m = v.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  // Rok vzadu (dd.mm.rrrr / dd/mm/rrrr / dd-mm-rrrr).
+  m = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return v;
+}
 // Pre porovnanie období v štatistikách — vráti rovnako dlhé obdobie hneď pred
 // zvoleným (napr. 1.–15. jún → predchádzajúce je 17.–31. máj).
 function previousPeriod(start, end) {
@@ -8749,7 +8767,8 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
       .map((r) => {
         const obj = {};
         fields.forEach((f) => {
-          obj[f.key] = mapping[f.key] ? (r[mapping[f.key]] || "").toString().trim() : "";
+          const val = mapping[f.key] ? (r[mapping[f.key]] || "").toString().trim() : "";
+          obj[f.key] = f.type === "date" ? parseImportDate(val) : val;
         });
         return obj;
       })
@@ -14938,13 +14957,13 @@ function DamageImportModal({ machines, technicians, today, onClose, onImport }) 
       }
       const popis = (r[mapPopis] || "").toString().trim();
       if (!popis) return;
-      const dateReported = (mapDate ? (r[mapDate] || "").toString().trim() : "") || today;
+      const dateReported = (mapDate ? parseImportDate(r[mapDate]) : "") || today;
       const customerOverride = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
       const locationOverride = mapLocation ? (r[mapLocation] || "").toString().trim() : "";
       const techName = mapTechnician ? (r[mapTechnician] || "").toString().trim() : "";
       const tech = techName ? technicians.find((t) => (t.name || "").trim().toLowerCase() === techName.toLowerCase()) : null;
       if (techName && !tech) missingTechs.push(techName);
-      const assignedDateRaw = mapAssignedDate ? (r[mapAssignedDate] || "").toString().trim() : "";
+      const assignedDateRaw = mapAssignedDate ? parseImportDate(r[mapAssignedDate]) : "";
       const assignedDate = tech ? assignedDateRaw || today : null;
       const note = mapNote ? (r[mapNote] || "").toString().trim() : "";
 
@@ -15088,11 +15107,11 @@ function ExternalServiceImportModal({ technicians, today, onClose, onImport }) {
       const location = mapLocation ? (r[mapLocation] || "").toString().trim() : "";
       const depoRaw = mapDepo ? (r[mapDepo] || "").toString().trim() : "";
       const assignedDepo = DEPO_OPTIONS.find((d) => d.toLowerCase() === depoRaw.toLowerCase()) || "";
-      const dateReported = (mapDate ? (r[mapDate] || "").toString().trim() : "") || today;
+      const dateReported = (mapDate ? parseImportDate(r[mapDate]) : "") || today;
       const techName = mapTechnician ? (r[mapTechnician] || "").toString().trim() : "";
       const tech = techName ? technicians.find((t) => (t.name || "").trim().toLowerCase() === techName.toLowerCase()) : null;
       if (techName && !tech) missingTechs.push(techName);
-      const assignedDateRaw = mapAssignedDate ? (r[mapAssignedDate] || "").toString().trim() : "";
+      const assignedDateRaw = mapAssignedDate ? parseImportDate(r[mapAssignedDate]) : "";
       const assignedDate = tech ? assignedDateRaw || today : null;
       const note = mapNote ? (r[mapNote] || "").toString().trim() : "";
 
@@ -15233,9 +15252,9 @@ function ImportModal({ onClose, onImport }) {
           objekt,
           type: mapType ? (r[mapType] || "").toString().trim() : "",
           depo: mapDepo ? (r[mapDepo] || "").toString().trim() : "",
-          revizia: objekt === "Požičovňový stroj" && mapRevizia ? (r[mapRevizia] || "").toString().trim() : "",
-          reviziaEZ: objekt === "Požičovňový stroj" && mapReviziaEZ ? (r[mapReviziaEZ] || "").toString().trim() : "",
-          uradnaSkuska: objekt === "Požičovňový stroj" && mapUradnaSkuska ? (r[mapUradnaSkuska] || "").toString().trim() : "",
+          revizia: objekt === "Požičovňový stroj" && mapRevizia ? parseImportDate(r[mapRevizia]) : "",
+          reviziaEZ: objekt === "Požičovňový stroj" && mapReviziaEZ ? parseImportDate(r[mapReviziaEZ]) : "",
+          uradnaSkuska: objekt === "Požičovňový stroj" && mapUradnaSkuska ? parseImportDate(r[mapUradnaSkuska]) : "",
           trackRevisions: parseAnoNie(mapTrackZZ, r),
           trackRevisionsEZ: parseAnoNie(mapTrackEZ, r),
           trackUradnaSkuska: parseAnoNie(mapTrackSkuska, r),
@@ -15398,7 +15417,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
         missing.push(codeRaw);
         return;
       }
-      const startDate = (r[mapStart] || "").toString().trim();
+      const startDate = parseImportDate(r[mapStart]);
       if (!startDate) return;
       const customerName = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
       const ico = mapIco ? (r[mapIco] || "").toString().trim() : "";
@@ -15418,7 +15437,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
         customer: customerName,
         customerEmail: "",
         startDate,
-        endDate: mapEnd ? (r[mapEnd] || "").toString().trim() || startDate : startDate,
+        endDate: mapEnd ? parseImportDate(r[mapEnd]) || startDate : startDate,
         obchodnik: mapObchodnik ? (r[mapObchodnik] || "").toString().trim() : "",
         status: "planned",
         notes: "Importované z kontrolného súboru",
@@ -23156,7 +23175,7 @@ function SparePartsImportButton({ depo, onImport }) {
         cisloDielu: mapCisloDielu ? (r[mapCisloDielu] || "").toString().trim() : "",
         popisDielu: mapPopisDielu ? (r[mapPopisDielu] || "").toString().trim() : "",
         stav: mapStav && (r[mapStav] || "").toString().trim() ? (r[mapStav] || "").toString().trim() : SPAREPART_STAV.OBJEDNANE,
-        datumObjednania: mapDatum ? (r[mapDatum] || "").toString().trim() : "",
+        datumObjednania: mapDatum ? parseImportDate(r[mapDatum]) : "",
         nakupnaObjednavka: mapObjednavka ? (r[mapObjednavka] || "").toString().trim() : "",
         poznamka: mapPoznamka ? (r[mapPoznamka] || "").toString().trim() : "",
       }))
