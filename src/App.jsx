@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.663";
+const APP_VERSION = "1.0.665";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7256,7 +7256,9 @@ function DispatcherApp() {
           onClose={() => { setReservationCardTarget(null); setCardHistory([]); }}
           onDelete={() => setRejectReservationTarget(reservationCardTarget)}
           onConvert={() => {
-            pushCard("reservation", reservationCardTarget);
+            // Zámerne bez pushCard — premena je jednosmerná akcia, po uložení sa
+            // netreba (a nesmie) vracať späť na kartu už premenenej rezervácie
+            // (tá by sa inak otvorila so zastaraným stavom a dala by sa premeniť znova).
             setShowAddJob({ prefillReservation: reservationCardTarget });
             setReservationCardTarget(null);
           }}
@@ -21214,7 +21216,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           return (
                             <div
                               key={a.id}
-                              onClick={isCheckerInspection ? () => onOpenCheckerInspection(a) : handleClick}
+                              onClick={isCheckerInspection && !quickMode ? () => onOpenCheckerInspection(a) : handleClick}
                               title={tooltip}
                               style={{
                                 height: 22,
