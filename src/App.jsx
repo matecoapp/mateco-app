@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.644";
+const APP_VERSION = "1.0.645";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1920,36 +1920,64 @@ function makeRecordPersist(table, setState) {
    Searchable select
 --------------------------------------------------------- */
 function SearchInput({ value, onChange, placeholder, style }) {
+  // Na mobile (viď @media) je toto pole cez CSS schované za lupu — namiesto
+  // trvalo zabratého miesta v riadku filtrov (rovnaký vzor ako GlobalSearch
+  // v hlavičke). Rozbalené ostáva otvorené, kým v ňom niečo je — zavrieť ho
+  // ide len prázdne (Vymazať/kliknutie mimo pri prázdnej hodnote).
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const boxRef = useRef(null);
+  useEffect(() => {
+    if (!mobileExpanded) return;
+    function onDocClick(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target) && !value) setMobileExpanded(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [mobileExpanded, value]);
+
   return (
-    <div style={{ position: "relative", display: "inline-block", ...style }}>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ width: "100%", paddingRight: value ? 26 : undefined }}
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          title="Vymazať"
-          style={{
-            position: "absolute",
-            right: 4,
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "transparent",
-            border: "none",
-            color: "var(--text-dim)",
-            cursor: "pointer",
-            fontSize: 16,
-            lineHeight: 1,
-            padding: 4,
-          }}
-        >
-          ×
-        </button>
-      )}
+    <div ref={boxRef} className={`list-search-box${mobileExpanded ? " list-search-mobile-open" : ""}`} style={{ position: "relative", display: "inline-block", ...style }}>
+      <button
+        type="button"
+        className="list-search-mobile-trigger header-icon-btn"
+        onClick={() => setMobileExpanded(true)}
+        aria-label="Hľadať"
+        title="Hľadať"
+        style={{ display: "none", background: "var(--panel-2)", border: "1px solid var(--border)", color: "var(--text-dim)", cursor: "pointer" }}
+      >
+        🔍
+      </button>
+      <div className="list-search-input-wrap" style={{ position: "relative" }}>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoFocus={mobileExpanded}
+          style={{ width: "100%", paddingRight: value ? 26 : undefined }}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            title="Vymazať"
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "transparent",
+              border: "none",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+              fontSize: 16,
+              lineHeight: 1,
+              padding: 4,
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -2014,6 +2042,59 @@ function FilterPopover({ activeCount, onClear, children }) {
               maxWidth: "calc(100vw - 32px)",
               zIndex: 201,
               padding: 14,
+            }}
+          >
+            {children}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Malé ozubené koliesko — schová ľubovoľné nastavenia (zoradenie,
+// prepínače...) za jedno ikonové tlačidlo. Na rozdiel od FilterPopover
+// vyššie (má vlastný text "Filtre" + odznak počtu) je tu triggerom len
+// samotná ikona ⚙ — použité tam, kde by aj krátky text zaberal na mobile
+// príliš veľa miesta v riadku filtrov (napr. Kalendár požičovne).
+function GearPopover({ children, className }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const [alignRight, setAlignRight] = useState(false);
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setAlignRight(window.innerWidth - rect.left < 260);
+  }, [open]);
+  return (
+    <div className={className} style={{ position: "relative", display: className ? "none" : "inline-block" }} ref={btnRef}>
+      <button
+        type="button"
+        className="btn btn-ghost header-icon-btn"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Nastavenia zobrazenia"
+        title="Nastavenia zobrazenia"
+        style={{ color: "var(--text-dim)" }}
+      >
+        ⚙
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
+          <div
+            className="panel"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: alignRight ? "auto" : 0,
+              right: alignRight ? 0 : "auto",
+              minWidth: 220,
+              maxWidth: "calc(100vw - 32px)",
+              zIndex: 201,
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
             }}
           >
             {children}
@@ -2687,11 +2768,19 @@ function DispatcherApp() {
   // Švihnutie prstom od ľavého okraja obrazovky (mobile) otvorí to isté menu
   // ako klik na "vlajočku"/edge-flag — sleduje sa len dotyk, ktorý ZAČAL v
   // úzkom 24px pásiku pri okraji, nech sa gesto nebije s bežným vodorovným
-  // scrollovaním obsahu (Gantt, tabuľky) kdekoľvek inde na obrazovke.
+  // scrollovaním obsahu (Gantt, tabuľky) kdekoľvek inde na obrazovke. Keď je
+  // menu OTVORENÉ, rovnaké gesto naopak (švih doľava, zač. kdekoľvek v
+  // otvorenej zásuvke) menu zavrie — dx<dy podmienka nižšie nechá bežné
+  // vertikálne scrollovanie zoznamu záložiek vnútri zásuvky bez zásahu.
   useEffect(() => {
     let startX = null, startY = null;
     function onTouchStart(e) {
       const t = e.touches[0];
+      if (mobileNavOpen) {
+        startX = t.clientX;
+        startY = t.clientY;
+        return;
+      }
       if (t.clientX > 24) { startX = null; return; }
       startX = t.clientX;
       startY = t.clientY;
@@ -2701,8 +2790,11 @@ function DispatcherApp() {
       const t = e.touches[0];
       const dx = t.clientX - startX;
       const dy = Math.abs(t.clientY - startY);
-      if (dx > 50 && dx > dy) {
+      if (!mobileNavOpen && dx > 50 && dx > dy) {
         setMobileNavOpen(true);
+        startX = null;
+      } else if (mobileNavOpen && -dx > 50 && -dx > dy) {
+        setMobileNavOpen(false);
         startX = null;
       }
     }
@@ -2717,7 +2809,7 @@ function DispatcherApp() {
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
     };
-  }, []);
+  }, [mobileNavOpen]);
 
   // body nemá vlastný --bg (tá premenná sa v tmavom režime prepisuje len
   // v rámci .app-shell.dark, nie na body/html) — bez tejto triedy by pri
@@ -16687,6 +16779,56 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset]);
 
+  // Normálny/Kompaktný + zoradenie — na webe stále v 3. stĺpci vpravo, na
+  // mobile (viď @media) sa namiesto toho schovajú za ozubené koliesko vedľa
+  // lupy (rovnaký JSX obsah na oboch miestach, nech sa nemusí zdvojovať —
+  // len ktoré z dvoch miest appka na danú šírku obrazovky cez CSS ukáže).
+  const settingsControls = (
+    <>
+      <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
+        <button
+          onClick={() => setCompactMode(false)}
+          style={{
+            fontSize: 11,
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "none",
+            cursor: "pointer",
+            background: !compactMode ? "var(--panel)" : "transparent",
+            color: !compactMode ? "var(--text)" : "var(--text-dim)",
+            fontWeight: !compactMode ? 600 : 400,
+          }}
+        >
+          Normálny
+        </button>
+        <button
+          onClick={() => setCompactMode(true)}
+          style={{
+            fontSize: 11,
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "none",
+            cursor: "pointer",
+            background: compactMode ? "var(--panel)" : "transparent",
+            color: compactMode ? "var(--text)" : "var(--text-dim)",
+            fontWeight: compactMode ? 600 : 400,
+          }}
+        >
+          Kompaktný
+        </button>
+      </div>
+      <select
+        value={sortMode}
+        onChange={(e) => setSortMode(e.target.value)}
+        title="Zoradiť stroje podľa"
+        style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
+      >
+        <option value="code">↕ Sériové číslo</option>
+        <option value="category">↕ Kategória a výška</option>
+      </select>
+    </>
+  );
+
   return (
     <>
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: availH ? `${availH}px` : undefined }}>
@@ -16711,6 +16853,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             </button>
           ))}
           <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+          <GearPopover className="gantt-mobile-settings">{settingsControls}</GearPopover>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
@@ -16720,48 +16863,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
           )}
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-          <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
-            <button
-              onClick={() => setCompactMode(false)}
-              style={{
-                fontSize: 11,
-                padding: "3px 10px",
-                borderRadius: 4,
-                border: "none",
-                cursor: "pointer",
-                background: !compactMode ? "var(--panel)" : "transparent",
-                color: !compactMode ? "var(--text)" : "var(--text-dim)",
-                fontWeight: !compactMode ? 600 : 400,
-              }}
-            >
-              Normálny
-            </button>
-            <button
-              onClick={() => setCompactMode(true)}
-              style={{
-                fontSize: 11,
-                padding: "3px 10px",
-                borderRadius: 4,
-                border: "none",
-                cursor: "pointer",
-                background: compactMode ? "var(--panel)" : "transparent",
-                color: compactMode ? "var(--text)" : "var(--text-dim)",
-                fontWeight: compactMode ? 600 : 400,
-              }}
-            >
-              Kompaktný
-            </button>
-          </div>
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value)}
-            title="Zoradiť stroje podľa"
-            style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
-          >
-            <option value="code">↕ Sériové číslo</option>
-            <option value="category">↕ Kategória a výška</option>
-          </select>
+        <div className="gantt-desktop-settings" style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+          {settingsControls}
         </div>
       </div>
 
@@ -23769,7 +23872,25 @@ function GlobalStyle() {
            Preto v portraite miznú/orezávajú sa tlačidlá napravo (→, Dnes,
            Normálny/Kompaktný) — grid stĺpce sa len stlačia/pretečú, nezalomí
            sa to na ďalší riadok tak ako pri flexboxe. */
-        .quick-filters { display: flex !important; flex-wrap: wrap !important; }
+        .quick-filters { display: flex !important; flex-wrap: wrap !important; justify-content: center !important; }
+        /* Kalendár požičovne — namiesto (chipy) / (mesiac) / (Normálny+zoradenie)
+           ako troch samostatných riadkov po zalomení: 1. riadok chipy+lupa+
+           ozubené koliesko, 2. riadok mesiac — oboje na stred. Nastavenia
+           (Normálny/Kompaktný, zoradenie) sú na mobile len za kolieskom
+           (gantt-desktop-settings schované, gantt-mobile-settings viditeľné). */
+        .quick-filters > div:first-child { width: 100%; justify-content: center; }
+        .quick-filters > div:nth-child(2) { width: 100%; justify-content: center; }
+        .gantt-desktop-settings { display: none !important; }
+        .gantt-mobile-settings { display: inline-block !important; }
+
+        /* Lupa namiesto trvalo otvoreného poľa vyhľadávania — v zoznamoch
+           (Stroje, Zamestnanci, Diely...) rovnaký vzor ako vyhľadávanie v
+           hlavičke: ikona, po kliknutí sa pole rozbalí v bežnom toku. */
+        .list-search-mobile-trigger { display: flex !important; align-items: center; justify-content: center; }
+        .list-search-input-wrap { display: none; }
+        .list-search-box.list-search-mobile-open { flex: 1 1 100%; }
+        .list-search-box.list-search-mobile-open .list-search-mobile-trigger { display: none !important; }
+        .list-search-box.list-search-mobile-open .list-search-input-wrap { display: block !important; width: 100%; }
 
         /* Info-grid karty (Karta stroja, zákazky, šoféra, technika…) — jeden stĺpec pod sebou */
         .resp-grid { grid-template-columns: 1fr !important; }
