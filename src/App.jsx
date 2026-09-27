@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.640";
+const APP_VERSION = "1.0.641";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -6756,6 +6756,28 @@ function DispatcherApp() {
                   link: { module: "servis", view: "diely", depo: p.depo },
                 });
               }
+            }}
+            onApproveBulk={(ids) => {
+              // Root cause opravy "hromadné schválenie" bugu: volanie onApprove()
+              // N-krát v rade (raz na položku) stavalo každé "next" pole znova zo
+              // ZASTARANÉHO spareParts z uzáveru — každé ďalšie volanie tak vrátilo
+              // späť zmenu z predchádzajúceho, výsledkom bolo schválené len
+              // posledné z vybraných (a napriek tomu N notifikácií). Tu je to JEDEN
+              // spoločný zápis nad aktuálnym spareParts, presne ako pri
+              // assignDamagesBulk.
+              const idSet = new Set(ids);
+              const targets = spareParts.filter((x) => idSet.has(x.id));
+              persistSpareParts(spareParts.map((x) => (idSet.has(x.id) ? { ...x, stav: SPAREPART_STAV.CAKA_NA_OBJEDNANIE } : x)));
+              targets.forEach((p) => {
+                if (!p.requestedBy) return;
+                pushNotification({
+                  kind: "spare_parts",
+                  userName: p.requestedBy,
+                  title: "Požiadavka na diel schválená",
+                  message: `${p.cisloDielu} — ${p.popisDielu} bolo schválené, čaká na objednanie.`,
+                  link: { module: "servis", view: "diely", depo: p.depo },
+                });
+              });
             }}
             onReject={(id, reason) => {
               const p = spareParts.find((x) => x.id === id);
@@ -22286,7 +22308,7 @@ function exportSparePartsCSV(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-function SparePartsView({ spareParts, machines, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onReject, onRestore, onUpdate, onDelete, onImport }) {
+function SparePartsView({ spareParts, machines, myEmployee, user, today, targetDepo, onTargetDepoConsumed, onAdd, onApprove, onApproveBulk, onReject, onRestore, onUpdate, onDelete, onImport }) {
   const canManage = can(user, "sparepart_manage");
   const myDepo = myEmployee?.depo || "";
   // "Vedúci technik" role vidí/objednáva len na svoje depá (napr. BA + NR),
@@ -22628,7 +22650,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                 className="btn btn-accent"
                 style={{ fontSize: 11, padding: "3px 8px" }}
                 onClick={() => {
-                  pending.filter((p) => !uncheckedPendingIds.has(p.id)).forEach((p) => onApprove(p.id));
+                  onApproveBulk(pending.filter((p) => !uncheckedPendingIds.has(p.id)).map((p) => p.id));
                   setUncheckedPendingIds(new Set());
                 }}
               >
