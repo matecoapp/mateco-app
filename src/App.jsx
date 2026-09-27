@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.677";
+const APP_VERSION = "1.0.678";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -4795,6 +4795,24 @@ function DispatcherApp() {
   function toggleProtocolInvoiced(protocolId) {
     persistProtocolLogs(protocolLogs.map((p) => (p.id === protocolId ? { ...p, invoiced: !p.invoiced } : p)));
   }
+  // Fakturácia bežnej externej zákazky (ukončenej, s vlastným damageId) — po
+  // ukončení "čaká na fakturáciu", dispečer (nie fakturant, ten rieši len
+  // svoje ERP podklady inde) tu zapíše číslo faktúry a záznam sa presunie do
+  // histórie fakturácie. Zámerne oddelené od toggleProtocolInvoiced vyššie
+  // (to je len pre osirotené protokoly bez zákazky).
+  function markExternalInvoiced(damageId, invoiceNumber) {
+    persistDamages(
+      damages.map((d) =>
+        d.id === damageId ? { ...d, invoiced: true, invoiceNumber, invoicedAt: today, invoicedBy: currentUser?.name || "" } : d
+      )
+    );
+  }
+  // Vrátenie omylom vyfakturovanej zákazky späť do "Na fakturáciu".
+  function unmarkExternalInvoiced(damageId) {
+    persistDamages(
+      damages.map((d) => (d.id === damageId ? { ...d, invoiced: false, invoiceNumber: null, invoicedAt: null, invoicedBy: null } : d))
+    );
+  }
   // Opak vyššie — vyradí protokol zo zákazky (vráti ho medzi "Ostatné protokoly" na
   // karte stroja), napr. keď ho niekto omylom priradil nesprávne.
   function unassignProtocolFromDamage(protocolId) {
@@ -6894,6 +6912,8 @@ function DispatcherApp() {
                 onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
                 onAssignProtocol={assignProtocolToDamage}
                 onToggleProtocolInvoiced={toggleProtocolInvoiced}
+                onMarkInvoiced={markExternalInvoiced}
+                onUnmarkInvoiced={unmarkExternalInvoiced}
                 highlightDamageId={highlightDamageId}
                 onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
                 onOpenSummary={() => setExternaSummaryOpen(true)}
@@ -18419,7 +18439,7 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
   );
 }
 
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, onAttachMachine, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
+function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit, onOpenDetail, onResolve, onComplete, onProtocol, onAttachMachine, onMarkInvoiced, onUnmarkInvoiced, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
   const cardRef = useRef(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -18528,6 +18548,27 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onEdit,
               {isSimple ? "Vykonané" : damageLabel(d)} {fmtDate(d.opravaDatum || d.vykonanaDatum)}
               {d.opravaKomentar ? ` — ${d.opravaKomentar}` : ""}
             </div>
+          )}
+          {variant === "externa" && d.resolved && (
+            d.invoiced ? (
+              <div style={{ marginTop: 6 }}>
+                <span className="badge badge-ok">Vyfakturované — č. {d.invoiceNumber || "—"}</span>
+                {onUnmarkInvoiced && can(user, "external_status") && (
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 6 }} onClick={() => onUnmarkInvoiced(d.id)}>
+                    Zrušiť vyfakturovanie
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ marginTop: 6 }}>
+                <span className="badge badge-warn">💶 Na fakturáciu</span>
+                {onMarkInvoiced && can(user, "external_status") && (
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 6 }} onClick={() => onMarkInvoiced(d)}>
+                    Vyfakturovať
+                  </button>
+                )}
+              </div>
+            )
           )}
         </div>
           </div>
@@ -18786,10 +18827,19 @@ function DamagesView({ damages, technicians, machineById, user, onAssign, onDele
 /* ---------------------------------------------------------
    External service jobs — manually entered, machines outside our DB
 --------------------------------------------------------- */
-function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
+// Stav externej zákazky na účely filtra/bucketov nižšie — kým nie je vyriešená,
+// rovnaké rozdelenie ako doteraz (nahlásené/pridelené); po vyriešení namiesto
+// jedného "Vyriešené" priamo rozlišuje, či ešte čaká na fakturáciu, alebo je
+// už vyfakturovaná (a teda v histórii fakturácie).
+function externaBucketStatus(d) {
+  if (!d.resolved) return d.technicianId ? "assigned" : "new";
+  return d.invoiced ? "invoiced" : "to_invoice";
+}
+function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, onMarkInvoiced, onUnmarkInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
+  const [invoiceTarget, setInvoiceTarget] = useState(null); // externá zákazka, ktorej sa práve zapisuje číslo faktúry
   const depoOptions = DEPO_OPTIONS;
 
   // Protokoly vypísané pre externý stroj úplne mimo zákazky (technik klikol
@@ -18819,7 +18869,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
     if (highlightDamageId) {
       const target = damages.find((x) => x.id === highlightDamageId);
       if (target) {
-        const status = target.resolved ? "resolved" : target.technicianId ? "assigned" : "new";
+        const status = externaBucketStatus(target);
         setActiveFilters((prev) => (prev.has(status) ? prev : new Set([...prev, status])));
         setDepoFilter(null);
         setSearch("");
@@ -18829,10 +18879,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
     setActiveFilters(new Set(["new", "assigned"]));
   }, [highlightDamageId, damages]);
   const filtered = damages.filter((d) => d.type === "externa");
-  let statusFiltered = filtered.filter((d) => {
-    const status = d.resolved ? "resolved" : d.technicianId ? "assigned" : "new";
-    return activeFilters.has(status);
-  });
+  let statusFiltered = filtered.filter((d) => activeFilters.has(externaBucketStatus(d)));
   if (depoFilter) {
     statusFiltered = statusFiltered.filter((d) => (d.assignedDepo || "").toLowerCase() === depoFilter.toLowerCase());
   }
@@ -18863,7 +18910,8 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   const filterButtons = [
     { id: "new", label: "Nahlásené" },
     { id: "assigned", label: "Pridelené" },
-    { id: "resolved", label: "Vyriešené" },
+    { id: "to_invoice", label: "Na fakturáciu" },
+    { id: "invoiced", label: "Vyfakturované" },
   ];
 
   function toggleFilter(id) {
@@ -18951,7 +18999,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onResolve={onResolve} onComplete={onComplete} onProtocol={onProtocol} onMarkInvoiced={onMarkInvoiced ? setInvoiceTarget : null} onUnmarkInvoiced={onUnmarkInvoiced} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" />
         ))}
       </div>
 
@@ -19027,6 +19075,20 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
           onAssign={(damageId) => {
             onAssignProtocol(assignPickerFor.id, damageId);
             setAssignPickerFor(null);
+          }}
+        />
+      )}
+      {invoiceTarget && (
+        <ErpOrderNumberModal
+          count={1}
+          title="Vyfakturovať externú zákazku"
+          label="Číslo faktúry"
+          helpText={`${invoiceTarget.code || "Zákazka"} — presunie sa do histórie fakturácie.`}
+          confirmLabel="Vyfakturovať"
+          onClose={() => setInvoiceTarget(null)}
+          onConfirm={(invoiceNumber) => {
+            onMarkInvoiced(invoiceTarget.id, invoiceNumber);
+            setInvoiceTarget(null);
           }}
         />
       )}
@@ -19831,12 +19893,20 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
 
 // Pred označením "Spracované" (jedno aj hromadne) sa vyžiada číslo servisnej
 // objednávky/výkazu práce, ktoré sa priradí k záznamu (erpOrderNumber).
-function ErpOrderNumberModal({ count, onClose, onConfirm, title = "Číslo servisnej objednávky / výkazu práce", label = "Číslo objednávky / výkazu" }) {
+function ErpOrderNumberModal({
+  count,
+  onClose,
+  onConfirm,
+  title = "Číslo servisnej objednávky / výkazu práce",
+  label = "Číslo objednávky / výkazu",
+  helpText,
+  confirmLabel = "Spracované",
+}) {
   const [value, setValue] = useState("");
   return (
     <Modal title={title} onClose={onClose} elevated>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
-        {count > 1 ? `Priradí sa k ${count} označeným záznamom a presunie ich do spracovaných.` : "Priradí sa k tomuto záznamu a presunie ho do spracovaných."}
+        {helpText || (count > 1 ? `Priradí sa k ${count} označeným záznamom a presunie ich do spracovaných.` : "Priradí sa k tomuto záznamu a presunie ho do spracovaných.")}
       </div>
       <Field label={label}>
         <input
@@ -19849,7 +19919,7 @@ function ErpOrderNumberModal({ count, onClose, onConfirm, title = "Číslo servi
       </Field>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-        <button className="btn btn-accent" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>Spracované</button>
+        <button className="btn btn-accent" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>{confirmLabel}</button>
       </div>
     </Modal>
   );
