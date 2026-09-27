@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.646";
+const APP_VERSION = "1.0.647";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -23566,8 +23566,16 @@ function GlobalStyle() {
       /* Tabuľka (.table-cards) sa na mobile prekreslí na kartičky — každý
          riadok = jedna karta, buňky pod sebou ako "label: hodnota" (label z
          data-label atribútu, keď ho buňka má). Webové zobrazenie (bežná
-         tabuľka) je nezmenené, toto platí len pod @media nižšie. */
-      @media (max-width: 720px) {
+         tabuľka) je nezmenené, toto platí len pod @media nižšie.
+         Druhá časť dotazu (max-width:1000px + pointer:coarse + hover:none)
+         chytá aj TELEFÓN NA ŠÍRKU (otočený) — tam je šírka okna často nad
+         720px (napr. 844px), takže by inak spadol do WEBOVÉHO rozloženia
+         (ikonový pás, roztiahnutá hlavička) namiesto mobilného, aj keď ide
+         stále o rovnaký úzky dotykový telefón, len otočený. pointer:coarse
+         + hover:none vylúči bežné široké OKNO PREHLIADAČA NA POČÍTAČI
+         (myš = pointer:fine/hover:hover), takže desktop v okne ~800px
+         širokom zostáva nezmenený. */
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         table.table-cards thead { display: none; }
         table.table-cards, table.table-cards tbody { display: block; width: 100%; }
         table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
@@ -23743,8 +23751,9 @@ function GlobalStyle() {
 
       /* ══════════════════════════════════════════════════════
          MOBILE — telefóny a malé tablety
+         (aj telefón na šírku — viď vysvetlenie pri prvom @media vyššie)
          ══════════════════════════════════════════════════════ */
-      @media (max-width: 720px) {
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         /* iOS "gumové" posúvanie stránky mimo obrazovku (najmä šikmým ťahom prsta) —
            len na mobile, na PC by to blokovalo bežné rolovanie kolieskom/scrollbarom. */
         html, body { overscroll-behavior: none; overflow-x: hidden; }
@@ -23915,6 +23924,11 @@ function GlobalStyle() {
            hlavičke: ikona, po kliknutí sa pole rozbalí v bežnom toku. */
         .list-search-mobile-trigger { display: flex !important; align-items: center; justify-content: center; }
         .list-search-input-wrap { display: none; }
+        /* Volajúci väčšinou zvyknú posielať minWidth:200-280 (na plné pole
+           na webe) — kým je zbalené na ikonu, to zbytočne naťahovalo celý
+           box (aj keď v ňom bola vidno len 34px lupa), a napr. v riadku
+           filtrov Kalendára to tlačilo lupu+koliesko na vlastný riadok. */
+        .list-search-box:not(.list-search-mobile-open) { min-width: 0 !important; width: auto !important; }
         .list-search-box.list-search-mobile-open { flex: 1 1 100%; }
         .list-search-box.list-search-mobile-open .list-search-mobile-trigger { display: none !important; }
         .list-search-box.list-search-mobile-open .list-search-input-wrap { display: block !important; width: 100%; }
