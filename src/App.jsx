@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.678";
+const APP_VERSION = "1.0.679";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -18837,6 +18837,12 @@ function externaBucketStatus(d) {
 }
 function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onResolve, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, onMarkInvoiced, onUnmarkInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
+  // "Na fakturáciu"/"Vyfakturované" sú samostatné bucket-prepínače, nie filtre —
+  // na rozdiel od Nahlásené/Pridelené sa nekombinujú (ani medzi sebou, ani s
+  // nimi), len jeden je aktívny naraz, presne ako záložky. Predtým to bolo
+  // súčasťou toho istého multi-filtra, takže sa to vedelo miešať dokopy a
+  // vypnutie vyžadovalo ručné odklikanie ostatných filtrov.
+  const [bucketView, setBucketView] = useState(null); // null | "to_invoice" | "invoiced"
   const [depoFilter, setDepoFilter] = useState(null);
   const [search, setSearch] = useState("");
   const [invoiceTarget, setInvoiceTarget] = useState(null); // externá zákazka, ktorej sa práve zapisuje číslo faktúry
@@ -18870,16 +18876,25 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
       const target = damages.find((x) => x.id === highlightDamageId);
       if (target) {
         const status = externaBucketStatus(target);
-        setActiveFilters((prev) => (prev.has(status) ? prev : new Set([...prev, status])));
+        if (status === "to_invoice" || status === "invoiced") {
+          setBucketView(status);
+        } else {
+          setBucketView(null);
+          setActiveFilters((prev) => (prev.has(status) ? prev : new Set([...prev, status])));
+        }
         setDepoFilter(null);
         setSearch("");
         return;
       }
     }
+    setBucketView(null);
     setActiveFilters(new Set(["new", "assigned"]));
   }, [highlightDamageId, damages]);
   const filtered = damages.filter((d) => d.type === "externa");
-  let statusFiltered = filtered.filter((d) => activeFilters.has(externaBucketStatus(d)));
+  const toInvoiceCount = filtered.filter((d) => externaBucketStatus(d) === "to_invoice").length;
+  let statusFiltered = bucketView
+    ? filtered.filter((d) => externaBucketStatus(d) === bucketView)
+    : filtered.filter((d) => activeFilters.has(externaBucketStatus(d)));
   if (depoFilter) {
     statusFiltered = statusFiltered.filter((d) => (d.assignedDepo || "").toLowerCase() === depoFilter.toLowerCase());
   }
@@ -18910,11 +18925,17 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   const filterButtons = [
     { id: "new", label: "Nahlásené" },
     { id: "assigned", label: "Pridelené" },
-    { id: "to_invoice", label: "Na fakturáciu" },
-    { id: "invoiced", label: "Vyfakturované" },
+    { id: "to_invoice", label: "Na fakturáciu", bucket: true, badge: toInvoiceCount },
+    { id: "invoiced", label: "Vyfakturované", bucket: true },
   ];
 
   function toggleFilter(id) {
+    const btn = filterButtons.find((f) => f.id === id);
+    if (btn?.bucket) {
+      setBucketView((prev) => (prev === id ? null : id));
+      return;
+    }
+    setBucketView(null);
     setActiveFilters((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -18973,27 +18994,54 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {filterButtons.map((f) => (
-          <button
-            key={f.id}
-            className="btn"
-            onClick={() => toggleFilter(f.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: activeFilters.has(f.id) ? "var(--accent)" : "transparent",
-              color: activeFilters.has(f.id) ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (activeFilters.has(f.id) ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+        {filterButtons.map((f) => {
+          const isActive = f.bucket ? bucketView === f.id : !bucketView && activeFilters.has(f.id);
+          return (
+            <button
+              key={f.id}
+              className="btn"
+              onClick={() => toggleFilter(f.id)}
+              style={{
+                position: "relative",
+                padding: "6px 12px",
+                fontSize: 12,
+                background: isActive ? "var(--accent)" : "transparent",
+                color: isActive ? "#fff" : "var(--text-dim)",
+                border: "1px solid " + (isActive ? "var(--accent)" : "var(--border)"),
+              }}
+            >
+              {f.label}
+              {!!f.badge && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -7,
+                    right: -7,
+                    background: "var(--danger)",
+                    color: "#fff",
+                    borderRadius: "50%",
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 4px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {f.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.length === 0 && (
           <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
-            {activeFilters.size === 0
+            {!bucketView && activeFilters.size === 0
               ? "Vyberte aspoň jeden filter."
               : "Žiadne externé servisné zákazky v tomto filtri. Nahláste novú tlačidlom vyššie."}
           </div>
