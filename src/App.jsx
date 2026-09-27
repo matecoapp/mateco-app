@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.657";
+const APP_VERSION = "1.0.658";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -20952,33 +20952,54 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   return (
     <div>
+      {can(user, "plan_quick_events") && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
+          {QUICK_KINDS.map((k) => (
+            <button
+              key={k.id}
+              className="btn"
+              onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
+              style={{
+                padding: "5px 10px",
+                fontSize: 11,
+                background: quickMode === k.id ? k.color : "transparent",
+                color: quickMode === k.id ? "#fff" : k.color,
+                border: "1px solid " + k.color,
+              }}
+            >
+              {k.label}
+            </button>
+          ))}
+          {quickMode && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
+            </span>
+          )}
+        </div>
+      )}
+      {/* Názov mesiaca je na úrovni výberu depa (nie vlastný riadok vyššie) a
+          vycentrovaný na stred CELÉHO ganttu (1fr auto 1fr) — depo chipy
+          vľavo, mesiac presne v strede bez ohľadu na šírku chipov. */}
       <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 14, gap: 10 }}>
-        {can(user, "plan_quick_events") ? (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
-            {QUICK_KINDS.map((k) => (
-              <button
-                key={k.id}
-                className="btn"
-                onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
-                style={{
-                  padding: "5px 10px",
-                  fontSize: 11,
-                  background: quickMode === k.id ? k.color : "transparent",
-                  color: quickMode === k.id ? "#fff" : k.color,
-                  border: "1px solid " + k.color,
-                }}
-              >
-                {k.label}
-              </button>
-            ))}
-            {quickMode && (
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
-              </span>
-            )}
-          </div>
-        ) : <div />}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {depoOptions.map((d) => (
+            <button
+              key={d}
+              className="btn depo-chip-btn"
+              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
+              style={{
+                padding: "5px 10px",
+                fontSize: 11,
+                background: depoFilter === d ? "var(--accent)" : "transparent",
+                color: depoFilter === d ? "#fff" : "var(--text-dim)",
+                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+              }}
+            >
+              <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
           <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
@@ -20988,24 +21009,6 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           )}
         </div>
         <div />
-      </div>
-      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
       </div>
       <div className="panel" style={{ padding: 16 }}>
         {/* WebkitOverflowScrolling: pri rýchlom švihnutí prstom na mobile (najmä
