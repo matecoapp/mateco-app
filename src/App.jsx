@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.665";
+const APP_VERSION = "1.0.666";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -5413,7 +5413,17 @@ function DispatcherApp() {
       const date = addDaysISO(startDate, i);
       newAssignments.push({ id: uid(), technicianId, date, kind: "dovolenka", stroj: "Dovolenka", umiestnenie: "", firma: "", poznamka: "Dovolenka" });
     }
-    persistAssignments([...assignments, ...newAssignments]);
+    // Otvorené (nedokončené) kontroly stroja tohto checkera v termíne dovolenky sa
+    // presunú rovno na náhradníka — ukončené sa nedotýkajú. originalTechnicianId
+    // (pôvodný checker) sa uloží nech ich vieme pri zrušení dovolenky vrátiť späť.
+    const reassigned = substituteId
+      ? assignments.map((a) =>
+          a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === technicianId && a.date >= startDate && a.date <= endDate
+            ? { ...a, technicianId: substituteId, originalTechnicianId: technicianId }
+            : a
+        )
+      : assignments;
+    persistAssignments([...reassigned, ...newAssignments]);
     // ...a náhradu checkera pre každé depo, ktoré tento technik bežne strojí — platforma
     // po dátume "do" automaticky vráti pôvodného checkera (nič sa netrvalo neprepisuje).
     const newSubs = depos.map((depo) => ({
@@ -5479,9 +5489,39 @@ function DispatcherApp() {
       persistAssignments([...assignments, { id: uid(), technicianId: assignSlot.technicianId, date: assignSlot.date, ...data }]);
     }
   }
+  // Po zmazaní dovolenky (celej, alebo len jej časti) treba náhradu checkera buď
+  // úplne zrušiť (žiadny deň dovolenky už v jej termíne neostáva), alebo ju skrátiť
+  // len na dni, čo ešte ostávajú — a otvorené kontroly strojov presunuté na
+  // náhradníka v dňoch, ktoré už dovolenkou nie sú kryté, vrátiť pôvodnému checkerovi.
+  function releaseCheckerVacation(technicianId, remainingAssignments) {
+    const subs = checkerSubstitutions.filter((s) => s.originalTechnicianId === technicianId);
+    if (subs.length === 0) return remainingAssignments;
+    let nextAssignments = remainingAssignments;
+    const keptSubs = [];
+    subs.forEach((s) => {
+      const vacationDates = remainingAssignments
+        .filter((x) => x.technicianId === technicianId && x.kind === "dovolenka" && x.date >= s.startDate && x.date <= s.endDate)
+        .map((x) => x.date)
+        .sort();
+      const newStart = vacationDates[0];
+      const newEnd = vacationDates[vacationDates.length - 1];
+      if (vacationDates.length > 0) keptSubs.push(newStart === s.startDate && newEnd === s.endDate ? s : { ...s, startDate: newStart, endDate: newEnd });
+      // Otvorená kontrola presunutá na náhradníka počas tejto dovolenky, ktorej deň
+      // (po zmazaní/skrátení) už dovolenkou nie je krytý, sa vráti pôvodnému checkerovi.
+      nextAssignments = nextAssignments.map((x) =>
+        x.kind === "kontrolaStroja" && !x.resolved && x.originalTechnicianId === technicianId && x.technicianId === s.substituteTechnicianId &&
+        x.date >= s.startDate && x.date <= s.endDate && (vacationDates.length === 0 || x.date < newStart || x.date > newEnd)
+          ? { ...x, technicianId, originalTechnicianId: null }
+          : x
+      );
+    });
+    persistCheckerSubstitutions([...checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId), ...keptSubs]);
+    return nextAssignments;
+  }
   function deleteAssignment(id) {
     const a = assignments.find((x) => x.id === id);
-    const remaining = assignments.filter((x) => x.id !== id);
+    let remaining = assignments.filter((x) => x.id !== id);
+    if (a?.kind === "dovolenka") remaining = releaseCheckerVacation(a.technicianId, remaining);
     persistAssignments(remaining);
     if (a?.damageId) {
       const stillAssigned = remaining.filter((x) => x.damageId === a.damageId);
