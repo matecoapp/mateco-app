@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.658";
+const APP_VERSION = "1.0.659";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -12371,6 +12371,12 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
             maxWidth: "90vw",
             height: 520,
             maxHeight: "75vh",
+            minWidth: 320,
+            minHeight: 300,
+            // "resize" — natívny CSS handle vpravo dole, appka je ukotvená
+            // cez right/bottom (nie left/top), takže rastie smerom hore/vľavo
+            // preč od bublinového tlačidla, nie cez neho.
+            resize: "both",
             background: "var(--panel)",
             border: "1px solid var(--border)",
             borderRadius: 10,
