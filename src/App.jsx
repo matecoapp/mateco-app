@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.676";
+const APP_VERSION = "1.0.677";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1006,6 +1006,12 @@ function openPrintableChecklist(assignment, machine, technicianName) {
   }
 }
 
+// Ktoré typy servisných záznamov sa smú párovať so servisným protokolom
+// (automatické priradenie podľa otvoreného tiketu aj ručné "Prideliť ku
+// zákazke") — pôvodne len poškodenie/externá, revízie a úradné skúšky sa
+// vypĺňajú a ukončujú rovnako a protokol im patrí rovnako.
+const PROTOCOL_PAIRABLE_DAMAGE_TYPES = ["poskodenie", "externa", "revizia", "uradnaSkuska"];
+const DAMAGE_TYPE_LABELS = { poskodenie: "poškodenie", externa: "externá zákazka", revizia: "revízia", uradnaSkuska: "úradná skúška" };
 function buildProtocolParams(d, technicians, machineById) {
   const params = {};
   const m = d.machineId ? machineById[d.machineId] : null;
@@ -3194,7 +3200,7 @@ function DispatcherApp() {
     const openTicketByMachine = {};
     damages.forEach((d) => {
       if (d.resolved) return;
-      if (d.type !== "poskodenie" && d.type !== "externa") return;
+      if (!PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type)) return;
       if (!d.machineId) return;
       if (openTicketByMachine[d.machineId]) return;
       const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
@@ -4680,7 +4686,7 @@ function DispatcherApp() {
           matchedOpenTicket = submittedName
             ? damages.find((d) => {
                 if (d.resolved) return false;
-                if (d.type !== "poskodenie" && d.type !== "externa") return false;
+                if (!PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type)) return false;
                 if (d.machineId !== data.machineId) return false;
                 const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
                 return techIds.some((id) => (technicianByIdTop[id]?.name || "").trim().toLowerCase() === submittedName);
@@ -7871,6 +7877,8 @@ function DispatcherApp() {
         <CompleteRevisionModal
           damage={completeRevisionTarget}
           today={today}
+          protocolLogs={protocolLogs}
+          onAssignProtocol={(protocolId) => assignProtocolToDamage(protocolId, completeRevisionTarget.id)}
           onClose={() => setCompleteRevisionTarget(null)}
           onSave={(date, parts) => completeRevision(completeRevisionTarget.id, date, parts)}
         />
@@ -7879,6 +7887,8 @@ function DispatcherApp() {
         <CompleteUradnaSkuskaModal
           damage={completeUradnaSkuskaTarget}
           today={today}
+          protocolLogs={protocolLogs}
+          onAssignProtocol={(protocolId) => assignProtocolToDamage(protocolId, completeUradnaSkuskaTarget.id)}
           onClose={() => setCompleteUradnaSkuskaTarget(null)}
           onSave={(date) => completeUradnaSkuska(completeUradnaSkuskaTarget.id, date)}
         />
@@ -17652,8 +17662,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                           openPrintableServiceProtocol(
                             p,
                             history
-                              .filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa"))
-                              .map((d) => ({ id: d.id, label: d.popis, sub: d.type === "externa" ? "externá zákazka" : "poškodenie", date: d.dateReported })),
+                              .filter((d) => !d.resolved && PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type))
+                              .map((d) => ({ id: d.id, label: d.popis, sub: DAMAGE_TYPE_LABELS[d.type] || "poškodenie", date: d.dateReported })),
                             can(user, "protocol_edit_locked")
                           )
                         }
@@ -17732,14 +17742,14 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
     </Modal>
     {assignProtocolTarget && (
       <Modal eyebrow="Prideliť protokol ku zákazke" title={<span style={{ color: "var(--accent)" }}>{m.code}</span>} onClose={() => setAssignProtocolTarget(null)}>
-        {history.filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).length === 0 ? (
+        {history.filter((d) => !d.resolved && PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type)).length === 0 ? (
           <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
             Pre tento stroj momentálne nie je žiadna otvorená servisná zákazka.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {history
-              .filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa"))
+              .filter((d) => !d.resolved && PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type))
               .map((d) => (
                 <button
                   key={d.id}
@@ -20325,7 +20335,56 @@ function BulkAssignModal({ damages, technicians, today, onClose, onSave }) {
 /* ---------------------------------------------------------
    Complete revision modal (revízia vykonaná)
 --------------------------------------------------------- */
-function CompleteRevisionModal({ damage, today, onClose, onSave }) {
+// Rovnaký banner "chýba protokol" ako ResolveDamageModal nižšie (poškodenia) —
+// revízie/úradné skúšky sa doteraz dali ukončiť úplne bez servisného protokolu,
+// bez akéhokoľvek upozornenia.
+function MissingProtocolBanner({ damage, protocolLogs, onAssignProtocol }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const hasProtocol = (protocolLogs || []).some((p) => p.damageId === damage.id);
+  const availableProtocols = (protocolLogs || []).filter(
+    (p) => p.machineId === damage.machineId && !p.damageId && !p.assignmentId
+  );
+  if (hasProtocol || !onAssignProtocol) return null;
+  return (
+    <>
+      <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14, fontWeight: 600 }}>
+        ⚠️ Zákazka nemá priradený servisný protokol.{" "}
+        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 4 }} onClick={() => setShowPicker((v) => !v)}>
+          📋 Prideliť protokol{availableProtocols.length ? ` (${availableProtocols.length})` : ""}
+        </button>
+      </div>
+      {showPicker && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {availableProtocols.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
+          ) : (
+            availableProtocols.map((p) => (
+              <button
+                key={p.id}
+                className="panel"
+                style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
+                onClick={() => { onAssignProtocol(p.id); setShowPicker(false); }}
+              >
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
+                )}
+                <div style={{ fontSize: 12, color: "var(--text)" }}>
+                  <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
+                  <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {p.workDescription || "— bez popisu vykonanej práce —"}
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+function CompleteRevisionModal({ damage, today, protocolLogs, onAssignProtocol, onClose, onSave }) {
   const [date, setDate] = useState(today);
   const isMerged = damage.revizeType === "ZZ+EZ";
   const [doneZZ, setDoneZZ] = useState(true);
@@ -20334,6 +20393,7 @@ function CompleteRevisionModal({ damage, today, onClose, onSave }) {
   return (
     <Modal eyebrow="Revízia vykonaná" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+      <MissingProtocolBanner damage={damage} protocolLogs={protocolLogs} onAssignProtocol={onAssignProtocol} />
       {isMerged && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, border: "1px solid var(--border)", borderRadius: 6, padding: 10 }}>
           <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Čo bolo reálne vykonané?</div>
@@ -20367,12 +20427,13 @@ function CompleteRevisionModal({ damage, today, onClose, onSave }) {
   );
 }
 
-function CompleteUradnaSkuskaModal({ damage, today, onClose, onSave }) {
+function CompleteUradnaSkuskaModal({ damage, today, protocolLogs, onAssignProtocol, onClose, onSave }) {
   const [date, setDate] = useState(today);
   const nextYear = date ? Number(date.slice(0, 4)) + 10 : null;
   return (
     <Modal eyebrow="Úradná skúška vykonaná" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+      <MissingProtocolBanner damage={damage} protocolLogs={protocolLogs} onAssignProtocol={onAssignProtocol} />
       <Field label="Dátum vykonania úradnej skúšky *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
