@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.643";
+const APP_VERSION = "1.0.644";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -15768,13 +15768,13 @@ const CalendarGrid = React.memo(function CalendarGrid({
             position: "sticky",
             top: 0,
             zIndex: 3,
-            background: "var(--accent-light)",
+            background: "var(--gantt-header-bg)",
             borderBottom: "1px solid var(--border)",
             height: HEADER_HEIGHT,
             willChange: "transform",
           }}
         >
-          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--accent-light)", willChange: "transform" }}></div>
+          <div style={{ position: "sticky", left: 0, zIndex: 4, background: "var(--gantt-header-bg)", willChange: "transform" }}></div>
           {visibleDayIdx.map((i) => {
             const iso = allDays[i];
             const isToday = iso === today;
@@ -23207,6 +23207,14 @@ function GlobalStyle() {
         --accent: #E30613;
         --accent-dark: #B5040F;
         --accent-light: #fdf0f0;
+        /* Nepriehľadná verzia accent-light — pre miesta, kde má farba
+           NIEČO PREKRYŤ (roh nad menami strojov v gantte), nie len jemne
+           podfarbiť cez existujúci obsah. accent-light je v tmavom režime
+           zámerne poloPRIEHĽADNÁ (viď nižšie) pre zvýraznenie riadkov, čo je
+           tu presne opačne — cez priehľadný roh presvitali mená strojov aj
+           dni scrollované pod hlavičkou (svetlý režim to nebolo vidno, lebo
+           tam #fdf0f0 nepriehľadná náhodou je). */
+        --gantt-header-bg: #fdf0f0;
         --ok: #3b6d11;
         --ok-bg: #eaf3de;
         --warn: #854f0b;
@@ -23252,6 +23260,7 @@ function GlobalStyle() {
         --info-bg: rgba(24,95,165,.3);
         --gantt-cell-bg: #2c323a;
         --gantt-cell-border: #3f4750;
+        --gantt-header-bg: #3a262a;
       }
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
@@ -23766,7 +23775,14 @@ function GlobalStyle() {
         .resp-grid { grid-template-columns: 1fr !important; }
 
         /* Modálne okná — takmer celá obrazovka, menší padding */
-        .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; }
+        /* transform:translateZ(0) tu nie je na rodičovi žiadneho sticky prvku
+           (karty v modáloch žiadny sticky nemajú, na rozdiel od Ganttu vyššie,
+           kde presne toto rozbíjalo position:sticky) — vynúti si to vlastnú
+           GPU vrstvu pre scrollovanie dlhých kariet, čo je známa oprava pre
+           WebKit chybu, keď pri rýchlom scrolle ostane "zamrznutý" starý
+           vykreslený obsah cez novší (vyzerá to ako zle poskladané/prekryté
+           texty, aj keď telefón už dávno nescrolluje). */
+        .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; transform: translateZ(0); }
         .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
         /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
            scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
