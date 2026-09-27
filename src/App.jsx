@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.650";
+const APP_VERSION = "1.0.651";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -23958,7 +23958,13 @@ function GlobalStyle() {
            len tá istá farba pozadia. Chyba tak zostáva neviditeľná, aj keď
            nastane. */
         .modal-overlay { padding: 0 !important; align-items: stretch !important; overscroll-behavior: contain; background: var(--panel) !important; }
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        /* .panel (základná trieda) má vlastný 1px border a box-shadow —
+           tie sa predtým nechávali, lenže farba borderu (var(--border), sivá)
+           sa oproti bielemu/tmavému pozadiu vždy odlíši, takže presne na
+           spodnej hrane karty (kde .modal-panel končí a .modal-overlay pod
+           ňou pokračuje tou istou farbou) bola vidno tenká čiara — zvyšok
+           po predošlej "diere" v pozadí. Border aj shadow tu vypnuté. */
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; border: none !important; box-shadow: none !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
         /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
            scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
            iOS pri dotiahnutí na koniec obsahu "gumovo" preťahovalo ZA vlastný
@@ -24023,6 +24029,19 @@ function GlobalStyle() {
            .protocol-overlay samotný už žiadny padding navyše nepotrebuje/nesmie
            mať (zdvojilo by odsadenie). */
         .protocol-frame-wrap { border-radius: 0 !important; }
+      }
+
+      /* Spodná lišta (Telefón/Protokol/Porucha/Rezervácia/VTZ EZ) na šírku
+         zaberá príliš veľa z už aj tak nízkej výšky obrazovky a pôsobí príliš
+         výrazne (veľké tlačidlá s nápismi, plná červená farba na Protokole).
+         Na šírku preto len ikony, nižšia a tichšia — bez plnej farby, len
+         jemne zvýraznený okraj/ikona pre Protokol. */
+      @media (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) {
+        .mobile-tech-actions { padding: 3px 6px calc(3px + env(safe-area-inset-bottom)) 6px !important; gap: 4px !important; }
+        .mobile-tech-action-btn { flex-direction: row !important; min-height: 30px !important; padding: 4px 6px !important; gap: 0 !important; font-size: 0 !important; }
+        .mobile-tech-action-icon { font-size: 15px !important; }
+        .mobile-tech-action-accent { background: var(--panel-2) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+        .app-main.has-mobile-tech-bar { padding-bottom: calc(42px + env(safe-area-inset-bottom)) !important; }
       }
 
     `}</style>
