@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.675";
+const APP_VERSION = "1.0.676";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7105,6 +7105,7 @@ function DispatcherApp() {
                   onRevertChecklist={revertChecklistErpProcessed}
                   onMarkProtocol={markProtocolErpProcessed}
                   onRevertProtocol={revertProtocolErpProcessed}
+                  user={effectiveUser}
                 />
               )}
             </>
@@ -19747,7 +19748,7 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
   );
 }
 
-function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
+function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
   const visible = items.filter((p) => (showHistory ? p.erpProcessed : !p.erpProcessed));
   const totalHours = visible.reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
   if (!visible.length) {
@@ -19792,7 +19793,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert }) {
                 <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
                 {showHistory && <td data-label="Objednávka/výkaz">{p.erpOrderNumber || "—"}</td>}
                 <td data-label="Náhľad">
-                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], false)}>Náhľad</button>
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Náhľad</button>
                 </td>
                 <td className="td-actions">
                   {diff && !showHistory && (
@@ -19844,7 +19845,7 @@ function ErpOrderNumberModal({ count, onClose, onConfirm, title = "Číslo servi
   );
 }
 
-function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianById, onMarkChecklist, onRevertChecklist, onMarkProtocol, onRevertProtocol }) {
+function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianById, onMarkChecklist, onRevertChecklist, onMarkProtocol, onRevertProtocol, user }) {
   const [tab, setTab] = useState("hromadne");
   const [showHistory, setShowHistory] = useState(false);
   const [selectedTechId, setSelectedTechId] = useState(null);
@@ -19915,7 +19916,7 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
       {tab === "solo" && (
         <ErpChecklistTable items={solo} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={requestMarkChecklist} onRevert={onRevertChecklist} withParts />
       )}
-      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={requestMarkProtocol} onRevert={onRevertProtocol} />}
+      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={requestMarkProtocol} onRevert={onRevertProtocol} user={user} />}
       {markPrompt && (
         <ErpOrderNumberModal
           count={markPrompt.ids.length}
