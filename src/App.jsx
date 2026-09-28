@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.691";
+const APP_VERSION = "1.0.692";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -363,7 +363,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? ` — ${esc(name)}` : ""}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(phaseKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
@@ -480,8 +480,8 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${sigBlock(p.handoverCustomerSignature, "Podpis nájomcu", p.handoverCustomerName)}
-        ${sigBlock(p.handoverDriverSignature, "Podpis prenajímateľa")}
+        ${sigBlock(p.handoverCustomerSignature, "Za nájomcu", p.handoverCustomerName)}
+        ${sigBlock(p.handoverDriverSignature, "Za prenajímateľa", p.handoverDriverName)}
       </div>`}
     </div>
     <div>
@@ -489,8 +489,8 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
       ${p.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${sigBlock(p.returnCustomerSignature, "Podpis nájomcu", p.returnCustomerName)}
-        ${sigBlock(p.returnDriverSignature, "Podpis prenajímateľa")}
+        ${sigBlock(p.returnCustomerSignature, "Za nájomcu", p.returnCustomerName)}
+        ${sigBlock(p.returnDriverSignature, "Za prenajímateľa", p.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
     </div>
@@ -13557,6 +13557,12 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const [customerName, setCustomerName] = useState(
     (isReturnPhase ? existing?.returnCustomerName : existing?.handoverCustomerName) || defaultCustomerName
   );
+  // Meno "za prenajímateľa" — ťahá sa z prihláseného používateľa (ten, kto
+  // protokol reálne vypĺňa na mieste), dá sa tiež prepísať (napr. keď stroj
+  // odovzdáva/preberá iný šofér/checker, než je práve prihlásený).
+  const [driverName, setDriverName] = useState(
+    (isReturnPhase ? existing?.returnDriverName : existing?.handoverDriverName) || user?.name || ""
+  );
   // Fotky stavu stroja pri zvoze od zákazníka (len fáza "vrátenie") — porovnanie
   // s fotkami checkera z vývozu (kontrola stroja pred vývozom).
   const [returnPhotos, setReturnPhotos] = useState(existing?.returnPhotos || []);
@@ -13609,6 +13615,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     setDriverSig(next === "vratenie" ? existing?.returnDriverSignature || null : existing?.handoverDriverSignature || null);
     setReturnPhotos(next === "vratenie" ? existing?.returnPhotos || [] : []);
     setCustomerName((next === "vratenie" ? existing?.returnCustomerName : existing?.handoverCustomerName) || defaultCustomerName);
+    setDriverName((next === "vratenie" ? existing?.returnDriverName : existing?.handoverDriverName) || user?.name || "");
   }
 
   function setItemStatus(i, status) {
@@ -13622,7 +13629,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // treba) — nič nebráni odoslaniu bez neho. Checklist ale musí byť vyplnený
   // do posledného riadku, to sa už nesmie dať obísť.
   const checklistComplete = checklist.every((it) => it[statusKey] === "ok" || it[statusKey] === "problem");
-  const canSave = checklistComplete && customerSig && driverSig && customerName.trim();
+  const canSave = checklistComplete && customerSig && driverSig && customerName.trim() && driverName.trim();
 
   function handleSave() {
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
@@ -13631,6 +13638,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.returnCustomerSignature = customerSig;
       patch.returnCustomerName = customerName.trim();
       patch.returnDriverSignature = driverSig;
+      patch.returnDriverName = driverName.trim();
       patch.returnDone = true;
       patch.returnDate = existing?.returnDate || todayISO();
       patch.returnPhotos = returnPhotos;
@@ -13638,6 +13646,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.handoverCustomerSignature = customerSig;
       patch.handoverCustomerName = customerName.trim();
       patch.handoverDriverSignature = driverSig;
+      patch.handoverDriverName = driverName.trim();
       patch.handoverDone = true;
       patch.handoverDate = existing?.handoverDate || todayISO();
     }
@@ -13955,14 +13964,24 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Podpisy — {isReturnPhase ? "vrátenie" : "prevzatie"}
       </div>
-      <Field label="Meno preberajúcej/odovzdávajúcej osoby *">
-        <input
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          placeholder="napr. Ján Novák"
-          style={{ width: "100%" }}
-        />
-      </Field>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label="Za nájomcu — meno *">
+          <input
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="napr. Ján Novák"
+            style={{ width: "100%" }}
+          />
+        </Field>
+        <Field label="Za prenajímateľa — meno *">
+          <input
+            value={driverName}
+            onChange={(e) => setDriverName(e.target.value)}
+            placeholder="napr. Ján Novák"
+            style={{ width: "100%" }}
+          />
+        </Field>
+      </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" value={customerSig} onChange={setCustomerSig} />
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" value={driverSig} onChange={setDriverSig} />
