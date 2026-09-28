@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.692";
+const APP_VERSION = "1.0.693";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -7105,6 +7105,7 @@ function DispatcherApp() {
             onTargetDepoConsumed={() => setSparePartsTargetDepo(null)}
             onAdd={(items) => {
               const canManage = can(effectiveUser, "sparepart_manage");
+              if (!canManage && !can(effectiveUser, "sparepart_request")) return;
               const allowedDepos = myAssignableDepos(effectiveUser);
               // Technik smie žiadať len na svoje depo, "vedúci technik" len na
               // svoje depá — vynútené aj tu, nie len vo formulári, nech to
@@ -23484,7 +23485,9 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         ) : (
           <div style={{ fontSize: 13, fontWeight: 600 }}>Depo: {myDepo || "— nemáte priradené depo —"}</div>
         )}
-        <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Nová požiadavka</button>
+        {(canManage || can(user, "sparepart_request")) && (
+          <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Nová požiadavka</button>
+        )}
       </div>
 
       {confirmMessage && (
