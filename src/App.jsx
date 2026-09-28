@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.687";
+const APP_VERSION = "1.0.688";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -16973,7 +16973,12 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     function measure() {
       if (rootRef.current) setAvailH(window.innerHeight - rootRef.current.getBoundingClientRect().top - 16);
     }
-    measure();
+    // Pri prechode sem z dlhšej stránky (napr. Stroje) ostáva okno ešte
+    // odscrollované dole — meranie top-u by vtedy vyšlo nesprávne (gantt by
+    // zdedil výšku predošlej stránky). Scroll hore + meranie až o frame
+    // neskôr (rAF), nech je layout/scroll už usadený.
+    window.scrollTo(0, 0);
+    requestAnimationFrame(measure);
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
