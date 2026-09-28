@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.688";
+const APP_VERSION = "1.0.689";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1845,6 +1845,43 @@ async function claimReminder(table, item, patch, guardField, today) {
     return false;
   }
 }
+// Atomické "získaj/nastav verejný token zákazky" — volá DB funkciu
+// claim_job_public_token (pozri sql/claim_job_public_token.sql), ktorá nikdy
+// neprepíše existujúci token, len vráti ten aktuálny (nech ho nastavila táto
+// požiadavka, alebo niekto iný medzičasom). Rieši preteky pri súbežnom
+// generovaní (šofér v teréne + dispečer na karte zákazky naraz) bez blind
+// upsertu celého riadku zákazky. Pri úplnom zlyhaní siete sa zápis odloží do
+// offline fronty (flushPublicTokenClaims nižšie) a skúsi znova pri návrate
+// signálu — volajúci si medzitým vystačí s lokálnym kandidátom na zobrazenie,
+// realtime kanál pre "jobs" lokálny stav sám opraví, ak sa ukáže iný víťaz.
+async function claimJobPublicToken(jobId, candidateToken, attempt = 1) {
+  try {
+    const { data, error } = await supabase.rpc("claim_job_public_token", { p_job_id: jobId, p_token: candidateToken });
+    if (error) throw error;
+    return data || candidateToken;
+  } catch (e) {
+    if (attempt < 3) {
+      await sleep(attempt * 800);
+      return claimJobPublicToken(jobId, candidateToken, attempt + 1);
+    }
+    console.error("claimJobPublicToken zlyhalo, skúsi sa znova pri návrate signálu", jobId, e);
+    idbPut("outbox", `publicTokenClaim:${jobId}`, { kind: "publicTokenClaim", jobId, candidateToken });
+    refreshOutboxCount();
+    return null;
+  }
+}
+async function flushPublicTokenClaims() {
+  const items = await idbGetAll("outbox");
+  for (const it of items) {
+    if (it?.kind !== "publicTokenClaim") continue;
+    const token = await claimJobPublicToken(it.jobId, it.candidateToken);
+    if (token) await idbDelete("outbox", `publicTokenClaim:${it.jobId}`);
+  }
+  refreshOutboxCount();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("online", flushPublicTokenClaims);
+}
 function saveRecordRow(table, item) {
   const qKey = `${table}:${item.id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
@@ -3207,6 +3244,19 @@ function DispatcherApp() {
     return () => setOutboxCountListener(null);
   }, []);
 
+  // Záložný periodický pokus, nezávislý od udalosti "online" — na slabom/zdieľanom
+  // WiFi (napr. na predvádzaní) vie prehliadač hlásiť navigator.onLine=true aj keď
+  // požiadavky reálne prepadávajú (žiadny skutočný offline→online prechod, takže
+  // "online" event nikdy nepríde) — bez tohto by červený/žltý banner ostal visieť
+  // navždy, aj keď sa signál medzitým zlepší. Skúša len keď je čo skúšať.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (outboxCount > 0) { flushOutbox(); flushPublicTokenClaims(); }
+      saveErrors.forEach((k) => retrySave(k));
+    }, 20000);
+    return () => clearInterval(t);
+  }, [outboxCount, saveErrors]);
+
   useEffect(() => {
     setProtocolOpenListener((html, params) => setProtocolModalData({ html, params }));
     return () => setProtocolOpenListener(null);
@@ -3330,6 +3380,7 @@ function DispatcherApp() {
       setEmployees(emp);
       setLoaded(true);
       flushOutbox(); // dáta sa práve stiahli online, skús poslať aj rozpracované zápisy z minula
+      flushPublicTokenClaims();
     })();
   }, [authChecked, session?.user?.id]);
 
@@ -4935,10 +4986,13 @@ function DispatcherApp() {
     // Zámerne crypto.randomUUID(), NIE uid() — tento token je verejný bezpečnostný
     // prvok (jediné, čo chráni dáta zákazníka bez prihlásenia), na rozdiel od
     // bežných interných ID používa kryptograficky bezpečný generátor.
+    // claimJobPublicToken (nie blind updateJob) — DB atomicky rozhodne o
+    // víťazovi, ak by niekto iný (napr. dispečer na karte zákazky) generoval
+    // token pre tú istú zákazku v tom istom okamihu (viď jeho komentár).
     let publicToken = job?.publicToken || null;
     if (job && !publicToken) {
-      publicToken = crypto.randomUUID();
-      updateJob(jobId, { publicToken });
+      publicToken = crypto.randomUUID(); // optimistický kandidát — hneď zobraziteľný šoférovi
+      claimJobPublicToken(jobId, publicToken);
     }
     let recordId;
     if (existing) {
@@ -8215,9 +8269,12 @@ function DispatcherApp() {
           onGeneratePortalLink={() => {
             if (!jobDetail.publicToken) {
               // crypto.randomUUID() — pozri poznámku pri saveHandoverProtocol, prečo
-              // nie uid().
+              // nie uid(). claimJobPublicToken namiesto blind updateJob — pozri
+              // rovnaký komentár, prečo (preteky so šoférom v teréne).
               const token = crypto.randomUUID();
-              updateJob(jobDetail.id, { publicToken: token });
+              claimJobPublicToken(jobDetail.id, token).then((real) => {
+                if (real) setJobDetail((prev) => (prev ? { ...prev, publicToken: real } : prev));
+              });
               setJobDetail((prev) => (prev ? { ...prev, publicToken: token } : prev));
             }
           }}
