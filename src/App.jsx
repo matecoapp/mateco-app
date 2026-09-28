@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.684";
+const APP_VERSION = "1.0.686";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1955,6 +1955,30 @@ function makeRecordPersist(table, setState) {
   };
 }
 
+// Mäkký ("advisory") zámok "kto to práve edituje" — pozri návrh v dokumente o
+// uzamykaní záznamov. Zapisuje sa priamo cez saveRecordRow/deleteRecordRow (bez
+// prechodu cez React stav volajúceho), lebo ide o efemérnu informáciu — ostatní
+// ju vidia cez ten istý realtime kanál ako ostatné tabuľky (record_locks).
+// Nič nemaže na pozadí: zámok starší ako LOCK_TTL_MS sa jednoducho ignoruje
+// (isLockActive), takže zabudnutá/spadnutá karta sa "uvoľní" sama.
+const LOCK_TTL_MS = 90 * 1000;
+const LOCK_HEARTBEAT_MS = 20 * 1000;
+function writeRecordLock(table, recordId, userName) {
+  if (!userName) return;
+  saveRecordRow("record_locks", { id: `${table}:${recordId}`, table, recordId, userName, lockedAt: new Date().toISOString() });
+}
+function clearRecordLock(table, recordId) {
+  deleteRecordRow("record_locks", `${table}:${recordId}`);
+}
+function isLockActive(lock) {
+  return !!lock && Date.now() - new Date(lock.lockedAt).getTime() < LOCK_TTL_MS;
+}
+// Nájde aktívny zámok od INÉHO používateľa na danom zázname — vlastný zámok sa
+// nezobrazuje (človek nemá vidieť banner "edituje X", keď X je on sám).
+function findOtherLock(recordLocks, table, recordId, myName) {
+  return (recordLocks || []).find((l) => l.table === table && l.recordId === recordId && l.userName !== myName && isLockActive(l)) || null;
+}
+
 /* ---------------------------------------------------------
    Searchable select
 --------------------------------------------------------- */
@@ -2980,6 +3004,12 @@ function DispatcherApp() {
   // ktorýkoľvek technik, frontu na spracovanie ("Spracované") vidia len EZ technici
   // (employees.alsoEzTechnik) — viď RevisionsView.
   const [ezMeasurements, setEzMeasurements] = useState([]);
+  // Mäkké (odporúčacie) zámky "kto to práve edituje" — { id: "<table>:<recordId>",
+  // table, recordId, userName, lockedAt }. Nezabraňuje uloženiu (to rieši _rev/baseRev
+  // vyššie), len ukáže banner ostatným skôr, než začnú písať. Zámok starší ako
+  // LOCK_TTL_MS sa ignoruje (považuje sa za mŕtvy — pozri isLockActive nižšie),
+  // netreba ho mazať cez cron/server, stačí ho pri ďalšom zápise prepísať.
+  const [recordLocks, setRecordLocks] = useState([]);
   const [profiles, setProfiles] = useState([]); // všetci používatelia (z tabuľky profiles)
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
   const [authChecked, setAuthChecked] = useState(false);
@@ -3237,11 +3267,12 @@ function DispatcherApp() {
       setTrash([]);
       setTransportNotes([]);
       setEzMeasurements([]);
+      setRecordLocks([]);
       setLoaded(true);
       return;
     }
     (async () => {
-      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes, ezm] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes, ezm, rlocks] = await Promise.all([
         loadRecordTable("machines"),
         loadRecordTable("jobs"),
         loadRecordTable("assignments"),
@@ -3265,6 +3296,7 @@ function DispatcherApp() {
         loadRecordTable("portal_requests"),
         loadRecordTable("transportNotes"),
         loadRecordTable("ezMeasurements"),
+        loadRecordTable("record_locks"),
       ]);
       setMachines(m);
       setVehicles(veh);
@@ -3288,6 +3320,7 @@ function DispatcherApp() {
       setTrash(trsh);
       setTransportNotes(tnotes);
       setEzMeasurements(ezm);
+      setRecordLocks(rlocks);
 
       setEmployees(emp);
       setLoaded(true);
@@ -3345,6 +3378,7 @@ function DispatcherApp() {
       ["trash", setTrash],
       ["transportNotes", setTransportNotes],
       ["ezMeasurements", setEzMeasurements],
+      ["record_locks", setRecordLocks],
     ];
     const channels = tables.map(([table, setState]) =>
       supabase
@@ -5141,11 +5175,17 @@ function DispatcherApp() {
   function setDamageResolved(id, resolved) {
     persistDamages(damages.map((d) => (d.id === id ? { ...d, resolved } : d)));
   }
-  function resolveDamage(damageId, stav, opravaDatum, opravaKomentar) {
+  // baseRev: rovnaká poistka ako pri updateJob — zadaná z ResolveDamageModal,
+  // kde na tom istom poškodení môže robiť aj dispečer servisu aj vedúci naraz.
+  function resolveDamage(damageId, stav, opravaDatum, opravaKomentar, baseRev) {
     const d = damages.find((x) => x.id === damageId);
+    if (d && baseRev !== undefined && (d._rev || 0) !== baseRev) {
+      alert("Toto poškodenie medzičasom zmenil niekto iný. Obnov stránku (F5) a uprav znova, nech sa nič neprepíše.");
+      return false;
+    }
     persistDamages(
       damages.map((x) =>
-        x.id === damageId ? { ...x, stav, resolved: stav === "opravene", opravaDatum, opravaKomentar } : x
+        x.id === damageId ? { ...x, stav, resolved: stav === "opravene", opravaDatum, opravaKomentar, _rev: (x._rev || 0) + 1 } : x
       )
     );
     if (d && stav === "opravene" && d.type !== "externa") {
@@ -5187,6 +5227,7 @@ function DispatcherApp() {
       );
     }
     setResolveDamageTarget(null);
+    return true;
   }
   // Žiadosť o predĺženie z portálu — Schváliť upraví koniec zákazky, Zamietnuť
   // len uzavrie žiadosť s dôvodom. V oboch prípadoch to zákazník uvidí pri
@@ -6182,9 +6223,17 @@ function DispatcherApp() {
     }
     return record;
   }
-  function updateJob(id, patch) {
+  // baseRev: voliteľná poistka proti tichému prepísaniu (rovnaký vzor ako
+  // saveHandoverProtocol) — zadaná len z formulára "Upraviť zákazku", kde môže
+  // mať zákazku otvorenú viac ľudí naraz. Ostatné volania (preprava, portál,
+  // checker...) baseRev nezadávajú, tam sa _rev len potichu inkrementuje.
+  function updateJob(id, patch, baseRev) {
     const before = jobs.find((j) => j.id === id);
-    persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+    if (before && baseRev !== undefined && (before._rev || 0) !== baseRev) {
+      alert("Túto zákazku medzičasom zmenil niekto iný. Obnov stránku (F5) a uprav znova, nech sa nič neprepíše.");
+      return false;
+    }
+    persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch, _rev: (j._rev || 0) + 1 } : j)));
     if (before) {
       if (patch.fromDepo !== undefined || patch.startDate !== undefined) {
         ensureCheckerAssignment({ ...before, ...patch });
@@ -6209,6 +6258,7 @@ function DispatcherApp() {
       // každej úprave (napr. aj pri ťahaní zákazky v kalendári) bombardovať
       // ďalším upozornením navyše.
     }
+    return true;
   }
   function reportTransportIssue(jobId, note, createDamage) {
     const job = jobs.find((j) => j.id === jobId);
@@ -6248,7 +6298,8 @@ function DispatcherApp() {
   }
   function saveJobModal(data) {
     if (showAddJob?.existing) {
-      updateJob(showAddJob.existing.id, data);
+      const { _baseRev, ...patch } = data;
+      if (!updateJob(showAddJob.existing.id, patch, _baseRev)) return; // konflikt — alert už vypísaný, okno necháme otvorené
       setShowAddJob(null);
       showToast("Zákazka bola upravená.");
     } else {
@@ -7387,6 +7438,8 @@ function DispatcherApp() {
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id))}
           isDeparted={!!(showAddJob.existing && handoverProtocols.find((h) => h.jobId === showAddJob.existing.id)?.handoverDone)}
+          recordLocks={recordLocks}
+          currentUser={currentUser}
         />
       )}
       {showAddReservation && (
@@ -7975,7 +8028,9 @@ function DispatcherApp() {
           protocolLogs={protocolLogs}
           onAssignProtocol={(protocolId) => assignProtocolToDamage(protocolId, resolveDamageTarget.id)}
           onClose={() => setResolveDamageTarget(null)}
-          onSave={(stav, date, comment) => resolveDamage(resolveDamageTarget.id, stav, date, comment)}
+          onSave={(stav, date, comment, baseRev) => resolveDamage(resolveDamageTarget.id, stav, date, comment, baseRev)}
+          recordLocks={recordLocks}
+          currentUser={currentUser}
         />
       )}
       {confirmUnassignProtocol && (
@@ -13470,15 +13525,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Poistka do hĺbky — nový protokol môže reálne založiť len šofér/checker,
   // pridelený na vývoz, a len v deň vývozu — aj keby sa sem niekto dostal inou
   // cestou než cez normálne (už správne strážené) tlačidlá.
-  if (!existing && !canFillHandoverPhase(job, myEmployee, "prevzatie", user)) {
-    return (
-      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
-        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-          Nový protokol môže vypísať len šofér pridelený na vývoz tohto stroja, a to v deň vývozu.
-        </div>
-      </Modal>
-    );
-  }
+  const cannotCreateNew = !existing && !canFillHandoverPhase(job, myEmployee, "prevzatie", user);
 
   function switchPhase(next) {
     if (next === "vratenie" && !existing?.handoverDone) return;
@@ -13571,6 +13618,23 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [screen, existing, job, machine, portalLink]);
+
+  // Poistka do hlbky (presunuta AZ za vsetky hooky vyssie — pred nou v ranom
+  // "return" tu predtym boli useMemo/useEffect volane iba niekedy, co pri
+  // realtime prichode "existing" medzi renderami vedelo zhodit cely React
+  // strom pádom "Rendered more hooks than during the previous render.").
+  // Novy protokol moze realne zalozit len sofer/checker pridelený na vyvoz,
+  // a to len v den vyvozu — aj keby sa sem niekto dostal inou cestou nez cez
+  // normalne (uz spravne strazene) tlacidla.
+  if (cannotCreateNew) {
+    return (
+      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
+        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+          Nový protokol môže vypísať len šofér pridelený na vývoz tohto stroja, a to v deň vývozu.
+        </div>
+      </Modal>
+    );
+  }
 
   if (screen === "sent") {
     return (
@@ -14702,7 +14766,17 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
-function AddJobModal({ machines, drivers, technicians, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted }) {
+function AddJobModal({ machines, drivers, technicians, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted, recordLocks, currentUser }) {
+  // Mäkký zámok "edituje X" — len pri úprave existujúcej zákazky (nová zákazka
+  // ešte nemá s kým kolidovať). Zapíše sa pri otvorení, obnovuje heartbeatom,
+  // zmaže pri zatvorení — pozri writeRecordLock/clearRecordLock vyššie.
+  useEffect(() => {
+    if (!existing) return;
+    writeRecordLock("jobs", existing.id, currentUser?.name);
+    const t = setInterval(() => writeRecordLock("jobs", existing.id, currentUser?.name), LOCK_HEARTBEAT_MS);
+    return () => { clearInterval(t); clearRecordLock("jobs", existing.id); };
+  }, [existing?.id]);
+  const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.name) : null;
   const [tab, setTab] = useState("zakazka"); // "zakazka" | "preprava"
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
@@ -14798,6 +14872,11 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
+      {otherLock && (
+        <div style={{ background: "var(--warning-bg, #fff3cd)", color: "var(--warning, #856404)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ⚠️ Túto zákazku práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
         {[
           { id: "zakazka", label: "1. Zákazka" },
@@ -14980,6 +15059,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               onSaveCustomer?.({ firma: customer.trim(), email: customerEmail.trim(), telefon: customerPhone.trim(), contacts: pendingContacts });
             }
             onSave({
+              _baseRev: existing?._rev,
               machineId,
               machineDisplayName: machine?.objekt === "Externý stroj" ? machineDisplayName.trim() : "",
               driverId: driverId || null,
@@ -20674,7 +20754,7 @@ function CompleteUradnaSkuskaModal({ damage, today, protocolLogs, onAssignProtoc
 /* ---------------------------------------------------------
    Resolve damage modal (Označiť ako vyriešené — dátum opravy + komentár)
 --------------------------------------------------------- */
-function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onClose, onSave }) {
+function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onClose, onSave, recordLocks, currentUser }) {
   const options = [
     { id: "opravene", label: "Opravené" },
     { id: "dalsi_zasah", label: "Potrebný ďalší servisný zásah" },
@@ -20685,6 +20765,12 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
   const [date, setDate] = useState(damage.opravaDatum || today);
   const [comment, setComment] = useState(damage.opravaKomentar || "");
   const canSave = stav && date && comment.trim();
+  useEffect(() => {
+    writeRecordLock("damages", damage.id, currentUser?.name);
+    const t = setInterval(() => writeRecordLock("damages", damage.id, currentUser?.name), LOCK_HEARTBEAT_MS);
+    return () => { clearInterval(t); clearRecordLock("damages", damage.id); };
+  }, [damage.id]);
+  const otherLock = findOtherLock(recordLocks, "damages", damage.id, currentUser?.name);
   // Banner namiesto samostatnej medzikrokovej obrazovky (NoProtocolWarningModal) —
   // ak zákazka nemá priradený protokol, ukáže sa to rovno tu s možnosťou ho
   // priradiť, formulár na ukončenie je hneď prístupný, netreba klikať cez ďalšie okno.
@@ -20695,6 +20781,11 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
   );
   return (
     <Modal eyebrow="Upraviť stav zákazky" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
+      {otherLock && (
+        <div style={{ background: "var(--warning-bg, #fff3cd)", color: "var(--warning, #856404)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          ⚠️ Toto poškodenie práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
+        </div>
+      )}
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
       {!hasProtocol && onAssignProtocol && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14, fontWeight: 600 }}>
@@ -20743,7 +20834,7 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
       <Field label="Čo sa zistilo / vykonalo *">
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Popis zásahu…" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim())}>
+      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim(), damage._rev)}>
         Uložiť
       </button>
     </Modal>
