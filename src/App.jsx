@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.686";
+const APP_VERSION = "1.0.687";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1963,20 +1963,25 @@ function makeRecordPersist(table, setState) {
 // (isLockActive), takže zabudnutá/spadnutá karta sa "uvoľní" sama.
 const LOCK_TTL_MS = 90 * 1000;
 const LOCK_HEARTBEAT_MS = 20 * 1000;
-function writeRecordLock(table, recordId, userName) {
-  if (!userName) return;
-  saveRecordRow("record_locks", { id: `${table}:${recordId}`, table, recordId, userName, lockedAt: new Date().toISOString() });
+// id MUSÍ obsahovať userId — je to riadok "moja editácia tohto záznamu", nie
+// "editácia tohto záznamu" (bez userId by dvaja editori prepisovali ten istý
+// riadok navzájom svojím heartbeatom a banner by nezmyslene skákal medzi
+// menami podľa toho, kto naposledy zapísal).
+function writeRecordLock(table, recordId, userId, userName) {
+  if (!userId || !userName) return;
+  saveRecordRow("record_locks", { id: `${table}:${recordId}:${userId}`, table, recordId, userId, userName, lockedAt: new Date().toISOString() });
 }
-function clearRecordLock(table, recordId) {
-  deleteRecordRow("record_locks", `${table}:${recordId}`);
+function clearRecordLock(table, recordId, userId) {
+  if (!userId) return;
+  deleteRecordRow("record_locks", `${table}:${recordId}:${userId}`);
 }
 function isLockActive(lock) {
   return !!lock && Date.now() - new Date(lock.lockedAt).getTime() < LOCK_TTL_MS;
 }
 // Nájde aktívny zámok od INÉHO používateľa na danom zázname — vlastný zámok sa
 // nezobrazuje (človek nemá vidieť banner "edituje X", keď X je on sám).
-function findOtherLock(recordLocks, table, recordId, myName) {
-  return (recordLocks || []).find((l) => l.table === table && l.recordId === recordId && l.userName !== myName && isLockActive(l)) || null;
+function findOtherLock(recordLocks, table, recordId, myUserId) {
+  return (recordLocks || []).find((l) => l.table === table && l.recordId === recordId && l.userId !== myUserId && isLockActive(l)) || null;
 }
 
 /* ---------------------------------------------------------
@@ -14772,11 +14777,11 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   // zmaže pri zatvorení — pozri writeRecordLock/clearRecordLock vyššie.
   useEffect(() => {
     if (!existing) return;
-    writeRecordLock("jobs", existing.id, currentUser?.name);
-    const t = setInterval(() => writeRecordLock("jobs", existing.id, currentUser?.name), LOCK_HEARTBEAT_MS);
-    return () => { clearInterval(t); clearRecordLock("jobs", existing.id); };
+    writeRecordLock("jobs", existing.id, currentUser?.id, currentUser?.name);
+    const t = setInterval(() => writeRecordLock("jobs", existing.id, currentUser?.id, currentUser?.name), LOCK_HEARTBEAT_MS);
+    return () => { clearInterval(t); clearRecordLock("jobs", existing.id, currentUser?.id); };
   }, [existing?.id]);
-  const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.name) : null;
+  const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.id) : null;
   const [tab, setTab] = useState("zakazka"); // "zakazka" | "preprava"
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
@@ -20766,11 +20771,11 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
   const [comment, setComment] = useState(damage.opravaKomentar || "");
   const canSave = stav && date && comment.trim();
   useEffect(() => {
-    writeRecordLock("damages", damage.id, currentUser?.name);
-    const t = setInterval(() => writeRecordLock("damages", damage.id, currentUser?.name), LOCK_HEARTBEAT_MS);
-    return () => { clearInterval(t); clearRecordLock("damages", damage.id); };
+    writeRecordLock("damages", damage.id, currentUser?.id, currentUser?.name);
+    const t = setInterval(() => writeRecordLock("damages", damage.id, currentUser?.id, currentUser?.name), LOCK_HEARTBEAT_MS);
+    return () => { clearInterval(t); clearRecordLock("damages", damage.id, currentUser?.id); };
   }, [damage.id]);
-  const otherLock = findOtherLock(recordLocks, "damages", damage.id, currentUser?.name);
+  const otherLock = findOtherLock(recordLocks, "damages", damage.id, currentUser?.id);
   // Banner namiesto samostatnej medzikrokovej obrazovky (NoProtocolWarningModal) —
   // ak zákazka nemá priradený protokol, ukáže sa to rovno tu s možnosťou ho
   // priradiť, formulár na ukončenie je hneď prístupný, netreba klikať cez ďalšie okno.
