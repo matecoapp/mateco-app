@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.693";
+const APP_VERSION = "1.0.695";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -221,6 +221,8 @@ const PERM = {
   // "Spracované") je navyše k tomu viazané na příznak employees.alsoEzTechnik
   // (nie je to rola, appka to kontroluje osobitne, viď EzMeasurementsView).
   ez_measurement_view: ["dispecer_servisu", "veduci_servisu"],
+  // Prideliť meranie EZ konkrétnemu EZ technikovi (výber len z employees.alsoEzTechnik).
+  ez_measurement_assign: ["dispecer_servisu", "veduci_servisu"],
   technician_add: ["veduci_servisu"],
   technician_edit: ["veduci_servisu"],
   technician_archive: ["veduci_servisu"],
@@ -3052,6 +3054,7 @@ function DispatcherApp() {
   // ktorýkoľvek technik, frontu na spracovanie ("Spracované") vidia len EZ technici
   // (employees.alsoEzTechnik) — viď RevisionsView.
   const [ezMeasurements, setEzMeasurements] = useState([]);
+  const [ezDayTarget, setEzDayTarget] = useState(null); // { technicianId, date } — kliknutie na "EZ" v kalendári servisu
   // Mäkké (odporúčacie) zámky "kto to práve edituje" — { id: "<table>:<recordId>",
   // table, recordId, userName, lockedAt }. Nezabraňuje uloženiu (to rieši _rev/baseRev
   // vyššie), len ukáže banner ostatným skôr, než začnú písať. Zámok starší ako
@@ -3937,6 +3940,25 @@ function DispatcherApp() {
           link: { module: "servis", view: "ez_merania" },
         });
       });
+  }
+  function assignEzMeasurement(id, technicianId, date) {
+    const tech = employees.find((e) => e.id === technicianId);
+    const meas = ezMeasurements.find((m) => m.id === id);
+    if (!tech || !meas) return;
+    persistEzMeasurements(
+      ezMeasurements.map((m) =>
+        m.id === id
+          ? { ...m, assignedTechnicianId: tech.id, assignedTechnicianName: tech.name, assignedDate: date, assignedBy: currentUser?.name || "", assignedAt: new Date().toISOString() }
+          : m
+      )
+    );
+    pushNotification({
+      userName: tech.name,
+      title: "Pridelené meranie EZ na spracovanie",
+      message: `Stroj ${meas.machineCode || "—"} — spracovať do ${fmtDate(date)}.`,
+      kind: "ez_measurement",
+      link: { module: "servis", view: "ez_merania" },
+    });
   }
   function markEzMeasurementProcessed(id) {
     persistEzMeasurements(
@@ -7010,6 +7032,8 @@ function DispatcherApp() {
                 checkerSubstitutions={checkerSubstitutions}
                 onOpenTechnician={(t) => setTechnicianCard(t)}
                 onOpenCheckerInspection={(a) => setCheckerInspectionConfirmTarget(a)}
+                ezMeasurements={ezMeasurements}
+                onOpenEzDay={(technicianId, date) => setEzDayTarget({ technicianId, date })}
                 plannerTargetDate={plannerTargetDate}
                 onPlannerTargetDateConsumed={() => setPlannerTargetDate(null)}
               />
@@ -7290,7 +7314,9 @@ function DispatcherApp() {
                   measurements={ezMeasurements}
                   myEmployee={myEmployee}
                   user={effectiveUser}
+                  technicians={technicians}
                   onProcess={markEzMeasurementProcessed}
+                  onAssign={assignEzMeasurement}
                 />
               )}
               {view === "erp" && canErpView && (
@@ -8345,6 +8371,7 @@ function DispatcherApp() {
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
           forcePhase={handoverDirectPhase}
+          checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz")}
           onClose={() => { setShowHandoverProtocol(null); setHandoverDirectPhase(null); goBackCard(); }}
           onSave={(patch, baseRev, showSuccessScreen) => {
             const result = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
@@ -8394,6 +8421,17 @@ function DispatcherApp() {
           onReschedule={(damage) => { setAssignSlot(null); setDamageAssignTarget(damage); }}
         />
       )}
+      {ezDayTarget && (
+        <EzDayModal
+          items={ezMeasurements.filter((m) => m.assignedTechnicianId === ezDayTarget.technicianId && m.assignedDate === ezDayTarget.date)}
+          technicianName={employees.find((e) => e.id === ezDayTarget.technicianId)?.name}
+          date={ezDayTarget.date}
+          myEmployee={myEmployee}
+          user={effectiveUser}
+          onProcess={markEzMeasurementProcessed}
+          onClose={() => setEzDayTarget(null)}
+        />
+      )}
       {checkerInspectionConfirmTarget && (() => {
         const job = jobs.find((j) => j.id === checkerInspectionConfirmTarget.jobId);
         const machine = job ? enrichedMachineById[job.machineId] : null;
@@ -8435,6 +8473,7 @@ function DispatcherApp() {
             job={job}
             machine={machine}
             handoverDone={!!handoverForJob?.handoverDone}
+            handoverProtocol={handoverForJob}
             myEmployee={myEmployee}
             user={effectiveUser}
             onClose={() => { setCheckerInspectionTarget(null); goBackCard(); }}
@@ -13513,7 +13552,7 @@ function HandoverProtocolChecklistRecap({ checklist, statusKey, noteKey }) {
   );
 }
 
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue }) {
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection }) {
   const [showPortalQr, setShowPortalQr] = useState(false);
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
   const portalLink = job?.publicToken
@@ -13868,6 +13907,16 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </div>
       )}
 
+      {!isReturnPhase && (
+        checkerInspection?.resolved ? (
+          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy)}>
+            🔍 Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
+          </button>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Kontrola checkera v depe zatiaľ nebola vykonaná.</div>
+        )
+      )}
+
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Predmet kontroly
       </div>
@@ -14014,7 +14063,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
 // v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
 // skôr než čokoľvek z toho).
-function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmployee, user, onClose, onSave, onReportServiceStatus }) {
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, onClose, onSave, onReportServiceStatus }) {
   const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
   const [checklist, setChecklist] = useState(() =>
     assignment.checklist
@@ -14140,6 +14189,15 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, myEmpl
         )}
       </div>
 
+      {phase === "vratenie" && (
+        handoverProtocol?.returnDone ? (
+          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
+            📋 Zobraziť protokol šoféra (zvoz)
+          </button>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Šofér zatiaľ nevyplnil protokol o vrátení.</div>
+        )
+      )}
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Predmet kontroly
       </div>
@@ -19760,24 +19818,162 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
 // dve úrovne prístupu: dispečer/vedúci servisu (ez_measurement_view) vidia
 // zoznam a detail, ale tlačidlo "Spracované" majú schované — spracovať smie
 // len employees.alsoEzTechnik (nie je to rola, appka to overuje osobitne).
-function EzMeasurementsView({ measurements, myEmployee, user, onProcess }) {
+// Môže dané meranie označiť za spracované? Len EZ technik (employees.alsoEzTechnik);
+// ak je meranie pridelené konkrétnemu technikovi, tak len ten (alebo admin).
+function canProcessEz(meas, myEmployee, user) {
+  if (isAdminUser(user)) return true;
+  if (!(myEmployee?.alsoEzTechnik && myEmployee.role === user?.role)) return false;
+  return !meas.assignedTechnicianId || meas.assignedTechnicianId === myEmployee.id;
+}
+
+function EzMeasurementDetail({ meas }) {
+  return (
+    <div style={{ marginTop: 10, fontSize: 12 }}>
+      {meas.motohodiny && <div>Motohodiny: {meas.motohodiny}</div>}
+      {!meas.skipNabijacka && meas.nabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
+        meas.nabijacka[key] ? <div key={key}>{label}: {meas.nabijacka[key]}</div> : null
+      ))}
+      {!meas.skipZasuvka && meas.zasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
+        meas.zasuvka[key] ? <div key={key}>{label}: {meas.zasuvka[key]}</div> : null
+      ))}
+      {meas.note && <div style={{ marginTop: 6 }}>Poznámka: {meas.note}</div>}
+      {meas.photoUrl && (
+        <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4, marginTop: 6, cursor: "pointer", border: "1px solid var(--border)" }} />
+      )}
+    </div>
+  );
+}
+
+// Potvrdenie pred "Spracované" — nech sa to neodklikne omylom.
+function EzProcessConfirmModal({ meas, onCancel, onConfirm }) {
+  return (
+    <Modal eyebrow="Revízie EZ" title="Označiť meranie ako spracované?" onClose={onCancel}>
+      <div style={{ fontSize: 13, marginBottom: 6 }}>
+        Stroj <strong>{meas.machineCode || "—"}</strong> · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 18 }}>
+        Meranie sa presunie do histórie spracovaných. Potvrďte len ak je revízia EZ naozaj spracovaná.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
+        <button className="btn btn-accent" onClick={onConfirm}>Áno, spracované</button>
+      </div>
+    </Modal>
+  );
+}
+
+function EzAssignModal({ meas, ezTechs, onClose, onSave }) {
+  const [technicianId, setTechnicianId] = useState(meas.assignedTechnicianId || "");
+  const [date, setDate] = useState(meas.assignedDate || todayISO());
+  return (
+    <Modal eyebrow="Revízie EZ" title={`Prideliť meranie — ${meas.machineCode || "—"}`} onClose={onClose}>
+      {ezTechs.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+          Žiadny zamestnanec nemá príznak "EZ technik" (Administratíva → Zamestnanci → Upraviť).
+        </div>
+      ) : (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <Field label="EZ technik *">
+            <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} style={{ width: "100%" }}>
+              <option value="">— vyberte —</option>
+              {ezTechs.map((t) => <option key={t.id} value={t.id}>{t.name}{t.depo ? ` (${t.depo})` : ""}</option>)}
+            </select>
+          </Field>
+          <Field label="Spracovať do *">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
+          </Field>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+        <button className="btn btn-accent" disabled={!technicianId || !date} onClick={() => onSave(technicianId, date)}>Prideliť</button>
+      </div>
+    </Modal>
+  );
+}
+
+// Otvára sa z kalendára (Plán servisu) po kliku na "EZ" — merania pridelené
+// technikovi na daný deň, s možnosťou ich rovno (po potvrdení) spracovať.
+function EzDayModal({ items, technicianName, date, myEmployee, user, onProcess, onClose }) {
+  const [confirmId, setConfirmId] = useState(null);
+  const confirming = items.find((m) => m.id === confirmId);
+  return (
+    <>
+      <Modal eyebrow={`Revízie EZ · ${fmtDate(date)}`} title={technicianName || "Merania EZ"} onClose={onClose} wide>
+        {items.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Na tento deň nie sú pridelené žiadne merania.</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map((meas) => (
+            <div key={meas.id} className="panel" style={{ padding: 10, opacity: meas.processed ? 0.7 : 1 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{meas.machineCode || "—"}</strong>{" "}
+                  <span style={{ color: "var(--text-dim)" }}>
+                    · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
+                    {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
+                  </span>
+                </div>
+                {!meas.processed && canProcessEz(meas, myEmployee, user) && (
+                  <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setConfirmId(meas.id)}>
+                    Spracované
+                  </button>
+                )}
+              </div>
+              <EzMeasurementDetail meas={meas} />
+            </div>
+          ))}
+        </div>
+      </Modal>
+      {confirming && (
+        <EzProcessConfirmModal
+          meas={confirming}
+          onCancel={() => setConfirmId(null)}
+          onConfirm={() => { onProcess(confirming.id); setConfirmId(null); }}
+        />
+      )}
+    </>
+  );
+}
+
+function EzMeasurementsView({ measurements, myEmployee, user, technicians, onProcess, onAssign }) {
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
-  const canProcess = !!(myEmployee?.alsoEzTechnik && myEmployee.role === user?.role) || isAdminUser(user);
+  const [assignFilter, setAssignFilter] = useState("all"); // all | unassigned | mine
+  const [assigning, setAssigning] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
+  const canAssign = can(user, "ez_measurement_assign");
+  const ezTechs = (technicians || []).filter((t) => !t.archived && t.alsoEzTechnik);
+  const today = todayISO();
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (measurements || [])
       .filter((m) => (showHistory ? m.processed : !m.processed))
-      .filter((m) => !q || (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q))
+      .filter((m) => assignFilter === "all" || (assignFilter === "unassigned" ? !m.assignedTechnicianId : m.assignedTechnicianId === myEmployee?.id))
+      .filter((m) => !q || (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q) || (m.assignedTechnicianName || "").toLowerCase().includes(q))
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  }, [measurements, showHistory, search]);
+  }, [measurements, showHistory, search, assignFilter, myEmployee?.id]);
+  const confirming = (measurements || []).find((m) => m.id === confirmId);
 
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, zadal…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <SearchInput placeholder="Hľadať sériové číslo, zadal, technika…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        {!showHistory && [["all", "Všetky"], ["unassigned", "Nepridelené"], ["mine", "Moje"]].map(([id, label]) => (
+          <button
+            key={id}
+            className="btn"
+            onClick={() => setAssignFilter(id)}
+            style={{
+              fontSize: 12,
+              background: assignFilter === id ? "var(--accent)" : "transparent",
+              color: assignFilter === id ? "#fff" : "var(--text-dim)",
+              border: "1px solid " + (assignFilter === id ? "var(--accent)" : "var(--border)"),
+            }}
+          >
+            {label}
+          </button>
+        ))}
         <div style={{ flex: 1 }} />
         <button className="btn btn-ghost" onClick={() => { setShowHistory((v) => !v); setExpandedId(null); }}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
@@ -19789,45 +19985,59 @@ function EzMeasurementsView({ measurements, myEmployee, user, onProcess }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rows.map((meas) => (
-            <div key={meas.id} className="panel" style={{ padding: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 13 }}>
-                  <strong>{meas.machineCode || "—"}</strong>{" "}
-                  <span style={{ color: "var(--text-dim)" }}>
-                    · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
-                    {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedId(expandedId === meas.id ? null : meas.id)}>
-                    {expandedId === meas.id ? "Skryť" : "Detail"}
-                  </button>
-                  {!showHistory && canProcess && (
-                    <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onProcess(meas.id)}>
-                      Spracované
+          {rows.map((meas) => {
+            const lateAssigned = !meas.processed && meas.assignedDate && meas.assignedDate < today;
+            return (
+              <div key={meas.id} className="panel" style={{ padding: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{meas.machineCode || "—"}</strong>{" "}
+                    <span style={{ color: "var(--text-dim)" }}>
+                      · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
+                      {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
+                    </span>
+                    {meas.assignedTechnicianId && (
+                      <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: lateAssigned ? "var(--danger)" : "var(--accent)" }}>
+                        → {meas.assignedTechnicianName || "technik"} do {fmtDate(meas.assignedDate)}{lateAssigned ? " (po termíne)" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedId(expandedId === meas.id ? null : meas.id)}>
+                      {expandedId === meas.id ? "Skryť" : "Detail"}
                     </button>
-                  )}
+                    {!showHistory && canAssign && (
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setAssigning(meas)}>
+                        {meas.assignedTechnicianId ? "Preradiť" : "Prideliť"}
+                      </button>
+                    )}
+                    {!showHistory && canProcessEz(meas, myEmployee, user) && (
+                      <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setConfirmId(meas.id)}>
+                        Spracované
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {expandedId === meas.id && <EzMeasurementDetail meas={meas} />}
               </div>
-              {expandedId === meas.id && (
-                <div style={{ marginTop: 10, fontSize: 12 }}>
-                  {meas.motohodiny && <div>Motohodiny: {meas.motohodiny}</div>}
-                  {!meas.skipNabijacka && meas.nabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
-                    meas.nabijacka[key] ? <div key={key}>{label}: {meas.nabijacka[key]}</div> : null
-                  ))}
-                  {!meas.skipZasuvka && meas.zasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
-                    meas.zasuvka[key] ? <div key={key}>{label}: {meas.zasuvka[key]}</div> : null
-                  ))}
-                  {meas.note && <div style={{ marginTop: 6 }}>Poznámka: {meas.note}</div>}
-                  {meas.photoUrl && (
-                    <img src={meas.photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(meas.photoUrl)} style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4, marginTop: 6, cursor: "pointer", border: "1px solid var(--border)" }} />
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+      {assigning && (
+        <EzAssignModal
+          meas={assigning}
+          ezTechs={ezTechs}
+          onClose={() => setAssigning(null)}
+          onSave={(technicianId, date) => { onAssign(assigning.id, technicianId, date); setAssigning(null); }}
+        />
+      )}
+      {confirming && (
+        <EzProcessConfirmModal
+          meas={confirming}
+          onCancel={() => setConfirmId(null)}
+          onConfirm={() => { onProcess(confirming.id); setConfirmId(null); }}
+        />
       )}
     </div>
   );
@@ -21358,7 +21568,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, setShowArchived, onOpenCheckerInspection, plannerTargetDate, onPlannerTargetDateConsumed }) {
+function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, setTechnicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, setShowArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
@@ -21419,8 +21629,19 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
       const key = `${a.technicianId}_${a.date}`;
       (map[key] = map[key] || []).push(a);
     });
+    // Merania EZ pridelené technikovi — odvodené priamo z ezMeasurements (nie
+    // sú v assignments), jeden chip na technika a deň bez ohľadu na počet meraní.
+    const ezByKey = {};
+    (ezMeasurements || []).forEach((m) => {
+      if (!m.assignedTechnicianId || !m.assignedDate) return;
+      const key = `${m.assignedTechnicianId}_${m.assignedDate}`;
+      (ezByKey[key] = ezByKey[key] || { technicianId: m.assignedTechnicianId, date: m.assignedDate, items: [] }).items.push(m);
+    });
+    Object.entries(ezByKey).forEach(([key, g]) => {
+      (map[key] = map[key] || []).push({ id: `ez:${key}`, kind: "ezSpracovanie", technicianId: g.technicianId, date: g.date, ezItems: g.items });
+    });
     return map;
-  }, [assignments]);
+  }, [assignments, ezMeasurements]);
 
   const todayCellRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -21765,10 +21986,16 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const linkedDamage = a.damageId ? damageById[a.damageId] : null;
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
                           const isCheckerInspection = a.kind === "kontrolaStroja";
+                          const isEz = a.kind === "ezSpracovanie";
+                          const ezOpen = isEz ? a.ezItems.filter((x) => !x.processed) : [];
+                          const ezAllDone = isEz && ezOpen.length === 0;
+                          const ezLate = isEz && !ezAllDone && a.date < today;
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
-                          const bg = isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
-                          const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
-                          const tooltip = a.kind === "udalost"
+                          const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
+                          const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
+                          const tooltip = isEz
+                            ? `Spracovanie meraní EZ (${ezOpen.length} z ${a.ezItems.length} čaká)${ezLate ? " — po termíne" : ""}: ${a.ezItems.map((x) => x.machineCode || "—").join(", ")}`
+                            : a.kind === "udalost"
                             ? (a.poznamka || "Udalosť")
                             : isCheckerInspection
                             ? `Kontrola stroja ${isReturnInspection ? "po vrátení" : "pred vývozom"} — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
@@ -21778,7 +22005,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           return (
                             <div
                               key={a.id}
-                              onClick={isCheckerInspection && !quickMode ? () => onOpenCheckerInspection(a) : handleClick}
+                              onClick={isEz && !quickMode ? () => onOpenEzDay(a.technicianId, a.date) : isCheckerInspection && !quickMode ? () => onOpenCheckerInspection(a) : handleClick}
                               title={tooltip}
                               style={{
                                 height: 22,
@@ -21787,7 +22014,8 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                                 color: "#fff",
                                 fontSize: 9,
                                 fontWeight: 600,
-                                opacity: isCheckerInspection && a.resolved ? 0.5 : 1,
+                                opacity: (isCheckerInspection && a.resolved) || ezAllDone ? 0.5 : 1,
+                                outline: ezLate ? "2px solid var(--danger)" : undefined,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -22382,6 +22610,7 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
         />
       ) : domain === "servis" ? (
         <ServisStatistiky
+          machines={machines}
           technicians={technicians}
           protocolLogs={protocolLogs}
           assignments={assignments}
@@ -22617,7 +22846,21 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
   );
 }
 
-function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
+function ServisStatistiky({ machines, technicians, protocolLogs, assignments, start, end, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
+  // % prepadnutých revízií — stav DNES (nie za obdobie): podiel sledovaných
+  // strojov, čo majú revíziu po termíne alebo bez dátumu (rovnaké pravidlo ako
+  // pri automatickom zakladaní revíznych zákaziek).
+  const revToday = todayISO();
+  const revMachines = (machines || []).filter((m) => !m.archived && (!m.objekt || m.objekt === "Požičovňový stroj"));
+  const isLate = (m, field) => !m[field] || daysBetween(revToday, m[field]) < 0;
+  const revStat = (rows) => ({ total: rows.length, late: rows.filter((r) => r.late).length, pct: rows.length ? Math.round((rows.filter((r) => r.late).length / rows.length) * 100) : 0 });
+  const revZz = revStat(revMachines.filter((m) => m.trackRevisions !== false).map((m) => ({ late: isLate(m, "revizia") })));
+  const revEz = revStat(revMachines.filter((m) => m.trackRevisionsEZ !== false).map((m) => ({ late: isLate(m, "reviziaEZ") })));
+  const revAll = revStat(
+    revMachines
+      .filter((m) => m.trackRevisions !== false || m.trackRevisionsEZ !== false)
+      .map((m) => ({ late: (m.trackRevisions !== false && isLate(m, "revizia")) || (m.trackRevisionsEZ !== false && isLate(m, "reviziaEZ")) }))
+  );
   const activeTechnicians = technicians.filter((t) => !t.archived);
   const trackedTechnicians = activeTechnicians.filter((t) => t.trackStatistics !== false);
   const trackedNames = new Set(trackedTechnicians.map((t) => t.name));
@@ -22692,6 +22935,12 @@ function ServisStatistiky({ technicians, protocolLogs, assignments, start, end, 
         <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
         <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
         <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
+      </div>
+
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <StatCard label={`Prepadnuté revízie — spolu (${revAll.late} z ${revAll.total} strojov)`} value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger)" : undefined} />
+        <StatCard label={`Revízia ZZ po termíne (${revZz.late} z ${revZz.total})`} value={`${revZz.pct} %`} color={revZz.pct > 0 ? "var(--danger)" : undefined} />
+        <StatCard label={`Revízia EZ po termíne (${revEz.late} z ${revEz.total})`} value={`${revEz.pct} %`} color={revEz.pct > 0 ? "var(--danger)" : undefined} />
       </div>
 
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
