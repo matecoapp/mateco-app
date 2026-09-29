@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.695";
+const APP_VERSION = "1.0.697";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1344,12 +1344,30 @@ function driverOptionsGrouped(drivers) {
   );
 }
 
-function canFillHandoverPhase(job, myEmployee, phase, user) {
+// Vlastná doprava — protokol namiesto šoféra vypĺňa checker, ktorému je pre
+// danú zákazku a fázu pridelená kontrola stroja (kind "kontrolaStroja").
+function isSelfTransportPhase(job, phase) {
+  return phase === "prevzatie" ? !!job?.selfPickup : !!job?.selfReturn;
+}
+function myCheckerAssignment(job, myEmployee, phase, assignments) {
+  if (!job || !myEmployee) return null;
+  const want = phase === "prevzatie" ? "vyvoz" : "vratenie";
+  return (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === want && a.technicianId === myEmployee.id) || null;
+}
+function canFillHandoverPhase(job, myEmployee, phase, user, assignments) {
+  if (!job || !myEmployee || !user) return false;
+  const today = todayISO();
+  if (isSelfTransportPhase(job, phase)) {
+    if (!myCheckerAssignment(job, myEmployee, phase, assignments)) return false;
+    if (phase === "prevzatie") return (job.departureDate || job.startDate) === today;
+    if (job.status !== "completed") return false;
+    const d = job.pickupDate || job.endDate;
+    return !d || d === today;
+  }
   // Rola sa overuje podľa profilu (user.role), nie podľa employees.role — ten
   // sa od profilu môže rozísť (rovnaký problém, aký spôsobil, že šofér
   // nevidel svoje priradené prevozy — viď transportNotes).
-  if (!job || !myEmployee || !user || (user.role !== "sofer" && user.role !== "externy_sofer")) return false;
-  const today = todayISO();
+  if (user.role !== "sofer" && user.role !== "externy_sofer") return false;
   if (phase === "prevzatie") {
     // Skutočný deň vývozu je departureDate (dá sa prepísať nezávisle od
     // zmluvného startDate, napr. pri odloženom vývoze) — ak nie je zadaný,
@@ -3955,7 +3973,7 @@ function DispatcherApp() {
     pushNotification({
       userName: tech.name,
       title: "Pridelené meranie EZ na spracovanie",
-      message: `Stroj ${meas.machineCode || "—"} — spracovať do ${fmtDate(date)}.`,
+      message: `Stroj ${meas.machineCode || "—"} — termín spracovania ${fmtDate(date)}.`,
       kind: "ez_measurement",
       link: { module: "servis", view: "ez_merania" },
     });
@@ -5039,7 +5057,7 @@ function DispatcherApp() {
         message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"}). Dostupné na karte zákazky.`,
         link: { module: "poziciovna", view: "jobs", jobId },
       });
-      if (job) ensureReturnCheckerAssignment({ ...job, ...data });
+      if (job && !job.selfReturn) ensureReturnCheckerAssignment({ ...job, ...data });
     } else if (data.handoverDone) {
       pushNotification({
         kind: "handover_protocol",
@@ -5914,7 +5932,7 @@ function DispatcherApp() {
       const st = effectiveStatus(j, today);
       return st === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && filteredIds.has(j.machineId);
     });
-    const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && filteredIds.has(j.machineId));
+    const unassigned = jobs.filter((j) => j.status !== "completed" && !j.driverId && !j.selfPickup && j.startDate >= today && filteredIds.has(j.machineId));
     const noEndDate = jobs.filter((j) => j.status !== "completed" && !j.endDate && filteredIds.has(j.machineId));
     const approvedReservations = (reservations || []).filter((r) => r.status === "approved" && filteredIds.has(r.machineId));
     const revisionOverdue = damages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue && filteredIds.has(d.machineId));
@@ -6216,19 +6234,27 @@ function DispatcherApp() {
   // pridelenie šoféra, len ide o kontrolnú (nie prepravnú) úlohu PRED vývozom.
   // Už vyriešené priradenie (checker kontrolu vykonal) sa nemení.
   function ensureCheckerAssignment(job) {
-    const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.startDate);
+    // Vlastná doprava: kontrolu aj odovzdanie zákazníkovi robí checker v deň
+    // vyzdvihnutia (departureDate) — nie deň vopred ako pri vývoze našou dopravou.
+    const pickupDay = job.departureDate || job.startDate;
+    const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, job.fromDepo, job.selfPickup ? pickupDay : job.startDate);
     if (!checkerId) return;
     // Kontrola stroja sa robí vždy vopred, deň pred vývozom — ale len ak je vývoz
     // naplánovaný do budúcna. Keď je vývoz už dnes (alebo v minulosti pri dodatočnom
     // zápise), deň vopred by bol včera, čo sa nedá — zostáva teda v ten istý deň.
-    const inspectionDate = job.startDate > todayISO() ? addDaysISO(job.startDate, -1) : job.startDate;
+    const inspectionDate = job.selfPickup ? pickupDay : job.startDate > todayISO() ? addDaysISO(job.startDate, -1) : job.startDate;
+    // assignmentsRef (nie "assignments" z closure) — v jednom kroku môže bežať
+    // aj ensureReturnCheckerAssignment a nesmú si navzájom prepísať zápis.
+    const assignments = assignmentsRef.current;
     const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
     if (existing) {
       if (existing.resolved) return;
-      if (existing.technicianId === checkerId && existing.date === inspectionDate) return;
+      if (existing.technicianId === checkerId && existing.date === inspectionDate && !!existing.self === !!job.selfPickup) return;
     }
-    const record = { id: uid(), technicianId: checkerId, date: inspectionDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false };
-    persistAssignments([...assignments.filter((a) => a.id !== existing?.id), record]);
+    const record = { id: uid(), technicianId: checkerId, date: inspectionDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false, self: !!job.selfPickup };
+    const next = [...assignments.filter((a) => a.id !== existing?.id), record];
+    assignmentsRef.current = next;
+    persistAssignments(next);
     const checker = technicianByIdTop[checkerId];
     if (checker) {
       const machine = machineById[job.machineId];
@@ -6236,8 +6262,10 @@ function DispatcherApp() {
         kind: "assignment_transport",
         roles: [],
         userName: checker.name,
-        title: "Kontrola stroja pred vývozom",
-        message: `Skontrolujte stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — vývoz ${fmtDate(job.startDate)} (kontrola ${fmtDate(inspectionDate)}).`,
+        title: job.selfPickup ? "Osobný odber stroja v depe" : "Kontrola stroja pred vývozom",
+        message: job.selfPickup
+          ? `Zákazník ${job.customer || "—"} si ${fmtDate(inspectionDate)} vyzdvihne stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} v depe — kontrola a odovzdanie zákazníkovi.`
+          : `Skontrolujte stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — vývoz ${fmtDate(job.startDate)} (kontrola ${fmtDate(inspectionDate)}).`,
         link: { module: "servis", view: "plan", plannerDate: inspectionDate },
       });
     }
@@ -6247,18 +6275,24 @@ function DispatcherApp() {
   // "kontrolaStroja" (phase: "vratenie") v Pláne servisu — bez fotiek, tie robí
   // šofér pri zvoze priamo na mieste a žijú v handoverProtocols. Rovnaká
   // idempotentná logika ako ensureCheckerAssignment — už hotovú kontrolu nemení.
+  // Vlastná doprava pri zvoze (job.selfReturn): úloha vzniká už pri ukončení
+  // zákazky, na deň vrátenia (pickupDate) — checker najprv spíše protokol o
+  // vrátení so zákazníkom a potom kontrolu; pri zmene dátumu sa presunie.
   function ensureReturnCheckerAssignment(job) {
     const depo = job.returnDepo || job.fromDepo;
-    const date = todayISO();
+    const date = job.selfReturn ? job.pickupDate || job.endDate || todayISO() : todayISO();
     const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, depo, date);
     if (!checkerId) return;
+    const assignments = assignmentsRef.current;
     const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
     if (existing) {
       if (existing.resolved) return;
-      if (existing.technicianId === checkerId) return;
+      if (existing.technicianId === checkerId && (!job.selfReturn || existing.date === date)) return;
     }
-    const record = { id: uid(), technicianId: checkerId, date, kind: "kontrolaStroja", phase: "vratenie", jobId: job.id, machineId: job.machineId, resolved: false };
-    persistAssignments([...assignments.filter((a) => a.id !== existing?.id), record]);
+    const record = { id: uid(), technicianId: checkerId, date, kind: "kontrolaStroja", phase: "vratenie", jobId: job.id, machineId: job.machineId, resolved: false, self: !!job.selfReturn };
+    const next = [...assignments.filter((a) => a.id !== existing?.id), record];
+    assignmentsRef.current = next;
+    persistAssignments(next);
     const checker = technicianByIdTop[checkerId];
     if (checker) {
       const machine = machineById[job.machineId];
@@ -6266,8 +6300,10 @@ function DispatcherApp() {
         kind: "assignment_transport",
         roles: [],
         userName: checker.name,
-        title: "Kontrola stroja po vrátení",
-        message: `Skontrolujte vrátený stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} na depe ${depo || "—"}.`,
+        title: job.selfReturn ? "Osobné vrátenie stroja v depe" : "Kontrola stroja po vrátení",
+        message: job.selfReturn
+          ? `Zákazník ${job.customer || "—"} ${fmtDate(date)} vráti stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} na depo ${depo || "—"} — protokol o vrátení a kontrola.`
+          : `Skontrolujte vrátený stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} na depe ${depo || "—"}.`,
         link: { module: "servis", view: "plan", plannerDate: date },
       });
     }
@@ -6322,8 +6358,18 @@ function DispatcherApp() {
     }
     persistJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch, _rev: (j._rev || 0) + 1 } : j)));
     if (before) {
-      if (patch.fromDepo !== undefined || patch.startDate !== undefined) {
-        ensureCheckerAssignment({ ...before, ...patch });
+      const merged = { ...before, ...patch };
+      if (patch.fromDepo !== undefined || patch.startDate !== undefined || patch.selfPickup !== undefined || (merged.selfPickup && patch.departureDate !== undefined)) {
+        ensureCheckerAssignment(merged);
+      }
+      if (merged.selfReturn && merged.status === "completed" && (patch.status !== undefined || patch.selfReturn !== undefined || patch.pickupDate !== undefined || patch.returnDepo !== undefined)) {
+        ensureReturnCheckerAssignment(merged);
+      } else if (patch.selfReturn === false && before.selfReturn) {
+        // Späť na našu dopravu — vopred založená úloha "Osobné vrátenie" už
+        // neplatí (kontrola po vrátení vznikne až po šoférovom protokole).
+        const next = assignmentsRef.current.filter((a) => !(a.jobId === id && a.kind === "kontrolaStroja" && a.phase === "vratenie" && !a.resolved));
+        assignmentsRef.current = next;
+        persistAssignments(next);
       }
       const machine = machineById[before.machineId];
       const notifyDriver = (driverId, title, message, transportType) => {
@@ -6410,7 +6456,11 @@ function DispatcherApp() {
     goBackCard();
   }
   function completeJob(jobId, data) {
-    updateJob(jobId, { status: "completed", endDate: data.endDate, returnDepo: data.returnDepo, returnDriverId: data.returnDriverId || null });
+    updateJob(jobId, {
+      status: "completed", endDate: data.endDate, returnDepo: data.returnDepo, returnDriverId: data.returnDriverId || null,
+      selfReturn: !!data.selfReturn,
+      ...(data.pickupDate ? { pickupDate: data.pickupDate } : {}),
+    });
     const job = jobs.find((j) => j.id === jobId);
     if (job && data.returnDepo) {
       persistMachines(machines.map((m) => (m.id === job.machineId ? { ...m, depo: data.returnDepo } : m)));
@@ -7314,7 +7364,7 @@ function DispatcherApp() {
                   measurements={ezMeasurements}
                   myEmployee={myEmployee}
                   user={effectiveUser}
-                  technicians={technicians}
+                  technicians={employees}
                   onProcess={markEzMeasurementProcessed}
                   onAssign={assignEzMeasurement}
                 />
@@ -8372,6 +8422,7 @@ function DispatcherApp() {
           canDelete={isAdminUser(effectiveUser)}
           forcePhase={handoverDirectPhase}
           checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz")}
+          assignments={assignments}
           onClose={() => { setShowHandoverProtocol(null); setHandoverDirectPhase(null); goBackCard(); }}
           onSave={(patch, baseRev, showSuccessScreen) => {
             const result = saveHandoverProtocol(showHandoverProtocol.id, showHandoverProtocol.machineId, patch, baseRev);
@@ -8381,8 +8432,16 @@ function DispatcherApp() {
               // (mohol sa práve teraz prvýkrát vygenerovať vyššie) — karta sa nezatvára.
               setShowHandoverProtocol((prev) => (prev ? { ...prev, publicToken: result.publicToken } : prev));
             } else {
+              const job = showHandoverProtocol;
               setShowHandoverProtocol(null);
-              goBackCard();
+              setHandoverDirectPhase(null);
+              // Osobné vrátenie: checker práve spísal protokol so zákazníkom —
+              // hneď pokračuje kontrolou stroja (krok 2).
+              const returnInspection = patch.returnDone && job.selfReturn
+                ? assignmentsRef.current.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie" && !a.resolved)
+                : null;
+              if (returnInspection) setCheckerInspectionTarget(returnInspection);
+              else goBackCard();
             }
           }}
           onDelete={(id) => {
@@ -8492,8 +8551,23 @@ function DispatcherApp() {
                 });
               }
               setCheckerInspectionTarget(null);
-              goBackCard();
+              // Osobný odber: po kontrole hneď odovzdanie zákazníkovi (protokol).
+              if (job?.selfPickup && !isReturn && !handoverForJob?.handoverDone) {
+                setHandoverDirectPhase("prevzatie");
+                setShowHandoverProtocol(job);
+              } else {
+                goBackCard();
+              }
             }}
+            onOpenHandover={
+              job
+                ? (phase) => {
+                    setCheckerInspectionTarget(null);
+                    setHandoverDirectPhase(phase);
+                    setShowHandoverProtocol(job);
+                  }
+                : undefined
+            }
             onReportServiceStatus={
               machine
                 ? (popis) => {
@@ -10658,7 +10732,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
 
   const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && matchesSearchAndDepo(j));
   const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
-  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && j.startDate >= today && matchesSearchAndDepo(j));
+  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && !j.selfPickup && j.startDate >= today && matchesSearchAndDepo(j));
   const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j));
   function matchesSearchAndDepoRes(r) {
     if (obchodnikFilter && r.obchodnik !== obchodnikFilter) return false;
@@ -11207,11 +11281,22 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
   const [quickFilter, setQuickFilter] = useState(null); // { key, dateVal, type, label, driverName } — recomputed live, never frozen
   const depoOptions = DEPO_OPTIONS;
 
-  const transports = useMemo(() => {
+  const allTransports = useMemo(() => {
     const list = [];
     jobs.forEach((j) => {
+      const hpForJob = (handoverProtocols || []).find((h) => h.jobId === j.id);
+      // Osobný odber (vlastná doprava) — žiadny šofér, v zozname pre dispečera
+      // zvlášť, kým ho checker neodovzdá zákazníkovi.
+      if (j.selfPickup && j.status !== "completed" && !hpForJob?.handoverDone) {
+        list.push({
+          id: j.id + "-vyvoz", jobId: j.id, type: "vyvoz", self: true,
+          date: j.departureDate || j.startDate, driverId: null, machineId: j.machineId,
+          from: j.fromDepo || "—", to: j.fromDepo || "—", customer: j.customer,
+          overdue: (j.departureDate || j.startDate) < today,
+        });
+      }
       // Vývoz — po ukončení zákazky už dávno prebehol, netreba ho ukazovať.
-      if (j.status !== "completed" && (j.startDate >= today || !j.driverId)) {
+      if (!j.selfPickup && j.status !== "completed" && (j.startDate >= today || !j.driverId)) {
         list.push({
           id: j.id + "-vyvoz",
           jobId: j.id,
@@ -11238,6 +11323,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
             id: j.id + "-zvoz",
             jobId: j.id,
             type: "zvoz",
+            self: !!j.selfReturn,
             date: j.pickupDate || j.endDate,
             driverId: j.returnDriverId || null,
             machineId: j.machineId,
@@ -11251,6 +11337,8 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
     });
     return list.sort((a, b) => (a.date < b.date ? -1 : 1));
   }, [jobs, today, handoverProtocols]);
+  const transports = useMemo(() => allTransports.filter((t) => !t.self), [allTransports]);
+  const selfTransports = allTransports.filter((t) => t.self);
 
   function matchesDepoAndSearch(t) {
     if (depoFilter && t.from.toLowerCase() !== depoFilter.toLowerCase() && t.to.toLowerCase() !== depoFilter.toLowerCase()) {
@@ -11461,6 +11549,44 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
 
   return (
     <div>
+      {selfTransports.length > 0 && (
+        <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+            🏢 Osobný odber / vrátenie v depe (vlastná doprava — rieši checker)
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {selfTransports.map((t) => {
+              const m = machineById[t.machineId];
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => onOpenJob && onOpenJob(t.jobId, t.type)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12, cursor: onOpenJob ? "pointer" : "default" }}
+                >
+                  <span className={`badge ${t.type === "vyvoz" ? "badge-info" : "badge-warn"}`} style={{ minWidth: 70, textAlign: "center" }}>
+                    {t.type === "vyvoz" ? "Odber" : "Vrátenie"}
+                  </span>
+                  <span className="mono" style={{ fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
+                  {can(user, "transport_assign_driver") && (
+                    <input
+                      type="date"
+                      value={t.date}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); if (e.target.value) onSetTransportDate && onSetTransportDate(t.jobId, t.type, e.target.value); }}
+                      style={{ fontSize: 11, padding: "3px 5px", width: 130 }}
+                      title="Zmeniť dátum — kontrola checkera sa presunie spolu s ním"
+                    />
+                  )}
+                  {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
+                  <span className="mono">{m?.code || "—"}</span>
+                  <span>depo {t.type === "vyvoz" ? t.from : t.to}</span>
+                  {t.customer && <span style={{ color: "var(--text-dim)" }}>· {t.customer}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {assignedTransportNotes.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -13311,6 +13437,8 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
   const [endDate, setEndDate] = useState(job.endDate || today);
   const [returnDepo, setReturnDepo] = useState(job.returnDepo || job.fromDepo || machine?.depo || "");
   const [returnDriverId, setReturnDriverId] = useState(job.returnDriverId || "");
+  const [selfReturn, setSelfReturn] = useState(!!job.selfReturn);
+  const [returnDate, setReturnDate] = useState("");
   const canSave = endDate && returnDepo.trim();
 
   return (
@@ -13325,16 +13453,32 @@ function CompleteJobModal({ job, machine, drivers, technicians, today, onClose, 
           {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
       </Field>
-      <Field label="Šofér (zvoz)">
-        <select value={returnDriverId} onChange={(e) => setReturnDriverId(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— zatiaľ neurčený —</option>
-          {driverOptionsGrouped(drivers)}
-        </select>
+      <Field label="Doprava pri zvoze">
+        <TransportModeToggle selfMode={selfReturn} onChange={setSelfReturn} />
       </Field>
+      {selfReturn ? (
+        <Field label="Dátum vrátenia do depa">
+          <input type="date" value={returnDate || endDate} onChange={(e) => setReturnDate(e.target.value)} style={{ width: "100%" }} />
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Zákazník vráti stroj sám — protokol o vrátení aj kontrolu robí checker depa.</div>
+        </Field>
+      ) : (
+        <Field label="Šofér (zvoz)">
+          <select value={returnDriverId} onChange={(e) => setReturnDriverId(e.target.value)} style={{ width: "100%" }}>
+            <option value="">— zatiaľ neurčený —</option>
+            {driverOptionsGrouped(drivers)}
+          </select>
+        </Field>
+      )}
       <button
         className="btn btn-accent"
         disabled={!canSave}
-        onClick={() => onSave({ endDate, returnDepo: returnDepo.trim(), returnDriverId: returnDriverId || null })}
+        onClick={() =>
+          onSave(
+            selfReturn
+              ? { endDate, returnDepo: returnDepo.trim(), returnDriverId: null, selfReturn: true, pickupDate: returnDate || endDate }
+              : { endDate, returnDepo: returnDepo.trim(), returnDriverId: returnDriverId || null, selfReturn: false }
+          )
+        }
       >
         Ukončiť zákazku
       </button>
@@ -13552,7 +13696,7 @@ function HandoverProtocolChecklistRecap({ checklist, statusKey, noteKey }) {
   );
 }
 
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection }) {
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, assignments }) {
   const [showPortalQr, setShowPortalQr] = useState(false);
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
   const portalLink = job?.publicToken
@@ -13646,7 +13790,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Poistka do hĺbky — nový protokol môže reálne založiť len šofér/checker,
   // pridelený na vývoz, a len v deň vývozu — aj keby sa sem niekto dostal inou
   // cestou než cez normálne (už správne strážené) tlačidlá.
-  const cannotCreateNew = !existing && !canFillHandoverPhase(job, myEmployee, "prevzatie", user);
+  const cannotCreateNew = !existing && !canFillHandoverPhase(job, myEmployee, "prevzatie", user, assignments);
 
   function switchPhase(next) {
     if (next === "vratenie" && !existing?.handoverDone) return;
@@ -13702,8 +13846,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const canGoReturn =
     !!existing &&
     !existing.returnDone &&
-    (user?.role === "sofer" || user?.role === "externy_sofer") &&
-    canFillHandoverPhase(job, myEmployee, "vratenie", user);
+    canFillHandoverPhase(job, myEmployee, "vratenie", user, assignments);
   // Dispečer aj šofér vedia poslať zákazníkovi odkaz/QR — nie je to viazané na
   // úpravu protokolu (tú má len dispečer), len na to, že vôbec smie s
   // odovzdávacím protokolom pracovať.
@@ -13757,7 +13900,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     return (
       <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-          Nový protokol môže vypísať len šofér pridelený na vývoz tohto stroja, a to v deň vývozu.
+          {job?.selfPickup
+            ? `Osobný odber — protokol vypíše checker depa v deň vyzdvihnutia (${fmtDate(job.departureDate || job.startDate)}). Ak zákazník príde v iný deň, dispečer presunie dátum vyzdvihnutia.`
+            : "Nový protokol môže vypísať len šofér pridelený na vývoz tohto stroja, a to v deň vývozu."}
         </div>
       </Modal>
     );
@@ -14063,7 +14208,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
 // v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
 // skôr než čokoľvek z toho).
-function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, onClose, onSave, onReportServiceStatus }) {
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, onClose, onSave, onReportServiceStatus, onOpenHandover }) {
   const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
   const [checklist, setChecklist] = useState(() =>
     assignment.checklist
@@ -14097,7 +14242,11 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const timeLocked = phase === "vratenie" && daysSinceReturn >= 2 && !isAdminUser(user);
   const hardLocked = (phase !== "vratenie" && !!handoverDone) || timeLocked;
   const [editing, setEditing] = useState(canEdit && !assignment.resolved);
-  const showForm = canEdit && !hardLocked && editing;
+  // Vlastná doprava: pri odbere checker po kontrole odovzdá stroj zákazníkovi
+  // (protokol), pri vrátení najprv protokol so zákazníkom a až potom kontrola.
+  const selfTransport = phase === "vratenie" ? !!job?.selfReturn : !!job?.selfPickup;
+  const waitingForReturnProtocol = phase === "vratenie" && selfTransport && !handoverProtocol?.returnDone;
+  const showForm = canEdit && !hardLocked && editing && !waitingForReturnProtocol;
 
   function setItemStatus(i, status) {
     setChecklist((prev) => prev.map((it, idx) => (idx === i ? { ...it, checkerStatus: status } : it)));
@@ -14176,12 +14325,21 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
 
   return (
     <>
-    <Modal eyebrow={phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"} title={machine?.code || "Stroj"} onClose={onClose} wide>
+    <Modal
+      eyebrow={selfTransport ? (phase === "vratenie" ? "Osobné vrátenie v depe" : "Osobný odber v depe") : phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"}
+      title={machine?.code || "Stroj"}
+      onClose={onClose}
+      wide
+    >
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {job?.customer || "—"} · {phase === "vratenie" ? "Zvoz" : "Vývoz"} {(phase === "vratenie" ? job?.endDate : job?.startDate) ? fmtDate(phase === "vratenie" ? job.endDate : job.startDate) : "—"}
+        {job?.customer || "—"} · {selfTransport ? (phase === "vratenie" ? "Vrátenie do depa" : "Vyzdvihnutie v depe") : phase === "vratenie" ? "Zvoz" : "Vývoz"}{" "}
+        {(() => {
+          const d = phase === "vratenie" ? job?.pickupDate || job?.endDate : job?.departureDate || job?.startDate;
+          return d ? fmtDate(d) : "—";
+        })()}
         {job?.customerPhone && (
           <a href={`tel:${job.customerPhone}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
             <PhoneIcon size={12} /> {job.customerPhone}
@@ -14189,15 +14347,41 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         )}
       </div>
 
-      {phase === "vratenie" && (
+      {waitingForReturnProtocol ? (
+        <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Krok 1: protokol o vrátení so zákazníkom</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+            Zákazník vracia stroj sám. Najprv spíšte so zákazníkom protokol o vrátení (jeho podpis), potom sa tu odomkne kontrola stroja.
+          </div>
+          {canEdit && onOpenHandover && (
+            <button type="button" className="btn btn-accent" onClick={() => onOpenHandover("vratenie")}>📋 Protokol o vrátení</button>
+          )}
+        </div>
+      ) : phase === "vratenie" ? (
         handoverProtocol?.returnDone ? (
           <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
-            📋 Zobraziť protokol šoféra (zvoz)
+            📋 Zobraziť protokol o vrátení
           </button>
         ) : (
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Šofér zatiaľ nevyplnil protokol o vrátení.</div>
         )
+      ) : selfTransport && (
+        handoverDone ? (
+          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
+            📋 Zobraziť protokol o odovzdaní
+          </button>
+        ) : assignment.resolved && canEdit && onOpenHandover ? (
+          <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Kontrola je hotová — odovzdajte stroj zákazníkovi</div>
+            <button type="button" className="btn btn-accent" onClick={() => onOpenHandover("prevzatie")}>📋 Odovzdať zákazníkovi (protokol)</button>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+            Osobný odber — po uložení kontroly odovzdáte stroj zákazníkovi protokolom.
+          </div>
+        )
       )}
+      {!waitingForReturnProtocol && (<>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Predmet kontroly
       </div>
@@ -14289,7 +14473,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       )}
       {phase === "vratenie" && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-          Fotky po vrátení robí šofér pri zvoze — nájdete ich v protokole o vrátení.
+          {selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1)." : "Fotky po vrátení robí šofér pri zvoze — nájdete ich v protokole o vrátení."}
         </div>
       )}
 
@@ -14351,7 +14535,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           Upraviť môže len pridelený checker alebo administrátor.
         </div>
       )}
-      {!hardLocked && canEdit && !showForm && (
+      {!hardLocked && canEdit && !showForm && !waitingForReturnProtocol && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
           <button className="btn btn-ghost" onClick={() => setEditing(true)}>✏️ Upraviť kontrolu</button>
         </div>
@@ -14366,6 +14550,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           </div>
         </div>
       )}
+      </>)}
     </Modal>
     {confirmNoPhotos && (
       <ConfirmActionModal
@@ -14521,8 +14706,8 @@ function JobDetailModal({ job, machine, driverById, technicianById, depoCheckers
         <CardField label="Kam" value={job.toLocation} />
         <CardField label="Začiatok" value={fmtDate(job.startDate)} />
         <CardField label="Koniec" value={job.endDate ? fmtDate(job.endDate) : "— bez určeného konca —"} danger={!job.endDate && job.status !== "completed"} />
-        <CardField label="Šofér (vývoz)" value={job.driverId ? driverById[job.driverId]?.name : "— neurčený —"} />
-        <CardField label="Šofér (zvoz)" value={job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
+        <CardField label="Šofér (vývoz)" value={job.selfPickup ? "Vlastná doprava — osobný odber v depe" : job.driverId ? driverById[job.driverId]?.name : "— neurčený —"} />
+        <CardField label="Šofér (zvoz)" value={job.selfReturn ? "Vlastná doprava — vráti sám do depa" : job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"} />
         <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
         <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
         <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
@@ -14685,7 +14870,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
   // zákazníkom pri "Vytvoriť rezerváciu" (rovnaký vzor ako AddJobModal).
   const [pendingContacts, setPendingContacts] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
-    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+    () => (customers || []).find((c) => (c.firma || "").trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [toLocation, setToLocation] = useState(existing?.toLocation || "");
@@ -14930,6 +15115,29 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
+function TransportModeToggle({ selfMode, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {[[false, "Mateco doprava"], [true, "Vlastná doprava"]].map(([val, label]) => (
+        <button
+          key={label}
+          type="button"
+          className="btn"
+          onClick={() => onChange(val)}
+          style={{
+            flex: 1, fontSize: 12,
+            background: selfMode === val ? "var(--accent)" : "transparent",
+            color: selfMode === val ? "#fff" : "var(--text)",
+            border: "1px solid " + (selfMode === val ? "var(--accent)" : "var(--border)"),
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AddJobModal({ machines, drivers, technicians, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted, recordLocks, currentUser }) {
   // Mäkký zámok "edituje X" — len pri úprave existujúcej zákazky (nová zákazka
   // ešte nemá s kým kolidovať). Zapíše sa pri otvorení, obnovuje heartbeatom,
@@ -14947,19 +15155,23 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   const machine = machines.find((m) => m.id === machineId);
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
+  // Vlastná doprava zákazníka — volí sa zvlášť pre vývoz a zvoz (zákazník si
+  // môže stroj vyzdvihnúť sám a vrátime ho my, alebo naopak).
+  const [selfPickup, setSelfPickup] = useState(!!existing?.selfPickup);
+  const [selfReturn, setSelfReturn] = useState(!!existing?.selfReturn);
   const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
   // Pri úprave existujúcej zákazky treba selectedCustomerId dopočítať hneď
   // (podľa mena) — inak appka nevie, že zadané meno je už existujúci zákazník
   // v databáze, a nová kontaktná osoba by sa k nemu neuložila.
   const [selectedCustomerId, setSelectedCustomerId] = useState(
-    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+    () => (customers || []).find((c) => (c.firma || "").trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
   // Pri premene rezervácie na zákazku treba selectedCustomerId dopočítať rovnako
   // ako pri úprave existujúcej — inak appka nevie, že zákazník z rezervácie je už
   // v databáze, a kontaktné osoby sa nenatiahnu (kým sa zákazník znova neodklikne).
   useEffect(() => {
     if (existing || !prefillReservation) return;
-    const match = (customers || []).find((c) => c.firma.trim().toLowerCase() === (prefillReservation.customer || "").trim().toLowerCase());
+    const match = (customers || []).find((c) => (c.firma || "").trim().toLowerCase() === (prefillReservation.customer || "").trim().toLowerCase());
     if (match) {
       setSelectedCustomerId(match.id);
       setSelectedContacts(match.contacts || []);
@@ -15032,7 +15244,7 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
   // Koniec zákazky logicky nemôže byť pred jej začiatkom.
   const dateOrderInvalid = endDate && endDate < startDate;
 
-  const canSave = machineId && fromDepo.trim() && toLocation.trim() && customer.trim() && obchodnik && startDate && !conflict && !pendingPrep && !dateOrderInvalid;
+  const canSave = machineId && fromDepo.trim() && (selfPickup || toLocation.trim()) && customer.trim() && obchodnik && startDate && !conflict && !pendingPrep && !dateOrderInvalid;
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
@@ -15174,19 +15386,29 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
-          <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
-          <Field label="Šofér (vývoz)">
-            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
-              <option value="">— zatiaľ neurčený —</option>
-              {driverOptionsGrouped(drivers)}
-            </select>
+          <Field label={selfPickup ? "Kam (nepovinné)" : "Kam *"}><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Doprava pri vývoze">
+            <TransportModeToggle selfMode={selfPickup} onChange={setSelfPickup} />
           </Field>
+          <Field label="Doprava pri zvoze">
+            <TransportModeToggle selfMode={selfReturn} onChange={setSelfReturn} />
+          </Field>
+          {selfPickup ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>Zákazník si stroj vyzdvihne v depe — kontrolu aj odovzdanie robí checker depa.</div>
+          ) : (
+            <Field label="Šofér (vývoz)">
+              <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— zatiaľ neurčený —</option>
+                {driverOptionsGrouped(drivers)}
+              </select>
+            </Field>
+          )}
           <div />
-          <Field label="Dátum vývozu">
+          <Field label={selfPickup ? "Dátum vyzdvihnutia v depe" : "Dátum vývozu"}>
             <input type="date" value={departureDate} onChange={(e) => setDepartureDate(e.target.value)} style={{ width: "100%" }} />
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz).</div>
           </Field>
-          <Field label="Dátum zvozu">
+          <Field label={selfReturn ? "Dátum vrátenia do depa" : "Dátum zvozu"}>
             <input type="date" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa konca — dá sa zmeniť aj neskôr priamo v Prepravách.</div>
           </Field>
@@ -15226,7 +15448,9 @@ function AddJobModal({ machines, drivers, technicians, customers, blacklist, job
               _baseRev: existing?._rev,
               machineId,
               machineDisplayName: machine?.objekt === "Externý stroj" ? machineDisplayName.trim() : "",
-              driverId: driverId || null,
+              driverId: selfPickup ? null : driverId || null,
+              selfPickup,
+              selfReturn,
               fromDepo: fromDepo.trim(),
               toLocation: toLocation.trim(),
               customer: customer.trim(),
@@ -15977,7 +16201,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
     () => Object.fromEntries((customers || []).filter((c) => c.ico).map((c) => [c.ico.trim(), c])),
     [customers]
   );
-  const customerByName = useMemo(() => Object.fromEntries((customers || []).map((c) => [c.firma.trim().toLowerCase(), c])), [customers]);
+  const customerByName = useMemo(() => Object.fromEntries((customers || []).map((c) => [(c.firma || "").trim().toLowerCase(), c])), [customers]);
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -16852,6 +17076,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       <div style={{ maxWidth: Math.min(barWidths[j.id] || 100, 260), overflow: "hidden", padding: compactMode ? "1px 6px" : "3px 6px", lineHeight: 1.3 }}>
                         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {compactMode && hasNote ? "📝 " : ""}
+                          {j.selfPickup || j.selfReturn ? "🏢 " : ""}
                           {isDone ? `✓ ${label}` : noEnd ? `⚠ ${label}` : label}
                         </div>
                         {showNote && (
@@ -17700,6 +17925,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
+        <span>🏢 vlastná doprava zákazníka</span>
       </div>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {salespeople.map((s) => (
@@ -19544,7 +19770,7 @@ function ReportExternalServiceModal({ existing, today, customers, blacklist, onS
   // zákazníkom pri nahlásení (rovnaký vzor ako AddJobModal).
   const [pendingContacts, setPendingContacts] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
-    () => (customers || []).find((c) => c.firma.trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
+    () => (customers || []).find((c) => (c.firma || "").trim().toLowerCase() === (existing?.customer || "").trim().toLowerCase())?.id || null
   );
   const blacklistMatch = (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase());
   const [location, setLocation] = useState(existing?.location || "");
@@ -19879,7 +20105,7 @@ function EzAssignModal({ meas, ezTechs, onClose, onSave }) {
               {ezTechs.map((t) => <option key={t.id} value={t.id}>{t.name}{t.depo ? ` (${t.depo})` : ""}</option>)}
             </select>
           </Field>
-          <Field label="Spracovať do *">
+          <Field label="Termín spracovania *">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
           </Field>
         </div>
@@ -19998,7 +20224,7 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
                     </span>
                     {meas.assignedTechnicianId && (
                       <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: lateAssigned ? "var(--danger)" : "var(--accent)" }}>
-                        → {meas.assignedTechnicianName || "technik"} do {fmtDate(meas.assignedDate)}{lateAssigned ? " (po termíne)" : ""}
+                        → {meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)}{lateAssigned ? " (po termíne)" : ""}
                       </span>
                     )}
                   </div>
@@ -20629,7 +20855,14 @@ function ErpPozicovnaView({ handoverProtocols, jobs, machineById, onMark, onReve
               <tr key={h.id}>
                 <td data-label="Model" style={{ fontWeight: 600 }}>{machine?.type || "—"}</td>
                 <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{machine?.code || "—"}</td>
-                <td data-label="Zákazník">{job?.customer || "—"}</td>
+                <td data-label="Zákazník">
+                  {job?.customer || "—"}
+                  {(job?.selfPickup || job?.selfReturn) && (
+                    <span className="badge badge-warn" style={{ marginLeft: 6, fontSize: 10 }} title="Zákazník si stroj vyzdvihol/vrátil sám — bez fakturácie dopravy v danom smere">
+                      Vlastná doprava{job.selfPickup && job.selfReturn ? "" : job.selfPickup ? " (odber)" : " (vrátenie)"}
+                    </span>
+                  )}
+                </td>
                 <td data-label="Číslo zmluvy">{job?.cisloZmluvy || "—"}</td>
                 <td data-label="Vrátené">{h.returnDate ? fmtDate(h.returnDate) : "—"}</td>
                 {showHistory && <td data-label="Faktúra">{h.erpOrderNumber || "—"}</td>}
@@ -21992,13 +22225,13 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const ezLate = isEz && !ezAllDone && a.date < today;
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
                           const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
-                          const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
+                          const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.resolved ? "✓ " : ""}${a.self ? "🏢 " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = isEz
                             ? `Spracovanie meraní EZ (${ezOpen.length} z ${a.ezItems.length} čaká)${ezLate ? " — po termíne" : ""}: ${a.ezItems.map((x) => x.machineCode || "—").join(", ")}`
                             : a.kind === "udalost"
                             ? (a.poznamka || "Udalosť")
                             : isCheckerInspection
-                            ? `Kontrola stroja ${isReturnInspection ? "po vrátení" : "pred vývozom"} — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
+                            ? `${a.self ? (isReturnInspection ? "Osobné vrátenie v depe (protokol + kontrola)" : "Osobný odber v depe (kontrola + odovzdanie)") : `Kontrola stroja ${isReturnInspection ? "po vrátení" : "pred vývozom"}`} — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
                             : quickKind
                             ? quickKind.label
                             : `${machine?.code || a.stroj || "—"} · ${machineCurrentLocation(machine) || a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}`;
