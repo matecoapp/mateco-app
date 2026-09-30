@@ -64,10 +64,20 @@ self.addEventListener("push", (event) => {
     badge: `${self.registration.scope}icon-192.png`,
     data: { link: payload.link || null, notificationId: payload.notificationId || null },
   };
+  // Rovnaký druh (podľa názvu) nahradí predošlú neprečítanú push správu
+  // a pripočíta počet — namiesto 10 správ jedna „Názov (10)“.
+  const tag = payload.kind || title;
   event.waitUntil(
-    self.registration.showNotification(title, options).catch((e) => {
-      console.error("[sw] showNotification zlyhalo", e);
-    })
+    self.registration.getNotifications({ tag })
+      .then((prev) => {
+        const count = prev.reduce((sum, n) => sum + (n.data?.count || 1), 0) + 1;
+        return self.registration.showNotification(count > 1 ? `${title} (${count})` : title, {
+          ...options, tag, renotify: true, data: { ...options.data, count },
+        });
+      })
+      .catch((e) => {
+        console.error("[sw] showNotification zlyhalo", e);
+      })
   );
 });
 
