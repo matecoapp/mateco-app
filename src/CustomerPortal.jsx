@@ -61,8 +61,9 @@ function protocolEsc(s) {
 // zvyšku portálovej stránky. Ak sa šablóna zmení v App.jsx, treba ju zmeniť aj tu.
 function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
-  function sigBlock(dataUrl, label) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+  // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
+  function sigBlock(dataUrl, label, name) {
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(statusKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
@@ -143,8 +144,8 @@ function buildOfficialProtocolHtml(data) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${sigBlock(data.handoverCustomerSignature, "Podpis nájomcu")}
-        ${sigBlock(data.handoverDriverSignature, "Podpis prenajímateľa")}
+        ${sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
+        ${sigBlock(data.handoverDriverSignature, "Za prenajímateľa", data.handoverDriverName)}
       </div>`}
     </div>
     <div>
@@ -152,8 +153,8 @@ function buildOfficialProtocolHtml(data) {
       ${data.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${sigBlock(data.returnCustomerSignature, "Podpis nájomcu")}
-        ${sigBlock(data.returnDriverSignature, "Podpis prenajímateľa")}
+        ${sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
+        ${sigBlock(data.returnDriverSignature, "Za prenajímateľa", data.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
     </div>
@@ -457,7 +458,17 @@ export default function CustomerPortal({ token }) {
                   {data.machineType || "Stroj"}
                 </div>
                 {data.machineCode && <div style={{ fontSize: 13, color: "#6b6b6b" }}>Sériové číslo {data.machineCode}</div>}
-                {data.address && <div style={{ fontSize: 13, color: "#6b6b6b" }}>{data.address}</div>}
+                {data.address && !data.selfPickup && <div style={{ fontSize: 13, color: "#6b6b6b" }}>{data.address}</div>}
+                {data.selfPickup && (
+                  <div style={{ fontSize: 13, color: "#6b6b6b", marginTop: 4 }}>
+                    Vyzdvihnutie v depe {data.fromDepo || ""}{data.departureDate ? ` dňa ${fmtDate(data.departureDate)}` : ""}
+                  </div>
+                )}
+                {data.selfReturn && (
+                  <div style={{ fontSize: 13, color: "#6b6b6b", marginTop: 4 }}>
+                    Vrátenie do depa {data.returnDepo || data.fromDepo || ""}{data.pickupDate ? ` dňa ${fmtDate(data.pickupDate)}` : ""}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
