@@ -242,6 +242,8 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     missing_message: "Popíšte, prosím, čo sa deje.",
     missing_date: "Zvoľte, prosím, dátum.",
     invalid_token: "Tento odkaz už nie je platný.",
+    invalid_date: "Dátum nesmie byť v minulosti ani pred začiatkom prenájmu.",
+    not_realized: "Tento prenájom sa nerealizoval.",
   };
 
   async function handleSubmit() {
@@ -286,6 +288,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
           </div>
           <input
             type="date"
+            min={new Date().toLocaleDateString("sv-SE")}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
@@ -449,7 +452,7 @@ export default function CustomerPortal({ token }) {
                     borderRadius: 6,
                   }}
                 >
-                  {data.returnDone ? "Ukončené" : "Aktívny prenájom"}
+                  {data.notRealized ? "Nerealizovaná" : data.returnDone ? "Ukončené" : "Aktívny prenájom"}
                 </span>
               </div>
 
@@ -485,7 +488,12 @@ export default function CustomerPortal({ token }) {
               <div>
                 <RequestHistory requests={data.requests} />
 
-                {!data.returnDone && (
+                {data.notRealized && (
+                  <div style={{ fontSize: 13, color: "#6b6b6b", marginBottom: 14 }}>
+                    Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.
+                  </div>
+                )}
+                {!data.returnDone && !data.notRealized && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
                     <RequestForm
                       type="problem"
