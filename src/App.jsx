@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.711";
+const APP_VERSION = "1.0.712";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -2347,8 +2347,18 @@ function clearRecordLock(table, recordId, userId) {
   if (!userId) return;
   deleteRecordRow("record_locks", `${table}:${recordId}:${userId}`);
 }
+// Rozdiel hodín zariadenia voči serveru (lockedAt zapisuje DB, step61) — zlé hodiny
+// inak skryli cudzí zámok alebo nechali spadnutý visieť hodinu.
+let _clockOffsetMs = 0;
+async function syncServerClock() {
+  const t0 = Date.now();
+  const { data, error } = await supabase.rpc("server_now");
+  if (error || !data) return;
+  const t1 = Date.now();
+  _clockOffsetMs = new Date(data).getTime() - (t0 + t1) / 2;
+}
 function isLockActive(lock) {
-  return !!lock && Date.now() - new Date(lock.lockedAt).getTime() < LOCK_TTL_MS;
+  return !!lock && Date.now() + _clockOffsetMs - new Date(lock.lockedAt).getTime() < LOCK_TTL_MS;
 }
 // Nájde aktívny zámok od INÉHO používateľa na danom zázname — vlastný zámok sa
 // nezobrazuje (človek nemá vidieť banner "edituje X", keď X je on sám).
@@ -3747,6 +3757,7 @@ function DispatcherApp() {
       setEmployees(emp);
       setLoaded(true);
       finishInitialLoad();
+      syncServerClock();
       flushOutbox(); // dáta sa práve stiahli online, skús poslať aj rozpracované zápisy z minula
       flushPublicTokenClaims();
     })();
@@ -4286,6 +4297,10 @@ function DispatcherApp() {
         const emp = employees.find((e) => e.linkedUserId === id);
         if (emp && patch.role && patch.role !== emp.role && !["admin", "nezaradeny"].includes(patch.role)) {
           updateEmployee(emp.id, { role: patch.role }, { skipRoleSync: true });
+        }
+        // Účet bez prístupu — karta by inak ďalej figurovala vo výberoch šoférov/checkerov.
+        if (emp && !emp.archived && patch.role === "nezaradeny" && window.confirm(`Účet je teraz bez prístupu. Archivovať aj kartu zamestnanca ${emp.name}? (vypadne z výberov a jeho úlohy sa upracú)`)) {
+          setEmployeeArchived(emp.id, true, "Iné", "Účet bez prístupu (Správa používateľov)");
         }
       });
   }
@@ -6387,10 +6402,15 @@ function DispatcherApp() {
       damageId,
     }));
     persistAssignments((assignments) => [...assignments.filter((a) => !isReplaced(a)), ...newAssignments]);
+    // Ponechaní technici iných dep (vedúci technik BA) majú vlastný termín — karta ukáže najskorší.
+    const keptAssignments = assignments
+      .filter((a) => !a.kind && a.damageId === damageId && keep.includes(a.technicianId) && (a.date || "") >= today)
+      .sort((x, y) => (x.date || "").localeCompare(y.date || ""));
+    const cardDate = [...(ids.length ? [date] : []), ...keptAssignments.map((a) => a.date)].sort()[0] || date;
     persistDamages(
       (damages) => damages.map((d) =>
         d.id === damageId
-          ? { ...d, technicianId: [...ids, ...keep][0] || null, technicianIds: [...ids, ...keep], assignedDate: date, assignmentId: newAssignments[0]?.id || null }
+          ? { ...d, technicianId: [...ids, ...keep][0] || null, technicianIds: [...ids, ...keep], assignedDate: cardDate, assignmentId: newAssignments[0]?.id || keptAssignments[0]?.id || null }
           : d
       )
     );
@@ -6667,12 +6687,26 @@ function DispatcherApp() {
       // originalTechnicianId vyššie) v dňoch, ktoré už dovolenkou nie sú krytý,
       // sa vráti rovno pôvodnému (anchor) checkerovi, nech ju medzitým držal
       // ktokoľvek v reťazci náhrad.
+      // Aj kontroly zákaziek, čo vznikli počas dovolenky rovno u náhradníka (bez originalTechnicianId).
+      const freed = (d) => d >= s.startDate && d <= s.endDate && (vacationDates.length === 0 || d < newStart || d > newEnd);
+      const jobDepo = (x) => {
+        const j = jobs.find((jj) => jj.id === x.jobId);
+        return j ? (x.phase === "vratenie" ? j.returnDepo || j.fromDepo : j.fromDepo) : null;
+      };
       nextAssignments = nextAssignments.map((x) =>
-        x.kind === "kontrolaStroja" && !x.resolved && x.originalTechnicianId === technicianId &&
-        x.date >= s.startDate && x.date <= s.endDate && (vacationDates.length === 0 || x.date < newStart || x.date > newEnd)
+        x.kind === "kontrolaStroja" && !x.resolved && freed(x.date) &&
+        (x.originalTechnicianId === technicianId || (!x.originalTechnicianId && x.technicianId === s.substituteTechnicianId && jobDepo(x) === s.depo))
           ? { ...x, technicianId, originalTechnicianId: null }
           : x
       );
+    });
+    // Zrušená/skrátená dovolenka — zástup aj pôvodný checker sa to dozvedia.
+    frontier.forEach((r) => {
+      const sub = employees.find((e) => e.id === r.substituteTechnicianId);
+      const orig = employees.find((e) => e.id === technicianId);
+      const when = r.start === r.end ? fmtDate(r.start) : `${fmtDate(r.start)} – ${fmtDate(r.end)}`;
+      if (sub) pushNotification({ kind: "checker_inspection", roles: [], userName: sub.name, title: "Zastupovanie checkera zrušené", message: `${orig?.name || "Checker"} je späť — zastupovanie${r.depo ? ` (depo ${r.depo})` : ""} ${when} odpadá, kontroly sú znova jeho.`, link: { module: "servis", view: "plan", plannerDate: r.start } });
+      if (orig) pushNotification({ kind: "checker_inspection", roles: [], userName: orig.name, title: "Kontroly sú znova vaše", message: `Neprítomnosť ${when} bola zrušená — kontroly strojov${r.depo ? ` depa ${r.depo}` : ""} v týchto dňoch robíte vy.`, link: { module: "servis", view: "plan", plannerDate: r.start } });
     });
     let remainingSubs = checkerSubstitutions.filter((s) => s.originalTechnicianId !== technicianId);
     while (frontier.length > 0) {
