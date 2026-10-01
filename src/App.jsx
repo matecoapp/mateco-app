@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.715";
+const APP_VERSION = "1.0.716";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1761,7 +1761,7 @@ async function refreshOutboxCount() {
   const items = await idbGetAll("outbox");
   // Odmietnuté protokoly (a ich upozornenia) sa samé neodošlú — čakajú na dispečing.
   const blockedKeys = new Set(items.filter((x) => x?.rejectedNotified).map((x) => `${x.table}:${x.item?.id}`));
-  const blocked = items.filter((x) => x?.rejectedNotified || (x?.item?.afterProtocol && blockedKeys.has(x.item.afterProtocol))).length;
+  const blocked = items.filter((x) => x?.rejectedNotified || blockedKeys.has(x?.item?.afterProtocol || x?.afterProtocol)).length;
   _outboxCountListener?.(items.length, blocked);
 }
 // Názvy polí v hláškach o konflikte (offline zmena vs. zmena kolegu).
@@ -1782,6 +1782,15 @@ let _offlineQueueAllowed = false;
 let _offlineBlockedListener = null;
 function setOfflineBlockedListener(fn) {
   _offlineBlockedListener = fn;
+}
+// Kancelária bez signálu — každý zápis (aj vedľajší: upozornenie, nastavenie) sa zastaví hneď,
+// nie až po opakovaní (inak by po návrate signálu odišlo upozornenie k akcii, ktorá sa nevykonala).
+let _lastOfflineBlockAt = 0;
+function officeOffline(table) {
+  if (_offlineQueueAllowed || typeof navigator === "undefined" || navigator.onLine) return false;
+  _lastOfflineBlockAt = Date.now();
+  _offlineBlockedListener?.(table);
+  return true;
 }
 // Offline zmena termínu zákazky: ak kolega medzitým zmenil niektorý dátum, alebo by nové dátumy
 // kolidovali s inou zákazkou na stroji, platia dátumy z DB (a používateľ dostane hlášku).
@@ -2026,6 +2035,7 @@ async function writeWithRetry(key, value, attempt = 1) {
 // (opakovanie po výpadku tak neprepíše zmenu kolegu pri inom depe).
 const _lastBases = {};
 function saveKey(key, value, base) {
+  if (officeOffline("app_data")) return Promise.resolve();
   _lastValues[key] = value;
   // Pre opakovanie (retrySave) sa drží najstarší stav od posledného úspešného zápisu.
   if (base !== undefined) _lastBases[key] = { ...base, ...(_lastBases[key] || {}) };
@@ -2049,6 +2059,14 @@ function saveKey(key, value, base) {
       }
     }
     const ok = await writeWithRetry(key, toWrite);
+    if (!ok && !_offlineQueueAllowed) {
+      // Kancelária: neuložené nastavenie sa neskôr samo nezapíše (po návrate sa načíta aktuálny stav).
+      delete _lastValues[key];
+      delete _lastBases[key];
+      _saveStatusListener?.("ok", key);
+      _offlineBlockedListener?.("app_data");
+      return;
+    }
     if (ok === "denied") {
       // Oprávnenie chýba — opakovanie nepomôže, nezasekávať sa v nekonečnom pokuse.
       delete _lastValues[key];
@@ -2345,6 +2363,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("online", flushPublicTokenClaims);
 }
 function saveRecordRow(table, item, base) {
+  if (table !== "record_locks" && officeOffline(table)) return Promise.resolve();
   const qKey = `${table}:${item.id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const next = prev.then(async () => {
@@ -2400,6 +2419,7 @@ async function deleteRowWithRetry(table, id, attempt = 1) {
 // base: záznam v momente zmazania — offline zmazanie sa po návrate signálu vykoná len,
 // ak ho medzitým nikto nezmenil.
 function deleteRecordRow(table, id, base) {
+  if (table !== "record_locks" && officeOffline(table)) return Promise.resolve();
   const qKey = `${table}:${id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const next = prev.then(async () => {
@@ -2496,10 +2516,7 @@ async function deleteRecordRowsBatch(table, ids) {
 function makeRecordPersist(table, setState) {
   return (nextOrFn) => {
     // Kancelária bez signálu: zmena sa ani lokálne neurobí (inak by po návrate zmizla).
-    if (!_offlineQueueAllowed && typeof navigator !== "undefined" && !navigator.onLine && table !== "record_locks") {
-      _offlineBlockedListener?.(table);
-      return;
-    }
+    if (table !== "record_locks" && officeOffline(table)) return false;
     setState((prev) => {
       const next = typeof nextOrFn === "function" ? nextOrFn(prev) : nextOrFn;
       const prevById = new Map(prev.map((x) => [x.id, x]));
@@ -3538,6 +3555,8 @@ function DispatcherApp() {
   const toastTimer = useRef(null);
   // warn: upozornenie/chyba — bez „✓“, nech to nevyzerá ako úspech.
   function showToast(message, warn) {
+    // Akcia sa práve zastavila (kancelária bez signálu) — „✓ uložené“ by klamalo.
+    if (!warn && Date.now() - _lastOfflineBlockAt < 3000) return;
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(`${warn ? "⚠" : "✓"} ${message}`);
     toastTimer.current = setTimeout(() => setToast(null), 3000);
@@ -3822,8 +3841,9 @@ function DispatcherApp() {
       if (Date.now() - lastBlocked > 8000) {
         lastBlocked = Date.now();
         alert("Bez signálu sa táto zmena neuloží.\n\nOffline sa dajú vypĺňať len protokoly v teréne (šofér, technik). Skúste to znova, keď budete pripojení.");
+        // Po návrate spojenia načítať aktuálny stav (opakovane, ak prvý pokus ešte nevyjde).
+        [5000, 20000, 60000].forEach((ms) => setTimeout(() => resyncRef.current?.(), ms));
       }
-      setTimeout(() => resyncRef.current?.(), 5000);
     });
     setMergeConflictListener(async (table, item, fields, kind) => {
       const what = item?.customer || item?.code || item?.name || item?.firma || "záznam";
@@ -4886,6 +4906,7 @@ function DispatcherApp() {
   // depoCheckers je malý konfiguračný objekt ({depo: technicianId}, len 5 depí),
   // nie zoznam záznamov s vlastným ID — do tohto vzoru nezapadá, zostáva po starom.
   const persistDepoCheckers = useCallback((next, base) => {
+    if (officeOffline("app_data")) return;
     setDepoCheckers(next);
     saveKey("depoCheckers", next, base);
   }, []);
@@ -5135,6 +5156,7 @@ function DispatcherApp() {
     Object.entries(ROLE_PERM_ALIAS).forEach(([r, parent]) => { if (allRoles.includes(parent) && !allRoles.includes(r)) allRoles.push(r); });
     const newNotif = { id: uid(), createdAt: new Date().toISOString(), roles: allRoles, userName: userName || null, userId, createdById: system ? null : currentUser?.id || null, title, message, link: link || null, kind: kind || null, readBy: [], ...(afterProtocolId ? { afterProtocol: `handoverProtocols:${afterProtocolId}` } : {}) };
     if (deferred) return newNotif;
+    if (officeOffline("notifications")) return null;
     // Staré upozornenia (60+ dní) maže denne databáza (step58) — nie hodiny tohto zariadenia.
     setNotifications((prev) => [newNotif, ...prev]);
     saveRecordRow("notifications", newNotif);
@@ -5143,6 +5165,9 @@ function DispatcherApp() {
   // predtým jedno „prečítané“ prepísalo. Bez step56 sa použije pôvodný spôsob.
   async function markNotificationsRead(ids) {
     if (!currentUser || ids.length === 0) return;
+    // Kancelária bez signálu „prečítané“ neukladá (ani lokálne — po návrate by sa vrátilo).
+    if (!_offlineQueueAllowed && !navigator.onLine) return;
+    const before = notifications.filter((n) => ids.includes(n.id) && !n.readBy.includes(currentUser.id));
     setNotifications((prev) => prev.map((n) => (ids.includes(n.id) && !n.readBy.includes(currentUser.id) ? { ...n, readBy: [...n.readBy, currentUser.id] } : n)));
     let error;
     try {
@@ -5151,10 +5176,9 @@ function DispatcherApp() {
       error = e;
     }
     // Bez RPC, alebo bez signálu v teréne — cez bežný zápis (offline fronta); DB (step62) aj tak zmení len moje „prečítané“.
+    // (Stav je už lokálne zmenený — zapisuje sa priamo, porovnanie zoznamov by rozdiel nenašlo.)
     if (error && (error.code === "PGRST202" || error.code === "42883" || _offlineQueueAllowed)) {
-      persistNotifications(
-        (notifications) => notifications.map((n) => (ids.includes(n.id) && !n.readBy.includes(currentUser.id) ? { ...n, readBy: [...n.readBy, currentUser.id] } : n))
-      );
+      before.forEach((n) => saveRecordRow("notifications", { ...n, readBy: [...n.readBy, currentUser.id] }, n));
     }
   }
   function markNotificationRead(id) {
@@ -7590,6 +7614,7 @@ function DispatcherApp() {
   // Už vyriešené priradenie (checker kontrolu vykonal) sa nemení.
   // Nový checker depa preberie otvorené kontroly zákaziek toho depa.
   function saveDepoCheckers(nextRaw, formBase) {
+    if (officeOffline("app_data")) return; // presun kontrol by sa aj tak neuložil
     // Okno mohlo byť otvorené pred archiváciou checkera — neaktívnych nevracať.
     const active = (tid) => employees.some((e) => e.id === tid && !e.archived);
     const base = formBase || depoCheckers;
@@ -7809,6 +7834,7 @@ function DispatcherApp() {
   // mať zákazku otvorenú viac ľudí naraz. Ostatné volania (preprava, portál,
   // checker...) baseRev nezadávajú, tam sa _rev len potichu inkrementuje.
   function updateJob(id, patch, baseRev) {
+    if (officeOffline("jobs")) return false;
     const before = jobs.find((j) => j.id === id);
     if (before && baseRev !== undefined && (before._rev || 0) !== baseRev) {
       alert("Túto zákazku medzičasom zmenil niekto iný. Obnov stránku (F5) a uprav znova, nech sa nič neprepíše.");
@@ -8039,8 +8065,7 @@ function DispatcherApp() {
     if (!can(effectiveUser, "transport_assign_driver")) return false;
     const err = validateTransportDate(jobId, type, date);
     if (err) { alert(err); return false; }
-    updateJob(jobId, type === "vyvoz" ? { departureDate: date } : { pickupDate: date });
-    return true;
+    return updateJob(jobId, type === "vyvoz" ? { departureDate: date } : { pickupDate: date }) !== false;
   }
   function assignDriver(jobId, driverId) {
     if (!can(effectiveUser, "transport_assign_driver")) return;
