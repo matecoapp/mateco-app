@@ -452,7 +452,7 @@ export default function CustomerPortal({ token }) {
             <div style={{ padding: "16px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 12, color: "#6b6b6b" }}>Zákazka č.</div>
+                  <div style={{ fontSize: 12, color: "#6b6b6b" }}>{!data.code || data.code.includes(" · ") ? "Zákazka" : "Zákazka č."}</div>
                   <div style={{ fontSize: 15, fontWeight: 600 }}>{data.code || "—"}</div>
                 </div>
                 <span
