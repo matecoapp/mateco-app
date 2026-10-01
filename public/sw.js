@@ -15,16 +15,26 @@
 // CACHE_VERSION sa bumpuje ručne spolu s APP_VERSION v App.jsx (pri každom
 // vydaní appky) — inak by appka po vydaní novej verzie zostala niekomu
 // natrvalo zaseknutá na starej cache aj keď má signál.
-const CACHE_VERSION = "mateco-appshell-v2";
+const CACHE_VERSION = "mateco-appshell-v3";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   // Appshell (vstupná stránka) sa nacachuje hneď pri inštalácii pod pevným
   // kľúčom (scope appky), nech je k dispozícii aj pri úplne prvom offline
   // štarte cez URL s iným query stringom (napr. "?notif=..." z notifikácie).
+  // Spolu s ňou aj jej súbory (JS/CSS) — prvé načítanie prebehne ešte pred
+  // service workerom, takže by inak v cache chýbali a offline štart by zlyhal.
   event.waitUntil(
     fetch(self.registration.scope)
-      .then((res) => caches.open(CACHE_VERSION).then((cache) => cache.put(self.registration.scope, res)))
+      .then(async (res) => {
+        const cache = await caches.open(CACHE_VERSION);
+        const html = await res.clone().text();
+        await cache.put(self.registration.scope, res);
+        const urls = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css|png|svg|ico|webmanifest))"/g)]
+          .map((m) => new URL(m[1], self.registration.scope).href)
+          .filter((u) => u.startsWith(self.location.origin));
+        await Promise.all(urls.map((u) => fetch(u).then((r) => (r.ok ? cache.put(u, r) : null)).catch(() => {})));
+      })
       .catch(() => {})
   );
 });
