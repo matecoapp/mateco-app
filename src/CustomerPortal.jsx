@@ -63,7 +63,7 @@ function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${dataUrl ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(statusKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
@@ -244,6 +244,8 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     invalid_token: "Tento odkaz už nie je platný.",
     invalid_date: "Dátum nesmie byť v minulosti ani pred začiatkom prenájmu.",
     not_realized: "Tento prenájom sa nerealizoval.",
+    too_long: "Správa je príliš dlhá (najviac 2000 znakov).",
+    already_returned: "Stroj už bol vrátený — predĺženie nie je možné.",
   };
 
   async function handleSubmit() {
@@ -274,7 +276,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
   return (
     <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: 10 }}>
       {type === "problem" ? (
-        <textarea
+        <textarea maxLength={2000}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={3}
@@ -387,6 +389,12 @@ export default function CustomerPortal({ token }) {
             if (showLoading) setState("error");
             return;
           }
+          // Odkaz ešte nie je aktívny (pred vývozom stroja) — step58.
+          if (result && result.notYetActive) {
+            setData(result);
+            setState("notyet");
+            return;
+          }
           if (!result) {
             if (showLoading && attemptsLeft > 0) {
               setTimeout(() => { if (!cancelled) refetch(true, attemptsLeft - 1); }, 1500);
@@ -427,6 +435,11 @@ export default function CustomerPortal({ token }) {
         {state === "invalid" && (
           <div style={{ background: "#fff", borderRadius: 10, padding: 24, textAlign: "center", color: "#6b6b6b" }}>
             Tento odkaz už nie je platný.
+          </div>
+        )}
+        {state === "notyet" && (
+          <div style={{ background: "#fff", borderRadius: 10, padding: 24, textAlign: "center", color: "#6b6b6b" }}>
+            Odkaz bude aktívny od {fmtDate(data?.activeFrom)} — od dňa vývozu stroja.
           </div>
         )}
         {state === "error" && (
@@ -533,7 +546,7 @@ export default function CustomerPortal({ token }) {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                 <div style={{ fontSize: 12, color: "#999", fontWeight: 600 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
-                {data.handoverDone && !data.migratedWithoutHandover && (
+                {((data.handoverDone && !data.migratedWithoutHandover) || data.returnDone) && (
                   <button
                     onClick={() => {
                       const w = window.open("", "_blank");
@@ -548,7 +561,7 @@ export default function CustomerPortal({ token }) {
                 )}
               </div>
               {!data.handoverDone ? (
-                <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>Zatiaľ nevypísaný.</div>
+                <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>{data.returnDone ? "Prevzatie nebolo zdokumentované." : "Zatiaľ nevypísaný."}</div>
               ) : data.migratedWithoutHandover ? (
                 <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "10px 0" }}>
                   Stroj bol prevzatý pred zavedením tohto systému — prevzatie nie je zdokumentované.
@@ -564,7 +577,7 @@ export default function CustomerPortal({ token }) {
                   driverSig={data.handoverDriverSignature}
                 />
               )}
-              {data.handoverDone && (
+              {(data.handoverDone || data.returnDone) && (
                 data.returnDone ? (
                   <ProtocolPhase
                     title="Vrátenie"
