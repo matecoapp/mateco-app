@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.723";
+const APP_VERSION = "1.0.724";
 // Prehľad prepráv: hlavička dňa („Dnes · pi 2. 10.“ / „Po 5. 10.“) a deň v maile („na pondelok“).
 const SK_DAY_SHORT = ["ne", "po", "ut", "st", "št", "pi", "so"];
 const SK_DAY_ACC = ["nedeľu", "pondelok", "utorok", "stredu", "štvrtok", "piatok", "sobotu"];
@@ -13680,7 +13680,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
       </div>
 
       {summaryDriverIds.length > 0 && (
-        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
+        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "clip" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes a 2 pracovné dni{effectiveDriverFilter ? " (len vybraný šofér)" : ""} · ↑ vývoz · ↓ zvoz
           </div>
