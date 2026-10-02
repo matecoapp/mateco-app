@@ -26,7 +26,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.716";
+const APP_VERSION = "1.0.719";
 // Kto je checker pre dané depo k danému dátumu — najprv sa pozrie, či nie je
 // aktívna dočasná náhrada (napr. dovolenka checkera), inak vráti dedikovaného checkera.
 function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
@@ -1786,8 +1786,33 @@ function setOfflineBlockedListener(fn) {
 // Kancelária bez signálu — každý zápis (aj vedľajší: upozornenie, nastavenie) sa zastaví hneď,
 // nie až po opakovaní (inak by po návrate signálu odišlo upozornenie k akcii, ktorá sa nevykonala).
 let _lastOfflineBlockAt = 0;
-function officeOffline(table) {
-  if (_offlineQueueAllowed || typeof navigator === "undefined" || navigator.onLine) return false;
+let _blockedDataCleared = false;
+// Účet bez prístupu: offline kópia dát (zákazníci, kontakty…) zo zariadenia preč. Neodoslané
+// protokoly ostávajú — po obnovení prístupu odídu (deaktivácia omylom ich nezahodí).
+async function clearBlockedDeviceData(deleted) {
+  if (deleted) {
+    // „Zmazaný“ len ak to potvrdí server — prázdny zoznam profilov môže byť aj neplatný token.
+    // Platný používateľ bez vlastného profilu (ten vidí vždy) = profil zmazaný v platforme.
+    const { data, error } = await supabase.auth.getUser();
+    if (!(data?.user || error?.status === 403 || error?.status === 404 || error?.code === "user_not_found")) { _blockedDataCleared = false; return; }
+  }
+  idbClear("tables");
+}
+// Terén smie bez signálu len to, čo patrí k protokolom (rozhodnutie 1. 10.): protokol, kontrola checkera,
+// nové poškodenie (porucha/problém), meranie EZ, problém s prepravou na zákazke a upozornenia k tomu.
+// Plánovanie (pridelenia, úprava tiketu, mazanie) aj u vedúceho technika BA len online.
+function fieldOfflineAllowed(table, item, base, isDelete) {
+  if (!_offlineQueueAllowed || isDelete) return false;
+  if (["handoverProtocols", "protocolLogs", "ezMeasurements", "jobs"].includes(table)) return true;
+  if (item === undefined && ["notifications", "damages", "assignments"].includes(table)) return true; // rozhodne až záznam
+  if (table === "notifications") return !["assignment_service", "spare_parts"].includes(item?.kind);
+  if (table === "damages") return !base; // nové poškodenie áno, zmena existujúceho tiketu nie
+  if (table === "assignments") return item?.kind === "kontrolaStroja";
+  return false;
+}
+function officeOffline(table, item, base, isDelete) {
+  if (typeof navigator === "undefined" || navigator.onLine) return false;
+  if (fieldOfflineAllowed(table, item, base, isDelete)) return false;
   _lastOfflineBlockAt = Date.now();
   _offlineBlockedListener?.(table);
   return true;
@@ -1863,6 +1888,9 @@ async function flushOutboxOnce() {
     const qKey = `${table}:${item.id}`;
     // Cez tú istú frontu ako bežné ukladanie — nech sa neprebijú navzájom.
     const run = (_recordSaveQueues[qKey] || Promise.resolve()).then(async () => {
+      // Medzitým ho uložilo bežné ukladanie (záznam je vo fronte už počas opakovaní) — nič viac.
+      const still = await idbGet("outbox", qKey);
+      if (!still || JSON.stringify(still.item) !== JSON.stringify(item)) return;
       let toWrite = item;
       if ("base" in it) {
         const { data: fresh, error } = await supabase.from(table).select("id, data").eq("id", item.id).maybeSingle();
@@ -2170,6 +2198,9 @@ function mergeOnFresh(fresh, item, base, onConflict) {
       const added = mine.filter((x) => !b0.includes(x)), removed = b0.filter((x) => !mine.includes(x));
       out[k] = [...new Set([...fresh[k], ...added])].filter((x) => !removed.includes(x));
       out.technicianId = out[k][0] || null;
+      // Karta ukazuje najskorší termín z oboch pridelení.
+      const dates = [fresh.assignedDate, added.length ? item.assignedDate : null].filter(Boolean).sort();
+      if (dates.length) out.assignedDate = dates[0];
       continue;
     }
     if ((k === "technicianId" || k === "assignedDate" || k === "assignmentId") && Array.isArray(fresh.technicianIds)) {
@@ -2328,6 +2359,8 @@ async function claimJobPublicToken(jobId, candidateToken, attempt = 1) {
       return claimJobPublicToken(jobId, candidateToken, attempt + 1);
     }
     console.error("claimJobPublicToken zlyhalo, skúsi sa znova pri návrate signálu", jobId, e);
+    // Kancelária: bez signálu sa nič nezaraďuje na neskôr (odkaz si vygeneruje znova online).
+    if (!_offlineQueueAllowed) { _offlineBlockedListener?.("jobs"); return null; }
     idbPut("outbox", `publicTokenClaim:${jobId}`, { kind: "publicTokenClaim", jobId, candidateToken });
     refreshOutboxCount();
     return null;
@@ -2363,11 +2396,19 @@ if (typeof window !== "undefined") {
   window.addEventListener("online", flushPublicTokenClaims);
 }
 function saveRecordRow(table, item, base) {
-  if (table !== "record_locks" && officeOffline(table)) return Promise.resolve();
+  if (table !== "record_locks" && officeOffline(table, item, base)) return Promise.resolve();
   const qKey = `${table}:${item.id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
+  const queueIt = () => idbGet("outbox", qKey)
+    .then((queued) => idbPut("outbox", qKey, { table, item, base: queued && "base" in queued ? queued.base : base || null }))
+    .then(refreshOutboxCount);
   const next = prev.then(async () => {
     _saveStatusListener?.("pending", table);
+    // Terén bez signálu: do fronty hneď (nie až po opakovaniach) — F5 / zavretie karty ho nestratí.
+    if (typeof navigator !== "undefined" && !navigator.onLine && table !== "record_locks" && fieldOfflineAllowed(table, item, base)) {
+      _retryActions[table] = flushOutbox;
+      await queueIt();
+    }
     const ok = await writeRecordRowWithRetry(table, item);
     if (ok === "denied") {
       delete _retryActions[table];
@@ -2380,12 +2421,15 @@ function saveRecordRow(table, item, base) {
       // Opakovanie len cez frontu (zlúčenie nad čerstvým riadkom) — nie slepý zápis starej kópie.
       // Zámok „práve edituje“ sa offline nedoručuje (po návrate už nemá zmysel).
       if (table === "record_locks") return;
-      if (!_offlineQueueAllowed) { _saveStatusListener?.("ok", table); _offlineBlockedListener?.(table); return; }
+      if (!fieldOfflineAllowed(table, item, base)) {
+        _saveStatusListener?.("ok", table);
+        // Upozornenie k už uloženej zmene (výpadok len na chvíľu) — bez zavádzajúcej hlášky „neuloží sa“.
+        if (table !== "notifications") _offlineBlockedListener?.(table);
+        return;
+      }
       _retryActions[table] = flushOutbox;
       // base = stav pred prvou neodoslanou zmenou (pri ďalších zmenách ostáva pôvodný)
-      idbGet("outbox", qKey)
-        .then((queued) => idbPut("outbox", qKey, { table, item, base: queued && "base" in queued ? queued.base : base || null }))
-        .then(refreshOutboxCount);
+      queueIt();
     }
     _saveStatusListener?.(ok ? "ok" : "error", table);
   });
@@ -2419,7 +2463,7 @@ async function deleteRowWithRetry(table, id, attempt = 1) {
 // base: záznam v momente zmazania — offline zmazanie sa po návrate signálu vykoná len,
 // ak ho medzitým nikto nezmenil.
 function deleteRecordRow(table, id, base) {
-  if (table !== "record_locks" && officeOffline(table)) return Promise.resolve();
+  if (table !== "record_locks" && officeOffline(table, null, base, true)) return Promise.resolve();
   const qKey = `${table}:${id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const next = prev.then(async () => {
@@ -2435,7 +2479,7 @@ function deleteRecordRow(table, id, base) {
     } else {
       // Offline — zmazanie sa dokončí po návrate signálu (flushOutbox), len v teréne.
       if (table === "record_locks") return;
-      if (!_offlineQueueAllowed) { _saveStatusListener?.("ok", table); _offlineBlockedListener?.(table); return; }
+      if (!fieldOfflineAllowed(table, null, base, true)) { _saveStatusListener?.("ok", table); _offlineBlockedListener?.(table); return; }
       _retryActions[table] = flushOutbox;
       idbPut("outbox", `${table}:${id}`, { table, id, deleted: true, ...(base ? { base } : {}) }).then(refreshOutboxCount);
     }
@@ -2516,6 +2560,8 @@ async function deleteRecordRowsBatch(table, ids) {
 function makeRecordPersist(table, setState) {
   return (nextOrFn) => {
     // Kancelária bez signálu: zmena sa ani lokálne neurobí (inak by po návrate zmizla).
+    // Kancelária a tabuľky, ktoré terén offline nesmie, sa zastavia hneď (zmena sa ani neukáže);
+    // pri tabuľkách so zmiešaným pravidlom rozhodne až záznam v saveRecordRow.
     if (table !== "record_locks" && officeOffline(table)) return false;
     setState((prev) => {
       const next = typeof nextOrFn === "function" ? nextOrFn(prev) : nextOrFn;
@@ -3838,9 +3884,10 @@ function DispatcherApp() {
     let lastBlocked = 0;
     setOfflineBlockedListener(() => {
       // Viac zápisov jednej akcie = jedna hláška; po návrate spojenia sa načíta aktuálny stav.
-      if (Date.now() - lastBlocked > 8000) {
+      if (Date.now() - lastBlocked > 1500) { // jedna akcia = jedna hláška, ďalšia akcia znova
         lastBlocked = Date.now();
         alert("Bez signálu sa táto zmena neuloží.\n\nOffline sa dajú vypĺňať len protokoly v teréne (šofér, technik). Skúste to znova, keď budete pripojení.");
+        lastBlocked = Date.now(); // čas čítania hlášky sa nepočíta — zvyšné zápisy tej istej akcie bez ďalšej hlášky
         // Po návrate spojenia načítať aktuálny stav (opakovane, ak prvý pokus ešte nevyjde).
         [5000, 20000, 60000].forEach((ms) => setTimeout(() => resyncRef.current?.(), ms));
       }
@@ -4541,6 +4588,7 @@ function DispatcherApp() {
     setProfiles((prev) => prev.map((p) => (p.id === profileId ? { ...p, role } : p)));
   }
   function updateProfileInfo(id, patch) {
+    if (officeOffline("profiles")) return;
     supabase
       .from("profiles")
       .update(patch)
@@ -4571,6 +4619,7 @@ function DispatcherApp() {
       });
   }
   function deleteProfile(id) {
+    if (officeOffline("profiles")) return;
     supabase
       .from("profiles")
       .delete()
@@ -4584,6 +4633,11 @@ function DispatcherApp() {
           return;
         }
         setProfiles((prev) => prev.filter((p) => p.id !== id));
+        // Účet je preč — karta (checker depa, šofér) by inak ostala vo výberoch a dostávala úlohy.
+        const emp = employees.find((e) => e.linkedUserId === id && !e.archived);
+        if (emp && window.confirm(`Účet je zmazaný. Archivovať aj kartu zamestnanca ${emp.name}? (vypadne z výberov, prestane byť checkerom depa a jeho úlohy sa upracú)`)) {
+          setEmployeeArchived(emp.id, true, "Iné", "Účet zmazaný", true); // účet už neexistuje — rolu nemeniť
+        }
         // Karta zamestnanca sa od zmazaného účtu odpojí (dá sa prepojiť na nový).
         persistEmployees((list) => list.map((e) => (e.linkedUserId === id ? { ...e, linkedUserId: null } : e)));
       });
@@ -4632,12 +4686,13 @@ function DispatcherApp() {
       }
     }
   }
-  function setEmployeeArchived(id, archived, reason, note) {
+  function setEmployeeArchived(id, archived, reason, note, skipProfile) {
+    if (officeOffline("employees")) return;
     // Archivovaný zamestnanec stráca prístup (účet → nezaradený); po aktivácii
     // dostane účet späť rolu zamestnanca. Admin účtov sa to netýka.
     const emp = employees.find((e) => e.id === id);
     const linkedProfile = emp?.linkedUserId ? profiles.find((p) => p.id === emp.linkedUserId) : null;
-    if (linkedProfile && !isAdminUser(linkedProfile)) setProfileRole(linkedProfile.id, archived ? "nezaradeny" : emp.role);
+    if (linkedProfile && !isAdminUser(linkedProfile) && !skipProfile) setProfileRole(linkedProfile.id, archived ? "nezaradeny" : emp.role);
     if (archived && emp) {
       if (emp.role === "technik") {
         detachTechnicianWork(id);
@@ -4652,6 +4707,23 @@ function DispatcherApp() {
       dropDepoChecker(emp);
       // Ako zástup by ďalej dostával kontroly.
       persistCheckerSubstitutions((cur) => cur.filter((s) => s.substituteTechnicianId !== id));
+      if (emp.role === "sofer" || emp.role === "externy_sofer") {
+        // Nevykonané prepravy sa uvoľnia (inak by ich nikto neodviezol); vykonané ostávajú ako história.
+        const hpOf = (jid) => handoverProtocols.find((h) => h.jobId === jid);
+        const open = (j) => j.status !== "completed" && !j.notRealized;
+        const vyvoz = jobs.filter((j) => j.driverId === id && open(j) && !hpOf(j.id)?.handoverDone);
+        // Zvoz čaká práve na ukončenej (ešte nevrátenej) zákazke.
+        const zvoz = jobs.filter((j) => j.returnDriverId === id && !j.notRealized && !hpOf(j.id)?.returnDone);
+        if (vyvoz.length || zvoz.length) {
+          persistJobs((cur) => cur.map((j) => {
+            const patch = {};
+            if (vyvoz.some((x) => x.id === j.id) && j.driverId === id) patch.driverId = null;
+            if (zvoz.some((x) => x.id === j.id) && j.returnDriverId === id) patch.returnDriverId = null;
+            return Object.keys(patch).length ? { ...j, ...patch } : j;
+          }));
+          pushNotification({ kind: "assignment_transport", roles: ["dispecer_pozicovne", "veduci_pozicovne"], title: "Prepravy bez šoféra", message: `${emp.name || "Šofér"} bol archivovaný — ${((n) => `${n} ${n === 1 ? "preprava je" : n < 5 ? "prepravy sú" : "prepráv je"}`)(vyvoz.length + zvoz.length)} bez šoféra. Prideľte ich v Prepravách.`, link: { module: "poziciovna", view: "prepravy" } });
+        }
+      }
     }
     persistEmployees(
       (employees) => employees.map((e) =>
@@ -4681,6 +4753,7 @@ function DispatcherApp() {
     }
   }
   function deleteEmployee(id) {
+    if (officeOffline("employees")) return;
     const emp = employees.find((e) => e.id === id);
     // Zmazaný zamestnanec stráca prístup rovnako ako archivovaný.
     const linkedProfile = emp?.linkedUserId ? profiles.find((p) => p.id === emp.linkedUserId) : null;
@@ -4694,7 +4767,13 @@ function DispatcherApp() {
     // v prepravách.
     if (emp?.role === "technik") {
       detachTechnicianWork(id);
-      persistWeeklyDuty((weeklyDuty) => weeklyDuty.filter((w) => w.technicianId !== id));
+      // Len budúce týždne (minulé ostávajú ako história) — vedúci servisu sa to dozvie.
+      const weekNow = weekRangeFor(todayISO()).weekStart;
+      const duty = weeklyDuty.filter((w) => w.technicianId === id && (w.weekStart || "") >= weekNow);
+      if (duty.length) {
+        persistWeeklyDuty((cur) => cur.filter((w) => !duty.some((x) => x.id === w.id)));
+        pushNotification({ kind: "assignment_service", roles: ["veduci_servisu"], title: "Služba na telefóne bez technika", message: `${emp.name || "Technik"} bol zmazaný — v ${duty.length} ${duty.length === 1 ? "týždni" : "týždňoch"} služby na telefóne nikto nie je. Nastavte ju v pláne servisu.`, link: { module: "servis", view: "plan" } });
+      }
       persistCheckerSubstitutions((checkerSubstitutions) => checkerSubstitutions.filter((s) => s.originalTechnicianId !== id && s.substituteTechnicianId !== id));
       if (emp) dropDepoChecker(emp);
     } else if (emp?.role === "sofer" || emp?.role === "externy_sofer") {
@@ -4840,6 +4919,7 @@ function DispatcherApp() {
   // appku hneď zhodil. Takto sa vyhodnotí až pri skutočnom volaní (klik na
   // "Obnoviť"), kedy už majú všetky svoju hodnotu.
   function restoreFromTrash(trashEntry) {
+    if (officeOffline("trash")) return;
     const RESTORE_PERSIST = {
       jobs: persistJobs, machines: persistMachines, customers: persistCustomers, reservations: persistReservations,
       damages: persistDamages, employees: persistEmployees, machineModels: persistMachineModels,
@@ -4856,6 +4936,11 @@ function DispatcherApp() {
       return;
     }
     // Obnovená zákazka nesmie obsadiť stroj, ktorý má medzitým inú zákazku/rezerváciu (aj ukončenú).
+    // Schválená rezervácia tiež obsadzuje stroj.
+    if (trashEntry.originalTable === "reservations" && record?.status === "approved") {
+      const conflict = findMachineConflict(jobs, reservations.filter((r) => r.id !== record.id), record.machineId, null, record.expectedStart, record.expectedEnd);
+      if (conflict) { alert(`Rezerváciu nie je možné obnoviť — ${conflict}`); return; }
+    }
     if (trashEntry.originalTable === "jobs" && record && !record.notRealized) {
       const conflict = findMachineConflict(jobs, reservations, record.machineId, record.id, jobFrom(record), jobTo(record));
       if (conflict) { alert(`Zákazku nie je možné obnoviť — ${conflict}`); return; }
@@ -4921,28 +5006,38 @@ function DispatcherApp() {
     // dookola). Ostatné necháva na denné čistenie v DB (step58).
     if (!loaded || checkerSubstitutions.length === 0 || !can(currentUser, "plan_quick_events") && !["veduci_pozicovne"].includes(currentUser?.role) && !isAdminUser(currentUser)) return;
     const stillActive = checkerSubstitutions.filter((s) => s.endDate >= today);
-    if (stillActive.length !== checkerSubstitutions.length) {
+    // Bez signálu nič (inak hláška „neuloží sa“ bez akcie používateľa); po návrate sa efekt spustí znova.
+    if (stillActive.length !== checkerSubstitutions.length && navigator.onLine) {
       persistCheckerSubstitutions((subs) => subs.filter((s) => s.endDate >= today));
     }
   }, [loaded, today, checkerSubstitutions, persistCheckerSubstitutions, currentUser]);
 
   function deleteCheckerSubstitution(id) {
+    if (officeOffline("checkerSubstitutions")) return; // aj vedúci technik BA v teréne — plánovanie len online
     const sb = checkerSubstitutions.find((x) => x.id === id);
     persistCheckerSubstitutions((checkerSubstitutions) => checkerSubstitutions.filter((s) => s.id !== id));
     if (!sb || (sb.endDate || "9999") < todayISO()) return;
     // Plynúca/budúca náhrada — kontroly v tých dňoch sa vrátia pôvodnému checkerovi a všetci sa to dozvedia.
     const inRange = (d) => d >= sb.startDate && d <= sb.endDate;
-    persistAssignments((cur) => cur.map((a) =>
-      a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === sb.substituteTechnicianId && inRange(a.date)
-        && (a.originalTechnicianId === sb.originalTechnicianId || (!a.originalTechnicianId && (() => { const j = jobs.find((jj) => jj.id === a.jobId); return j && (a.phase === "vratenie" ? j.returnDepo || j.fromDepo : j.fromDepo) === sb.depo; })()))
-        ? { ...a, technicianId: sb.originalTechnicianId, originalTechnicianId: null }
-        : a
-    ));
+    const otherSubs = checkerSubstitutions.filter((x) => x.id !== sb.id);
+    const newChecker = (d) => resolveCheckerId(depoCheckers, otherSubs, sb.depo, d) || sb.originalTechnicianId;
+    const moves = (a) => a.kind === "kontrolaStroja" && !a.resolved && a.technicianId === sb.substituteTechnicianId && inRange(a.date)
+      && (a.originalTechnicianId === sb.originalTechnicianId || (!a.originalTechnicianId && (() => { const j = jobs.find((jj) => jj.id === a.jobId); return j && (a.phase === "vratenie" ? j.returnDepo || j.fromDepo : j.fromDepo) === sb.depo; })()));
+    // Komu kontroly naozaj pripadnú (môže to byť viac ľudí — iné zastupovanie len na časť dní).
+    const receivers = [...new Set(assignments.filter(moves).map((a) => newChecker(a.date)))];
+    persistAssignments((cur) => cur.map((a) => (moves(a) ? { ...a, technicianId: newChecker(a.date), originalTechnicianId: null } : a)));
     const sub = employees.find((e) => e.id === sb.substituteTechnicianId);
     const orig = employees.find((e) => e.id === sb.originalTechnicianId);
     const when = `${fmtDate(sb.startDate)}–${fmtDate(sb.endDate)}`;
     if (sub) pushNotification({ kind: "checker_inspection", roles: [], userName: sub.name, title: "Zastupovanie checkera zrušené", message: `Zastupovanie za ${orig?.name || "checkera"}${sb.depo ? ` (depo ${sb.depo})` : ""} ${when} bolo zrušené — kontroly v týchto dňoch nerobíte.`, link: { module: "servis", view: "plan", plannerDate: sb.startDate } });
-    pushNotification({ kind: "checker_inspection", roles: ["veduci_servisu", "veduci_pozicovne"], title: "Depo bez checkera počas neprítomnosti", message: `Náhrada za ${orig?.name || "checkera"}${sb.depo ? ` (depo ${sb.depo})` : ""} ${when} bola zmazaná. Nastavte nový zástup v pláne servisu — kontroly v týchto dňoch sa zatiaľ vrátili ${orig?.name || "pôvodnému checkerovi"}.`, link: { module: "servis", view: "plan", plannerDate: sb.startDate } });
+    // Kto kontroly naozaj dostal (aktuálny checker depa / iné zastupovanie, inak pôvodný).
+    const nextIds = receivers.length ? receivers : [newChecker(sb.startDate)];
+    const nexts = nextIds.map((nid) => employees.find((e) => e.id === nid)).filter(Boolean);
+    const link = { module: "servis", view: "plan", plannerDate: sb.startDate };
+    nexts.filter((n) => n.id !== sub?.id).forEach((next) => pushNotification({ kind: "checker_inspection", roles: [], userName: next.name, title: next.id === orig?.id ? "Kontroly sú znova vaše" : "Prevzatá kontrola stroja (zastupovanie)", message: `Zastupovanie za ${orig?.name || "checkera"}${sb.depo ? ` (depo ${sb.depo})` : ""} ${when} bolo zrušené — kontroly strojov, ktoré vám pripadli, robíte vy.`, link }));
+    const others = nexts.filter((n) => n.id !== orig?.id);
+    if (others.length) pushNotification({ kind: "checker_inspection", roles: ["veduci_servisu", "veduci_pozicovne"], title: "Zastupovanie checkera zmazané", message: `Náhrada za ${orig?.name || "checkera"}${sb.depo ? ` (depo ${sb.depo})` : ""} ${when} bola zmazaná — kontroly v týchto dňoch dostal ${nexts.map((n) => n.name).join(", ")}.`, link });
+    else pushNotification({ kind: "checker_inspection", roles: ["veduci_servisu", "veduci_pozicovne"], title: "Depo bez checkera počas neprítomnosti", message: `Náhrada za ${orig?.name || "checkera"}${sb.depo ? ` (depo ${sb.depo})` : ""} ${when} bola zmazaná. Nastavte nový zástup v pláne servisu — kontroly v týchto dňoch sa zatiaľ vrátili ${orig?.name || "pôvodnému checkerovi"}.`, link });
   }
 
   const persistFramoveZmluvy = useCallback(makeRecordPersist("framoveZmluvy", setFramoveZmluvy), []);
@@ -5124,14 +5219,26 @@ function DispatcherApp() {
 
   // Zaznamená, že preprava daného šoféra na daný deň bola práve odoslaná mailom —
   // nabudúce platforma vie porovnať, či pribudlo niečo nové, a neposielať ticho duplicitu.
-  function recordTransportSend(driverId, date, transportIds) {
-    persistTransportSendLog((log) => [...log.filter((l) => !(l.driverId === driverId && l.date === date)), { id: uid(), driverId, date, sentAt: new Date().toISOString(), transportIds }]);
+  // Okno jedného typu (vývoz/zvoz) prepíše len svoj typ — prepravy druhého typu v zázname ostanú.
+  const transportType = (id) => String(id).split("-").pop();
+  // types = typy, ktoré dané miesto zobrazuje (prehľad oba, okno „Vývoz/Zvoz zajtra“ len svoj).
+  const ALL_TRANSPORT_TYPES = ["vyvoz", "zvoz"];
+  function recordTransportSend(driverId, date, transportIds, typeList = ALL_TRANSPORT_TYPES) {
+    const types = new Set(typeList);
+    persistTransportSendLog((log) => {
+      const prev = log.find((l) => l.driverId === driverId && l.date === date);
+      const keep = (prev?.transportIds || []).filter((id) => !types.has(transportType(id)));
+      return [...log.filter((l) => !(l.driverId === driverId && l.date === date)), { id: uid(), driverId, date, sentAt: new Date().toISOString(), transportIds: [...keep, ...transportIds] }];
+    });
   }
-  function getTransportSendStatus(driverId, date, currentIds) {
+  function getTransportSendStatus(driverId, date, currentIds, typeList = ALL_TRANSPORT_TYPES) {
+    const types = new Set(typeList);
     const log = transportSendLog.find((l) => l.driverId === driverId && l.date === date);
-    if (!log) return { sent: false };
+    // Okno „Vývoz zajtra“ po odoslaní len zvozov — vývozy ešte odoslané neboli.
+    if (!log || !log.transportIds.some((id) => types.has(transportType(id)))) return { sent: false };
     // Pribudnuté aj ubudnuté (presunuté/zrušené) prepravy — šofér má v maile neplatný zoznam.
-    const newCount = currentIds.filter((id) => !log.transportIds.includes(id)).length + log.transportIds.filter((id) => !currentIds.includes(id)).length;
+    // Ubudnuté sa rátajú len z typov, ktoré toto miesto zobrazuje (okno „Vývoz zajtra“ nevidí zvozy).
+    const newCount = currentIds.filter((id) => !log.transportIds.includes(id)).length + log.transportIds.filter((id) => types.has(transportType(id)) && !currentIds.includes(id)).length;
     return { sent: true, sentAt: log.sentAt, newCount };
   }
 
@@ -5156,7 +5263,7 @@ function DispatcherApp() {
     Object.entries(ROLE_PERM_ALIAS).forEach(([r, parent]) => { if (allRoles.includes(parent) && !allRoles.includes(r)) allRoles.push(r); });
     const newNotif = { id: uid(), createdAt: new Date().toISOString(), roles: allRoles, userName: userName || null, userId, createdById: system ? null : currentUser?.id || null, title, message, link: link || null, kind: kind || null, readBy: [], ...(afterProtocolId ? { afterProtocol: `handoverProtocols:${afterProtocolId}` } : {}) };
     if (deferred) return newNotif;
-    if (officeOffline("notifications")) return null;
+    if (officeOffline("notifications", newNotif)) return null;
     // Staré upozornenia (60+ dní) maže denne databáza (step58) — nie hodiny tohto zariadenia.
     setNotifications((prev) => [newNotif, ...prev]);
     saveRecordRow("notifications", newNotif);
@@ -5351,6 +5458,7 @@ function DispatcherApp() {
           .join(", ");
         const when = parsed?.exportedAt ? ` zo dňa ${fmtDate(String(parsed.exportedAt))}` : "";
         if (!window.confirm(`Naozaj obnoviť zálohu${when}?\n\nAktuálne dáta sa NAHRADIA obsahom zálohy (${counts}). Záznamy, ktoré v zálohe nie sú, sa zmažú. Túto akciu nie je možné vrátiť.`)) return;
+        if (officeOffline("app_data")) return; // bez signálu by sa obnovila len časť
         if (Array.isArray(data.machines)) persistMachines(data.machines);
         if (Array.isArray(data.vehicles)) persistVehicles(data.vehicles);
         if (Array.isArray(data.jobs)) persistJobs(data.jobs);
@@ -5587,6 +5695,7 @@ function DispatcherApp() {
 
   const persistReservations = useCallback(makeRecordPersist("reservations", setReservations), []);
   function addReservation(data) {
+    if (officeOffline("reservations")) return false;
     const autoApproved = can(effectiveUser, "reservation_convert"); // dispečer/vedúci požičovne si schvália sami
     // requestedAsJob — obchodník už vie, že ide o istotu, nie len o rezerváciu
     // na vyjednávanie. Ukladá sa stále ako rezervácia (rovnaké polia, rovnaké
@@ -6142,6 +6251,18 @@ function DispatcherApp() {
       });
     }
     let recordId;
+    // Oprava už spracovaného (fakturovaného) vrátenia — späť medzi nespracované a fakturant sa to dozvie.
+    const META = ["_rev", "editedBy", "editedAt", "erpProcessed", "erpProcessedAt", "erpProcessedBy", "erpOrderNumber"];
+    if (existing?.erpProcessed && existing.returnDone && Object.keys(toWrite).some((k) => !META.includes(k) && !eq(toWrite[k], existing[k]))) {
+      toWrite = { ...toWrite, erpProcessed: false };
+      pushNotification({
+        kind: "handover_protocol",
+        roles: ["fakturant_pozicovna"],
+        title: "Opravený protokol o vrátení",
+        message: `${currentUser?.name || "Dispečer"} opravil už spracovaný protokol o vrátení — stroj ${machine?.code || "—"} (${job?.customer || "—"}). Skontrolujte fakturáciu.`,
+        link: { module: "poziciovna", view: "jobs", jobId },
+      });
+    }
     if (existing) {
       persistHandoverProtocols((handoverProtocols) => handoverProtocols.map((h) => (h.id === existing.id ? { ...h, ...toWrite, _rev: (h._rev || 0) + 1 } : h)));
       recordId = existing.id;
@@ -6445,6 +6566,7 @@ function DispatcherApp() {
   // baseRev: rovnaká poistka ako pri updateJob — zadaná z ResolveDamageModal,
   // kde na tom istom poškodení môže robiť aj dispečer servisu aj vedúci naraz.
   function resolveDamage(damageId, stav, opravaDatum, opravaKomentar, baseRev) {
+    if (officeOffline("damages", null, true)) return false; // zmena existujúceho tiketu len online
     const d = damages.find((x) => x.id === damageId);
     if (d && baseRev !== undefined && (d._rev || 0) !== baseRev) {
       alert("Toto poškodenie medzičasom zmenil niekto iný. Obnov stránku (F5) a uprav znova, nech sa nič neprepíše.");
@@ -6554,9 +6676,16 @@ function DispatcherApp() {
   async function convertPortalRequestToDamage(request) {
     // Dvojklik (kým beží overenie) — druhý klik nič nerobí.
     if (convertingRequestsRef.current.has(request.id)) return;
+    if (officeOffline("damages", null, true)) return;
     convertingRequestsRef.current.add(request.id);
     // Dvaja dispečeri naraz → dve poškodenia; overiť čerstvý stav žiadosti.
-    const { data: freshReq } = await supabase.from("portal_requests").select("data").eq("id", request.id).maybeSingle();
+    const { data: freshReq, error: freshErr } = await supabase.from("portal_requests").select("data").eq("id", request.id).maybeSingle();
+    if (freshErr) {
+      // Výpadok spojenia — nič nezaložiť (inak by sa poškodenie založilo samo po návrate), dá sa kliknúť znova.
+      convertingRequestsRef.current.delete(request.id);
+      alert("Spojenie sa nepodarilo — žiadosť sa nespracovala. Skúste to znova.");
+      return;
+    }
     if (freshReq && freshReq.data?.status !== "pending") {
       alert("Túto žiadosť už medzičasom spracoval niekto iný.");
       return;
@@ -6725,7 +6854,7 @@ function DispatcherApp() {
         if (x.id !== d.id) return x;
         // eslint-disable-next-line no-unused-vars
         const { vykonanaDatum, vykonanaDatumZZ, vykonanaDatumEZ, previousRevizia, previousReviziaEZ, previousUradnaSkuska, setZZ, setEZ, setUS, ...rest } = x;
-        return { ...rest, resolved: false };
+        return { ...rest, resolved: false, ...unassignIfNoTask(x) };
       })
     );
   }
@@ -6751,6 +6880,7 @@ function DispatcherApp() {
     }));
   }
   function assignDamage(damageId, technicianIds, date) {
+    if (officeOffline("damages", null, true)) return; // pridelenie len online (aj vedúci technik BA v teréne)
     const damage = damages.find((d) => d.id === damageId);
     if (!damage) { alert("Toto poškodenie medzičasom niekto zmazal."); setDamageAssignTarget(null); return; }
     // Medzičasom ho niekto uzavrel — pridelenie by technikovi vytvorilo úlohu na hotovej veci.
@@ -6822,6 +6952,7 @@ function DispatcherApp() {
   // Hromadné priradenie technika na viacero poškodení naraz — rovnaká logika ako
   // assignDamage(), len pre viac záznamov jedným zápisom (nie N samostatných).
   function assignDamagesBulk(damageIds, technicianIds, date) {
+    if (officeOffline("damages", null, true)) return;
     const ids = Array.isArray(technicianIds) ? technicianIds : [technicianIds];
     const targets = damages.filter((d) => damageIds.includes(d.id) && !d.resolved);
     if (targets.length === 0 || ids.length === 0) return;
@@ -6911,6 +7042,7 @@ function DispatcherApp() {
     ]);
   }
   function quickVacationWithSubstitute(technicianId, startDate, endDate, substituteId, depos, kind = "dovolenka", moveTasksTo = null) {
+    if (officeOffline("quickAssignments")) return false; // aj vedúci technik BA v teréne — plánovanie len online
     const label = QUICK_KIND_LABELS[kind] || kind;
     // Vytvorí záznam neprítomnosti pre každý deň v zvolenom rozsahu, okrem dní, čo
     // ju už majú (rovnaká poistka ako pri addQuickAssignment — proti duplicitám).
@@ -7090,7 +7222,8 @@ function DispatcherApp() {
       nextAssignments = nextAssignments.map((x) =>
         x.kind === "kontrolaStroja" && !x.resolved && freed(x.date) &&
         (x.originalTechnicianId === technicianId || (!x.originalTechnicianId && x.technicianId === s.substituteTechnicianId && jobDepo(x) === s.depo))
-          ? { ...x, technicianId, originalTechnicianId: null }
+          // Aktuálny checker depa k tomu dňu (medzitým mohol byť nastavený iný), inak pôvodný.
+          ? { ...x, technicianId: resolveCheckerId(depoCheckers, checkerSubstitutions.filter((c) => c.originalTechnicianId !== technicianId), jobDepo(x) || s.depo, x.date) || technicianId, originalTechnicianId: null }
           : x
       );
     });
@@ -7140,6 +7273,7 @@ function DispatcherApp() {
     return allowed.includes(spareParts.find((x) => x.id === id)?.depo);
   }
   function deleteAssignment(id) {
+    if (officeOffline("assignments", null, null, true)) return; // mazanie (aj dovolenky) len online
     const a = assignments.find((x) => x.id === id);
     if (a && !a.kind && (a.date || "") >= todayISO()) notifyRemovedTechnicians([a], a.poznamka || a.stroj || "Úloha");
     let remaining = assignments.filter((x) => x.id !== id);
@@ -7614,7 +7748,7 @@ function DispatcherApp() {
   // Už vyriešené priradenie (checker kontrolu vykonal) sa nemení.
   // Nový checker depa preberie otvorené kontroly zákaziek toho depa.
   function saveDepoCheckers(nextRaw, formBase) {
-    if (officeOffline("app_data")) return; // presun kontrol by sa aj tak neuložil
+    if (officeOffline("app_data")) return false; // presun kontrol by sa aj tak neuložil
     // Okno mohlo byť otvorené pred archiváciou checkera — neaktívnych nevracať.
     const active = (tid) => employees.some((e) => e.id === tid && !e.archived);
     const base = formBase || depoCheckers;
@@ -7792,6 +7926,7 @@ function DispatcherApp() {
     }
   }
   function addJob(data) {
+    if (officeOffline("jobs")) return; // formulár ostane otvorený s rozpísanými údajmi
     const record = { id: uid(), status: "planned", ...data };
     persistJobs((jobs) => [...jobs, record]);
     setShowAddJob(null);
@@ -7957,6 +8092,7 @@ function DispatcherApp() {
       showToast("Zákazka bola upravená.");
     } else {
       const newJob = addJob(data);
+      if (!newJob) return; // bez signálu — formulár ostane otvorený
       if (showAddJob?.prefillReservation) {
         const r = showAddJob.prefillReservation;
         const machine = machineById[r.machineId];
@@ -8205,6 +8341,7 @@ function DispatcherApp() {
     ? profilesFetched ? "Váš účet bol zmazaný." : null
     : currentUser.active === false ? "Váš účet je deaktivovaný." : !currentUser.role ? "Váš účet nemá pridelenú rolu." : null;
   if (blockedReason) {
+    if (!_blockedDataCleared) { _blockedDataCleared = true; clearBlockedDeviceData(!currentUser); }
     return (
       <div className={`app-shell${darkMode ? " dark" : ""}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
         <GlobalStyle />
@@ -8231,6 +8368,7 @@ function DispatcherApp() {
   }
 
   if (currentUser.role === "nezaradeny") {
+    if (!_blockedDataCleared) { _blockedDataCleared = true; clearBlockedDeviceData(false); }
     return (
       <div className={`app-shell${darkMode ? " dark" : ""}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
         <GlobalStyle />
@@ -8787,7 +8925,7 @@ function DispatcherApp() {
               const depo = forcedDepo || items[0]?.depo || "";
               if (allowedDepos && (!allowedDepos.includes(depo) || items.some((it) => it.depo && !allowedDepos.includes(it.depo)))) return;
               const nowIso = new Date().toISOString();
-              persistSpareParts((spareParts) => [...spareParts,
+              if (persistSpareParts((spareParts) => [...spareParts,
                 ...items.map((data) => ({
                   id: uid(),
                   ...data,
@@ -8799,7 +8937,7 @@ function DispatcherApp() {
                   requestedBy: myEmployee?.name || "",
                   requestedAt: nowIso,
                 })),
-              ]);
+              ]) === false) return false; // bez signálu — formulár ostane otvorený
               if (!canManage) {
                 pushNotification({
                   kind: "spare_parts",
@@ -9207,8 +9345,8 @@ function DispatcherApp() {
           onSave={(data) => {
             if (showAddReservation.existing) {
               updateReservation(showAddReservation.existing.id, data);
-            } else {
-              addReservation(data);
+            } else if (addReservation(data) === false) {
+              return; // bez signálu — formulár ostane otvorený
             }
             setShowAddReservation(null);
             goBackCard();
@@ -10204,7 +10342,7 @@ function DispatcherApp() {
                 ? (popis, patch) => {
                     const record = reportDamage(machine, popis, undefined, { silent: true });
                     const savePatch = patch
-                      ? { ...patch, ...revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts"]), resolved: true }
+                      ? { ...patch, ...revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts"]), resolved: true, skipped: false, skippedReason: null }
                       : {};
                     persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...savePatch, damageId: record.id } : a)));
                     setCheckerInspectionTarget(null);
@@ -13495,7 +13633,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
           return matchesDriver && t.date === quickFilter.dateVal && t.type === quickFilter.type;
         });
         const driver = quickFilter.key !== "unassigned" ? drivers.find((d) => d.id === quickFilter.key) : null;
-        const sendStatus = driver ? getTransportSendStatus(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id)) : null;
+        const sendStatus = driver ? getTransportSendStatus(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]) : null;
         return (
           <Modal eyebrow={quickFilter.label} title={`${quickFilter.driverName} (${liveItems.length})`} onClose={() => setQuickFilter(null)} wide>
             {driver && liveItems.length > 0 && can(user, "transport_assign_driver") && (
@@ -13518,7 +13656,7 @@ function TransportsOverview({ jobs, drivers, machineById, today, tomorrow, dayAf
                     const body = `Dobrý deň ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
                     const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join("; ");
                     composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
-                    recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id));
+                    recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]);
                   }}
                 >
                   {!sendStatus.sent
@@ -16701,16 +16839,16 @@ function JobDetailModal({ job, machine, driverById, drivers, onAssignDriver, onA
             </div>
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-              Generujem odkaz… Bez signálu sa vygeneruje po jeho obnovení.
+              Generujem odkaz… Bez signálu sa nevytvorí — po pripojení zavrite a znova otvorte tento panel.
             </div>
           )}
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
             {portalQr && <img src={portalQr} alt="QR kód pre zákazníka" style={{ width: 120, height: 120 }} />}
-            {onEmailCustomer && (
+            {onEmailCustomer && portalLink && (
               <button className="btn btn-ghost" onClick={onEmailCustomer}>✉ Poslať zákazníkovi emailom</button>
             )}
           </div>
-          {onTogglePortalRevoked && (
+          {onTogglePortalRevoked && (portalLink || job.portalRevoked) && (
             <button className="btn btn-ghost" style={{ color: job.portalRevoked ? "var(--ok)" : "var(--danger)" }} onClick={onTogglePortalRevoked}>
               {job.portalRevoked ? "Obnoviť odkaz" : "Zneplatniť odkaz"}
             </button>
@@ -17128,7 +17266,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
 
   useEffect(() => {
     // Pri úprave len keď sa stroj naozaj zmenil — vývoz ide z depa nového stroja (aj jeho checker).
-    if (existing && machineId === existing.machineId) return;
+    // Späť na pôvodný stroj = späť aj pôvodné depo vývozu.
+    if (existing && machineId === existing.machineId) { setFromDepo(existing.fromDepo ?? ""); return; }
     const m = machines.find((mm) => mm.id === machineId);
     if (m) setFromDepo(m.depo || "");
   }, [machineId]);
@@ -26298,7 +26437,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
           machines={machines}
           onClose={() => setShowAdd(false)}
           onSave={(data) => {
-            onAdd(data);
+            if (onAdd(data) === false) return;
             setShowAdd(false);
             if (!canManage) {
               setConfirmMessage(
@@ -26442,8 +26581,10 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
             Object.entries(values).forEach(([k, v]) => {
               if (v) cleaned[k] = v;
             });
-            onSave(cleaned, initialRef.current);
-            initialRef.current = cleaned; // ďalšie uloženie v tom istom okne porovnáva s tým, čo sa práve uložilo
+            // Ďalšie uloženie v tom istom okne porovnáva s tým, čo sa práve uložilo;
+            // zablokované (bez signálu) sa vráti na uložený stav, nech sa dá zopakovať.
+            if (onSave(cleaned, initialRef.current) === false) setValues(depoCheckers || {});
+            else initialRef.current = cleaned;
           }}
         >
           Uložiť
