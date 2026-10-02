@@ -27,7 +27,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.726";
+const APP_VERSION = "1.0.727";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -9199,6 +9199,8 @@ function DispatcherApp() {
                 onClearAll={() => askDelete("VŠETKY externé servisné zákazky", clearAllExterna)}
                 onOpenSummary={() => setExternaSummaryOpen(true)}
                 onImport={() => setShowImportExterna(true)}
+                onBulkAssign={assignDamagesBulk}
+                today={today}
               />
             )}
           </TabSwitcher>
@@ -21865,7 +21867,12 @@ function externaBucketStatus(d) {
   if (!d.resolved) return d.technicianId ? "assigned" : "new";
   return d.invoiced ? "invoiced" : "to_invoice";
 }
-function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, onMarkInvoiced, onUnmarkInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport }) {
+function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, onAssign, onDelete, onOpenDetail, onComplete, onProtocol, onAssignProtocol, onToggleProtocolInvoiced, onMarkInvoiced, onUnmarkInvoiced, highlightDamageId, onClearAll, onOpenSummary, onImport, onBulkAssign, today }) {
+  // Hromadné pridelenie technika — rovnako ako v Poškodeniach.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const canBulkAssign = onBulkAssign && can(user, "damage_assign");
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   // "Na fakturáciu"/"Vyfakturované" sú samostatné bucket-prepínače, nie filtre —
   // na rozdiel od Nahlásené/Pridelené sa nekombinujú (ani medzi sebou, ani s
@@ -22067,6 +22074,17 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
           );
         })}
       </div>
+      {canBulkAssign && selectedIds.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {selectedIds.size}</span>
+          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
+            Prideliť vybraným →
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
+            Zrušiť výber
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.length === 0 && (
           <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
@@ -22076,9 +22094,24 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
           </div>
         )}
         {sorted.map((d) => (
-          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onComplete={onComplete} onProtocol={onProtocol} onMarkInvoiced={onMarkInvoiced ? setInvoiceTarget : null} onUnmarkInvoiced={onUnmarkInvoiced} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" />
+          <ServiceEventCard key={d.id} d={d} technicianById={technicianById} user={user} onAssign={onAssign} onDelete={onDelete} onOpenDetail={onOpenDetail} onComplete={onComplete} onProtocol={onProtocol} onMarkInvoiced={onMarkInvoiced ? setInvoiceTarget : null} onUnmarkInvoiced={onUnmarkInvoiced} locationLabel={locationLabel(d)} highlighted={d.id === highlightDamageId} variant="externa" selectable={canBulkAssign && !d.resolved} selected={selectedIds.has(d.id)} onToggleSelect={toggleSelect} />
         ))}
       </div>
+      {showBulkAssign && (
+        <BulkAssignModal
+          damages={sorted.filter((d) => selectedIds.has(d.id))}
+          technicians={technicians}
+          user={user}
+          today={today}
+          onClose={() => setShowBulkAssign(false)}
+          onSave={(technicianIds, date) => {
+            // Len to, čo je v zozname práve viditeľné (skryté filtrom/vyhľadávaním sa nepriradí).
+            onBulkAssign(sorted.filter((d) => selectedIds.has(d.id) && !d.resolved).map((d) => d.id), technicianIds, date);
+            setSelectedIds(new Set());
+            setShowBulkAssign(false);
+          }}
+        />
+      )}
 
       {onAssignProtocol && (
         <div style={{ marginTop: 28 }}>
