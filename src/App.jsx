@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
+import * as Sentry from "@sentry/react";
 
 /* ---------------------------------------------------------
    Utility
@@ -26,7 +27,22 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.724";
+const APP_VERSION = "1.0.725";
+// Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    release: `mateco@${APP_VERSION}`,
+    environment: import.meta.env.MODE,
+    sendDefaultPii: false,
+    integrations: [Sentry.browserTracingIntegration({ instrumentNavigation: false })],
+    tracesSampleRate: 0.2, // ponytail: 20 % obrazoviek stačí na prehľad o používaní a drží free tier
+    beforeSend(event) {
+      event.tags = { ...event.tags, signal: navigator.onLine ? "áno" : "nie" };
+      return event;
+    },
+  });
+}
 // Prehľad prepráv: hlavička dňa („Dnes · pi 2. 10.“ / „Po 5. 10.“) a deň v maile („na pondelok“).
 const SK_DAY_SHORT = ["ne", "po", "ut", "st", "št", "pi", "so"];
 const SK_DAY_ACC = ["nedeľu", "pondelok", "utorok", "stredu", "štvrtok", "piatok", "sobotu"];
@@ -4603,6 +4619,18 @@ function DispatcherApp() {
     }
     return currentUser;
   }, [currentUser, viewAsRole]);
+
+  // Sentry: rola a obrazovka ku každej chybe (bez mena), obrazovky aj ako prehľad používania.
+  useEffect(() => {
+    Sentry.setUser(currentUser ? { id: currentUser.id } : null);
+    Sentry.setTag("rola", currentUser?.role || "neprihlásený");
+  }, [currentUser?.id, currentUser?.role]);
+  useEffect(() => {
+    const name = `${module}/${view}`;
+    Sentry.setTag("obrazovka", name);
+    const client = Sentry.getClient();
+    if (client) Sentry.startBrowserTracingNavigationSpan(client, { name, attributes: { "sentry.source": "custom" } });
+  }, [module, view]);
 
   // Poistka pre externého šoféra — nesmie skončiť nikde inde než na Prepravách,
   // ani cez zapamätanú polohu z minula (napr. keď mu niekto rolu zmenil neskôr).
@@ -12151,6 +12179,14 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // Trvalý odznak „Bez signálu“ — kancelária vidí výpadok dopredu, nie až pri Uložiť.
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const upd = () => setOnline(navigator.onLine);
+    window.addEventListener("online", upd);
+    window.addEventListener("offline", upd);
+    return () => { window.removeEventListener("online", upd); window.removeEventListener("offline", upd); };
+  }, []);
   return (
     <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ background: "var(--accent)" }}>
@@ -12177,6 +12213,16 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
             {effectiveUser?.role !== "externy_sofer" && <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />}
           </div>
           <div className="header-top-actions" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 6 }}>
+            {!online && (
+              <span
+                className="header-offline-badge"
+                role="status"
+                title="Zariadenie je bez signálu. Zmeny v kancelárii sa teraz neuložia; protokoly v teréne sa odošlú samé po pripojení."
+                style={{ background: "#fff", color: "var(--danger)", borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}
+              >
+                ⚠ Bez signálu
+              </span>
+            )}
             <NotificationBell
               notifications={myNotifications}
               unreadCount={unreadNotificationCount}
@@ -27926,6 +27972,7 @@ class AppErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     console.error("mateco-app crashed:", error, info);
+    Sentry.captureException(error, { contexts: { react: { componentStack: info?.componentStack } } });
   }
   render() {
     if (this.state.hasError) {
