@@ -32,11 +32,22 @@ jobs:
       - name: Zápis čísla verzie (na kontrolu aktualizácie v appke)
         run: echo "{\"v\":\"${{ github.sha }}\"}" > public/version.json
 
+      - name: Kontrola kódu (zjavné chyby, napr. preklep v názve)
+        run: npm run lint
+
       - name: Build appky
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+
+      - name: Skúška spustenia (platforma ukáže prihlásenie, inak sa nenasadí)
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          sleep 3
+          google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=10000 --dump-dom http://localhost:4173/ > dom.html
+          grep -q "Prihlásiť sa" dom.html || { echo "::error::Platforma sa po zostavení nespustila — nenasadzuje sa."; exit 1; }
 
       - name: Príprava na GitHub Pages
         uses: actions/upload-pages-artifact@v3
