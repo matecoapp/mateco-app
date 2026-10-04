@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.730";
+const APP_VERSION = "1.0.731";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -7352,11 +7352,27 @@ function DispatcherApp() {
     const keepByDamage = Object.fromEntries(targets.map((d) => [d.id, keepIdsFor(d)]));
     // Minulé pridelenia ostávajú (história); nahrádzajú sa dnešné a budúce, okrem ponechaných technikov.
     const isReplaced = (a) => !a.kind && !!keepByDamage[a.damageId] && (a.date || "") >= today && !keepByDamage[a.damageId].includes(a.technicianId);
+    // Odobraté úlohy: jedno upozornenie na technika za celý hromadný presun.
+    const removedByTech = {};
     targets.forEach((damage) => {
-      notifyRemovedTechnicians(
-        assignments.filter((a) => a.damageId === damage.id && isReplaced(a) && !ids.includes(a.technicianId)),
-        `${damage.type === "externa" ? "Externá zákazka" : damage.type === "revizia" ? "Revízia" : damage.type === "uradnaSkuska" ? "Úradná skúška" : "Poškodenie"} (${damage.code || "—"})`
-      );
+      const label = `${damage.type === "externa" ? "Externá zákazka" : damage.type === "revizia" ? "Revízia" : damage.type === "uradnaSkuska" ? "Úradná skúška" : "Poškodenie"} (${damage.code || "—"})`;
+      assignments.filter((a) => a.damageId === damage.id && isReplaced(a) && !ids.includes(a.technicianId)).forEach((a) => {
+        const list = (removedByTech[a.technicianId] ||= []);
+        if (!list.some((x) => x.a.damageId === a.damageId)) list.push({ a, label });
+      });
+    });
+    Object.values(removedByTech).forEach((list) => {
+      if (list.length === 1) return notifyRemovedTechnicians([list[0].a], list[0].label);
+      const tech = employees.find((e) => e.id === list[0].a.technicianId);
+      if (!tech) return;
+      pushNotification({
+        kind: "assignment_service",
+        roles: [],
+        userName: tech.name,
+        title: "Úlohy vám boli odobraté",
+        message: `Už nemáte pridelené (${list.length}): ${list.map((x) => `${x.label} — ${fmtDate(x.a.date)}`).join(", ")}.`,
+        link: { module: "servis", view: "plan", plannerDate: list.map((x) => x.a.date).sort()[0] },
+      });
     });
     const newAssignmentsAll = [];
     const patchByDamageId = {};
