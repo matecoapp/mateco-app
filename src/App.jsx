@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.735";
+const APP_VERSION = "1.0.737";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -402,6 +402,10 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   const { canEdit = false, canGoReturn = false, canEmail = false, portalLink = null, qrDataUrl = null, embedded = false } = opts;
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
+  function absentBlock(at, by) {
+    const when = at ? new Date(at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    return `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu${when ? ` (${esc(when)}` : ""}${by ? `${when ? ", " : " ("}spísal ${esc(by)}` : ""}${when || by ? ")" : ""}</div></div>`;
+  }
   function sigBlock(dataUrl, label, name) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${safeImgUrl(dataUrl) ? `<img src="${escAttr(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -520,7 +524,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${sigBlock(p.handoverCustomerSignature, "Za nájomcu", p.handoverCustomerName)}
+        ${p.handoverCustomerAbsent ? absentBlock(p.handoverAbsentAt, p.handoverDriverName) : sigBlock(p.handoverCustomerSignature, "Za nájomcu", p.handoverCustomerName)}
         ${sigBlock(p.handoverDriverSignature, "Za prenajímateľa", p.handoverDriverName)}
       </div>`}
     </div>
@@ -529,7 +533,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
       ${p.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${sigBlock(p.returnCustomerSignature, "Za nájomcu", p.returnCustomerName)}
+        ${p.returnCustomerAbsent ? absentBlock(p.returnAbsentAt, p.returnDriverName) : sigBlock(p.returnCustomerSignature, "Za nájomcu", p.returnCustomerName)}
         ${sigBlock(p.returnDriverSignature, "Za prenajímateľa", p.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
@@ -1082,6 +1086,8 @@ const DOW_NAMES_FULL = ["Nedeľa", "Pondelok", "Utorok", "Streda", "Štvrtok", "
 const DOW_NAMES = ["Ne", "Po", "Ut", "St", "Št", "Pi", "So"];
 // 14-bodový kontrolný zoznam z papierového "Protokolu o odovzdaní a prevzatí stroja" —
 // rovnaký zoznam sa vypĺňa dvakrát (Prevzatie aj Vrátenie), aby sa dal porovnať stav.
+// Povinný počet fotiek stroja: checker pred vývozom, šofér pri zvoze (a pri protokole bez zákazníka).
+const MIN_MACHINE_PHOTOS = 4;
 const HANDOVER_CHECKLIST_ITEMS = [
   "Technický stav zariadenia",
   "Čistota stroja",
@@ -16384,7 +16390,10 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   );
   // Fotky stavu stroja pri zvoze od zákazníka (len fáza "vrátenie") — porovnanie
   // s fotkami checkera z vývozu (kontrola stroja pred vývozom).
-  const [returnPhotos, setReturnPhotos] = useState(existing?.returnPhotos || []);
+  // Fotky stavu stroja danej fázy: pri zvoze vždy (returnPhotos), pri vývoze len keď zákazník nebol prítomný (handoverPhotos).
+  const [returnPhotos, setReturnPhotos] = useState((isReturnPhase ? existing?.returnPhotos : existing?.handoverPhotos) || []);
+  // Zákazník nebol prítomný — protokol bez podpisu nájomcu, zato s povinnými fotkami.
+  const [customerAbsent, setCustomerAbsent] = useState(!!(isReturnPhase ? existing?.returnCustomerAbsent : existing?.handoverCustomerAbsent));
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
   async function handleReturnPhotoFiles(files) {
@@ -16411,7 +16420,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           console.error("Nahranie fotky stavu stroja do Storage zlyhalo (asi offline) — čaká vo fronte:", e);
           const dataUrl = await blobToDataUrl(blob);
           setReturnPhotos((prev) => [...prev, dataUrl]);
-          queuePhotoMigration({ photoId, table: "handoverProtocols", recordId: existing?.id || newProtocolId, field: "returnPhotos", oldValue: dataUrl, pathPrefix });
+          queuePhotoMigration({ photoId, table: "handoverProtocols", recordId: existing?.id || newProtocolId, field: isReturnPhase ? "returnPhotos" : "handoverPhotos", oldValue: dataUrl, pathPrefix });
         }
       } catch (e) {
         console.error("Spracovanie fotky zlyhalo", e);
@@ -16437,7 +16446,8 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     setPhase(next);
     setCustomerSig(next === "vratenie" ? existing?.returnCustomerSignature || null : existing?.handoverCustomerSignature || null);
     setDriverSig(next === "vratenie" ? existing?.returnDriverSignature || null : existing?.handoverDriverSignature || null);
-    setReturnPhotos(next === "vratenie" ? existing?.returnPhotos || [] : []);
+    setReturnPhotos((next === "vratenie" ? existing?.returnPhotos : existing?.handoverPhotos) || []);
+    setCustomerAbsent(!!(next === "vratenie" ? existing?.returnCustomerAbsent : existing?.handoverCustomerAbsent));
     setCustomerName((next === "vratenie" ? existing?.returnCustomerName : existing?.handoverCustomerName) || defaultCustomerName);
     setDriverName((next === "vratenie" ? existing?.returnDriverName : existing?.handoverDriverName) || user?.name || "");
   }
@@ -16446,22 +16456,31 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // treba) — nič nebráni odoslaniu bez neho. Checklist ale musí byť vyplnený
   // do posledného riadku, to sa už nesmie dať obísť.
   const checklistComplete = HANDOVER_CHECKLIST_ITEMS.every((_, i) => checklist[i]?.[statusKey] === "ok" || checklist[i]?.[statusKey] === "problem");
-  const canSave = uploadingPhotos === 0 && checklistComplete && customerSig && driverSig && customerName.trim() && driverName.trim();
+  // Povinné fotky: pri vrátení vždy, pri prevzatí len bez zákazníka. Oprava starého protokolu počet nevynucuje.
+  const photosNeeded = !isCorrection && (isReturnPhase || customerAbsent) ? Math.max(0, MIN_MACHINE_PHOTOS - returnPhotos.length) : 0;
+  const customerOk = (customerAbsent ? returnPhotos.length > 0 : !!(customerSig && customerName.trim())) && photosNeeded === 0;
+  const canSave = uploadingPhotos === 0 && checklistComplete && customerOk && driverSig && driverName.trim();
 
   function handleSave() {
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
     const isFirstHandover = !isReturnPhase && !existing?.handoverDone;
+    const absentAt = customerAbsent ? (isReturnPhase ? existing?.returnAbsentAt : existing?.handoverAbsentAt) || new Date().toISOString() : null;
     if (isReturnPhase) {
-      patch.returnCustomerSignature = customerSig;
-      patch.returnCustomerName = customerName.trim();
+      patch.returnCustomerAbsent = customerAbsent;
+      patch.returnAbsentAt = absentAt;
+      patch.returnCustomerSignature = customerAbsent ? null : customerSig;
+      patch.returnCustomerName = customerAbsent ? "" : customerName.trim();
       patch.returnDriverSignature = driverSig;
       patch.returnDriverName = driverName.trim();
       patch.returnDone = true;
       patch.returnDate = existing?.returnDate || todayISO();
       patch.returnPhotos = returnPhotos;
     } else {
-      patch.handoverCustomerSignature = customerSig;
-      patch.handoverCustomerName = customerName.trim();
+      patch.handoverCustomerAbsent = customerAbsent;
+      patch.handoverAbsentAt = absentAt;
+      patch.handoverCustomerSignature = customerAbsent ? null : customerSig;
+      patch.handoverCustomerName = customerAbsent ? "" : customerName.trim();
+      if (returnPhotos.length || existing?.handoverPhotos?.length) patch.handoverPhotos = returnPhotos;
       patch.handoverDriverSignature = driverSig;
       patch.handoverDriverName = driverName.trim();
       patch.handoverDone = true;
@@ -16750,10 +16769,18 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       </ol>
       <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>{HANDOVER_VOP_NOTE}</div>
 
-      {isReturnPhase && (
+      {/* Osobný odber/vrátenie je v depe so zákazníkom — tam voľba nemá zmysel. */}
+      {(customerAbsent || !(isReturnPhase ? job?.selfReturn : job?.selfPickup)) && (
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, marginBottom: 14, cursor: "pointer" }}>
+        <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} />
+        Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)
+      </label>
+      )}
+
+      {(
         <>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Fotky stavu stroja pri zvoze
+            Fotky stavu stroja pri {isReturnPhase ? "zvoze" : "vývoze"}{isReturnPhase || customerAbsent ? ` * (aspoň ${MIN_MACHINE_PHOTOS})` : " (nepovinné)"}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {returnPhotos.map((url, i) => (
@@ -16773,9 +16800,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <PhotoPickButtons onFiles={handleReturnPhotoFiles} />
           {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
-          {returnPhotos.length === 0 && (
-            <div style={{ fontSize: 12, color: "#b58a00", marginBottom: 6 }}>
-              ⚠️ Bez fotiek stavu stroja — odporúčame pridať, ale nie je to povinné.
+          {photosNeeded > 0 && (
+            <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>
+              Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
             </div>
           )}
           <div style={{ marginBottom: 14 }} />
@@ -16786,6 +16813,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         Podpisy — {isReturnPhase ? "vrátenie" : "prevzatie"}
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {customerAbsent ? (
+          <div style={{ fontSize: 13, color: "var(--text-dim)", alignSelf: "center" }}>Za nájomcu: zákazník nebol prítomný</div>
+        ) : (
         <Field label="Za nájomcu — meno *">
           <input
             value={customerName}
@@ -16794,6 +16824,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
             style={{ width: "100%" }}
           />
         </Field>
+        )}
         <Field label="Za prenajímateľa — meno *">
           <input
             value={driverName}
@@ -16804,7 +16835,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" value={customerSig} onChange={setCustomerSig} />
+        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" value={customerSig} onChange={setCustomerSig} />}
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" value={driverSig} onChange={setDriverSig} />
       </div>
 
@@ -16813,8 +16844,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           Chýba: {[
             uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
             !checklistComplete && "všetky body checklistu",
-            !customerName.trim() && "meno nájomcu",
-            !customerSig && "podpis nájomcu",
+            photosNeeded > 0 && `fotky stroja (${photosNeeded})`,
+            !customerAbsent && !customerName.trim() && "meno nájomcu",
+            !customerAbsent && !customerSig && "podpis nájomcu",
             !driverName.trim() && "meno prenajímateľa",
             !driverSig && "podpis prenajímateľa",
           ].filter(Boolean).join(", ")}
@@ -16923,7 +16955,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const hoursNum = Number(String(workHours).replace(",", "."));
   const hoursValid = String(workHours).trim() !== "" && hoursNum > 0;
   const partsValid = usedParts.every((p) => p.name.trim());
-  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid;
+  const photosNeeded = phase === "vyvoz" && !assignment.resolved ? Math.max(0, MIN_MACHINE_PHOTOS - photos.length) : 0;
+  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && photosNeeded === 0;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
   const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
 
@@ -17144,6 +17177,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
           {!hoursValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte odpracované hodiny.</div>}
           {!partsValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte názov každého pridaného dielu (alebo ho odstráňte).</div>}
+          {photosNeeded > 0 && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>Pridajte fotky stroja pred vývozom — povinné aspoň {MIN_MACHINE_PHOTOS} (chýba {photosNeeded}).</div>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
           </div>
@@ -17553,7 +17587,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           )}
         </div>
       )}
-      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0) && (
+      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0) && (
         <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Kontrola stroja — fotky
@@ -17563,9 +17597,9 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
                 Pred vývozom{inspectionVyvoz?.checkerBy ? ` — ${inspectionVyvoz.checkerBy}` : ""}
               </div>
-              {inspectionVyvoz?.checkerPhotos?.length > 0 ? (
+              {inspectionVyvoz?.checkerPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0 ? (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {inspectionVyvoz.checkerPhotos.map((url, i) => (
+                  {[...(inspectionVyvoz?.checkerPhotos || []), ...(handoverProtocol?.handoverPhotos || [])].map((url, i) => (
                     <img key={i} src={url} alt="Foto pred vývozom" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
                   ))}
                 </div>

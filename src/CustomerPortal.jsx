@@ -62,6 +62,7 @@ function protocolEsc(s) {
 function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
+  const absentBlock = () => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div></div>`;
   function sigBlock(dataUrl, label, name) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -144,7 +145,7 @@ function buildOfficialProtocolHtml(data) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
+        ${data.handoverCustomerAbsent ? absentBlock() : sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
         ${sigBlock(data.handoverDriverSignature, "Za prenajímateľa", data.handoverDriverName)}
       </div>`}
     </div>
@@ -153,7 +154,7 @@ function buildOfficialProtocolHtml(data) {
       ${data.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
+        ${data.returnCustomerAbsent ? absentBlock() : sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
         ${sigBlock(data.returnDriverSignature, "Za prenajímateľa", data.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
@@ -175,7 +176,7 @@ function buildOfficialProtocolHtml(data) {
 </body></html>`;
 }
 
-function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig }) {
+function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent }) {
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
@@ -203,7 +204,7 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {custAbsent ? <div style={{ fontSize: 11, color: "#c62828", height: 50, display: "flex", alignItems: "center" }}>Zákazník nebol prítomný</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis prenajímateľa</div>
@@ -574,6 +575,7 @@ export default function CustomerPortal({ token }) {
                   noteKey="handoverNote"
                   checklist={data.checklist}
                   custSig={data.handoverCustomerSignature}
+                  custAbsent={data.handoverCustomerAbsent}
                   driverSig={data.handoverDriverSignature}
                 />
               )}
@@ -586,6 +588,7 @@ export default function CustomerPortal({ token }) {
                     noteKey="returnNote"
                     checklist={data.checklist}
                     custSig={data.returnCustomerSignature}
+                    custAbsent={data.returnCustomerAbsent}
                     driverSig={data.returnDriverSignature}
                   />
                 ) : (
