@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.738";
+const APP_VERSION = "1.0.739";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -74,7 +74,11 @@ function resolveCheckerId(depoCheckers, checkerSubstitutions, depo, dateISO) {
 function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   const aEndsAt = aEnd || "9999-12-31";
   const bEndsAt = bEnd || "9999-12-31";
-  return aStart <= bEndsAt && bStart <= aEndsAt;
+  if (!(aStart <= bEndsAt && bStart <= aEndsAt)) return false;
+  // Nadväzujúci prenájom: koniec jednej = začiatok druhej v ten istý deň (ráno zvoz, poobede vývoz) — nie je kolízia.
+  if (aEndsAt === bStart && aStart < bStart) return false;
+  if (bEndsAt === aStart && bStart < aStart) return false;
+  return true;
 }
 // Stroj je mimo depa od vývozu po zvoz — kolízie rátať z väčšieho rozsahu
 // (prednávoz pred začiatkom, zvoz po konci).
@@ -1490,18 +1494,19 @@ function revisionPart(kind, date, today) {
   const days = daysBetween(today, date);
   return days < 0
     ? { text: `${kind} po termíne (mala byť ${fmtDate(date)})`, overdue: true }
-    : { text: `${kind} o ${days} dní (${fmtDate(date)})`, overdue: false };
+    : { text: `${kind} do ${fmtDate(date)}`, overdue: false };
 }
-// Deň kontroly stroja pred vývozom: deň pred skutočným vývozom (departureDate),
-// ak je vývoz dnes alebo už prešiel, tak v ten istý deň. Ak by deň vopred padol
-// na sobotu/nedeľu, kontrola je v deň vývozu (pondelok ráno). Osobný odber
-// (vlastná doprava) — vždy v deň vyzdvihnutia.
-function checkerInspectionDate(job) {
+// Deň kontroly stroja pred vývozom: posledný pracovný deň pred vývozom (víkend sa
+// preskakuje — vývoz v sobotu, nedeľu aj pondelok = kontrola v piatok). Ak ten deň
+// už prešiel (zákazka založená cez víkend), alebo je vývoz dnes, tak v deň vývozu.
+// Osobný odber (vlastná doprava) a nadväzujúci prenájom (stroj sa v ten deň vracia
+// z inej zákazky, turnover) — v deň vývozu.
+function checkerInspectionDate(job, turnover) {
   const dep = job.departureDate || job.startDate;
-  if (job.selfPickup || !dep || dep <= todayISO()) return dep;
-  const dayBefore = addDaysISO(dep, -1);
-  const dow = new Date(dayBefore + "T00:00:00").getDay();
-  return dow === 0 || dow === 6 ? dep : dayBefore;
+  if (job.selfPickup || turnover || !dep || dep <= todayISO()) return dep;
+  let d = addDaysISO(dep, -1);
+  for (let dow = new Date(d + "T00:00:00").getDay(); dow === 0 || dow === 6; dow = new Date(d + "T00:00:00").getDay()) d = addDaysISO(d, -1);
+  return d < todayISO() ? dep : d;
 }
 // Vlastná doprava — protokol namiesto šoféra vypĺňa checker, ktorému je pre
 // danú zákazku a fázu pridelená kontrola stroja (kind "kontrolaStroja").
@@ -4843,6 +4848,8 @@ function DispatcherApp() {
   // Vedúci dispečer = dispečer s príznakom na karte (nie rola). Admin „Zobraziť ako“ príznak nededí.
   const isLeadDispatcher = !!(myEmployee?.alsoVeduciDispecer && DISPATCHER_ROLES.includes(myEmployee.role) && myEmployee.role === effectiveUser?.role);
   const canManageDispatcherSubs = isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne" || isAdminUser(effectiveUser);
+  // Zrušiť ukončenie zákazky: admin, vedúci dispečer, vedúci požičovne (DB to stráži rovnako — step73).
+  const canUncompleteJobs = isAdminUser(effectiveUser) || isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne";
   const activeDispatcherSub = useCallback((dispatcherId, date = todayISO()) =>
     dispatcherSubstitutions.find((s) => s.dispatcherId === dispatcherId && s.startDate <= date && s.endDate >= date) || null, [dispatcherSubstitutions]);
   // Kto za dispečera práve koná (zástup, inak on sám). Zastupujúci, ktorý je sám zastúpený → nikto (poistka).
@@ -5465,6 +5472,37 @@ function DispatcherApp() {
 
   const persistCheckerSubstitutions = useCallback(makeRecordPersist("checkerSubstitutions", setCheckerSubstitutions), []);
 
+  // Nedokončené kontroly stroja checkera, ktorý je dnes neprítomný (dovolenka/PN so zástupom),
+  // sa presunú na zástup s dnešným dátumom — čo nestihol pred nástupom na dovolenku, robí zástup.
+  // Len kontroly stroja (vznikajú automaticky); servisné úlohy prerozdeľuje dispečer servisu.
+  useEffect(() => {
+    if (!loaded || !navigator.onLine || !["veduci_servisu", "dispecer_servisu"].includes(currentUser?.role)) return;
+    const active = checkerSubstitutions.filter((sb) => sb.startDate <= today && sb.endDate >= today && sb.substituteTechnicianId && sb.originalTechnicianId);
+    if (!active.length) return;
+    const depoOf = (a) => { const j = jobs.find((jj) => jj.id === a.jobId); return j ? (a.phase === "vratenie" ? j.returnDepo || j.fromDepo : j.fromDepo) : null; };
+    const moves = [];
+    assignmentsRef.current.forEach((a) => {
+      if (a.kind !== "kontrolaStroja" || a.resolved || !a.date || a.date >= today) return;
+      const sb = active.find((x) => x.originalTechnicianId === a.technicianId && (!x.depo || x.depo === depoOf(a)));
+      if (sb) moves.push({ a, sb });
+    });
+    if (!moves.length) return;
+    const ids = new Map(moves.map(({ a, sb }) => [a.id, sb]));
+    assignmentsRef.current = assignmentsRef.current.map((a) => (ids.has(a.id) ? { ...a, technicianId: ids.get(a.id).substituteTechnicianId, originalTechnicianId: a.technicianId, date: today } : a));
+    persistAssignments((cur) => cur.map((a) => (ids.has(a.id) && a.technicianId === ids.get(a.id).originalTechnicianId ? { ...a, technicianId: ids.get(a.id).substituteTechnicianId, originalTechnicianId: a.technicianId, date: today } : a)));
+    const bySub = {};
+    moves.forEach(({ a, sb }) => { (bySub[sb.id] = bySub[sb.id] || { sb, list: [] }).list.push(a); });
+    Object.values(bySub).forEach(({ sb, list }) => {
+      const sub = employees.find((e) => e.id === sb.substituteTechnicianId);
+      const orig = employees.find((e) => e.id === sb.originalTechnicianId);
+      const codes = list.map((a) => machineById[a.machineId]?.code || "—").join(", ");
+      const n = list.length;
+      const link = { module: "servis", view: "plan", plannerDate: today };
+      if (sub) pushNotification({ kind: "checker_inspection", roles: [], userName: sub.name, title: "Prevzatá kontrola stroja (zastupovanie)", message: `Za ${orig?.name || "checkera"} preberáte ${n === 1 ? "nedokončenú kontrolu stroja" : `${n} nedokončené kontroly strojov`} (${codes}) — na dnes.`, link });
+      if (orig) pushNotification({ kind: "checker_inspection", roles: [], userName: orig.name, title: "Kontrola stroja presunutá", message: `${n === 1 ? "Nedokončenú kontrolu stroja" : `${n} nedokončené kontroly strojov`} (${codes}) počas vašej neprítomnosti robí ${sub?.name || "zástup"}.`, link });
+    });
+  }, [loaded, today, checkerSubstitutions, assignments, jobs, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Náhrady checkerov, ktorým už skončila dovolenka (koniec pred dneškom), sa
   // sami potichu odstránia — nikto ich nemusí ručne mazať, keď dovolenka skončí,
   // a zároveň to zabráni, aby staré/zabudnuté náhrady niekedy prekážali novým.
@@ -6008,7 +6046,7 @@ function DispatcherApp() {
         ? "ZZ nikdy nevykonaná — chýba dátum"
         : zzOverdue
         ? `ZZ po termíne (mala byť ${fmtDate(m.revizia)})`
-        : `ZZ o ${zzDaysLeft} dní (${fmtDate(m.revizia)})`;
+        : `ZZ do ${fmtDate(m.revizia)}`;
 
       const ezMissing = ezOn && !m.reviziaEZ;
       const ezDaysLeft = ezOn && m.reviziaEZ ? daysBetween(today, m.reviziaEZ) : null;
@@ -6020,7 +6058,7 @@ function DispatcherApp() {
         ? "EZ nikdy nevykonaná — chýba dátum"
         : ezOverdue
         ? `EZ po termíne (mala byť ${fmtDate(m.reviziaEZ)})`
-        : `EZ o ${ezDaysLeft} dní (${fmtDate(m.reviziaEZ)})`;
+        : `EZ do ${fmtDate(m.reviziaEZ)}`;
 
       const existingRevisionTicket = damages.find((d) => d.type === "revizia" && d.machineId === m.id && !d.resolved);
 
@@ -6069,7 +6107,8 @@ function DispatcherApp() {
             desiredType !== existing.revizeType ||
             desiredOverdue !== !!existing.overdue ||
             (zzActive ? m.revizia || null : null) !== existing.revizia ||
-            (ezActive ? m.reviziaEZ || null : null) !== existing.reviziaEZ
+            (ezActive ? m.reviziaEZ || null : null) !== existing.reviziaEZ ||
+            `Revízia ${desiredPopis}` !== existing.popis // aj starý text „o N dní“ sa raz prepíše na „do dátumu“
           ) {
             updates[existing.id] = {
               revizeType: desiredType,
@@ -6098,7 +6137,7 @@ function DispatcherApp() {
               ? "Úradná skúška nikdy nevykonaná — chýba dátum"
               : days < 0
               ? `Úradná skúška po termíne (mala byť ${fmtDate(m.uradnaSkuska)})`
-              : `Úradná skúška o ${days} dní (${fmtDate(m.uradnaSkuska)})`,
+              : `Úradná skúška do ${fmtDate(m.uradnaSkuska)}`,
           };
           if (!openUS) {
             additions.push({
@@ -6119,7 +6158,7 @@ function DispatcherApp() {
               assignedDate: null,
               assignmentId: null,
             });
-          } else if ((openUS.uradnaSkuskaDate || null) !== desired.uradnaSkuskaDate || !!openUS.overdue !== desired.overdue) {
+          } else if ((openUS.uradnaSkuskaDate || null) !== desired.uradnaSkuskaDate || !!openUS.overdue !== desired.overdue || openUS.popis !== desired.popis) {
             updates[openUS.id] = desired;
           }
         }
@@ -8384,7 +8423,10 @@ function DispatcherApp() {
     if (handoverProtocolsRef.current.some((h) => h.jobId === job.id && h.handoverDone)) return;
     // Vlastná doprava: kontrolu aj odovzdanie zákazníkovi robí checker v deň
     // vyzdvihnutia (departureDate) — nie deň vopred ako pri vývoze našou dopravou.
-    const inspectionDate = checkerInspectionDate(job);
+    // Nadväzujúci prenájom: iná zákazka toho istého stroja končí v deň vývozu → kontrola až po jej zvoze.
+    const dep0 = job.departureDate || job.startDate;
+    const turnover = !!dep0 && jobs.some((o) => o.id !== job.id && o.machineId === job.machineId && !o.notRealized && jobTo(o) === dep0);
+    const inspectionDate = checkerInspectionDate(job, turnover);
     const checkerId = resolveCheckerId(dc, subs, job.fromDepo, inspectionDate);
     if (!checkerId) return;
     // assignmentsRef (nie "assignments" z closure) — v jednom kroku môže bežať
@@ -8423,8 +8465,8 @@ function DispatcherApp() {
         link: { module: "servis", view: "plan", plannerDate: inspectionDate, assignmentId: record.id },
       });
     }
-    // Ten istý checker, kontrola presunutá na skorší deň (posunutý vývoz) — musí to vedieť vopred.
-    else if (checker && existing && inspectionDate < existing.date) {
+    // Ten istý checker, kontrola presunutá na iný deň (posunutý vývoz) — musí to vedieť.
+    else if (checker && existing && inspectionDate !== existing.date) {
       pushNotification({ kind: "checker_inspection", roles: [], userName: checker.name, title: "Kontrola stroja presunutá", message: `Kontrola stroja ${machineById[job.machineId]?.code || "—"} (${job.customer || "—"}) je presunutá z ${fmtDate(existing.date)} na ${fmtDate(inspectionDate)}.`, link: { module: "servis", view: "plan", plannerDate: inspectionDate, assignmentId: record.id } });
     }
     // Pôvodný checker (napr. kontrolu prevzal zástup) sa dozvie, že ju nerobí.
@@ -8746,7 +8788,7 @@ function DispatcherApp() {
     goBackCard();
   }
   function uncompleteJob(jobId) {
-    if (!isAdminUser(effectiveUser) && !isLeadDispatcher) return;
+    if (!canUncompleteJobs) return;
     if (handoverProtocols.find((h) => h.jobId === jobId)?.returnDone) return;
     // Zákazka sa vracia do aktívneho stavu — vrátia sa hodnoty spred ukončenia
     // (koniec, zvoz, depo návratu, šofér, depo stroja) a zruší sa nevykonaná
@@ -10728,7 +10770,7 @@ function DispatcherApp() {
             setCompleteJobTarget(liveJob);
             setJobDetail(null);
           }}
-          onUncomplete={isAdminUser(effectiveUser) || isLeadDispatcher ? () => {
+          onUncomplete={canUncompleteJobs ? () => {
             pushCard("job", liveJob);
             setUncompleteJobTarget(liveJob);
             setJobDetail(null);
@@ -16499,8 +16541,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // treba) — nič nebráni odoslaniu bez neho. Checklist ale musí byť vyplnený
   // do posledného riadku, to sa už nesmie dať obísť.
   const checklistComplete = HANDOVER_CHECKLIST_ITEMS.every((_, i) => checklist[i]?.[statusKey] === "ok" || checklist[i]?.[statusKey] === "problem");
-  // Povinné fotky: pri vrátení vždy, pri prevzatí len bez zákazníka. Oprava starého protokolu počet nevynucuje.
-  const photosNeeded = !isCorrection && (isReturnPhase || customerAbsent) ? Math.max(0, MIN_MACHINE_PHOTOS - returnPhotos.length) : 0;
+  // Povinné fotky: pri vrátení vždy; pri prevzatí bez zákazníka alebo keď stroj nemá hotovú kontrolu checkera
+  // (vtedy sú fotky šoféra jediný doklad o stave). Oprava starého protokolu počet nevynucuje.
+  const noCheckerInspection = !isReturnPhase && !job?.selfPickup && !(checkerInspection?.resolved && !checkerInspection?.skipped);
+  const photosRequired = isReturnPhase || customerAbsent || noCheckerInspection;
+  const photosNeeded = !isCorrection && photosRequired ? Math.max(0, MIN_MACHINE_PHOTOS - returnPhotos.length) : 0;
   const customerOk = (customerAbsent ? returnPhotos.length > 0 : !!(customerSig && customerName.trim())) && photosNeeded === 0;
   const canSave = uploadingPhotos === 0 && checklistComplete && customerOk && driverSig && driverName.trim();
 
@@ -16518,12 +16563,16 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.returnDone = true;
       patch.returnDate = existing?.returnDate || todayISO();
       patch.returnPhotos = returnPhotos;
+      // Depo, ktoré šofér videl pri zvoze — DB (step73) upozorní dispečera, ak ho medzitým niekto zmenil (zvoz bez signálu).
+      if (!existing?.returnDone) patch.returnDepoSeen = job?.returnDepo || job?.fromDepo || null;
     } else {
       patch.handoverCustomerAbsent = customerAbsent;
       patch.handoverAbsentAt = absentAt;
       patch.handoverCustomerSignature = customerAbsent ? null : customerSig;
       patch.handoverCustomerName = customerAbsent ? "" : customerName.trim();
       if (returnPhotos.length || existing?.handoverPhotos?.length) patch.handoverPhotos = returnPhotos;
+      // Fotky šoféra nahrádzajú kontrolu checkera — vedieť to aj neskôr (DB pravidlo fotiek).
+      if (!existing?.handoverDone && noCheckerInspection) patch.handoverWithoutInspection = true;
       patch.handoverDriverSignature = driverSig;
       patch.handoverDriverName = driverName.trim();
       patch.handoverDone = true;
@@ -16823,7 +16872,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       {(
         <>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Fotky stavu stroja pri {isReturnPhase ? "zvoze" : "vývoze"}{isCorrection ? (customerAbsent ? " *" : "") : isReturnPhase || customerAbsent ? ` * (aspoň ${MIN_MACHINE_PHOTOS})` : " (nepovinné)"}
+            Fotky stavu stroja pri {isReturnPhase ? "zvoze" : "vývoze"}{isCorrection ? (customerAbsent ? " *" : "") : photosRequired ? ` * (aspoň ${MIN_MACHINE_PHOTOS})` : " (nepovinné)"}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {returnPhotos.map((url, i) => (
@@ -16845,7 +16894,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
           {photosNeeded > 0 && (
             <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>
-              Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
+              {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — " : ""}Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
             </div>
           )}
           <div style={{ marginBottom: 14 }} />
@@ -19890,6 +19939,15 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 // Stroj už odišiel (podpísané prevzatie) — začiatok nájmu sa nemení, len koniec.
                 const departed = !!departedJobIds?.has(j.id);
                 const draggable = canDragJobs && !isDone;
+                // Nadväzujúci prenájom v ten istý deň: deň výmeny sa rozdelí uhlopriečkou
+                // (odchádzajúca zákazka hore vľavo, nová dole vpravo), farby ostávajú podľa obchodníka.
+                const inView = (d) => d && d >= allDays[0] && d <= allDays[allDays.length - 1];
+                const endTurn = !noEnd && inView(j.endDate) && mJobs.some((o) => o.id !== j.id && !o.notRealized && o.startDate === j.endDate);
+                const startTurn = inView(j.startDate) && mJobs.some((o) => o.id !== j.id && !o.notRealized && o.endDate === j.startDate);
+                const cellPct = 100 / (endCol - startCol + 1);
+                const turnClip = startTurn || endTurn
+                  ? `polygon(${startTurn ? `calc(${cellPct}% + 2px) 0` : "0 0"}, ${endTurn ? `calc(100% - 2px) 0, calc(${100 - cellPct}% - 2px) 100%` : "100% 0, 100% 100%"}, ${startTurn ? "2px 100%" : "0 100%"})`
+                  : undefined;
                 return (
                   <div
                     key={j.id}
@@ -19932,6 +19990,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         borderRadius: 4,
                         overflow: "hidden",
                         boxSizing: "border-box",
+                        clipPath: turnClip,
                       }}
                     />
                     {/* Popisok aj tooltip sú zámerne MIMO farebného pozadia
@@ -19952,6 +20011,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         color: "#fff",
                         fontWeight: 600,
                         pointerEvents: "none",
+                        paddingLeft: startTurn ? `${cellPct}%` : undefined, // popisok za deň výmeny
                       }}
                     >
                       <div style={{ maxWidth: Math.min(barWidths[j.id] || 100, 260), overflow: "hidden", padding: compactMode ? "1px 6px" : "3px 6px", lineHeight: 1.3 }}>
