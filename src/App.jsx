@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.732";
+const APP_VERSION = "1.0.734";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -8511,6 +8511,10 @@ function DispatcherApp() {
       if (merged.status !== "completed" && (changed("fromDepo") || changed("startDate") || changed("selfPickup") || changed("departureDate") || changed("machineId"))) {
         ensureCheckerAssignment(merged);
       }
+      // Opravené depo návratu na ukončenej zákazke (kým stroj nie je vrátený).
+      const depoFix = merged.status === "completed" && !merged.notRealized && changed("returnDepo") && !handoverProtocols.some((h) => h.jobId === id && h.returnDone);
+      const prevRet = depoFix ? assignmentsRef.current.find((a) => a.jobId === id && a.kind === "kontrolaStroja" && a.phase === "vratenie" && !a.resolved) : null;
+      if (depoFix) persistMachines((ms) => ms.map((m) => (m.id === merged.machineId ? { ...m, depo: merged.returnDepo } : m)));
       if (merged.selfReturn && merged.status === "completed" && (patch.status !== undefined || patch.selfReturn !== undefined || patch.pickupDate !== undefined || patch.returnDepo !== undefined)) {
         ensureReturnCheckerAssignment(merged);
       } else if (patch.selfReturn === false && before.selfReturn) {
@@ -8532,6 +8536,12 @@ function DispatcherApp() {
         if (!driver) return;
         pushNotification({ roles: [], userName: driver.name, kind: "assignment_transport", title: transportType === "vyvoz" ? "Odobratý vývoz stroja" : "Odobratý zvoz stroja", message: `${transportType === "vyvoz" ? "Vývoz" : "Zvoz"} stroja ${machine?.code || "—"} pre ${before.customer || "—"} už nerobíte.`, link: { module: "poziciovna", view: "prepravy" } });
       };
+      if (depoFix) {
+        const now = prevRet && assignmentsRef.current.find((a) => a.id === prevRet.id);
+        const oldChecker = now && now.technicianId !== prevRet.technicianId ? technicianByIdTop[prevRet.technicianId] : null;
+        if (oldChecker) pushNotification({ kind: "checker_inspection", roles: [], userName: oldChecker.name, title: "Kontrola stroja presunutá", message: `Stroj ${machine?.code || "—"} (${before.customer || "—"}) sa vráti na depo ${merged.returnDepo} — vrátenie a kontrolu robí ${technicianByIdTop[now.technicianId]?.name || "iný technik"}.`, link: { module: "servis", view: "plan", plannerDate: now.date } });
+        if (merged.returnDriverId && merged.returnDriverId === before.returnDriverId) notifyDriver(merged.returnDriverId, "Zmenené depo zvozu", `Stroj ${machine?.code || "—"} od ${before.customer || "—"} vezte na depo ${merged.returnDepo} (predtým ${before.returnDepo || before.fromDepo || "—"}).`, "zvoz");
+      }
       if (patch.driverId !== undefined && before.driverId && patch.driverId !== before.driverId) notifyRemovedDriver(before.driverId, "vyvoz");
       if (patch.returnDriverId !== undefined && before.returnDriverId && patch.returnDriverId !== before.returnDriverId) notifyRemovedDriver(before.returnDriverId, "zvoz");
       // Nové pridelenie šoféra na vývoz/zvoz — funguje bez ohľadu na to, či sa
@@ -8685,7 +8695,7 @@ function DispatcherApp() {
     goBackCard();
   }
   function uncompleteJob(jobId) {
-    if (!isAdminUser(effectiveUser)) return;
+    if (!isAdminUser(effectiveUser) && !isLeadDispatcher) return;
     if (handoverProtocols.find((h) => h.jobId === jobId)?.returnDone) return;
     // Zákazka sa vracia do aktívneho stavu — vrátia sa hodnoty spred ukončenia
     // (koniec, zvoz, depo návratu, šofér, depo stroja) a zruší sa nevykonaná
@@ -9895,6 +9905,7 @@ function DispatcherApp() {
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id), true)}
           isDeparted={!!(showAddJob.existing && handoverProtocols.some((h) => h.jobId === showAddJob.existing.id && (h.handoverDone || h.returnDone)))}
+          isReturned={!!(showAddJob.existing && handoverProtocols.some((h) => h.jobId === showAddJob.existing.id && h.returnDone))}
           recordLocks={recordLocks}
           currentUser={currentUser}
         />
@@ -10665,11 +10676,11 @@ function DispatcherApp() {
             setCompleteJobTarget(liveJob);
             setJobDetail(null);
           }}
-          onUncomplete={() => {
+          onUncomplete={isAdminUser(effectiveUser) || isLeadDispatcher ? () => {
             pushCard("job", liveJob);
             setUncompleteJobTarget(liveJob);
             setJobDetail(null);
-          }}
+          } : null}
           onReportDamage={() => {
             const m = enrichedMachineById[liveJob.machineId];
             if (m) {
@@ -17436,8 +17447,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         {job.status !== "completed" && can(user, "job_complete") && (
           <button className="btn btn-accent" onClick={onComplete}>Ukončiť zákazku</button>
         )}
-        {/* Zrušiť ukončenie len admin a len kým stroj nie je vrátený. */}
-        {job.status === "completed" && isAdminUser(user) && !handoverProtocol?.returnDone && (
+        {/* Zrušiť ukončenie len admin / vedúci dispečer a len kým stroj nie je vrátený. */}
+        {job.status === "completed" && onUncomplete && !handoverProtocol?.returnDone && (
           <button
             className="btn btn-ghost"
             style={{ color: "var(--warn)" }}
@@ -17848,7 +17859,7 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   );
 }
 
-function TransportModeToggle({ selfMode, onChange }) {
+function TransportModeToggle({ selfMode, onChange, disabled }) {
   return (
     <div style={{ display: "flex", gap: 4 }}>
       {[[false, "Mateco doprava"], [true, "Vlastná doprava"]].map(([val, label]) => (
@@ -17856,6 +17867,7 @@ function TransportModeToggle({ selfMode, onChange }) {
           key={label}
           type="button"
           className="btn"
+          disabled={disabled}
           onClick={() => onChange(val)}
           style={{
             flex: 1, fontSize: 12,
@@ -17871,7 +17883,7 @@ function TransportModeToggle({ selfMode, onChange }) {
   );
 }
 
-function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted, recordLocks, currentUser }) {
+function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted, isReturned, recordLocks, currentUser }) {
   // Mäkký zámok "edituje X" — len pri úprave existujúcej zákazky (nová zákazka
   // ešte nemá s kým kolidovať). Zapíše sa pri otvorení, obnovuje heartbeatom,
   // zmaže pri zatvorení — pozri writeRecordLock/clearRecordLock vyššie.
@@ -17933,12 +17945,17 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   const [departureLinked, setDepartureLinked] = useState(!existing?.departureDate || existing.departureDate === existing.startDate);
   const [pickupLinked, setPickupLinked] = useState(!existing?.pickupDate || existing.pickupDate === existing.endDate);
   useEffect(() => {
-    if (departureLinked) setDepartureDate(startDate);
+    if (departureLinked && existing?.status !== "completed") setDepartureDate(startDate);
   }, [startDate]);
   useEffect(() => {
     if (pickupLinked) setPickupDate(endDate);
   }, [endDate]);
   const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
+  // Depo návratu sa dá opraviť aj po ukončení — kým stroj nie je vrátený (protokol o vrátení).
+  const returnDepoEditable = existing?.status === "completed" && !existing.notRealized && !isReturned;
+  // Ukončená zákazka: vývoz je už história — meniť sa dá len to, čo patrí k ukončeniu/zvozu.
+  const vyvozLocked = existing?.status === "completed";
+  const [returnDepo, setReturnDepo] = useState(existing?.returnDepo || existing?.fromDepo || "");
   const [machineDisplayName, setMachineDisplayName] = useState(existing?.machineDisplayName || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
 
@@ -18001,9 +18018,9 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Stroj *">
             {/* R1: stroj už odišiel — výmena = ukončiť zákazku a založiť novú (protokol, kontroly a ERP patria k stroju). */}
-            <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!isDeparted} />
-            {isDeparted && (
-              <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Stroj už odišiel — pri výmene ukončite zákazku a založte novú na nový stroj.</div>
+            <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!isDeparted || vyvozLocked} />
+            {(isDeparted || vyvozLocked) && (
+              <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? "Zákazka je ukončená — stroj sa už nemení." : "Stroj už odišiel — pri výmene ukončite zákazku a založte novú na nový stroj."}</div>
             )}
           </Field>
           {machine?.objekt === "Externý stroj" && (
@@ -18111,14 +18128,14 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
       {(
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Odkiaľ (depo) *">
-            <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} style={{ width: "100%" }}>
+            <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} disabled={vyvozLocked} style={{ width: "100%" }}>
               <option value="">— vybrať depo —</option>
               {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
           <Field label={selfPickup ? "Kam (nepovinné)" : "Kam *"}><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
           <Field label="Doprava pri vývoze">
-            <TransportModeToggle selfMode={selfPickup} onChange={setSelfPickup} />
+            <TransportModeToggle selfMode={selfPickup} onChange={setSelfPickup} disabled={vyvozLocked} />
           </Field>
           <Field label="Doprava pri zvoze">
             <TransportModeToggle selfMode={selfReturn} onChange={setSelfReturn} />
@@ -18127,7 +18144,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
             <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>Zákazník si stroj vyzdvihne v depe — kontrolu aj odovzdanie robí checker depa.</div>
           ) : (
             <Field label="Šofér (vývoz)">
-              <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
+              <select value={driverId} onChange={(e) => setDriverId(e.target.value)} disabled={vyvozLocked} style={{ width: "100%" }}>
                 <option value="">— zatiaľ neurčený —</option>
                 {driverOptionsGrouped(drivers)}
               </select>
@@ -18135,8 +18152,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
           )}
           <div />
           <Field label={selfPickup ? "Dátum vyzdvihnutia v depe" : "Dátum vývozu"}>
-            <input type="date" value={departureDate} onChange={(e) => { setDepartureDate(e.target.value); setDepartureLinked(e.target.value === startDate); }} style={{ width: "100%" }} />
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz).</div>
+            <input type="date" value={departureDate} onChange={(e) => { setDepartureDate(e.target.value); setDepartureLinked(e.target.value === startDate); }} disabled={vyvozLocked} style={{ width: "100%" }} />
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? "Zákazka je ukončená — vývoz sa už nemení." : "Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz)."}</div>
           </Field>
           <Field label={selfReturn ? "Dátum vrátenia do depa" : "Dátum zvozu"}>
             <input type="date" value={pickupDate} min={endDate || undefined} onChange={(e) => { setPickupDate(e.target.value); setPickupLinked(e.target.value === endDate); }} style={{ width: "100%" }} />
@@ -18146,6 +18163,14 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa konca — dá sa zmeniť aj neskôr priamo v Prepravách.</div>
             )}
           </Field>
+          {returnDepoEditable && (
+            <Field label="Depo návratu">
+              <select value={returnDepo} onChange={(e) => setReturnDepo(e.target.value)} style={{ width: "100%" }}>
+                {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Kam sa stroj vráti — podľa neho sa určí checker kontroly po vrátení.</div>
+            </Field>
+          )}
         </div>
       )}
 
@@ -18196,6 +18221,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               departureDate: departureDate || startDate,
               pickupDate: pickupDate || endDate || null,
               notes: notes.trim(),
+              ...(returnDepoEditable && returnDepo && returnDepo !== (existing.returnDepo || existing.fromDepo) ? { returnDepo } : {}),
             });
           }}
         >
