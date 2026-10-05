@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.734";
+const APP_VERSION = "1.0.735";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -8476,6 +8476,10 @@ function DispatcherApp() {
           link: { module: "poziciovna", view: "prepravy", transportId: `${record.id}-vyvoz` },
         });
       }
+    }
+    const returnDriver = record.returnDriverId && driverById[record.returnDriverId];
+    if (returnDriver) {
+      pushNotification({ kind: "assignment_transport", roles: [], userName: returnDriver.name, title: "Pridelený zvoz stroja", message: `Boli ste pridelení na zvoz stroja ${machine?.code || "—"} pre ${record.customer || "—"}${record.pickupDate || record.endDate ? ` — ${fmtDate(record.pickupDate || record.endDate)}` : ""}.`, link: { module: "poziciovna", view: "prepravy", transportId: `${record.id}-zvoz` } });
     }
     if (record.returnDriverId) {
       const driver = driverById[record.returnDriverId];
@@ -17896,6 +17900,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.id) : null;
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
+  const [returnDriverId, setReturnDriverId] = useState(existing?.returnDriverId || "");
   const machine = machines.find((m) => m.id === machineId);
   const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
   const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
@@ -17922,6 +17927,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
     }
   }, []);
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const [contactAdding, setContactAdding] = useState(false); // formulár novej kontaktnej osoby — na celú šírku
   // Kontakty pridané cez "+ Nová kontaktná osoba" pre ÚPLNE NOVÉHO zákazníka
   // (ešte nemá selectedCustomerId, takže sa nedajú uložiť rovno k nemu) — uložia
   // sa až pri vytvorení zákazky, spolu so samotným zákazníkom (onSaveCustomer).
@@ -18023,15 +18029,26 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? "Zákazka je ukončená — stroj sa už nemení." : "Stroj už odišiel — pri výmene ukončite zákazku a založte novú na nový stroj."}</div>
             )}
           </Field>
+          <Field label="Obchodník *">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {obchodnik && (
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
+              )}
+              <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— vybrať obchodníka —</option>
+                {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+          </Field>
           {machine?.objekt === "Externý stroj" && (
-            <Field label="Názov stroja pre túto zákazku">
+            <div style={{ gridColumn: "1 / -1" }}><Field label="Názov stroja pre túto zákazku">
               <input
                 value={machineDisplayName}
                 onChange={(e) => setMachineDisplayName(e.target.value)}
                 placeholder="napr. GS-1932 (podľa toho, čo rieši subdodávka)"
                 style={{ width: "100%" }}
               />
-            </Field>
+            </Field></div>
           )}
           <Field label="Zákazník *">
             <CustomerAutocomplete
@@ -18052,7 +18069,9 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               }}
             />
           </Field>
+          <div style={{ gridColumn: contactAdding ? "1 / -1" : undefined }}>
           <ContactPicker
+            onAddingChange={setContactAdding}
             contacts={selectedContacts}
             onSelect={(k) => {
               if (k.phone) setCustomerPhone(k.phone);
@@ -18076,12 +18095,15 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
                 : undefined
             }
           />
-          <BlacklistWarning match={blacklistMatch} />
-          {(customerContactName || customerPhone || customerEmail) && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-              Kontakt na zákazke: {customerContactName || "—"} · {customerPhone || "—"}{customerEmail ? ` · ${customerEmail}` : ""}
-            </div>
-          )}
+          </div>
+          {(blacklistMatch || customerContactName || customerPhone || customerEmail) && <div style={{ gridColumn: "1 / -1" }}>
+            <BlacklistWarning match={blacklistMatch} />
+            {(customerContactName || customerPhone || customerEmail) && (
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+                Kontakt na zákazke: {customerContactName || "—"} · {customerPhone || "—"}{customerEmail ? ` · ${customerEmail}` : ""}
+              </div>
+            )}
+          </div>}
           <Field label="Začiatok *">
             <input
               type="date"
@@ -18103,17 +18125,6 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
             ) : (
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Nechajte prázdne, ak koniec zákazky ešte nie je známy.</div>
             )}
-          </Field>
-          <Field label="Obchodník *">
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {obchodnik && (
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
-              )}
-              <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
-                <option value="">— vybrať obchodníka —</option>
-                {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-              </select>
-            </div>
           </Field>
           <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
           <div style={{ gridColumn: "1 / -1" }}>
@@ -18150,7 +18161,16 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               </select>
             </Field>
           )}
-          <div />
+          {selfReturn ? (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>Zákazník stroj vráti do depa sám — protokol aj kontrolu robí checker depa.</div>
+          ) : (
+            <Field label="Šofér (zvoz)">
+              <select value={returnDriverId} onChange={(e) => setReturnDriverId(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— zatiaľ neurčený —</option>
+                {driverOptionsGrouped(drivers)}
+              </select>
+            </Field>
+          )}
           <Field label={selfPickup ? "Dátum vyzdvihnutia v depe" : "Dátum vývozu"}>
             <input type="date" value={departureDate} onChange={(e) => { setDepartureDate(e.target.value); setDepartureLinked(e.target.value === startDate); }} disabled={vyvozLocked} style={{ width: "100%" }} />
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? "Zákazka je ukončená — vývoz sa už nemení." : "Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz)."}</div>
@@ -18163,6 +18183,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa konca — dá sa zmeniť aj neskôr priamo v Prepravách.</div>
             )}
           </Field>
+          {returnDepoEditable && <div />}
           {returnDepoEditable && (
             <Field label="Depo návratu">
               <select value={returnDepo} onChange={(e) => setReturnDepo(e.target.value)} style={{ width: "100%" }}>
@@ -18220,6 +18241,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               endDate: endDate || null,
               departureDate: departureDate || startDate,
               pickupDate: pickupDate || endDate || null,
+              returnDriverId: selfReturn ? null : returnDriverId || null,
               notes: notes.trim(),
               ...(returnDepoEditable && returnDepo && returnDepo !== (existing.returnDepo || existing.fromDepo) ? { returnDepo } : {}),
             });
@@ -18305,8 +18327,9 @@ function NewContactInlineForm({ onSave, onCancel }) {
 // "+ Nová kontaktná osoba" je prvá voľba v tom istom dropdowne (nie samostatné
 // tlačidlo/pole vedľa neho) — po jej výbere sa dropdown nahradí formulárom
 // NewContactInlineForm, "Zrušiť" sa vráti späť na dropdown.
-function ContactPicker({ contacts, onSelect, onAddNew }) {
-  const [adding, setAdding] = useState(false);
+function ContactPicker({ contacts, onSelect, onAddNew, onAddingChange }) {
+  const [adding, setAddingState] = useState(false);
+  const setAdding = (v) => { setAddingState(v); onAddingChange?.(v); };
   if ((!contacts || contacts.length === 0) && !onAddNew) return null;
   if (adding) {
     return (
