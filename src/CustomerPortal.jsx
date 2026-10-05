@@ -291,7 +291,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
           </div>
           <input
             type="date"
-            min={new Date().toLocaleDateString("sv-SE")}
+            min={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
