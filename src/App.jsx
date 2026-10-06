@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.742";
+const APP_VERSION = "1.0.743";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -1709,7 +1709,7 @@ const RECORD_TABLES = [
   "machines", "jobs", "assignments", "damages", "weeklyDuty", "notifications", "transportSendLog",
   "customers", "framoveZmluvy", "blacklist", "checkerSubstitutions", "reservations", "employees",
   "protocolLogs", "handoverProtocols", "machineModels", "spareParts", "trash", "vehicles",
-  "portal_requests", "transportNotes", "ezMeasurements", "dispatcherSubstitutions",
+  "portal_requests", "transportNotes", "ezMeasurements", "dispatcherSubstitutions", "partHandovers",
 ];
 async function collectStoredPhotoUrls(sinceIso) {
   const re = /https?:\/\/[^"'\\]+\/storage\/v1\/object\/public\/(?:protocols|inspections)\/[^"'\\]+/g;
@@ -1952,7 +1952,7 @@ async function clearBlockedDeviceData(deleted) {
 // Plánovanie (pridelenia, úprava tiketu, mazanie) aj u vedúceho technika BA len online.
 function fieldOfflineAllowed(table, item, base, isDelete) {
   if (!_offlineQueueAllowed || isDelete) return false;
-  if (["handoverProtocols", "protocolLogs", "ezMeasurements", "jobs"].includes(table)) return true;
+  if (["handoverProtocols", "protocolLogs", "ezMeasurements", "jobs", "partHandovers"].includes(table)) return true;
   if (item === undefined && ["notifications", "damages", "assignments"].includes(table)) return true; // rozhodne až záznam
   if (table === "notifications") return !["assignment_service", "spare_parts"].includes(item?.kind);
   if (table === "damages") return !base; // nové poškodenie áno, zmena existujúceho tiketu nie
@@ -3926,6 +3926,11 @@ function DispatcherApp() {
   // ktorýkoľvek technik, frontu na spracovanie ("Spracované") vidia len EZ technici
   // (employees.alsoEzTechnik) — viď RevisionsView.
   const [ezMeasurements, setEzMeasurements] = useState([]);
+  const [partHandovers, setPartHandovers] = useState([]); // výdaj dielov (dodacie listy)
+  const [partHandoverUi, setPartHandoverUi] = useState(null); // {kind: "quick"|"sign"|"edit", rec}
+  const [partHandoverFocusId, setPartHandoverFocusId] = useState(null); // z upozornenia
+  const partHandoversRef = useRef(partHandovers);
+  partHandoversRef.current = partHandovers;
   ezMeasurementsRef.current = ezMeasurements;
   const [dispatcherSubstitutions, setDispatcherSubstitutions] = useState([]); // [{id, dispatcherId, substituteId, startDate, endDate}] — zástupy dispečerov
   const [ezDayTarget, setEzDayTarget] = useState(null); // { technicianId, date } — kliknutie na "EZ" v kalendári servisu
@@ -4289,13 +4294,14 @@ function DispatcherApp() {
       setTrash([]);
       setTransportNotes([]);
       setEzMeasurements([]);
+      setPartHandovers([]);
       setRecordLocks([]);
       setLoaded(true);
       return;
     }
     _initialLoadDone = false;
     (async () => {
-      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes, ezm, dsubs, rlocks] = await Promise.all([
+      const [m, jobsTable, a, dmg, wd, notif, tsl, cust, dc, fz, bl, cs, res, emp, plogs, hprot, mmodels, sprts, trsh, veh, preq, tnotes, ezm, dsubs, rlocks, phand] = await Promise.all([
         loadRecordTable("machines", setMachines).then((rows) => applyPendingOutbox("machines", rows)),
         loadRecordTable("jobs", setJobs).then((rows) => applyPendingOutbox("jobs", rows)),
         loadRecordTable("assignments", setAssignments).then((rows) => applyPendingOutbox("assignments", rows)),
@@ -4321,6 +4327,7 @@ function DispatcherApp() {
         loadRecordTable("ezMeasurements", setEzMeasurements).then((rows) => applyPendingOutbox("ezMeasurements", rows)),
         loadRecordTable("dispatcherSubstitutions", setDispatcherSubstitutions),
         loadRecordTable("record_locks", setRecordLocks).then((rows) => applyPendingOutbox("record_locks", rows)),
+        loadRecordTable("partHandovers", setPartHandovers).then((rows) => applyPendingOutbox("partHandovers", rows)).catch(() => []), // bez step77 prázdne
       ]);
       setMachines(m);
       setVehicles(veh);
@@ -4346,6 +4353,7 @@ function DispatcherApp() {
       setEzMeasurements(ezm);
       setDispatcherSubstitutions(dsubs);
       setRecordLocks(rlocks);
+      setPartHandovers(phand);
 
       setEmployees(emp);
       setLoaded(true);
@@ -4389,7 +4397,7 @@ function DispatcherApp() {
     transportSendLog: setTransportSendLog, customers: setCustomers, framoveZmluvy: setFramoveZmluvy, blacklist: setBlacklist,
     checkerSubstitutions: setCheckerSubstitutions, reservations: setReservations, protocolLogs: setProtocolLogs,
     handoverProtocols: setHandoverProtocols, machineModels: setMachineModels, spareParts: setSpareParts, trash: setTrash,
-    transportNotes: setTransportNotes, ezMeasurements: setEzMeasurements, dispatcherSubstitutions: setDispatcherSubstitutions,
+    transportNotes: setTransportNotes, ezMeasurements: setEzMeasurements, dispatcherSubstitutions: setDispatcherSubstitutions, partHandovers: setPartHandovers,
   };
   useEffect(() => {
     const setters = tableSetters;
@@ -4529,6 +4537,7 @@ function DispatcherApp() {
       ["transportNotes", setTransportNotes],
       ["ezMeasurements", setEzMeasurements],
       ["dispatcherSubstitutions", setDispatcherSubstitutions],
+      ["partHandovers", setPartHandovers],
       ["record_locks", setRecordLocks],
     ];
     // Živé spojenie spadlo a znova sa pripojilo (aj bez výpadku siete, napr. firemná
@@ -5286,6 +5295,7 @@ function DispatcherApp() {
   const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
   const persistTransportNotes = useCallback(makeRecordPersist("transportNotes", setTransportNotes), []);
   const persistEzMeasurements = useCallback(makeRecordPersist("ezMeasurements", setEzMeasurements), []);
+  const persistPartHandovers = useCallback(makeRecordPersist("partHandovers", setPartHandovers), []);
   const persistDispatcherSubstitutions = useCallback(makeRecordPersist("dispatcherSubstitutions", setDispatcherSubstitutions), []);
   function addEzMeasurement(data) {
     const item = {
@@ -5825,6 +5835,7 @@ function DispatcherApp() {
       setModule(link.module);
       setView(link.view);
     }
+    if (link.partHandoverId) setPartHandoverFocusId(link.partHandoverId);
     if (link.damageId) {
       setHighlightDamageId(link.damageId);
       setHighlightLocation({ module: link.module, view: link.view });
@@ -5946,6 +5957,7 @@ function DispatcherApp() {
         trash,
         transportNotes,
         ezMeasurements,
+        partHandovers,
         dispatcherSubstitutions,
       },
     };
@@ -6016,6 +6028,7 @@ function DispatcherApp() {
         if (Array.isArray(data.trash)) persistTrash(data.trash);
         if (Array.isArray(data.transportNotes)) persistTransportNotes(data.transportNotes);
         if (Array.isArray(data.ezMeasurements)) persistEzMeasurements(data.ezMeasurements);
+        if (Array.isArray(data.partHandovers)) persistPartHandovers(data.partHandovers);
         if (Array.isArray(data.dispatcherSubstitutions)) persistDispatcherSubstitutions(data.dispatcherSubstitutions);
         showNotice("Záloha bola úspešne načítaná.");
       } catch (e) {
@@ -6544,6 +6557,7 @@ function DispatcherApp() {
             assignments: [assignmentsRef, persistAssignments],
             handoverProtocols: [handoverProtocolsRef, persistHandoverProtocols],
             ezMeasurements: [ezMeasurementsRef, persistEzMeasurements],
+            partHandovers: [partHandoversRef, persistPartHandovers],
           };
           const [ref, persist] = TARGETS[item.table] || [];
           if (!ref) continue;
@@ -8744,6 +8758,53 @@ function DispatcherApp() {
     setShowAddJob(null);
     setCardHistory([]);
   }
+  // ───── Výdaj dielov ─────
+  function savePartHandoverSigned(record) {
+    if (!record.customer?.trim()) return false;
+    // Odovzdaný medzičasom niekým iným — druhý podpis by prepísal prvý.
+    const cur = partHandoversRef.current.find((x) => x.id === record.id);
+    if (cur && cur.status !== "waiting") { showNotice("Tento výdaj už medzičasom odovzdal niekto iný."); return false; }
+    if (persistPartHandovers((list) => (list.some((x) => x.id === record.id) ? list.map((x) => (x.id === record.id ? record : x)) : [...list, record])) === false) return false;
+    showToast("Výdaj dielov bol odovzdaný — dispečer ho skontroluje.");
+    return true;
+  }
+  function savePartHandoverOffice(draft, { isNew, checked }) {
+    if (!phCanManage(effectiveUser)) return false;
+    const nowIso = new Date(serverNowMs()).toISOString();
+    const me = myEmployee?.name || currentUser?.name || "";
+    let rec;
+    if (isNew) rec = { ...draft, id: uid(), status: "waiting", source: "office", createdAt: nowIso, createdBy: me };
+    else {
+      const before = partHandovers.find((x) => x.id === draft.id) || draft;
+      const keys = ["customer", "customerAddress", "contactName", "contactPhone", "customerEmail", "method", "depo", "deliveryAddress", "machineText", "orderNumber", "items", "note", "date"];
+      const changed = keys.some((k) => JSON.stringify(before[k] ?? "") !== JSON.stringify(draft[k] ?? ""));
+      // Oprava po podpise (aj ceny sa dopĺňajú až pri kontrole — tie sa za opravu nerátajú).
+      const strip = (items) => (items || []).map(({ price, ...rest }) => rest); // eslint-disable-line no-unused-vars
+      const corrected = before.status !== "waiting" && keys.some((k) => k !== "items" && JSON.stringify(before[k] ?? "") !== JSON.stringify(draft[k] ?? "")) || (before.status !== "waiting" && JSON.stringify(strip(before.items)) !== JSON.stringify(strip(draft.items)));
+      rec = { ...before, ...draft, ...(corrected ? { correctedAt: nowIso, correctedBy: me } : {}), ...(checked ? { status: "billing", checkedAt: nowIso, checkedBy: me } : {}) };
+      if (!changed && !checked) return true;
+    }
+    if (persistPartHandovers((list) => (isNew ? [...list, rec] : list.map((x) => (x.id === rec.id ? rec : x)))) === false) return false;
+    showToast(isNew ? "Výdaj dielov bol zadaný." : checked ? "Výdaj je skontrolovaný — ide na fakturáciu." : "Výdaj bol upravený.");
+    return true;
+  }
+  function billPartHandover(p, { dlNumber, erpDoc, done }) {
+    if (!phCanBill(effectiveUser)) return;
+    const nowIso = new Date(serverNowMs()).toISOString();
+    persistPartHandovers((list) => list.map((x) => (x.id === p.id
+      ? (done ? { ...x, status: "done", dlNumber: (dlNumber || "").trim(), erpDoc: (erpDoc || "").trim(), processedAt: nowIso, processedBy: myEmployee?.name || currentUser?.name || "" }
+        : { ...x, status: "billing", processedAt: null, processedBy: null })
+      : x)));
+  }
+  function sendPartHandoverMail(p) {
+    openPrintablePartHandover(p);
+    composeMail({
+      to: p.customerEmail || "",
+      subject: `Dodací list – výdaj náhradných dielov${p.dlNumber ? ` ${p.dlNumber}` : ""} — ${p.customer || ""}`,
+      body: `Dobrý deň,\n\nv prílohe posielame dodací list k odovzdaným náhradným dielom:\n${(p.items || []).map((it) => `- ${it.name} (${it.pn}) — ${it.qty} ks`).join("\n")}\n\nS pozdravom,\nmateco Slovakia s.r.o.`,
+    });
+    if (!p.sentAt) persistPartHandovers((list) => list.map((x) => (x.id === p.id ? { ...x, sentAt: new Date(serverNowMs()).toISOString() } : x)));
+  }
   // Kolízia stroja podľa čerstvých dát z databázy — kolega mohol práve uložiť zákazku na ten istý stroj.
   async function freshMachineConflict(job) {
     if (!job?.machineId || job.notRealized) return null;
@@ -9113,6 +9174,7 @@ function DispatcherApp() {
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
         onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
+        onOpenPartHandover={() => setPartHandoverUi({ kind: "quick" })}
         onAddReservation={() => setShowAddReservation({})}
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
@@ -9207,6 +9269,7 @@ function DispatcherApp() {
           onAddReservation={() => setShowAddReservation({})}
           onAskDaily={() => setMaskotAskTick((n) => n + 1)}
           onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
+          onOpenPartHandover={() => setPartHandoverUi({ kind: "quick" })}
         />
         {!mobileNavOpen && (
           <button className="mobile-nav-edge-flag" onClick={() => setMobileNavOpen(true)} aria-label="Menu">☰</button>
@@ -9622,7 +9685,23 @@ function DispatcherApp() {
           </TabSwitcher>
         )}
 
-        {module === "servis" && view === "diely" && (
+        {module === "servis" && (view === "diely" || view === "vydaj") && (
+          <TabSwitcher options={[{ id: "diely", label: "Objednávky dielov" }, { id: "vydaj", label: `Výdaj dielov${partHandovers.filter((p) => p.status === (phCanManage(effectiveUser) ? "check" : phCanBill(effectiveUser) ? "billing" : "waiting")).length ? ` (${partHandovers.filter((p) => p.status === (phCanManage(effectiveUser) ? "check" : phCanBill(effectiveUser) ? "billing" : "waiting")).length})` : ""}` }]} active={view} onSelect={setView}>
+          {view === "vydaj" && (
+            <PartHandoversView
+              partHandovers={partHandovers}
+              user={effectiveUser}
+              focusId={partHandoverFocusId}
+              onNew={() => setPartHandoverUi({ kind: "edit" })}
+              onHandover={(p) => setPartHandoverUi({ kind: "sign", rec: p })}
+              onEdit={(p) => setPartHandoverUi({ kind: "edit", rec: p })}
+              onPrint={(p) => openPrintablePartHandover(p)}
+              onSendMail={sendPartHandoverMail}
+              onBill={billPartHandover}
+              onDelete={(p) => askDelete("tento výdaj dielov", () => persistPartHandovers((list) => list.filter((x) => x.id !== p.id)))}
+            />
+          )}
+          {view === "diely" && (
           <SparePartsView
             spareParts={spareParts}
             machines={machines}
@@ -9750,6 +9829,37 @@ function DispatcherApp() {
                 })),
               ])
             }
+          />
+          )}
+          </TabSwitcher>
+        )}
+        {partHandoverUi?.kind === "quick" && (
+          <PartHandoverQuickModal
+            partHandovers={partHandovers}
+            myEmployee={myEmployee}
+            onClose={() => setPartHandoverUi(null)}
+            onHandover={(p) => setPartHandoverUi({ kind: "sign", rec: p })}
+            onNew={() => setPartHandoverUi({ kind: "sign", rec: null })}
+          />
+        )}
+        {partHandoverUi?.kind === "sign" && (
+          <PartHandoverSignModal
+            rec={partHandoverUi.rec ? partHandovers.find((x) => x.id === partHandoverUi.rec.id) || partHandoverUi.rec : null}
+            customers={customers}
+            machines={machines}
+            user={effectiveUser}
+            myEmployee={myEmployee}
+            onClose={() => setPartHandoverUi(null)}
+            onSave={savePartHandoverSigned}
+          />
+        )}
+        {partHandoverUi?.kind === "edit" && (
+          <PartHandoverEditModal
+            rec={partHandoverUi.rec ? partHandovers.find((x) => x.id === partHandoverUi.rec.id) || partHandoverUi.rec : null}
+            customers={customers}
+            machines={machines}
+            onClose={() => setPartHandoverUi(null)}
+            onSave={savePartHandoverOffice}
           />
         )}
 
@@ -12255,7 +12365,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
   const servisTabs = [
     { id: "prehlad", label: "Prehľad" },
     { id: "plan", label: "Plán servisu" },
-    { id: "diely", label: "Náhradné diely" },
+    { id: "diely", label: "Náhradné diely", group: ["diely", "vydaj"] },
     { id: "poskodenia", label: "Poškodenia", group: ["poskodenia", "externe"] },
     { id: "revizie", label: "Revízie/Úradné skúšky", group: ["revizie", "uradne_skusky"] },
     ...(podkladySubs.length > 0
@@ -12471,6 +12581,12 @@ const RAIL_ICON_PROTOCOL = (
     <path d="M8.5 11h7M8.5 14.5h7M8.5 18h4" />
   </svg>
 );
+const RAIL_ICON_BOX = (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
+    <path d="M3 7.5L12 12l9-4.5M12 12v9" />
+  </svg>
+);
 const RAIL_ICON_RULER = (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="9" width="20" height="6" rx="1" />
@@ -12486,7 +12602,7 @@ const RAIL_ICON_RULER = (
 // EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory }) {
+function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory, onOpenPartHandover }) {
   const [railHover, setRailHover] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
@@ -12529,6 +12645,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
     poziciovna: [
       canReservation && { key: "rezervacia", label: "Nezáväzná rezervácia", icon: RAIL_ICON_RESERVATION, onClick: onAddReservation },
       canDamage && { key: "poskodenie1", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
+      phCanWrite(effectiveUser) && { key: "vydaj1", label: "Výdaj dielov", icon: RAIL_ICON_BOX, onClick: onOpenPartHandover },
     ].filter(Boolean),
     servis: [
       canProtocol && { key: "protokol", label: "Vypísať protokol", icon: RAIL_ICON_PROTOCOL, onClick: () => openProtocol({}) },
@@ -12539,6 +12656,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
         onClick: () => openEzMeasurement(null),
       },
       canDamage && { key: "poskodenie2", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
+      phCanWrite(effectiveUser) && { key: "vydaj2", label: "Výdaj dielov", icon: RAIL_ICON_BOX, onClick: onOpenPartHandover },
     ].filter(Boolean),
   };
 
@@ -12709,7 +12827,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
   );
 }
 
-function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate }) {
+function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate, onOpenPartHandover }) {
   // Skutočná výška hlavičky sa mení (mobile zalomenie na 2 riadky, rôzne
   // zoom/rozlíšenie) — meria sa a ukladá do --header-h, aby sa podľa nej
   // vedeli "prilepiť" hlavičky tabuliek presne POD hlavičku, nie pod ňu.
@@ -12851,6 +12969,12 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
             <button onClick={onAddReservation} className="mobile-tech-action-btn">
               <span className="mobile-tech-action-icon">📅</span>
               Rezervácia
+            </button>
+          )}
+          {phCanWrite(effectiveUser) && (
+            <button onClick={onOpenPartHandover} className="mobile-tech-action-btn">
+              <span className="mobile-tech-action-icon">📦</span>
+              Diely
             </button>
           )}
           {can(effectiveUser, "protocol_write") && (
@@ -27023,6 +27147,374 @@ function copyColumn(rows, key, label) {
   navigator.clipboard.writeText(text).then(
     () => {},
     () => showNotice(`Kopírovanie zlyhalo — skopíruj stĺpec "${label}" ručne.`)
+  );
+}
+
+/* ---------------------------------------------------------
+   Výdaj dielov (dodací list) — tabuľka partHandovers (step77).
+   Stav: waiting (zadal dispečer, čaká na odovzdanie) → check (podpísané,
+   čaká na kontrolu dispečera) → billing (skontrolované, na fakturáciu) → done.
+--------------------------------------------------------- */
+const PH_STATUS = { waiting: "Čaká na odovzdanie", check: "Čaká na kontrolu", billing: "Na fakturáciu", done: "Spracované" };
+const PH_STATUS_COLOR = { waiting: "#e08a00", check: "#c62828", billing: "#1565c0", done: "#2e7d32" };
+function phCanManage(u) { return isAdminUser(u) || ["dispecer_servisu", "veduci_servisu"].includes(u?.role); }
+function phCanBill(u) { return phCanManage(u) || u?.role === "fakturant_servis"; }
+function phCanWrite(u) { return !!u && !["externy_sofer", "nezaradeny"].includes(u.role); }
+const phQty = (q) => Number(String(q ?? "").replace(",", "."));
+const phPrice = (p) => (p === "" || p == null ? null : Number(String(p).replace(",", ".")));
+const phMoney = (n) => `${n.toFixed(2).replace(".", ",")} €`;
+function phItemsValid(items) {
+  return Array.isArray(items) && items.length > 0 && items.every((it) => (it.name || "").trim() && (it.pn || "").trim() && phQty(it.qty) > 0);
+}
+function phItemsSummary(items) {
+  return (items || []).map((it) => `${it.name || "—"} ${it.qty || ""} ks`).join(", ");
+}
+
+function openPrintablePartHandover(rec) {
+  const esc = (s) => (s ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
+  const items = rec.items || [];
+  const priced = items.filter((it) => phPrice(it.price) != null);
+  const total = priced.reduce((s, it) => s + phPrice(it.price) * phQty(it.qty), 0);
+  const qtyTotal = items.reduce((s, it) => s + (phQty(it.qty) || 0), 0);
+  const when = rec.handedAt ? new Date(rec.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : (rec.date ? fmtDate(rec.date) : "");
+  const method = rec.method === "delivery" ? `Doručenie${rec.deliveryAddress ? ` – ${rec.deliveryAddress}` : ""}` : `Osobný odber${rec.depo ? ` – depo ${rec.depo}` : ""}`;
+  const sig = (url, label) => `<div class="sigbox"><div class="siglabel">${label}</div>${safeImgUrl(url) ? `<img class="sigimg" src="${escAttr(url)}">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+  const customerSig = rec.customerAbsent
+    ? `<div class="sigbox"><div class="siglabel">Prevzal (odberateľ)</div><div class="signone" style="color:#c62828">Odberateľ nebol prítomný — bez podpisu</div>${(rec.absentPhotos || []).filter(safeImgUrl).map((u) => `<img class="photo" src="${escAttr(u)}">`).join("")}</div>`
+    : sig(rec.customerSignature, `Prevzal (odberateľ)${rec.customerName ? `: ${esc(rec.customerName)}` : ""}`);
+  const rows = items.map((it, i) => {
+    const p = phPrice(it.price);
+    return `<tr><td>${i + 1}</td><td>${esc(it.name)}</td><td>${esc(it.pn)}</td><td class="n">${esc(it.qty)} ks</td><td class="n">${p != null ? phMoney(p) : "—"}</td><td class="n">${p != null ? phMoney(p * phQty(it.qty)) : "—"}</td></tr>`;
+  }).join("");
+  const docHtml = `<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Dodací list ${esc(rec.dlNumber || "")} ${esc(rec.customer)}</title><style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .toolbar { text-align: center; padding: 10px 0; position: sticky; top: 0; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .btn { padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; border: none; background: #E30613; color: #fff; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); display: flex; flex-direction: column; }
+  .body-content { flex: 1; } .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; } .logo { height: 34px; }
+  h1 { font-size: 18px; color: #E30613; margin: 22px 0 0; text-align: right; } .sub { font-size: 12px; color: #555; margin-top: 4px; text-align: right; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 26px; margin-bottom: 18px; } .meta > div { display: flex; } .meta span.l { color: #666; flex: 0 0 auto; min-width: 120px; margin-right: 8px; }
+  .colhead { font-weight: bold; font-size: 13px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin: 6px 0 7px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; } th { text-align: left; font-size: 11px; color: #666; font-weight: normal; border-bottom: 1px solid #ccc; padding: 5px 4px; }
+  td { padding: 6px 4px; border-bottom: 1px solid #eee; } td.n, th.n { text-align: right; white-space: nowrap; } .total td { border-top: 2px solid #ccc; border-bottom: none; font-weight: bold; }
+  .note { margin: 10px 0 16px; padding: 8px 10px; background: #fafafa; border-left: 3px solid #E30613; font-size: 11.5px; }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; } .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 7px; }
+  .siglabel { font-size: 11px; color: #666; margin-bottom: 4px; } .sigimg { max-width: 100%; height: 64px; } .signone { font-size: 11px; color: #999; min-height: 40px; display: flex; align-items: center; }
+  .photo { height: 70px; margin: 4px 4px 0 0; border-radius: 3px; } .confirm { font-size: 11px; color: #444; margin-top: 14px; } .corr { font-size: 11px; color: #c62828; margin-top: 6px; }
+  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; } .footer .legal { margin-top: 6px; color: #888; font-size: 10px; }
+  @media print { .toolbar { display: none; } body { background: #fff; } .page { box-shadow: none; margin: 0; } @page { size: A4; margin: 0; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button></div>
+<div class="page"><div class="body-content">
+<div class="head"><img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco"><div><h1>DODACÍ LIST – VÝDAJ NÁHRADNÝCH DIELOV</h1><div class="sub">Číslo: ${esc(rec.dlNumber || "")}</div></div></div>
+<div class="meta">
+<div><span class="l">Odberateľ:</span>${esc(rec.customer)}</div><div><span class="l">Dátum odovzdania:</span>${esc(when)}</div>
+<div><span class="l">Adresa:</span>${esc(rec.customerAddress)}</div><div><span class="l">Spôsob:</span>${esc(method)}</div>
+<div><span class="l">Kontakt:</span>${esc([rec.contactName, rec.contactPhone].filter(Boolean).join(", "))}</div><div><span class="l">K stroju:</span>${esc(rec.machineText)}</div>
+<div><span class="l">Vypracoval:</span>${esc(rec.createdBy)}</div><div><span class="l">Číslo objednávky zákazníka:</span>${esc(rec.orderNumber)}</div>
+</div>
+<div class="colhead">Vydané diely</div>
+<table><tr><th>#</th><th>Názov dielu</th><th>PN (číslo dielu)</th><th class="n">Počet</th><th class="n">Cena/ks bez DPH</th><th class="n">Spolu bez DPH</th></tr>${rows}
+<tr class="total"><td></td><td colspan="2">Spolu</td><td class="n">${qtyTotal} ks</td><td></td><td class="n">${priced.length ? phMoney(total) : "—"}</td></tr></table>
+${rec.note || rec.handoverNote ? `<div class="note">${rec.note ? `<b>Poznámka:</b> ${esc(rec.note)}` : ""}${rec.note && rec.handoverNote ? "<br>" : ""}${rec.handoverNote ? `<b>Pri odovzdaní:</b> ${esc(rec.handoverNote)}` : ""}</div>` : ""}
+<div class="colhead">Odovzdanie a prevzatie</div>
+<div class="sigs">${sig(rec.handerSignature, `Odovzdal (mateco)${rec.handedBy ? `: ${esc(rec.handedBy)}` : ""}`)}${customerSig}</div>
+${rec.correctedAt ? `<div class="corr">Opravené dispečerom ${esc(fmtDate(String(rec.correctedAt).slice(0, 10)))}${rec.correctedBy ? ` (${esc(rec.correctedBy)})` : ""}.</div>` : ""}
+<div class="confirm">Odberateľ svojím podpisom potvrdzuje prevzatie vyššie uvedených dielov v uvedenom množstve a bez zjavných vád. Ceny sú uvedené bez DPH, ak sú vyplnené; záväzná je faktúra.</div>
+</div>
+<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX<div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div></div>
+</div></body></html>`;
+  if (_printProtocolOpenListener) _printProtocolOpenListener(docHtml);
+  else console.error("Zobrazenie dodacieho listu ešte nie je pripravené.");
+  return docHtml;
+}
+
+// Údaje výdaja (zákazník, spôsob, diely…) — spoločné pre zadanie dispečerom aj vypísanie v teréne.
+function PartHandoverFields({ value, onChange, customers, machines, withPrices }) {
+  const v = value;
+  const set = (patch) => onChange({ ...v, ...patch });
+  const items = v.items && v.items.length ? v.items : [{ name: "", pn: "", qty: "", price: "" }];
+  const setItem = (i, patch) => set({ items: items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) });
+  const pickCustomer = (name) => {
+    const c = (customers || []).find((x) => (x.firma || "").toLowerCase() === name.trim().toLowerCase());
+    const contact = c?.contacts?.[0];
+    set({ customer: name, ...(c ? { customerId: c.id, contactName: v.contactName || contact?.name || c.kontakt || "", contactPhone: v.contactPhone || contact?.phone || c.telefon || "", customerEmail: v.customerEmail || contact?.email || c.email || "" } : { customerId: null }) });
+  };
+  return (
+    <div>
+      <Field label="Odberateľ (zákazník) *">
+        <input list="ph-customers" value={v.customer || ""} onChange={(e) => pickCustomer(e.target.value)} placeholder="Firma zo zoznamu alebo nový názov" style={{ width: "100%" }} />
+        <datalist id="ph-customers">{(customers || []).map((c) => <option key={c.id} value={c.firma} />)}</datalist>
+      </Field>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Adresa"><input value={v.customerAddress || ""} onChange={(e) => set({ customerAddress: e.target.value })} style={{ width: "100%" }} /></Field>
+        <Field label="Kontaktná osoba"><input value={v.contactName || ""} onChange={(e) => set({ contactName: e.target.value })} style={{ width: "100%" }} /></Field>
+        <Field label="Telefón"><input value={v.contactPhone || ""} onChange={(e) => set({ contactPhone: e.target.value })} style={{ width: "100%" }} /></Field>
+        <Field label="Email"><input type="email" value={v.customerEmail || ""} onChange={(e) => set({ customerEmail: e.target.value })} style={{ width: "100%" }} /></Field>
+        <Field label="Spôsob odovzdania">
+          <select value={v.method || "pickup"} onChange={(e) => set({ method: e.target.value })} style={{ width: "100%" }}>
+            <option value="pickup">Osobný odber v depe</option>
+            <option value="delivery">Doručenie zákazníkovi</option>
+          </select>
+        </Field>
+        {v.method === "delivery" ? (
+          <Field label="Adresa doručenia"><input value={v.deliveryAddress || ""} onChange={(e) => set({ deliveryAddress: e.target.value })} style={{ width: "100%" }} /></Field>
+        ) : (
+          <Field label="Depo">
+            <select value={v.depo || ""} onChange={(e) => set({ depo: e.target.value })} style={{ width: "100%" }}>
+              <option value="">— vybrať —</option>
+              {DEPO_OPTIONS.filter((d) => d !== "Externé").map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </Field>
+        )}
+        <Field label="K stroju (voliteľné)">
+          <input list="ph-machines" value={v.machineText || ""} onChange={(e) => set({ machineText: e.target.value })} placeholder="Sériové číslo alebo popis" style={{ width: "100%" }} />
+          <datalist id="ph-machines">{(machines || []).map((m) => <option key={m.id} value={`${m.code}${m.type ? ` (${m.type})` : ""}`} />)}</datalist>
+        </Field>
+        <Field label="Číslo objednávky zákazníka (voliteľné)"><input value={v.orderNumber || ""} onChange={(e) => set({ orderNumber: e.target.value })} style={{ width: "100%" }} /></Field>
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 13, margin: "6px 0 8px" }}>Diely *</div>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: withPrices ? "2fr 1.3fr 0.7fr 0.9fr auto" : "2fr 1.3fr 0.7fr auto", gap: 6, marginBottom: 6 }}>
+          <input value={it.name || ""} onChange={(e) => setItem(i, { name: e.target.value })} placeholder="Názov dielu *" aria-label="Názov dielu" />
+          <input value={it.pn || ""} onChange={(e) => setItem(i, { pn: e.target.value })} placeholder="PN *" aria-label="PN dielu" />
+          <input value={it.qty ?? ""} onChange={(e) => setItem(i, { qty: e.target.value })} placeholder="Ks *" inputMode="decimal" aria-label="Počet kusov" />
+          {withPrices && <input value={it.price ?? ""} onChange={(e) => setItem(i, { price: e.target.value })} placeholder="€/ks bez DPH" inputMode="decimal" aria-label="Cena za kus" />}
+          <button type="button" className="btn btn-ghost" style={{ padding: "4px 8px" }} disabled={items.length === 1} onClick={() => set({ items: items.filter((_, idx) => idx !== i) })} aria-label="Odstrániť diel">✕</button>
+        </div>
+      ))}
+      <button type="button" className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 12 }} onClick={() => set({ items: [...items, { name: "", pn: "", qty: "", price: "" }] })}>+ Pridať diel</button>
+    </div>
+  );
+}
+
+// Odovzdanie: výdaj zadaný dispečerom (údaje len na čítanie) alebo nový výdaj vypísaný priamo v teréne.
+function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onClose, onSave }) {
+  const isNew = !rec;
+  const [recId] = useState(() => rec?.id || uid());
+  const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: myEmployee?.depo && myEmployee.depo !== "Externé" ? myEmployee.depo : "", items: [{ name: "", pn: "", qty: "", price: "" }] });
+  const [handoverNote, setHandoverNote] = useState("");
+  const [customerAbsent, setCustomerAbsent] = useState(false);
+  const [customerName, setCustomerName] = useState(rec?.contactName || "");
+  const [customerSig, setCustomerSig] = useState(null);
+  const [handerSig, setHanderSig] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(0);
+  const [photoError, setPhotoError] = useState("");
+  const myName = myEmployee?.name || user?.name || "";
+  async function addPhotos(files) {
+    setPhotoError("");
+    for (const file of Array.from(files)) {
+      setUploading((n) => n + 1);
+      try {
+        const blob = await compressImageToBlob(file);
+        const pathPrefix = `vydaj-dielov/${recId}`;
+        const photoId = String(Date.now());
+        try {
+          const path = `${pathPrefix}/${photoId}.jpg`;
+          await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
+          const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
+          setPhotos((prev) => [...prev, pub.publicUrl]);
+        } catch (e) {
+          // Bez signálu — fotka ide do záznamu ako data: a po návrate signálu sa dohrá do úložiska.
+          console.error("Nahranie fotky výdaja zlyhalo (asi offline) — čaká vo fronte:", e);
+          const dataUrl = await blobToDataUrl(blob);
+          setPhotos((prev) => [...prev, dataUrl]);
+          queuePhotoMigration({ photoId, table: "partHandovers", recordId: recId, field: "absentPhotos", oldValue: dataUrl, pathPrefix });
+        }
+      } catch (e) {
+        console.error("Spracovanie fotky zlyhalo", e);
+        setPhotoError("Nahranie fotky zlyhalo, skúste to znova.");
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+  const dataOk = !!(draft.customer || "").trim() && phItemsValid(draft.items);
+  const customerOk = customerAbsent ? photos.length > 0 : !!(customerSig && customerName.trim());
+  const canSave = uploading === 0 && dataOk && customerOk && !!handerSig;
+  function save() {
+    if (!canSave) return;
+    const nowIso = new Date(serverNowMs()).toISOString();
+    const base = isNew
+      ? { ...draft, id: recId, source: "field", createdAt: nowIso, createdBy: myName, date: todayISO(),
+          items: draft.items.map((it) => ({ name: it.name.trim(), pn: it.pn.trim(), qty: String(it.qty).trim(), price: "" })) }
+      : rec;
+    const record = {
+      ...base, status: "check", handedAt: nowIso, handedBy: myName, handedById: user?.id || null,
+      handoverNote: handoverNote.trim(), customerAbsent, customerName: customerAbsent ? "" : customerName.trim(),
+      customerSignature: customerAbsent ? null : customerSig, handerSignature: handerSig, absentPhotos: customerAbsent ? photos : [],
+    };
+    if (onSave(record) === false) return;
+    onClose();
+  }
+  const r = draft;
+  return (
+    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : r.customer || "Výdaj dielov"} onClose={onClose} wide>
+      {isNew ? (
+        <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices={false} />
+      ) : (
+        <div style={{ fontSize: 13, marginBottom: 12 }}>
+          <div><b>{r.customer}</b>{r.contactName ? ` · ${r.contactName}` : ""}{r.contactPhone ? ` · ${r.contactPhone}` : ""}</div>
+          <div style={{ color: "var(--text-dim)" }}>{r.method === "delivery" ? `Doručenie${r.deliveryAddress ? ` – ${r.deliveryAddress}` : ""}` : `Osobný odber${r.depo ? ` – depo ${r.depo}` : ""}`}{r.date ? ` · ${fmtDate(r.date)}` : ""}{r.machineText ? ` · stroj ${r.machineText}` : ""}</div>
+          {r.note && <div style={{ marginTop: 4 }}>📝 {r.note}</div>}
+          <table style={{ width: "100%", marginTop: 8, borderCollapse: "collapse" }}>
+            <thead><tr style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "left" }}><th>Názov</th><th>PN</th><th style={{ textAlign: "right" }}>Počet</th></tr></thead>
+            <tbody>{(r.items || []).map((it, i) => <tr key={i} style={{ borderTop: "1px solid var(--border)" }}><td>{it.name}</td><td>{it.pn}</td><td style={{ textAlign: "right" }}>{it.qty} ks</td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+      <Field label="Poznámka pri odovzdaní (napr. chýba kus, iný diel)">
+        <textarea value={handoverNote} onChange={(e) => setHandoverNote(e.target.value)} rows={2} style={{ width: "100%" }} />
+      </Field>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, margin: "4px 0 10px" }}>
+        <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} /> Odberateľ nie je prítomný (namiesto podpisu fotka)
+      </label>
+      {customerAbsent ? (
+        <div style={{ marginBottom: 12 }}>
+          <PhotoPickButtons onFiles={addPhotos} />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{photos.map((p, i) => <img key={i} src={p} alt={`Foto ${i + 1}`} style={{ height: 60, borderRadius: 4 }} />)}</div>
+          {uploading > 0 && <div style={{ fontSize: 12 }}>Nahrávam fotky…</div>}
+          {photoError && <div style={{ fontSize: 12, color: "var(--danger)" }}>{photoError}</div>}
+        </div>
+      ) : (
+        <Field label="Meno preberajúceho *"><input value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: "100%" }} /></Field>
+      )}
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        {customerAbsent ? <div /> : <SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} />}
+        <SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} />
+      </div>
+      {!canSave && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+          Chýba: {[!dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
+        </div>
+      )}
+      <button className="btn btn-accent" disabled={!canSave} onClick={save}>Odovzdať a podpísať</button>
+    </Modal>
+  );
+}
+
+// Rýchla akcia „Výdaj dielov“ — výdaje čakajúce na odovzdanie + nový výdaj priamo v teréne.
+function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover, onNew }) {
+  const myDepo = myEmployee?.depo;
+  const waiting = (partHandovers || []).filter((p) => p.status === "waiting")
+    .sort((a, b) => (b.depo === myDepo) - (a.depo === myDepo) || (a.date || "").localeCompare(b.date || ""));
+  return (
+    <Modal eyebrow="Výdaj dielov" title="Odovzdanie dielov zákazníkovi" onClose={onClose}>
+      <button className="btn btn-accent" style={{ marginBottom: 14 }} onClick={onNew}>+ Vypísať nový výdaj</button>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Čakajú na odovzdanie ({waiting.length})</div>
+      {waiting.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadny výdaj nečaká na odovzdanie.</div>}
+      {waiting.map((p) => (
+        <div key={p.id} className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 13, minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{p.customer}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{p.date ? fmtDate(p.date) : ""} · {p.method === "delivery" ? "doručenie" : `depo ${p.depo || "—"}`} · {phItemsSummary(p.items)}</div>
+          </div>
+          <button className="btn btn-accent" onClick={() => onHandover(p)}>Odovzdať</button>
+        </div>
+      ))}
+    </Modal>
+  );
+}
+
+// Zadanie výdaja vopred / kontrola a oprava dispečerom servisu.
+function PartHandoverEditModal({ rec, customers, machines, onClose, onSave }) {
+  const isNew = !rec;
+  const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: "", date: todayISO(), items: [{ name: "", pn: "", qty: "", price: "" }] });
+  const valid = !!(draft.customer || "").trim() && phItemsValid(draft.items) && (draft.items || []).every((it) => it.price === "" || it.price == null || phPrice(it.price) >= 0);
+  const signed = !!rec && rec.status !== "waiting";
+  function save(checked) {
+    if (!valid) return;
+    if (onSave({ ...draft, items: draft.items.map((it) => ({ ...it, name: it.name.trim(), pn: it.pn.trim(), qty: String(it.qty).trim(), price: it.price === "" || it.price == null ? "" : String(it.price).trim() })) }, { isNew, checked }) === false) return;
+    onClose();
+  }
+  return (
+    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide>
+      {signed && <div style={{ fontSize: 12, background: "var(--warning-bg, #fff3cd)", padding: "8px 12px", borderRadius: 6, marginBottom: 12 }}>Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
+      {!signed && (
+        <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+      )}
+      <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices />
+      <Field label="Poznámka (na dodací list)"><textarea value={draft.note || ""} onChange={(e) => setDraft({ ...draft, note: e.target.value })} rows={2} style={{ width: "100%" }} /></Field>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className={rec?.status === "check" ? "btn btn-ghost" : "btn btn-accent"} disabled={!valid} onClick={() => save(false)}>{isNew ? "Uložiť výdaj" : "Uložiť"}</button>
+        {rec?.status === "check" && <button className="btn btn-accent" disabled={!valid} onClick={() => save(true)}>Uložiť a označiť ako skontrolované</button>}
+      </div>
+    </Modal>
+  );
+}
+
+// Servis → Náhradné diely → Výdaj dielov: zoznam podľa stavu, kontrola a fakturácia.
+function PartHandoversView({ partHandovers, user, onNew, onHandover, onEdit, onPrint, onSendMail, onBill, onDelete, focusId }) {
+  const [tab, setTab] = useState(() => (phCanManage(user) ? "check" : phCanBill(user) ? "billing" : "waiting"));
+  const counts = Object.fromEntries(Object.keys(PH_STATUS).map((s) => [s, (partHandovers || []).filter((p) => p.status === s).length]));
+  const [billDraft, setBillDraft] = useState({});
+  useEffect(() => {
+    const f = focusId && (partHandovers || []).find((p) => p.id === focusId);
+    if (f) setTab(f.status);
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = (partHandovers || []).filter((p) => p.status === tab)
+    .sort((a, b) => (tab === "waiting" ? (a.date || "").localeCompare(b.date || "") : (b.handedAt || b.createdAt || "").localeCompare(a.handedAt || a.createdAt || "")));
+  const bd = (p) => billDraft[p.id] || { dlNumber: p.dlNumber || "", erpDoc: p.erpDoc || "" };
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        {Object.entries(PH_STATUS).map(([s, label]) => (
+          <button key={s} className="btn" onClick={() => setTab(s)}
+            style={{ padding: "5px 10px", fontSize: 12, background: tab === s ? "var(--accent)" : "transparent", color: tab === s ? "#fff" : "var(--text-dim)", border: "1px solid " + (tab === s ? "var(--accent)" : "var(--border)") }}>
+            {label} ({counts[s]})
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {phCanManage(user) && <button className="btn btn-accent" onClick={onNew}>+ Zadať výdaj</button>}
+      </div>
+      {list.length === 0 && <div className="panel" style={{ padding: 20, color: "var(--text-dim)" }}>Žiadne výdaje v stave „{PH_STATUS[tab]}“.</div>}
+      {list.map((p) => (
+        <div key={p.id} className="panel" style={{ padding: 12, marginBottom: 8, outline: p.id === focusId ? "2px solid var(--accent)" : "none" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>
+                {p.customer}
+                {p.source === "field" && <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "var(--warning-bg, #fff3cd)" }}>Vypísané v teréne</span>}
+                {p.dlNumber && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--text-dim)" }}>DL {p.dlNumber}</span>}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                {p.handedAt ? `odovzdal ${p.handedBy || "—"} ${new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : `${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : `depo ${p.depo || "—"}`}`}
+                {p.createdBy ? ` · vypracoval ${p.createdBy}` : ""}{p.correctedAt ? " · opravené" : ""}{p.sentAt ? " · poslané zákazníkovi" : ""}
+              </div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>{phItemsSummary(p.items)}</div>
+              {p.handoverNote && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 2 }}>Pri odovzdaní: {p.handoverNote}</div>}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {p.status !== "waiting" && <button className="btn btn-ghost" onClick={() => onPrint(p)}>Dodací list</button>}
+              {p.status === "waiting" && phCanWrite(user) && <button className="btn btn-accent" onClick={() => onHandover(p)}>Odovzdať</button>}
+              {phCanManage(user) && (p.status === "waiting" || p.status === "check" || p.status === "billing") && (
+                <button className={p.status === "check" ? "btn btn-accent" : "btn btn-ghost"} onClick={() => onEdit(p)}>{p.status === "check" ? "Skontrolovať" : "Upraviť"}</button>
+              )}
+              {phCanManage(user) && p.status === "billing" && <button className="btn btn-ghost" onClick={() => onSendMail(p)}>✉️ Poslať zákazníkovi</button>}
+              {phCanManage(user) && p.status !== "done" && <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(p)}>Zmazať</button>}
+            </div>
+          </div>
+          {phCanBill(user) && (p.status === "billing" || p.status === "done") && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+              <label style={{ fontSize: 12 }}>Číslo dodacieho listu (ERP)<br />
+                <input value={bd(p).dlNumber} disabled={p.status === "done"} onChange={(e) => setBillDraft({ ...billDraft, [p.id]: { ...bd(p), dlNumber: e.target.value } })} />
+              </label>
+              <label style={{ fontSize: 12 }}>Číslo dokladu / faktúry<br />
+                <input value={bd(p).erpDoc} disabled={p.status === "done"} onChange={(e) => setBillDraft({ ...billDraft, [p.id]: { ...bd(p), erpDoc: e.target.value } })} />
+              </label>
+              {p.status === "billing" ? (
+                <button className="btn btn-accent" disabled={!bd(p).dlNumber.trim()} onClick={() => onBill(p, { ...bd(p), done: true })}>Spracované</button>
+              ) : (
+                <button className="btn btn-ghost" onClick={() => onBill(p, { done: false })}>Vrátiť na fakturáciu</button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
