@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.758";
+const APP_VERSION = "1.0.759";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -3759,54 +3759,6 @@ function DispatcherApp() {
     setDocumentsSubView(subTab.id);
   }
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("mateco_dark_mode") === "1");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // Švihnutie prstom od ľavého okraja obrazovky (mobile) otvorí to isté menu
-  // ako klik na "vlajočku"/edge-flag — sleduje sa len dotyk, ktorý ZAČAL v
-  // úzkom 24px pásiku pri okraji, nech sa gesto nebije s bežným vodorovným
-  // scrollovaním obsahu (Gantt, tabuľky) kdekoľvek inde na obrazovke. Keď je
-  // menu OTVORENÉ, rovnaké gesto naopak (švih doľava, zač. kdekoľvek v
-  // otvorenej zásuvke) menu zavrie — dx<dy podmienka nižšie nechá bežné
-  // vertikálne scrollovanie zoznamu záložiek vnútri zásuvky bez zásahu.
-  useEffect(() => {
-    let startX = null, startY = null;
-    function onTouchStart(e) {
-      const t = e.touches[0];
-      if (mobileNavOpen) {
-        startX = t.clientX;
-        startY = t.clientY;
-        return;
-      }
-      if (t.clientX > 24) { startX = null; return; }
-      startX = t.clientX;
-      startY = t.clientY;
-    }
-    function onTouchMove(e) {
-      if (startX === null) return;
-      const t = e.touches[0];
-      const dx = t.clientX - startX;
-      const dy = Math.abs(t.clientY - startY);
-      if (!mobileNavOpen && dx > 50 && dx > dy) {
-        setMobileNavOpen(true);
-        startX = null;
-      } else if (mobileNavOpen && -dx > 50 && -dx > dy) {
-        setMobileNavOpen(false);
-        startX = null;
-      }
-    }
-    function onTouchEnd() {
-      startX = null;
-    }
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [mobileNavOpen]);
-
   // body nemá vlastný --bg (tá premenná sa v tmavom režime prepisuje len
   // v rámci .app-shell.dark, nie na body/html) — bez tejto triedy by pri
   // "gumovom" overscrolle (iOS/trackpad potiahnutie nad okraj stránky) bolo
@@ -9247,6 +9199,20 @@ function DispatcherApp() {
   })();
 
 
+  const navModules = buildNavModules(effectiveUser, damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length, myEmployee, navCounts);
+  const navGo = (m, v) => { setModule(m); setView(v); };
+  const navPickDoc = (m, st) => { if (!st.url) setModule(m); pickDocumentsSubView(st); };
+  const hasMobileBar = !!effectiveUser && effectiveUser.role !== "nezaradeny";
+  const quickActions = [
+    can(effectiveUser, "job_add") && { key: "job", label: "Nová zákazka", onClick: () => setShowAddJob({}) },
+    can(effectiveUser, "reservation_add") && { key: "rez", label: "Nezáväzná rezervácia", onClick: () => setShowAddReservation({}) },
+    can(effectiveUser, "protocol_write") && { key: "prot", label: "Vypísať protokol", onClick: () => openProtocol({}) },
+    can(effectiveUser, "damage_quick_report") && { key: "porucha", label: "Nahlásiť poruchu", onClick: () => setShowQuickDamagePicker(true) },
+    phCanWrite(effectiveUser) && { key: "vydaj", label: "Výdaj dielov", onClick: () => setPartHandoverUi({ kind: "quick" }) },
+    can(effectiveUser, "protocol_write") && { key: "vtz", label: "Záznam z merania VTZ EZ", onClick: () => openEzMeasurement(null) },
+    can(effectiveUser, "external_add") && { key: "ext", label: "Externá servisná zákazka", onClick: () => setShowExternalReport(true) },
+  ].filter(Boolean);
+
   return (
     <div className={`app-shell${darkMode ? " dark" : ""}`}>
       <GlobalStyle />
@@ -9275,12 +9241,11 @@ function DispatcherApp() {
         onMarkNotificationRead={markNotificationRead}
         onMarkAllNotificationsRead={markAllNotificationsRead}
         onNavigateNotification={navigateFromNotification}
-        onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
-        onOpenPartHandover={() => setPartHandoverUi({ kind: "quick" })}
-        onAddReservation={() => setShowAddReservation({})}
         onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
         searchIndex={searchIndex}
         onSearchNavigate={handleSearchNavigate}
+        quickActions={quickActions}
+        phoneInBar={mobileBarHasPhone(effectiveUser?.role)}
       />
 
       {showUserAdmin && (
@@ -9358,52 +9323,14 @@ function DispatcherApp() {
       )}
 
       <div className="app-body-row">
-        <IconRail
-          module={module}
-          view={view}
-          effectiveUser={effectiveUser}
-          damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
-          navCounts={navCounts}
-          myEmployee={myEmployee}
-          onSelectModule={setModule}
-          onSelectView={setView}
-          onPickDocumentsSubView={pickDocumentsSubView}
-          onOpenQuickDamageReport={() => setShowQuickDamagePicker(true)}
-          onAddReservation={() => setShowAddReservation({})}
-          onAskDaily={() => setMaskotAskTick((n) => n + 1)}
-          onOpenPhoneDirectory={() => setShowPhoneDirectory(true)}
-          onOpenPartHandover={() => setPartHandoverUi({ kind: "quick" })}
-        />
-        {!mobileNavOpen && (
-          <button className="mobile-nav-edge-flag" onClick={() => setMobileNavOpen(true)} aria-label="Menu">☰</button>
-        )}
-        {mobileNavOpen && (
-          <div className="mobile-nav-overlay">
-            <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
-            <div className="mobile-nav-drawer">
-              <div className="mobile-nav-scroll">
-                <SidebarNav
-                  module={module}
-                  view={view}
-                  effectiveUser={effectiveUser}
-                  damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
-          navCounts={navCounts}
-                  myEmployee={myEmployee}
-                  onSelectModule={setModule}
-                  onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
-                  onPickDocumentsSubView={(st) => { pickDocumentsSubView(st); setMobileNavOpen(false); }}
-                />
-              </div>
-              {/* Meno/nastavenia prihláseného používateľa je teraz naspäť v
-                  hlavičke (avatar s iniciálami, user-menu-mobile-wrap) aj na
-                  mobile, nie je preto potrebné tu v zásuvke duplicitne. */}
-            </div>
-          </div>
+        <SideMenu modules={navModules} module={module} view={view} onGo={navGo} onPickDoc={navPickDoc} onOpenPhoneDirectory={() => setShowPhoneDirectory(true)} />
+        {hasMobileBar && (
+          <MobileTabBar modules={navModules} module={module} view={view} role={effectiveUser?.role} actions={quickActions} onGo={navGo} onPickDoc={navPickDoc} onOpenPhoneDirectory={() => setShowPhoneDirectory(true)} />
         )}
       <div
         className={`app-main${
           // Spodná lišta je na mobile vo všetkých moduloch (aj „Dnes“, Administratíva) — miesto pre ňu tiež.
-          (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add"))
+          hasMobileBar
             ? " has-mobile-tech-bar"
             : ""
         }`}
@@ -12504,12 +12431,8 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   );
 }
 
-// Skratky modulov v úzkom IconRail páse — písmená namiesto SVG ikon (lepšie
-// čitateľné v tak úzkom stĺpci ako samostatné piktogramy).
-const MODULE_SHORT_LABEL = { dnes: "DNES", poziciovna: "POŽ", servis: "SRV", administrativa: "ADM" };
-
-// Zoznam modulov + ich záložiek — zdieľané medzi bočným menu na mobile
-// (SidebarNav, vnútri výsuvnej zásuvky) a ikonovým pásom na webe (IconRail),
+// Zoznam modulov + ich záložiek — zdieľané medzi ľavým menu na počítači
+// (SideMenu) a spodnou lištou na mobile (MobileTabBar),
 // nech sa tabuľka záložiek nemusí udržiavať na dvoch miestach naraz.
 function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {}) {
   // Revízie EZ: dispečer/vedúci servisu (ez_measurement_view) len na dohľad,
@@ -12538,7 +12461,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
     { id: "poskodenia", label: "Poškodenia", group: ["poskodenia", "externe"] },
     { id: "revizie", label: "Revízie/Úradné skúšky", group: ["revizie", "uradne_skusky"] },
     ...(podkladySubs.length > 0
-      ? [{ id: podkladySubs[0], label: podkladySubs.length > 1 ? "Podklady" : podkladySubs[0] === "ez_merania" ? "Revízie EZ" : "ERP — kontroly", group: podkladySubs }]
+      ? [{ id: podkladySubs[0], key: "podklady", label: podkladySubs.length > 1 ? "Podklady" : podkladySubs[0] === "ez_merania" ? "Revízie EZ" : "ERP — kontroly", group: podkladySubs }]
       : []),
     { id: "dokumenty", label: "Dokumenty", dropdown: true },
   ];
@@ -12562,7 +12485,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
     return { ...m, tabs, badge: tabs.reduce((n, t) => n + t.badge, 0) };
   };
   return [
-    ...(role !== "nezaradeny" ? [{ id: "dnes", label: "Dnes", tabs: [{ id: "dnes", label: "Dnes" }], badge: counts.dnes || 0 }] : []),
+    ...(role !== "nezaradeny" ? [{ id: "dnes", label: "Dnes", tabs: [{ id: "dnes", label: "Dnes", badge: counts.dnes || 0 }], badge: counts.dnes || 0 }] : []),
     ...(pozTabIds && pozTabIds.length === 0 ? [] : [{
       id: "poziciovna",
       label: "Požičovňa",
@@ -12574,137 +12497,6 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
   ];
 }
 
-// Bočné menu (text) — používa sa len vnútri výsuvnej zásuvky na mobile (viď
-// <Header>). Na webe ho nahradil IconRail nižšie. "otvorený" modul je vždy
-// presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
-// na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
-// záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, navCounts, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
-  const [docsExpandedState, setDocsExpandedState] = useState(false);
-  // V mobilnej zásuvke si tento stav drží sama (nikto ho nekontroluje zvonku).
-  // V IconRail flyoute ho kontroluje IconRail (onToggleDocsExpanded je daný),
-  // lebo aj pás potrebuje vedieť, či sú podzáložky Dokumentov rozbalené, nech
-  // pridá/uberie im zodpovedajúce bodky.
-  const docsExpanded = onToggleDocsExpanded ? docsExpandedProp : docsExpandedState;
-  const toggleDocsExpanded = onToggleDocsExpanded || (() => setDocsExpandedState((v) => !v));
-  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee, navCounts);
-  // Moduly (Požičovňa/Servis/Administratíva) sú zoskupené hore ako jeden
-  // blok, oddelené jednou čiarou od záložiek AKTUÁLNE otvoreného modulu pod
-  // nimi — namiesto pôvodného akordeónu (záložky priamo pod svojím modulom,
-  // ostatné moduly sa posúvali). IconRail nižšie musí mať rovnaké poradie
-  // riadkov 1:1 (viď railRows tam).
-  const activeModule = modules.find((m) => m.id === module);
-  const quickActions = quickActionsByModule?.[module];
-
-  return (
-    <nav className={className || "sidebar-nav"}>
-      <div className="sidebar-modules">
-        {modules.map((m) => (
-          <button key={m.id} className={`sidebar-group${module === m.id ? " active" : ""}`} onClick={() => onSelectModule(m.id)}>
-            <span>{m.label}</span>
-            {m.badge > 0 && <span className="sidebar-badge">{m.badge}</span>}
-          </button>
-        ))}
-      </div>
-      {activeModule && (
-        <div className="sidebar-tabs">
-          {activeModule.tabs.map((t) =>
-            t.dropdown ? (
-              <div key={t.id}>
-                <button className="sidebar-item" onClick={toggleDocsExpanded}>
-                  {t.label} {docsExpanded ? "▴" : "▾"}
-                </button>
-                {docsExpanded &&
-                  ((DOCUMENT_SUBTABS[activeModule.id] || []).length === 0 ? (
-                    <div className="sidebar-subnote">Táto sekcia sa pripravuje.</div>
-                  ) : (
-                    (DOCUMENT_SUBTABS[activeModule.id] || []).map((st) => (
-                      <button
-                        key={st.id}
-                        className="sidebar-item sidebar-subitem"
-                        onClick={() => {
-                          onSelectModule(activeModule.id);
-                          onPickDocumentsSubView(st);
-                        }}
-                      >
-                        {st.label}
-                        {st.url && <span style={{ marginLeft: "auto", fontSize: 11 }}>↗</span>}
-                      </button>
-                    ))
-                  ))}
-              </div>
-            ) : (
-              <button
-                key={t.id}
-                className={`sidebar-item${(t.group || [t.id]).includes(view) ? " active" : ""}`}
-                onClick={() => {
-                  onSelectModule(activeModule.id);
-                  onSelectView(t.id);
-                }}
-              >
-                {t.label}
-                {t.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{t.badge}</span>}
-              </button>
-            )
-          )}
-          {quickActions?.length > 0 && (
-            <div className="sidebar-quick">
-              {quickActions.map((qa) =>
-                qa.href ? (
-                  <a key={qa.key} className="sidebar-item quick" href={qa.href} target="_blank" rel="noopener noreferrer">
-                    {qa.label}
-                  </a>
-                ) : (
-                  <button key={qa.key} className="sidebar-item quick" onClick={qa.onClick}>
-                    {qa.label}
-                  </button>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </nav>
-  );
-}
-
-// Jednofarebné SVG ikonky modulov a rýchlych akcií pre IconRail — nakreslené
-// (nie emoji), nech je pás vizuálne jednotný. "Plošina" pre Požičovňu je
-// zjednodušená nožnicová plošina (platforma + vzpera + kolieska), presná
-// ikona pracovnej plošiny v bežných sadách neexistuje.
-const RAIL_ICON_PLATFORM = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="3" width="16" height="3" rx="1" />
-    <path d="M6 6l12 10M18 6L6 16" />
-    <rect x="7" y="17" width="10" height="3" rx="1" />
-    <circle cx="8" cy="21.3" r="1.1" fill="currentColor" stroke="none" />
-    <circle cx="16" cy="21.3" r="1.1" fill="currentColor" stroke="none" />
-  </svg>
-);
-const RAIL_ICON_WRENCH = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.5 2.5a5.3 5.3 0 0 0-7.1 7.1L2.5 17.5l4 4 7.9-7.9a5.3 5.3 0 0 0 7.1-7.1l-3 3-2.6-2.6 3-3z" />
-  </svg>
-);
-const RAIL_ICON_GEAR = (
-  <svg viewBox="0 0 24 24" width="20" height="20">
-    <g fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="3" />
-      <circle cx="12" cy="12" r="7.5" />
-    </g>
-    <g fill="currentColor">
-      <rect x="11" y="1.3" width="2" height="3" rx="1" />
-      <rect x="11" y="19.7" width="2" height="3" rx="1" />
-      <rect x="1.3" y="11" width="3" height="2" rx="1" />
-      <rect x="19.7" y="11" width="3" height="2" rx="1" />
-      <rect x="11" y="1.3" width="2" height="3" rx="1" transform="rotate(45 12 12)" />
-      <rect x="11" y="1.3" width="2" height="3" rx="1" transform="rotate(135 12 12)" />
-      <rect x="11" y="1.3" width="2" height="3" rx="1" transform="rotate(225 12 12)" />
-      <rect x="11" y="1.3" width="2" height="3" rx="1" transform="rotate(315 12 12)" />
-    </g>
-  </svg>
-);
-const RAIL_ICONS = { poziciovna: RAIL_ICON_PLATFORM, servis: RAIL_ICON_WRENCH, administrativa: RAIL_ICON_GEAR };
 function ChatBubbleIcon({ size = 15 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -12712,7 +12504,234 @@ function ChatBubbleIcon({ size = 15 }) {
     </svg>
   );
 }
-const RAIL_ICON_CHAT = <ChatBubbleIcon size={15} />;
+// Menu: na počítači ľavý panel s názvami (SideMenu), na mobile spodná lišta
+// (MobileTabBar) — obe z toho istého buildNavModules. Akcie „+ Nové“ podľa
+// role (quickActions) sú v hlavičke na počítači a pod „+“ v lište na mobile.
+const NAV_ICON_PATHS = {
+  dnes: "M3 10.5 12 3l9 7.5V21H3z M9 21v-6h6v6",
+  calendar: "M4 5h16v16H4z M4 9h16 M8 3v4 M16 3v4",
+  jobs: "M8 6h12 M8 12h12 M8 18h12 M4 6h.01 M4 12h.01 M4 18h.01",
+  prepravy: "M1 6h13v10H1z M14 9h4l3 3v4h-7z M5.5 19a1.5 1.5 0 1 0 0-.1 M17.5 19a1.5 1.5 0 1 0 0-.1",
+  dispeceri: "M16 21v-2a4 4 0 0 0-8 0v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  dashboard: "M4 5c0-1 3.6-2 8-2s8 1 8 2-3.6 2-8 2-8-1-8-2z M4 5v14c0 1 3.6 2 8 2s8-1 8-2V5 M4 12c0 1 3.6 2 8 2s8-1 8-2",
+  erp_pozicovna: "M4 4h16v4H4z M4 12h16v8H4z",
+  podklady: "M4 4h16v4H4z M4 12h16v8H4z",
+  dokumenty: "M6 2h9l5 5v15H6z M14 2v6h6",
+  prehlad: "M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z",
+  plan: "M4 5h16v16H4z M4 9h16 M8 13h3 M8 17h6",
+  diely: "M21 8l-9-5-9 5 9 5z M3 8v8l9 5 9-5V8 M12 13v8",
+  poskodenia: "M12 3 2 21h20z M12 10v5 M12 18h.01",
+  revizie: "M9 11l3 3 8-8 M20 12v8H4V4h11",
+  statistiky: "M4 20V10 M10 20V4 M16 20v-7 M22 20H2",
+  modely: "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z",
+  zamestnanci: "M16 21v-2a4 4 0 0 0-8 0v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  checkeri: "M9 4h6v3H9z M6 5h12v16H6z M9 13l2 2 4-4",
+  auta: "M1 6h13v10H1z M14 9h4l3 3v4h-7z M5.5 19a1.5 1.5 0 1 0 0-.1 M17.5 19a1.5 1.5 0 1 0 0-.1",
+  kos: "M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14",
+  audit: "M12 7v5l3 2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+  telefon: "M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z",
+  mail: "M3 5h18v14H3z M3 6l9 7 9-7",
+  viac: "M4 6h16 M4 12h16 M4 18h16",
+  plus: "M12 5v14 M5 12h14",
+};
+function NavIcon({ id, size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d={NAV_ICON_PATHS[id] || "M8 12h8"} />
+    </svg>
+  );
+}
+const navKey = (t) => t.key || t.id;
+const sendFeedbackMail = () =>
+  composeMail({
+    to: "radoslav.podusel@matecoslovakia.sk",
+    subject: "Pripomienky k mateco App",
+    body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
+  });
+
+// Zoznam položiek menu po sekciách (moduloch) — zdieľa ho ľavý panel aj „Viac“ na mobile.
+function NavList({ modules, module, view, exclude = [], collapsed, rowClass, onGo, onPickDoc, onExpand }) {
+  const [docsOpen, setDocsOpen] = useState(null);
+  return modules.map((m) => {
+    const tabs = m.tabs.filter((t) => !exclude.includes(navKey(t)));
+    if (!tabs.length) return null;
+    return (
+      <React.Fragment key={m.id}>
+        {m.id !== "dnes" && (collapsed ? <div className="nav-sec-line" /> : <div className="nav-sec">{m.label}</div>)}
+        {tabs.map((t) => {
+          const active = module === m.id && !t.dropdown && (t.group || [t.id]).includes(view);
+          const open = docsOpen === m.id;
+          return (
+            <React.Fragment key={t.id}>
+              <button
+                className={`${rowClass}${active ? " active" : ""}`}
+                title={collapsed ? t.label : undefined}
+                onClick={() => {
+                  if (!t.dropdown) return onGo(m.id, t.id);
+                  if (collapsed) onExpand?.();
+                  setDocsOpen(open ? null : m.id);
+                }}
+              >
+                <NavIcon id={navKey(t)} />
+                {!collapsed && <span className="nav-lbl">{t.label}{t.dropdown ? (open ? " ▴" : " ▾") : ""}</span>}
+                {t.badge > 0 && <span className="nav-b">{t.badge}</span>}
+              </button>
+              {t.dropdown && open && !collapsed &&
+                (DOCUMENT_SUBTABS[m.id] || []).map((st) => (
+                  <button key={st.id} className={`${rowClass} nav-sub`} onClick={() => onPickDoc(m.id, st)}>
+                    {st.label}{st.url ? " ↗" : ""}
+                  </button>
+                ))}
+            </React.Fragment>
+          );
+        })}
+      </React.Fragment>
+    );
+  });
+}
+
+// Ľavý panel na počítači (fixed, pod hlavičkou). Zbalený = len ikony; voľba sa pamätá v prehliadači.
+function SideMenu({ modules, module, view, onGo, onPickDoc, onOpenPhoneDirectory }) {
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("mateco_menu_collapsed") === "1"; } catch { return false; } });
+  const setC = (v) => { setCollapsed(v); try { localStorage.setItem("mateco_menu_collapsed", v ? "1" : "0"); } catch { /* bez úložiska len na túto reláciu */ } };
+  // Pozícia pod hlavičkou sa meria (hlavička sa zalamuje), panel je fixed — viď predošlý IconRail.
+  const wrapRef = useRef(null);
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => wrapRef.current && setTop(wrapRef.current.getBoundingClientRect().top + window.scrollY);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  return (
+    <div className={`side-menu-wrap${collapsed ? " collapsed" : ""}`} ref={wrapRef}>
+      <nav className="side-menu" style={{ top }}>
+        <div className="side-menu-scroll">
+          <NavList modules={modules} module={module} view={view} collapsed={collapsed} rowClass="nav-it" onGo={onGo} onPickDoc={onPickDoc} onExpand={() => setC(false)} />
+        </div>
+        <div className="side-menu-foot">
+          <button className="nav-it" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}><NavIcon id="telefon" />{!collapsed && <span className="nav-lbl">Telefónny zoznam</span>}</button>
+          <button className="nav-it" title="Poslať pripomienku" onClick={sendFeedbackMail}><NavIcon id="mail" />{!collapsed && <span className="nav-lbl">Poslať pripomienku</span>}</button>
+          <button className="nav-it nav-dim" title={collapsed ? "Rozbaliť menu" : "Zbaliť menu"} onClick={() => setC(!collapsed)}>{collapsed ? "»" : "« Zbaliť menu"}</button>
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+// Spodná lišta na mobile: Dnes · záložka · + · záložka · Viac (záložky podľa role).
+const MOBILE_BAR_SLOTS = {
+  sofer: ["prepravy", "telefon"],
+  externy_sofer: [null, "telefon"],
+  technik: ["plan", "poskodenia"],
+  veduci_technik_ba: ["plan", "poskodenia"],
+  dispecer_servisu: ["plan", "poskodenia"],
+  veduci_servisu: ["plan", "poskodenia"],
+  fakturant_servis: ["podklady", "poskodenia"],
+  dispecer_pozicovne: ["calendar", "prepravy"],
+  veduci_pozicovne: ["calendar", "prepravy"],
+  obchodnik: ["jobs", "calendar"],
+  fakturant_pozicovna: ["jobs", null],
+  admin: ["calendar", "plan"],
+};
+function mobileBarHasPhone(role) {
+  return (MOBILE_BAR_SLOTS[role] || []).includes("telefon");
+}
+function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, onOpenPhoneDirectory }) {
+  const [sheet, setSheet] = useState(null); // null | "plus" | "viac"
+  const all = modules.flatMap((m) => m.tabs.map((t) => ({ ...t, mod: m.id })));
+  const pick = (k) => (k === "telefon" ? { id: "telefon", label: "Telefón" } : k ? all.find((t) => navKey(t) === k) : null);
+  const [s0, s1] = (MOBILE_BAR_SLOTS[role] || ["calendar", "plan"]).map(pick);
+  const used = ["dnes", ...[s0, s1].filter(Boolean).map(navKey)];
+  const rest = modules.filter((m) => m.id !== "dnes");
+  const restTabs = rest.flatMap((m) => m.tabs).filter((t) => !used.includes(navKey(t)));
+  const restBadge = restTabs.reduce((n, t) => n + (t.badge || 0), 0);
+  const phoneInBar = mobileBarHasPhone(role);
+  const go = (m, v) => { setSheet(null); onGo(m, v); };
+  const isActive = (t) => t && t.mod && module === t.mod && (t.group || [t.id]).includes(view);
+  const item = (t) =>
+    t && (
+      <button key={t.id} className={`mnav-t${isActive(t) ? " active" : ""}`} onClick={() => (t.id === "telefon" ? onOpenPhoneDirectory() : go(t.mod, t.id))}>
+        <NavIcon id={navKey(t)} size={22} />
+        <span>{{ plan: "Plán", podklady: "Podklady" }[navKey(t)] || t.label}</span>
+        {t.badge > 0 && <span className="mnav-b">{t.badge}</span>}
+      </button>
+    );
+  const restActive = !isActive(all.find((t) => t.id === "dnes")) && !isActive(s0) && !isActive(s1);
+  return (
+    <>
+      <div className="mobile-tech-actions mnav-bar">
+        {item(all.find((t) => t.id === "dnes"))}
+        {item(s0)}
+        {actions.length > 0 && (
+          <button className="mnav-t" aria-label="Nové" onClick={() => setSheet("plus")}>
+            <span className="mnav-plus"><NavIcon id="plus" size={26} /></span>
+          </button>
+        )}
+        {item(s1)}
+        {(restTabs.length > 0 || !phoneInBar) && (
+          <button className={`mnav-t${restActive ? " active" : ""}`} onClick={() => setSheet("viac")}>
+            <NavIcon id="viac" size={22} />
+            <span>Viac</span>
+            {restBadge > 0 && <span className="mnav-b">{restBadge}</span>}
+          </button>
+        )}
+      </div>
+      {sheet && (
+        <div className="mobile-nav-overlay">
+          <div className="mobile-nav-scrim" onClick={() => setSheet(null)} />
+          <div className="mnav-sheet">
+            <div className="mnav-grab" />
+            {sheet === "plus" ? (
+              <>
+                <div className="mnav-sheet-title">Nové</div>
+                {actions.map((a) => (
+                  <button key={a.key} className="mnav-row" onClick={() => { setSheet(null); a.onClick(); }}>
+                    <NavIcon id="plus" />{a.label}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <>
+                <NavList modules={rest} module={module} view={view} exclude={used} rowClass="mnav-row" onGo={go} onPickDoc={(m, st) => { setSheet(null); onPickDoc(m, st); }} />
+                <div className="nav-sec">Ostatné</div>
+                {!phoneInBar && (
+                  <button className="mnav-row" onClick={() => { setSheet(null); onOpenPhoneDirectory(); }}><NavIcon id="telefon" />Telefónny zoznam</button>
+                )}
+                <button className="mnav-row" onClick={() => { setSheet(null); sendFeedbackMail(); }}><NavIcon id="mail" />Poslať pripomienku</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// „+ Nové ▾“ v hlavičke na počítači — rovnaké akcie ako „+“ v mobilnej lište.
+function NewMenu({ actions }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  return (
+    <div className="header-new-wrap" ref={ref}>
+      <button className="header-new-btn" onClick={() => setOpen((v) => !v)}>＋ Nové ▾</button>
+      {open && (
+        <div className="header-new-drop">
+          {actions.map((a) => (
+            <button key={a.key} className="kebab-item" onClick={() => { setOpen(false); a.onClick(); }}>{a.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PhoneIcon({ size = 15 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -12736,265 +12755,7 @@ function extractPhone(text) {
   const m = (text || "").match(/(\+?\d[\d \/-]{6,}\d)/);
   return m ? m[1].trim() : null;
 }
-const RAIL_ICON_WARN = (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3.5L2.5 20h19L12 3.5z" />
-    <path d="M12 10v4" />
-    <circle cx="12" cy="17" r=".9" fill="currentColor" stroke="none" />
-  </svg>
-);
-const RAIL_ICON_RESERVATION = (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="16" rx="2" />
-    <path d="M3 10h18M8 3v4M16 3v4" />
-    <path d="M12 13v6M9 16h6" />
-  </svg>
-);
-const RAIL_ICON_PROTOCOL = (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="3" width="14" height="18" rx="2" />
-    <path d="M9 3v0a3 3 0 0 0 6 0v0" />
-    <path d="M8.5 11h7M8.5 14.5h7M8.5 18h4" />
-  </svg>
-);
-const RAIL_ICON_BOX = (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
-    <path d="M3 7.5L12 12l9-4.5M12 12v9" />
-  </svg>
-);
-const RAIL_ICON_RULER = (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="9" width="20" height="6" rx="1" />
-    <path d="M6 9v2M10 9v3M14 9v2M18 9v3" />
-  </svg>
-);
-
-// Ikonový pás na webe — nahrádza predošlé trvalo roztiahnuté bočné menu.
-// Moduly sú len 3 ikony; prejdením myšou sa vysunie panel so záložkami
-// PREKRYTÝM cez plochu (position:absolute), nie natrvalo zabratou šírkou.
-// Dole (za deliacou čiarou) sú rýchle akcie, ktoré predtým boli v
-// samostatnom pruhu nad plochou (Nahlásiť poškodenie/Rezervácia/Protokol/VTZ
-// EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
-// keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
-// tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, navCounts, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory, onOpenPartHandover }) {
-  const [railHover, setRailHover] = useState(false);
-  const [docsExpanded, setDocsExpanded] = useState(false);
-  const hideTimer = useRef(null);
-  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee, navCounts);
-
-  // .icon-rail-wrap je len "dištančná" medzera vo flex riadku (.app-body-row)
-  // — samotný pás a vysunuté menu sú position:fixed, ukotvené priamo na
-  // viewport zhora po spodok. Predtým (position:sticky + height:100%) sa
-  // výška počítala ako percento z výšky .app-body-row, tá je ale definitná
-  // len vtedy, keď je stránka presne na výšku obrazovky — pri dlhšom obsahu
-  // (napr. dlhý zoznam strojov), ktorý naťahuje celú stránku a scrolluje sa
-  // celý dokument, .app-body-row je vysoká ako OBSAH, nie ako viditeľná
-  // plocha, takže telefón/mail na spodku pásu vždy "utiekli" mimo obraz.
-  // Fixed pozícia to rieši úplne — vždy presne vypĺňa viditeľnú výšku pod
-  // headerom, nezávisle od dĺžky stránky. Výška headeru sa mení (wrapuje sa
-  // na užšom okne, safe-area inset hore), tak sa meria reálne (nie natvrdo).
-  const wrapRef = useRef(null);
-  const [railTop, setRailTop] = useState(0);
-  useLayoutEffect(() => {
-    function measure() {
-      if (wrapRef.current) setRailTop(wrapRef.current.getBoundingClientRect().top + window.scrollY);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
-
-  function cancelHide() {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-  }
-  function scheduleHide() {
-    cancelHide();
-    hideTimer.current = setTimeout(() => setRailHover(false), 40);
-  }
-
-  const canProtocol = can(effectiveUser, "protocol_write");
-  const canDamage = can(effectiveUser, "damage_quick_report");
-  const canReservation = can(effectiveUser, "reservation_add");
-  const quickActionsByModule = {
-    poziciovna: [
-      canReservation && { key: "rezervacia", label: "Nezáväzná rezervácia", icon: RAIL_ICON_RESERVATION, onClick: onAddReservation },
-      canDamage && { key: "poskodenie1", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
-      phCanWrite(effectiveUser) && { key: "vydaj1", label: "Výdaj dielov", icon: RAIL_ICON_BOX, onClick: onOpenPartHandover },
-    ].filter(Boolean),
-    servis: [
-      canProtocol && { key: "protokol", label: "Vypísať protokol", icon: RAIL_ICON_PROTOCOL, onClick: () => openProtocol({}) },
-      canProtocol && {
-        key: "vtz",
-        label: "Záznam z merania VTZ EZ",
-        icon: RAIL_ICON_RULER,
-        onClick: () => openEzMeasurement(null),
-      },
-      canDamage && { key: "poskodenie2", label: "Nahlásiť poškodenie", icon: RAIL_ICON_WARN, onClick: onOpenQuickDamageReport },
-      phCanWrite(effectiveUser) && { key: "vydaj2", label: "Výdaj dielov", icon: RAIL_ICON_BOX, onClick: onOpenPartHandover },
-    ].filter(Boolean),
-  };
-
-  // 1:1 s textovým menu (SidebarNav): moduly sú zoskupené hore ako jeden
-  // blok ikon, jedna deliaca čiara, potom bodky/rýchle akcie LEN aktuálne
-  // otvoreného modulu — rovnaké poradie ako v SidebarNav.
-  const railRows = [];
-  modules.forEach((m) => {
-    railRows.push({ kind: "module", id: m.id, icon: RAIL_ICONS[m.id], label: m.label, active: module === m.id, badge: m.badge });
-  });
-
-  const activeModule = modules.find((m) => m.id === module);
-  if (activeModule) {
-    activeModule.tabs.forEach((t) => {
-      railRows.push({
-        kind: "dot",
-        key: `dot-${activeModule.id}-${t.id}`,
-        label: t.label,
-        active: !t.dropdown && (t.group || [t.id]).includes(view),
-        badge: t.badge,
-        onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(activeModule.id); onSelectView(t.id); },
-      });
-      // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
-      // flyoute (viď SidebarNav) — musia mať svoju bodku, inak sa všetko
-      // pod nimi posunie hore oproti textu. Klikateľné rovnako ako v menu.
-      if (t.dropdown && docsExpanded) {
-        const subs = DOCUMENT_SUBTABS[activeModule.id] || [];
-        if (subs.length === 0) {
-          railRows.push({ kind: "dot", key: `dot-${activeModule.id}-${t.id}-sub-0`, label: "Táto sekcia sa pripravuje." });
-        } else {
-          subs.forEach((st) => {
-            railRows.push({
-              kind: "dot",
-              key: `dot-${activeModule.id}-${t.id}-sub-${st.id}`,
-              label: st.label,
-              onClick: () => { onSelectModule(activeModule.id); onPickDocumentsSubView(st); },
-            });
-          });
-        }
-      }
-    });
-    const quickActions = quickActionsByModule[activeModule.id] || [];
-    quickActions.forEach((qa, qi) => {
-      railRows.push({ kind: "quick", ...qa, dividerBefore: qi === 0 });
-    });
-  }
-
-  // Výška riadkov je pevná (34px ikona/rýchla akcia, 29px bodka) a rovnaká
-  // čísla sú natvrdo aj vo flyoute (.sidebar-group/.sidebar-item, box-sizing:
-  // border-box) — žiadne hádanie z paddingu/line-height, žiadne meranie DOM,
-  // len dve zdieľané konštanty na oboch stranách, nech sa nemajú ako rozísť.
-  return (
-    <div className="icon-rail-wrap" ref={wrapRef} onMouseEnter={() => { cancelHide(); setRailHover(true); }} onMouseLeave={scheduleHide}>
-      <div className="icon-rail" style={{ top: railTop }}>
-        {/* Scrollovateľná časť (moduly/záložky) — oddelená od telefónu/
-            pripomienky nižšie, nech tie zostanú VIZUÁLNE vždy dole na
-            spodku (flex:1 tu hore necháva zvyšný priestor), nie len "za
-            posledným riadkom", keď je obsahu málo. */}
-        <div className="rail-scroll">
-          <div className="rail-modules">
-            {railRows.filter((r) => r.kind === "module").map((r) => (
-              <button
-                key={r.id}
-                className={`rail-icon rail-icon-label${r.active ? " active" : ""}`}
-                title={r.label}
-                onClick={() => onSelectModule(r.id)}
-              >
-                {MODULE_SHORT_LABEL[r.id] || r.label}
-                {r.badge > 0 && <span className="rail-badge">{r.badge}</span>}
-              </button>
-            ))}
-          </div>
-          {railRows.filter((r) => r.kind !== "module").map((r) => {
-            const dividerCls = r.dividerBefore ? " rail-divider-before" : "";
-            if (r.kind === "dot") {
-              return (
-                <button key={r.key} className={`rail-row${dividerCls}`} title={r.badge > 0 ? `${r.label} (${r.badge})` : r.label} onClick={r.onClick} disabled={!r.onClick}>
-                  <span className={`rail-tick${r.active ? " active" : ""}${r.badge > 0 ? " alert" : ""}`} />
-                </button>
-              );
-            }
-            return (
-              <div key={r.key} className={`rail-row rail-row-quick${dividerCls}`}>
-                {r.href ? (
-                  <a className="rail-icon quick" title={r.label} href={r.href} target="_blank" rel="noopener noreferrer">
-                    {r.icon}
-                  </a>
-                ) : (
-                  <button className="rail-icon quick" title={r.label} onClick={r.onClick}>
-                    {r.icon}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {/* Telefónny zoznam a spätná väzba mailom — presunuté z hornej lišty
-            sem, mimo scrollovateľnej časti vyššie, takže sú VŽDY vidno
-            celkom dole v páse, nezávisle od počtu riadkov nad nimi. */}
-        <div className="rail-bottom-actions">
-          <button className="rail-icon quick rail-bottom-icon" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}>
-            <PhoneIcon size={16} />
-          </button>
-          <button
-            className="rail-icon quick rail-bottom-icon"
-            title="Poslať pripomienku"
-            onClick={() =>
-              composeMail({
-                to: "radoslav.podusel@matecoslovakia.sk",
-                subject: "Pripomienky k mateco App",
-                body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
-              })
-            }
-          >
-            <MailIcon size={16} />
-          </button>
-        </div>
-      </div>
-      <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`} style={{ top: railTop }}>
-          <div className="rail-flyout-scroll">
-            <SidebarNav
-              className="rail-flyout-nav"
-              module={module}
-              view={view}
-              effectiveUser={effectiveUser}
-              damageAlertCount={damageAlertCount}
-              navCounts={navCounts}
-              myEmployee={myEmployee}
-              onSelectModule={onSelectModule}
-              onSelectView={onSelectView}
-              onPickDocumentsSubView={onPickDocumentsSubView}
-              quickActionsByModule={quickActionsByModule}
-              docsExpanded={docsExpanded}
-              onToggleDocsExpanded={() => setDocsExpanded((v) => !v)}
-            />
-          </div>
-          {/* Mimo scrollovateľnej časti vyššie (rail-flyout-scroll) — vždy
-              vidno celkom dole, textové menu bez ikon (tie má len úzky
-              ikonový pás vľavo). */}
-          <div className="rail-flyout-bottom">
-            <button className="sidebar-item quick" onClick={onOpenPhoneDirectory}>
-              Telefónny zoznam
-            </button>
-            <button
-              className="sidebar-item quick"
-              onClick={() =>
-                composeMail({
-                  to: "radoslav.podusel@matecoslovakia.sk",
-                  subject: "Pripomienky k mateco App",
-                  body: "Ahoj, posielam moje pripomienky na zlepšenie/úpravu aplikácie:\n\n",
-                })
-              }
-            >
-              Poslať pripomienku
-            </button>
-          </div>
-      </div>
-    </div>
-  );
-}
-
-function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenQuickDamageReport, onAddReservation, onOpenPhoneDirectory, searchIndex, onSearchNavigate, onOpenPartHandover }) {
+function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenPhoneDirectory, searchIndex, onSearchNavigate, quickActions, phoneInBar }) {
   // Skutočná výška hlavičky sa mení (mobile zalomenie na 2 riadky, rôzne
   // zoom/rozlíšenie) — meria sa a ukladá do --header-h, aby sa podľa nej
   // vedeli "prilepiť" hlavičky tabuliek presne POD hlavičku, nie pod ňu.
@@ -13051,6 +12812,10 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
               >
                 ⚠ Bez signálu
               </span>
+            )}
+            {quickActions?.length > 0 && <NewMenu actions={quickActions} />}
+            {!phoneInBar && (
+              <button className="header-phone-mobile" aria-label="Telefónny zoznam" onClick={onOpenPhoneDirectory}><PhoneIcon size={18} /></button>
             )}
             <NotificationBell
               notifications={myNotifications}
@@ -13110,48 +12875,6 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
           </div>
         </div>
       </div>
-      {/* Rýchle akcie (Vypísať protokol/Nahlásiť poškodenie/Rezervácia/VTZ EZ)
-          bývali tu ako samostatný pruh nad plochou — na webe sú teraz dole v
-          IconRail (viď <DispatcherApp>), na mobile v mobile-tech-actions
-          nižšie. "Odfotiť stroj" bolo len tu a nikde inde, preto bez náhrady. */}
-      {(can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add")) && (
-        <div className="mobile-tech-actions">
-          <button onClick={onOpenPhoneDirectory} className="mobile-tech-action-btn">
-            <span className="mobile-tech-action-icon">📞</span>
-            Telefón
-          </button>
-          {can(effectiveUser, "protocol_write") && (
-            <button onClick={() => openProtocol({})} className="mobile-tech-action-btn mobile-tech-action-accent">
-              <span className="mobile-tech-action-icon">📋</span>
-              Protokol
-            </button>
-          )}
-          {can(effectiveUser, "damage_quick_report") && (
-            <button onClick={onOpenQuickDamageReport} className="mobile-tech-action-btn">
-              <span className="mobile-tech-action-icon">⚠️</span>
-              Porucha
-            </button>
-          )}
-          {can(effectiveUser, "reservation_add") && (
-            <button onClick={onAddReservation} className="mobile-tech-action-btn">
-              <span className="mobile-tech-action-icon">📅</span>
-              Rezervácia
-            </button>
-          )}
-          {phCanWrite(effectiveUser) && (
-            <button onClick={onOpenPartHandover} className="mobile-tech-action-btn">
-              <span className="mobile-tech-action-icon">📦</span>
-              Diely
-            </button>
-          )}
-          {can(effectiveUser, "protocol_write") && (
-            <button onClick={() => openEzMeasurement(null)} className="mobile-tech-action-btn">
-              <span className="mobile-tech-action-icon">📏</span>
-              VTZ EZ
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -29167,180 +28890,43 @@ function GlobalStyle() {
       .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
 
-      /* Bočné menu (Požičovňa/Servis/Administratíva + ich záložky). Na webe
-         ikonový pás (IconRail nižšie), na mobile text vnútri výsuvnej
-         zásuvky (SidebarNav, tá istá trieda .sidebar-nav). Aktívny modul je
-         vždy presne ten, čo je "otvorený" (rovnaký stav, žiadny extra) —
-         klik na iný modul rovno prepne aj na jeho prvú záložku (setModule to
-         už robí), klik na záložku v OTVORENOM module len prepne pohľad. */
       .app-body-row { display: flex; flex: 1; min-height: 0; position: relative; }
-      .sidebar-nav { width: 152px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
-      /* box-shadow namiesto border-bottom — čiarka sa vykreslí, ale NEPRIDÁ
-         výšku navyše (border by pridal 1px, čo by sa v páse muselo naviac
-         niečím vykompenzovať — takto netreba). */
-      /* Moduly zoskupené hore ako jeden blok, jedna čiara oddeľuje záložky
-         AKTUÁLNE otvoreného modulu pod nimi (nie akordeón per modul). */
-      .sidebar-modules { box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
-      /* Výška 34/29px je NATVRDO rovnaká ako .rail-icon/.rail-row v páse
-         nižšie — dve zdieľané konštanty, nie odhad z paddingu/line-height
-         (to opakovane nesedelo). Nemení sa jedno bez druhého. */
-      .sidebar-group {
-        display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; text-align: left; box-sizing: border-box;
-        padding: 0 14px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
-        color: var(--text); background: transparent; border: none; cursor: pointer; border-radius: 6px;
-      }
-      .sidebar-group.active { color: #fff; background: var(--accent); }
-      .sidebar-badge { background: var(--accent); color: #fff; font-size: 10px; border-radius: 99px; padding: 1px 6px; font-weight: 700; }
-      .sidebar-group.active .sidebar-badge { background: #fff; color: var(--accent); }
-      .sidebar-item {
-        display: flex; align-items: center; gap: 6px; width: 100%; height: 29px; text-align: left; box-sizing: border-box;
-        padding: 0 14px 0 28px; font-family: 'Barlow', sans-serif; font-size: 12.5px;
-        color: var(--text-dim); background: transparent; border: none; cursor: pointer; border-radius: 0;
-      }
-      .sidebar-item:hover { background: var(--panel-2); }
-      .sidebar-item.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
-      .sidebar-subitem { padding-left: 40px; font-size: 12px; }
-      .sidebar-subnote { padding: 6px 14px 6px 40px; font-size: 11px; color: var(--text-dim); }
-      /* Rýchle akcie (nahlásiť poškodenie/rezervácia/protokol/VTZ EZ) — posledné
-         položky v zozname záložiek Požičovne/Servisu, len v IconRail flyoute
-         (quickActionsByModule sa do mobilnej zásuvky neposiela). */
-      /* Len tenká čiarka (box-shadow, nie border — ten by pridal 1px výšky
-         navyše, čo pás nemá čím vykompenzovať). */
-      .sidebar-quick { box-shadow: inset 0 1px 0 var(--border); }
-      .sidebar-group.rail-ask { color: #e6392e; font-weight: 700; background: #1a1a1a; border-radius: 6px; margin-bottom: 10px; }
-      .sidebar-group.rail-ask:hover { background: #2b2b2b; }
-      .sidebar-group.rail-ask svg { flex-shrink: 0; }
-      /* 34px riadok (nie 29 ako bežná .sidebar-item) — presne ako 34px
-         ikonka rýchlej akcie v IconRail páse. */
-      .sidebar-item.quick { height: 34px; color: var(--accent); font-weight: 600; }
-
-      /* IconRail — úzky pás ikon na webe namiesto trvalo roztiahnutého
-         bočného menu (nezaberá šírku plochy). Farba záhlavia, nech je hneď
-         jasné, že je to "menu appky", nie ďalší biely panel. Prejdením myšou
-         cez ikonu modulu sa vysunie panel so záložkami (rail-flyout) cez
-         plochu, nie natrvalo vedľa nej. Rýchle akcie (poškodenie/rezervácia/
-         protokol/VTZ EZ) sú dole za deliacou čiarou, menšie a kruhové —
-         zámerne odlíšené, nejde o navigáciu ale o akcie. */
-      /* .icon-rail-wrap je len dištančná medzera vo flex riadku (.app-body-row),
-         drží 52px šírky, nič nevykresľuje. Samotný pás (.icon-rail) aj vysunuté
-         menu (.rail-flyout) sú position:fixed, ukotvené priamo na viewport od
-         (JS zmeraného) vrchu po úplný spodok — height:100%/sticky tu totiž
-         spoliehalo na to, že .app-body-row má definitnú výšku "zvyšok
-         obrazovky pod headerom", čo platí LEN keď je stránka presne na výšku
-         obrazovky. Pri dlhšom obsahu (napr. dlhý zoznam strojov), ktorý
-         naťahuje celý dokument a scrolluje sa celá stránka, je .app-body-row
-         vysoká ako OBSAH, nie ako viditeľná plocha — spodok pásu (telefón/
-         pripomienka) tak vždy "utiekol" mimo obraz. Fixed (top nastavený z
-         IconRail cez inline style, viď wrapRef/railTop) to rieši úplne. */
-      .icon-rail-wrap { width: 52px; flex-shrink: 0; }
-      /* Bez gap medzi riadkami — presne ako vo flyoute (.rail-flyout-nav), kde
-         nadpis modulu a jeho záložky/akcie tiež nasledujú tesne za sebou bez
-         medzery. Výška každého typu riadku (.rail-row 29px, ikona modulu
-         34px) zodpovedá skutočnej výške riadku vo flyoute (.sidebar-group
-         ~34px, .sidebar-item ~29px), nech si sedia 1:1 aj vizuálne, nielen
-         počtom. Padding hore 8px = to isté, čo .rail-flyout-nav. */
-      /* Svetlý režim: biely pás + biele vysunuté menu, oddelené od plochy
-         červenou linkou, čierne ikony/bodky, zvolený modul = biela ikona v
-         červenej bubline, zvolená záložka = biela bodka s červeným rámikom.
-         Tmavý režim (.app-shell.dark nižšie) má vlastnú, nezmenenú paletu —
-         tmavosivý pás, biele/priesvitné ikony, červený pásik namiesto bubliny. */
-      .icon-rail { position: fixed; left: 0; bottom: 0; width: 52px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 8px 0; box-sizing: border-box; z-index: 50; isolation: isolate; }
-      /* Scrollovateľná časť pásu (moduly/záložky) — flex:1 necháva zvyšné
-         miesto pre .rail-bottom-actions POD ňou, mimo scrollu, takže telefón
-         a pripomienka sú vždy vidno vizuálne na spodku, nie len "za
-         posledným riadkom" pri krátkom obsahu. */
-      .rail-scroll { width: 100%; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; }
-      /* Plná šírka pásu (nie len 34px šírka ikony), nech je čiara pod modulmi
-         dobre vidno — box-shadow namiesto border, nech nepridáva výšku navyše. */
-      .rail-modules { width: 100%; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.4); padding-bottom: 6px; margin-bottom: 6px; }
-      .rail-icon {
-        width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-        color: var(--text-dim); background: transparent; border: none; cursor: pointer; position: relative; flex-shrink: 0; padding: 0;
-        transition: background .15s ease, color .15s ease;
-      }
-      .rail-icon:hover { background: var(--panel-2); color: var(--text); }
-      .rail-icon.active { color: #fff; background: var(--accent); }
-      .rail-icon.active:hover { color: #fff; }
-      /* Skratky modulov (POŽ/SRV/ADM) namiesto SVG ikon — rovnaký box ako
-         .rail-icon, len s textom. */
-      .rail-icon-label { font-family: 'Barlow Condensed', 'Barlow', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
-      /* Jeden riadok = jeden riadok vo flyoute (záložka = bodka, rýchla akcia
-         = červená ikona) — 29px, presne ako .sidebar-item tam (zdieľaná
-         konštanta, viď komentár pri .sidebar-item). */
-      .rail-row {
-        width: 34px; height: 29px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer;
-      }
-      .rail-row:disabled { cursor: default; }
-      .rail-row:hover:not(:disabled) { background: var(--panel-2); }
-      .rail-row-quick { height: 34px; }
-      /* Rovnako veľké ako ikony modulov (34px), nech sú dobre vidno. */
-      .rail-icon.quick { width: 34px; height: 34px; border-radius: 50%; color: var(--text-dim); }
-      .rail-icon.quick svg { width: 18px; height: 18px; }
-      .rail-icon.quick:hover { background: var(--panel-2); }
-      /* výnimka — "Čo vyriešiť dnes?" nie je rýchla akcia modulu, čierny box + červená bublina, jednoznačne oddelené */
-      .rail-icon.quick.rail-ask { color: #e6392e; background: #1a1a1a; border-radius: 8px; margin-bottom: 10px; }
-      .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
-      .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
-      .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
-      .rail-tick.alert:not(.active) { background: var(--danger) !important; opacity: 1; width: 8px; height: 8px; }
-      /* rovnaká deliaca čiara ako vo flyoute (.sidebar-quick), box-shadow →
-         nezaberá výšku, nerozhodí zarovnanie s textom (moduly/tabs čiaru má
-         .rail-modules vyššie) */
-      .rail-divider-before { box-shadow: inset 0 1px 0 var(--border); }
-      /* Telefón/pripomienka celkom dole v úzkom páse — MIMO .rail-scroll
-         vyššie (nie sticky vnútri neho), takže sú vždy vizuálne na spodku
-         pásu, nezávisle od toho, koľko riadkov má aktívny modul nad nimi. */
-      .rail-bottom-actions {
-        width: 100%; flex-shrink: 0;
-        display: flex; flex-direction: column; align-items: center; gap: 2px;
-        padding-top: 6px; box-shadow: inset 0 1px 0 var(--border);
-      }
-      .rail-icon.quick.rail-bottom-icon { color: var(--accent); }
-      .rail-badge {
-        position: absolute; top: -2px; right: -2px; background: #fff; color: var(--accent);
-        font-size: 9px; font-weight: 700; border-radius: 99px; min-width: 14px; height: 14px;
-        padding: 0 3px; display: flex; align-items: center; justify-content: center; line-height: 1;
-      }
-      .rail-flyout {
-        /* 260px, nie 205 — pri 205 sa "Poškodenia strojov požičovne" a "Záznam
-           z merania VTZ EZ" zalamovali na 2 riadky. Len tieň, žiadna deliaca
-           linka (tú má len samotný úzky pás vľavo, .icon-rail). */
-        position: fixed; left: 52px; bottom: 0; width: 260px; background: var(--panel);
-        border-right: 1px solid var(--border); box-shadow: 4px 0 16px rgba(0,0,0,.10); z-index: 50;
-        display: flex; flex-direction: column;
-        opacity: 0; transform: translateX(-10px); pointer-events: none;
-        transition: opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      .rail-flyout.rail-flyout-open { opacity: 1; transform: translateX(0); pointer-events: auto; }
-      /* Scrollovateľná časť (moduly/záložky) — flex:1 necháva zvyšný priestor
-         pre .rail-flyout-bottom POD ňou, mimo scrollu, nech telefón a
-         pripomienka zostanú vždy vizuálne na spodku vysunutého menu. */
-      .rail-flyout-scroll {
-        width: 100%; flex: 1; min-height: 0; overflow-y: auto;
-        /* horný padding je TU, nie na .rail-flyout-nav — musí platiť aj pre
-           tlačidlo "Čo vyriešiť dnes?" nad ním, inak je o 8px vyššie než
-           zodpovedajúca ikona bubliny v .icon-rail (tá má padding-top tiež
-           na vonkajšom kontajneri, nie až pri prvej ikone). */
-        padding-top: 8px;
-      }
-      .rail-flyout-nav { width: 100%; padding: 0 0 8px; }
-      /* Riadky 34px + gap 2px + padding 6px hore / 8px dole — rovnaké čísla
-         ako .rail-bottom-actions v úzkom páse (padding-top 6, gap 2, a 8px
-         padding-bottom prevzaté z .icon-rail), nech si telefón/pripomienka
-         sadnú 1:1 s ikonami vedľa, nielen počtom riadkov. */
-      .rail-flyout-bottom { width: 100%; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 0 8px; box-shadow: inset 0 1px 0 var(--border); }
-      .rail-flyout-bottom .sidebar-item { padding-left: 14px; }
-
-      /* Tmavý režim — pôvodná tmavosivá paleta, nemení sa. */
-      .app-shell.dark .icon-rail { background: #22262b; border-right: none; }
-      .app-shell.dark .rail-icon { color: rgba(255,255,255,.55); }
-      .app-shell.dark .rail-icon:hover { color: rgba(255,255,255,.85); background: transparent; }
-      .app-shell.dark .rail-icon.quick { color: var(--accent); }
-      .app-shell.dark .rail-icon.active { color: #fff; background: transparent; }
-      .app-shell.dark .rail-icon.active::before { content: ""; position: absolute; left: -8px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent); }
-      .app-shell.dark .rail-tick { background: rgba(255,255,255,.32); opacity: 1; }
-      .app-shell.dark .rail-tick.active { background: #fff; border-color: var(--accent); }
+      /* Ľavé menu na počítači — .side-menu-wrap len drží šírku vo flex riadku, panel je fixed. */
+      .side-menu-wrap { width: 212px; flex-shrink: 0; }
+      .side-menu-wrap.collapsed { width: 56px; }
+      .side-menu { position: fixed; left: 0; bottom: 0; width: inherit; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; box-sizing: border-box; z-index: 50; }
+      .side-menu-wrap .side-menu { width: 212px; }
+      .side-menu-wrap.collapsed .side-menu { width: 56px; }
+      .side-menu-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px; }
+      .side-menu-foot { flex-shrink: 0; padding: 6px 8px 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; }
+      .nav-sec { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); margin: 14px 10px 4px; }
+      .nav-sec-line { height: 1px; background: var(--border); margin: 8px 4px; }
+      .nav-it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: none; background: transparent; border-radius: 8px; font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer; text-align: left; position: relative; }
+      .nav-it:hover { background: var(--panel-2); }
+      .nav-it.active { background: var(--accent-light); color: var(--accent); font-weight: 700; }
+      .nav-it.nav-sub { padding-left: 38px; font-size: 12.5px; }
+      .nav-it.nav-dim { color: var(--text-dim); font-size: 12px; }
+      .nav-lbl { flex: 1; min-width: 0; }
+      .nav-b { margin-left: auto; background: var(--accent); color: #fff; border-radius: 10px; font-size: 10.5px; padding: 1px 7px; font-weight: 700; }
+      .side-menu-wrap.collapsed .nav-it { justify-content: center; padding: 8px 0; }
+      .side-menu-wrap.collapsed .nav-b { position: absolute; top: 0; right: 2px; font-size: 9px; padding: 0 5px; }
+      .header-new-wrap { position: relative; }
+      .header-new-btn { background: #fff; color: var(--accent); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+      .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
+      .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
+      .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(255,255,255,.16); color: #fff; cursor: pointer; }
+      /* Spodná lišta na mobile (zobrazí sa len v mobilnom @media cez .mobile-tech-actions). */
+      .mnav-t { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; font: inherit; font-size: 10.5px; color: var(--text-dim); position: relative; padding: 4px 0; cursor: pointer; min-width: 0; }
+      .mnav-t.active { color: var(--accent); font-weight: 700; }
+      .mnav-b { position: absolute; top: 0; left: 56%; background: var(--accent); color: #fff; border-radius: 9px; font-size: 9.5px; padding: 0 5px; font-weight: 700; }
+      .mnav-plus { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+      .mnav-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-radius: 16px 16px 0 0; padding: 10px 14px calc(18px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; box-sizing: border-box; }
+      .mnav-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 10px; }
+      .mnav-sheet-title { font-weight: 700; margin: 2px 6px 6px; }
+      .mnav-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 6px; border: none; border-bottom: 1px solid var(--border); background: transparent; font: inherit; font-size: 15px; color: var(--text); text-align: left; cursor: pointer; }
+      .mnav-row.active { color: var(--accent); font-weight: 700; }
+      .mnav-row.nav-sub { padding-left: 38px; font-size: 14px; }
+      .mnav-sheet .nav-sec { margin: 14px 6px 2px; }
 
       /* Tabuľka (.table-cards) sa na mobile prekreslí na kartičky — každý
          riadok = jedna karta, buňky pod sebou ako "label: hodnota" (label z
@@ -29381,38 +28967,8 @@ function GlobalStyle() {
       }
       .kebab-item:hover { background: var(--panel-2); }
 
-      /* "Vlajočka" prilepená na ľavom okraji obrazovky — otvorí to isté menu ako
-         výsuvný panel — len na mobile (nižšie v @media). Na webe je bočné menu
-         trvalo viditeľné (IconRail), vlajočku tam netreba. Úzka a nízka (tenká
-         šípka, nie veľké tlačidlo), väčšina trčí mimo obrazovky, nech
-         nezasahuje do plochy pod ňou. */
-      .mobile-nav-edge-flag {
-        display: none; position: fixed; left: -14px; top: 50%; transform: translateY(-50%);
-        align-items: center; justify-content: center;
-        width: 22px; height: 46px; padding-left: 10px; border-radius: 0 8px 8px 0;
-        background: var(--accent); border: none; color: #fff; font-size: 13px; cursor: pointer;
-        box-shadow: 2px 0 8px rgba(0,0,0,.18); z-index: 90;
-      }
       .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
       .mobile-nav-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
-      /* width:100% (nie pevných 152px ako .sidebar-nav) — pri dlhších názvoch
-         záložiek ("Poškodenia strojov požičovne") sa inak zalamovali na 2-3
-         riadky v pevnej výške riadku a prekrývali susedný riadok pod sebou
-         (presne ten istý problém, čo mal kedysi aj .rail-flyout — viď jeho
-         komentár pri width:260px vyššie). height:auto na riadkoch je poistka
-         pre prípad, že by sa aj tak zalomili na najužších telefónoch. */
-      .mobile-nav-drawer {
-        position: relative; width: 64%; max-width: 240px; background: var(--panel);
-        height: 100%; overflow-y: auto; box-shadow: 4px 0 16px rgba(0,0,0,.10);
-        padding-top: env(safe-area-inset-top);
-        display: flex; flex-direction: column;
-      }
-      .mobile-nav-scroll { flex: 1 1 auto; overflow-y: auto; }
-      /* Meno/nastavenia je vždy prilepené celkom dole v drawri (margin-top:
-         auto), aj keď je menu krátke a nevyplní celú výšku. */
-      .mobile-nav-footer { margin-top: auto; padding: 10px; border-top: 1px solid var(--border); }
-      .mobile-nav-drawer .sidebar-nav { width: 100%; }
-      .mobile-nav-drawer .sidebar-group, .mobile-nav-drawer .sidebar-item { height: auto; min-height: 29px; white-space: normal; padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
       /* Okamžitý tooltip nad blokom zákazky/rezervácie v Gantte — namiesto pomalého
          natívneho (title) sa objaví hneď pri prejdení myšou, čisto cez CSS.
          Zámerne NIŽŠIE ako .gantt-name-wrap (meno stroja), a to aj pri
@@ -29592,30 +29148,6 @@ function GlobalStyle() {
         body:has(.protocol-overlay) .mobile-tech-actions,
         body:has(.fullscreen-overlay) .mobile-tech-actions,
         body:has(.mobile-nav-overlay) .mobile-tech-actions { display: none !important; }
-        .mobile-tech-action-btn {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 2px;
-          padding: 8px 4px;
-          min-height: 52px;
-          border-radius: 8px;
-          background: var(--panel-2);
-          color: var(--text);
-          text-decoration: none;
-          font-family: 'Barlow', sans-serif;
-          font-size: 11px;
-          font-weight: 600;
-          border: 1px solid var(--border);
-        }
-        .mobile-tech-action-accent {
-          background: var(--accent);
-          color: #fff;
-          border-color: var(--accent);
-        }
-        .mobile-tech-action-icon { font-size: 18px; line-height: 1; }
         .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
 
         /* maSKot bublina — na mobile by inak sedela presne v spodnej lište
@@ -29628,12 +29160,10 @@ function GlobalStyle() {
         /* To isté pre bublinu "čaká na zobrazenie" (skok na zvýraznené poškodenie). */
         .damage-toast-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
 
-        /* IconRail (hover) nedáva na dotykovej obrazovke zmysel — na mobile
-           namiesto neho hamburger v hornej lište otvorí to isté menu ako
-           výsuvný panel (mobile-nav-drawer, mimo tohto breakpointu vyššie,
-           tá istá trieda .sidebar-nav ale vnútri drawera zostáva viditeľná). */
-        .icon-rail-wrap { display: none; }
-        .mobile-nav-edge-flag { display: flex; }
+        /* Na mobile namiesto ľavého menu spodná lišta (MobileTabBar), „+ Nové“ je pod „+“. */
+        .side-menu-wrap, .header-new-wrap { display: none !important; }
+        .header-phone-mobile { display: inline-flex; }
+        .mnav-bar { gap: 0 !important; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)) !important; }
 
         :root {
           --gantt-name-col: 92px;
@@ -29844,10 +29374,7 @@ function GlobalStyle() {
          jemne zvýraznený okraj/ikona pre Protokol. */
       @media (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) {
         .mobile-tech-actions { padding: 3px 6px calc(3px + env(safe-area-inset-bottom)) 6px !important; gap: 4px !important; }
-        .mobile-tech-action-btn { flex-direction: row !important; min-height: 30px !important; padding: 4px 6px !important; gap: 0 !important; font-size: 0 !important; }
-        .mobile-tech-action-icon { font-size: 15px !important; }
-        .mobile-tech-action-accent { background: var(--panel-2) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
-        .app-main.has-mobile-tech-bar { padding-bottom: calc(42px + env(safe-area-inset-bottom)) !important; }
+        .app-main.has-mobile-tech-bar { padding-bottom: calc(64px + env(safe-area-inset-bottom)) !important; }
       }
 
     `}</style>
