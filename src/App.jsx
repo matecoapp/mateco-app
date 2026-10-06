@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.740";
+const APP_VERSION = "1.0.741";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -5498,39 +5498,8 @@ function DispatcherApp() {
 
   const persistCheckerSubstitutions = useCallback(makeRecordPersist("checkerSubstitutions", setCheckerSubstitutions), []);
 
-  // Nedokončené kontroly stroja checkera, ktorý je dnes neprítomný (dovolenka/PN so zástupom),
-  // sa presunú na zástup s dnešným dátumom — čo nestihol pred nástupom na dovolenku, robí zástup.
-  // Len kontroly stroja (vznikajú automaticky); servisné úlohy prerozdeľuje dispečer servisu.
-  useEffect(() => {
-    if (!loaded || !navigator.onLine || !["veduci_servisu", "dispecer_servisu"].includes(currentUser?.role)) return;
-    const active = checkerSubstitutions.filter((sb) => sb.startDate <= today && sb.endDate >= today && sb.substituteTechnicianId && sb.originalTechnicianId);
-    if (!active.length) return;
-    const depoOf = (a) => { const j = jobs.find((jj) => jj.id === a.jobId); return j ? (a.phase === "vratenie" ? j.returnDepo || j.fromDepo : j.fromDepo) : null; };
-    const moves = [];
-    assignmentsRef.current.forEach((a) => {
-      if (a.kind !== "kontrolaStroja" || a.resolved || !a.date || a.date >= today) return;
-      // Stroj už odišiel — nevykonaná kontrola pred vývozom sa už nepresúva.
-      const hp = handoverProtocolsRef.current.find((h) => h.jobId === a.jobId);
-      if ((a.phase || "vyvoz") === "vyvoz" && hp?.handoverDone) return;
-      const sb = active.find((x) => x.originalTechnicianId === a.technicianId && (!x.depo || x.depo === depoOf(a)));
-      if (sb) moves.push({ a, sb });
-    });
-    if (!moves.length) return;
-    const ids = new Map(moves.map(({ a, sb }) => [a.id, sb]));
-    assignmentsRef.current = assignmentsRef.current.map((a) => (ids.has(a.id) ? { ...a, technicianId: ids.get(a.id).substituteTechnicianId, originalTechnicianId: a.technicianId, date: today } : a));
-    persistAssignments((cur) => cur.map((a) => (ids.has(a.id) && a.technicianId === ids.get(a.id).originalTechnicianId ? { ...a, technicianId: ids.get(a.id).substituteTechnicianId, originalTechnicianId: a.technicianId, date: today } : a)));
-    const bySub = {};
-    moves.forEach(({ a, sb }) => { (bySub[sb.id] = bySub[sb.id] || { sb, list: [] }).list.push(a); });
-    Object.values(bySub).forEach(({ sb, list }) => {
-      const sub = employees.find((e) => e.id === sb.substituteTechnicianId);
-      const orig = employees.find((e) => e.id === sb.originalTechnicianId);
-      const codes = list.map((a) => machineById[a.machineId]?.code || "—").join(", ");
-      const n = list.length;
-      const link = { module: "servis", view: "plan", plannerDate: today };
-      if (sub) pushNotification({ kind: "checker_inspection", roles: [], userName: sub.name, title: "Prevzatá kontrola stroja (zastupovanie)", message: `Za ${orig?.name || "checkera"} preberáte ${n === 1 ? "nedokončenú kontrolu stroja" : `${n} nedokončené kontroly strojov`} (${codes}) — na dnes.`, link });
-      if (orig) pushNotification({ kind: "checker_inspection", roles: [], userName: orig.name, title: "Kontrola stroja presunutá", message: `${n === 1 ? "Nedokončenú kontrolu stroja" : `${n} nedokončené kontroly strojov`} (${codes}) počas vašej neprítomnosti robí ${sub?.name || "zástup"}.`, link });
-    });
-  }, [loaded, today, checkerSubstitutions, assignments, jobs, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Neurobené kontroly stroja (presun na dnes / na zástup / uzavretie po vrátení) presúva databáza
+  // každý pracovný deň ráno — step75 daily_inspection_rollover.
 
   // Náhrady checkerov, ktorým už skončila dovolenka (koniec pred dneškom), sa
   // sami potichu odstránia — nikto ich nemusí ručne mazať, keď dovolenka skončí,
@@ -17124,7 +17093,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const hoursNum = Number(String(workHours).replace(",", "."));
   const hoursValid = String(workHours).trim() !== "" && hoursNum > 0;
   const partsValid = usedParts.every((p) => p.name.trim());
-  const photosNeeded = phase === "vyvoz" && !assignment.resolved ? Math.max(0, MIN_MACHINE_PHOTOS - photos.length) : 0;
+  // Hotová kontrola: pri úprave nesmie klesnúť pod 4 fotky (staršia s menej fotkami nie pod pôvodný počet).
+  const photosMin = assignment.skipped ? 0 : assignment.resolved ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
+  const photosNeeded = phase === "vyvoz" ? Math.max(0, photosMin - photos.length) : 0;
   const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && photosNeeded === 0;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
   const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
@@ -20018,8 +19989,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 // Nadväzujúci prenájom v ten istý deň: deň výmeny sa rozdelí uhlopriečkou
                 // (odchádzajúca zákazka hore vľavo, nová dole vpravo), farby ostávajú podľa obchodníka.
                 const inView = (d) => d && d >= allDays[0] && d <= allDays[allDays.length - 1];
-                const endTurn = !noEnd && inView(j.endDate) && mJobs.some((o) => o.id !== j.id && !o.notRealized && o.startDate === j.endDate);
-                const startTurn = inView(j.startDate) && mJobs.some((o) => o.id !== j.id && !o.notRealized && o.endDate === j.startDate);
+                const endTurn = !noEnd && inView(j.endDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.startDate === j.endDate) || mReservations.some((r) => r.expectedStart === j.endDate));
+                const startTurn = inView(j.startDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.endDate === j.startDate) || mReservations.some((r) => r.expectedEnd === j.startDate));
                 const cellPct = 100 / (endCol - startCol + 1);
                 const turnClip = startTurn || endTurn
                   ? `polygon(${startTurn ? `calc(${cellPct}% + 2px) 0` : "0 0"}, ${endTurn ? `calc(100% - 2px) 0, calc(${100 - cellPct}% - 2px) 100%` : "100% 0, 100% 100%"}, ${startTurn ? "2px 100%" : "0 100%"})`
@@ -20179,6 +20150,14 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 const bg = salespersonColor(r.obchodnik, salespeople) || NO_SALESPERSON_COLOR;
                 const isPending = r.status === "pending";
                 const draggable = canDragReservations && !isPending;
+                // Deň výmeny so zákazkou/rezerváciou — uhlopriečka ako pri zákazkách.
+                const inView = (d) => d && d >= allDays[0] && d <= allDays[allDays.length - 1];
+                const startTurn = inView(r.expectedStart) && (mJobs.some((o) => !o.notRealized && o.endDate === r.expectedStart) || mReservations.some((o) => o.id !== r.id && o.expectedEnd === r.expectedStart));
+                const endTurn = !noEnd && inView(r.expectedEnd) && (mJobs.some((o) => !o.notRealized && o.startDate === r.expectedEnd) || mReservations.some((o) => o.id !== r.id && o.expectedStart === r.expectedEnd));
+                const cellPct = 100 / (endCol - startCol + 1);
+                const turnClip = startTurn || endTurn
+                  ? `polygon(${startTurn ? `calc(${cellPct}% + 2px) 0` : "0 0"}, ${endTurn ? `calc(100% - 2px) 0, calc(${100 - cellPct}% - 2px) 100%` : "100% 0, 100% 100%"}, ${startTurn ? "2px 100%" : "0 100%"})`
+                  : undefined;
                 return (
                   <div
                     key={r.id}
@@ -20217,6 +20196,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         overflow: "hidden",
                         boxSizing: "border-box",
                         opacity: isPending ? 0.4 : 0.85,
+                        clipPath: turnClip,
                       }}
                     />
                     <div
@@ -20230,6 +20210,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         fontWeight: 600,
                         textShadow: "0 1px 2px rgba(0,0,0,.6)",
                         pointerEvents: "none",
+                        paddingLeft: startTurn ? `${cellPct}%` : undefined, // popisok za deň výmeny
                       }}
                     >
                       <div style={{ maxWidth: Math.min(barWidths["r-" + r.id] || 100, 260), overflow: "hidden", padding: "3px 6px", lineHeight: 1.3 }}>
