@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.750";
+const APP_VERSION = "1.0.751";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -3711,8 +3711,8 @@ function DispatcherApp() {
   );
   const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
-  const [module, setModuleRaw] = useState(() => localStorage.getItem("mateco_last_module") || "poziciovna");
-  const [view, setView] = useState(() => localStorage.getItem("mateco_last_view") || "calendar");
+  const [module, setModuleRaw] = useState(() => sessionStorage.getItem("mateco_last_module") || "poziciovna");
+  const [view, setView] = useState(() => sessionStorage.getItem("mateco_last_view") || "calendar");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dashboardDepoFilter, setDashboardDepoFilter] = useState(null);
@@ -4000,11 +4000,11 @@ function DispatcherApp() {
   // stránka podľa roly by sa po prihlásení nikdy nepoužila.
   useEffect(() => {
     if (!didSetLandingModule.current) return;
-    localStorage.setItem("mateco_last_module", module);
+    sessionStorage.setItem("mateco_last_module", module);
   }, [module]);
   useEffect(() => {
     if (!didSetLandingModule.current) return;
-    localStorage.setItem("mateco_last_view", view);
+    sessionStorage.setItem("mateco_last_view", view);
   }, [view]);
   useEffect(() => {
     if (documentsSubView) localStorage.setItem("mateco_last_documents_subview", documentsSubView);
@@ -4947,6 +4947,8 @@ function DispatcherApp() {
   // appka už nemusí nič vlastné predpočítavať.
   const [maskotAskTick, setMaskotAskTick] = useState(0);
 
+  // Pri každom otvorení platformy (nová karta/aplikácia) sa začína na „Dnes“; posledná obrazovka sa pamätá
+  // len v rámci otvorenej karty (sessionStorage), takže F5 nechá človeka tam, kde bol.
   // Hneď po prihlásení platformu otvor na module, ktorý dáva zmysel pre danú rolu
   // (napr. vedúci servisu rovno v Servise) — len pri prvom prihlásení v novej
   // relácii (nič si ešte nezapamätal), nie pri obnovení stránky (F5), kde má
@@ -4955,16 +4957,16 @@ function DispatcherApp() {
   useEffect(() => {
     if (currentUser && !didSetLandingModule.current) {
       didSetLandingModule.current = true;
-      if (!localStorage.getItem("mateco_last_module")) {
+      if (!sessionStorage.getItem("mateco_last_module")) {
         const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "dnes";
         setModule(landingModule);
         // Zapísať hneď — ak sa modul nezmení (napr. šofér už je v Požičovni),
         // efekt vyššie by ho nezapísal a pri F5 by sa úvodná stránka opakovala.
-        localStorage.setItem("mateco_last_module", landingModule);
+        sessionStorage.setItem("mateco_last_module", landingModule);
         // Šofér aj technik začínajú na „Dnes“ (setModule nastaví pohľad).
       } else {
-        localStorage.setItem("mateco_last_module", module);
-        localStorage.setItem("mateco_last_view", view);
+        sessionStorage.setItem("mateco_last_module", module);
+        sessionStorage.setItem("mateco_last_view", view);
       }
     }
   }, [currentUser]);
@@ -5036,8 +5038,8 @@ function DispatcherApp() {
     idbClear("outbox").then(refreshOutboxCount);
     Object.keys(_retryActions).forEach((k) => delete _retryActions[k]);
     setSaveErrors([]);
-    localStorage.removeItem("mateco_last_module");
-    localStorage.removeItem("mateco_last_view");
+    sessionStorage.removeItem("mateco_last_module");
+    sessionStorage.removeItem("mateco_last_view");
     localStorage.removeItem("mateco_last_documents_subview");
   }
   // Zmena roly prihlasovacieho účtu — cez SQL funkciu set_profile_role (step54),
