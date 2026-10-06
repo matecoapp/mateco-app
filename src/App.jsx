@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.749";
+const APP_VERSION = "1.0.750";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -225,14 +225,14 @@ const PERM = {
   damage_status: ["veduci_servisu", "dispecer_servisu"],
   damage_delete: ["veduci_servisu", "dispecer_servisu"],
   damage_clear_all: [], // len administrátor
-  damage_import_csv: ["veduci_servisu", "dispecer_servisu"],
+  damage_import_csv: [], // len admin (import pred pilotom)
   damage_quick_report: ["technik", "sofer", "externy_sofer", "obchodnik", "dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne", "veduci_technik_ba"],
   external_add: ["veduci_servisu", "dispecer_servisu"],
   external_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   external_status: ["veduci_servisu", "dispecer_servisu"],
   external_delete: ["veduci_servisu", "dispecer_servisu"],
   external_clear_all: [], // len administrátor
-  external_import_csv: ["veduci_servisu", "dispecer_servisu"],
+  external_import_csv: [], // len admin (import pred pilotom)
 
   // Servis — revízie / úradné skúšky
   revision_assign: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
@@ -15040,7 +15040,7 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
         <SearchInput placeholder="Hľadať firmu…" value={search} onChange={setSearch} style={{ minWidth: 240 }} />
         {canAdd && (
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onImport}>Import zákazníkov</button>
+            {isAdminUser(user) && <button className="btn btn-ghost" onClick={onImport}>Import zákazníkov</button>}
             <button className="btn btn-accent" onClick={onAdd}>+ Pridať zákazníka</button>
           </div>
         )}
@@ -28687,7 +28687,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       )}
 
-      {canManage && (
+      {isAdminUser(user) && (
         <div style={{ marginTop: 14 }}>
           <SparePartsImportButton depo={depo} onImport={onImport} />
         </div>
