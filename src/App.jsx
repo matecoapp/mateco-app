@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.752";
+const APP_VERSION = "1.0.753";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -25105,7 +25105,7 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Checkeri podľa depa — dnes ({fmtDate(today)})
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -26520,7 +26520,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Objednávky podľa depa
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             {depoRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
             ) : (
@@ -26537,7 +26537,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie objednávaný diel
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             {dielRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
             ) : (
@@ -26667,7 +26667,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Rentabilita podľa modelu — % dní v období na zákazke
       </div>
-      <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+      <div className="panel table-wrap" style={{ padding: 0 }}>
         {rentabilityRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
         ) : (
@@ -26822,7 +26822,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najviac servisované modely
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             {modelRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
             ) : (
@@ -26839,7 +26839,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie servisovaný stroj
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             {serialRows.length === 0 ? (
               <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
             ) : (
@@ -27149,7 +27149,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
         </div>
       )}
       <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ width: "100%", marginBottom: 10 }} />
-      <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+      <div className="panel table-wrap" style={{ padding: 0 }}>
         <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -28361,7 +28361,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             </button>
           )}
         </div>
-        <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+        <div className="panel table-wrap" style={{ padding: 0 }}>
           <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -28525,7 +28525,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </button>
             )}
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -28617,7 +28617,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </button>
             )}
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -28666,7 +28666,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--danger)", marginBottom: 8 }}>
             Zamietnuté ({zamietnute.length})
           </div>
-          <div className="panel" style={{ padding: 0, overflow: "clip" }}>
+          <div className="panel table-wrap" style={{ padding: 0 }}>
             <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -29525,6 +29525,10 @@ function GlobalStyle() {
       input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
       table { width: 100%; border-collapse: collapse; }
       th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); position: sticky; top: var(--header-h, 62px); z-index: 40; }
+      /* Tabuľky v paneli: na širokej obrazovke orezané (hlavička tabuľky ostáva prilepená pod lištou),
+         na užšej sa dajú posúvať doľava/doprava — vtedy hlavička nie je prilepená (inak by sa posunula). */
+      .table-wrap { overflow: clip; }
+      @media (max-width: 1500px) { .table-wrap { overflow-x: auto; } .table-wrap th { position: static; } }
       /* V okne (Modal) sa nescrolluje celá stránka pod hlavičkou appky, ale
          samotný .modal-overlay — tabuľky vnútri sa preto lepia na vrch OKNA
          (0), nie o výšku hlavičky nižšie (tam by zbytočne visela medzera). */
