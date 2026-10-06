@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.753";
+const APP_VERSION = "1.0.756";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -960,7 +960,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
   const partsRows = assignment.usedParts || [];
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
-<title>Checklist ${esc(machine?.code)}</title>
+<title>Checklist ${assignment.kind === "kontrolaStroja" ? (assignment.phase === "vratenie" ? "po vrátení " : "pred vývozom ") : ""}${esc(machine?.code)}</title>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
@@ -993,7 +993,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
   <div class="body-content">
   <div class="head">
     <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
-    <h1>CHECKLIST — KONTROLA STROJA</h1>
+    <h1>CHECKLIST — KONTROLA STROJA${assignment.kind === "kontrolaStroja" ? (assignment.phase === "vratenie" ? " PO VRÁTENÍ" : " PRED VÝVOZOM") : ""}</h1>
   </div>
   <div class="section">
     <div class="sechead">Stroj a technik</div>
@@ -1003,6 +1003,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
       <div class="field"><span class="l">Checker / Technik</span><span class="v">${esc(technicianName) || "—"}</span></div>
       <div class="field"><span class="l">Dátum</span><span class="v">${esc((assignment.checkerDate || assignment.date || "").slice(0, 10))}</span></div>
       <div class="field"><span class="l">Odpracované hodiny</span><span class="v">${esc(assignment.workHours)} h</span></div>
+      ${assignment.kind === "kontrolaStroja" ? `<div class="field"><span class="l">Druh kontroly</span><span class="v">${assignment.phase === "vratenie" ? "Po vrátení stroja (po prenájme)" : "Pred vývozom stroja (pred prenájmom)"}</span></div>` : ""}
     </div>
   </div>
   <div class="section">
@@ -17475,11 +17476,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           )}
         </div>
       ) : phase === "vratenie" ? (
-        handoverProtocol?.returnDone ? (
-          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
-            📋 Zobraziť protokol o vrátení
-          </button>
-        ) : (
+        // Fotky z vrátenia (šofér pri zvoze) sú priamo nižšie pri kontrole — bez odkazu na protokol.
+        !handoverProtocol?.returnDone && (
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Šofér zatiaľ nevyplnil protokol o vrátení.</div>
         )
       ) : selfTransport && (
@@ -17513,11 +17511,21 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         <ChecklistEditor checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" onChange={setChecklist} />
       )}
 
-      {phase !== "vratenie" && (
+      {phase === "vratenie" && (
+        <MachinePhotoGroup
+          title={selfTransport ? "Pri vrátení v depe — protokol o vrátení" : "Pri zvoze — šofér"}
+          who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate}
+          photos={handoverProtocol?.returnPhotos}
+          empty={selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1) — zatiaľ žiadne." : "Zatiaľ žiadne — šofér ich odfotí pri zvoze."}
+        />
+      )}
+      {(
         <>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Fotky stroja pred vývozom
+            {phase === "vratenie" ? "Po vrátení — checker (voliteľné, ak šofér niečo prehliadol)" : "Pred vývozom — checker"}
+            {assignment.checkerBy ? ` · ${assignment.checkerBy}` : ""}{assignment.checkerDate ? ` · ${fmtDate(String(assignment.checkerDate).slice(0, 10))}` : ""}
           </div>
+          {!showForm && photos.length === 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Bez fotiek.</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {photos.map((url, i) => (
               <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
@@ -17544,10 +17552,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           )}
         </>
       )}
-      {phase === "vratenie" && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-          {selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1)." : "Fotky po vrátení robí šofér pri zvoze — nájdete ich v protokole o vrátení."}
-        </div>
+      {phase === "vyvoz" && !selfTransport && (handoverProtocol?.handoverPhotos || []).length > 0 && (
+        <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
       )}
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
@@ -17806,43 +17812,12 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz, checkerVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
         <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
             </div>
-      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0) && (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Kontrola stroja — fotky
-          </div>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-                Pred vývozom{inspectionVyvoz?.checkerBy ? ` — ${inspectionVyvoz.checkerBy}` : ""}
-              </div>
-              {inspectionVyvoz?.checkerPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0 ? (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[...(inspectionVyvoz?.checkerPhotos || []), ...(handoverProtocol?.handoverPhotos || [])].map((url, i) => (
-                    <img key={i} src={url} alt="Foto pred vývozom" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
-              )}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-                Po vrátení
-              </div>
-              {handoverProtocol?.returnPhotos?.length > 0 ? (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {handoverProtocol.returnPhotos.map((url, i) => (
-                    <img key={i} src={url} alt="Foto po vrátení" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <div style={{ marginTop: 14 }}>
+        <MachinePhotoGroup title="Pred vývozom — checker" who={inspectionVyvoz?.checkerBy} date={inspectionVyvoz?.checkerDate} photos={inspectionVyvoz?.checkerPhotos} />
+        <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
+        <MachinePhotoGroup title="Pri zvoze — šofér" who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate} photos={handoverProtocol?.returnPhotos} />
+        <MachinePhotoGroup title="Po vrátení — checker" who={inspectionVratenie?.checkerBy} date={inspectionVratenie?.checkerDate} photos={inspectionVratenie?.checkerPhotos} />
+      </div>
           </>
         ) : binderTab === "protokol" ? (
           <>
@@ -27568,6 +27543,25 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
    Dlaždice = počty, „Na vybavenie“ = konkrétne veci s priamou akciou.
 --------------------------------------------------------- */
 const POZ_OFFICE_ROLES = ["dispecer_pozicovne", "veduci_pozicovne"];
+// Skupina fotiek stroja s označením, kto a kedy fotil (kontroly checkera, protokol šoféra).
+function MachinePhotoGroup({ title, who, date, photos, empty }) {
+  const list = photos || [];
+  if (!list.length && !empty) return null;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+        {title}{who ? ` · ${who}` : ""}{date ? ` · ${fmtDate(String(date).slice(0, 10))}` : ""}
+      </div>
+      {list.length ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {list.map((url, i) => (
+            <img key={i} src={url} alt={`${title} ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
+          ))}
+        </div>
+      ) : <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{empty}</div>}
+    </div>
+  );
+}
 // Otvorená záložka šanónu sa pamätá, kým sa karta nezavrie krížikom — návrat z náhľadu
 // (kontrola, protokol, detail) ju otvorí na tej istej záložke.
 const _binderMem = {};
