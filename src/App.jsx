@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.757";
+const APP_VERSION = "1.0.758";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -17809,16 +17809,23 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         setActive={(t) => { if (t === "zakaznik" && !portalLink) onGeneratePortalLink(); setBinderTab(t); }}
         panel={binderTab === "kontroly" ? (
           <>
-            <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-        <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz, checkerVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
-        <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
+            {/* Dva stĺpce: všetko k vývozu pod kontrolou pred vývozom, všetko k zvozu pod kontrolou po vrátení. */}
+            <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+              <div>
+                <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz, checkerVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
+                <div style={{ marginTop: 10 }}>
+                  <MachinePhotoGroup title="Checker" who={inspectionVyvoz?.checkerBy} date={inspectionVyvoz?.checkerDate} photos={inspectionVyvoz?.checkerPhotos} />
+                  <MachinePhotoGroup title="Šofér pri vývoze" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
+                </div>
+              </div>
+              <div>
+                <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
+                <div style={{ marginTop: 10 }}>
+                  <MachinePhotoGroup title="Šofér pri zvoze" who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate} photos={handoverProtocol?.returnPhotos} />
+                  <MachinePhotoGroup title="Checker" who={inspectionVratenie?.checkerBy} date={inspectionVratenie?.checkerDate} photos={inspectionVratenie?.checkerPhotos} />
+                </div>
+              </div>
             </div>
-      <div style={{ marginTop: 14 }}>
-        <MachinePhotoGroup title="Pred vývozom — checker" who={inspectionVyvoz?.checkerBy} date={inspectionVyvoz?.checkerDate} photos={inspectionVyvoz?.checkerPhotos} />
-        <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
-        <MachinePhotoGroup title="Pri zvoze — šofér" who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate} photos={handoverProtocol?.returnPhotos} />
-        <MachinePhotoGroup title="Po vrátení — checker" who={inspectionVratenie?.checkerBy} date={inspectionVratenie?.checkerDate} photos={inspectionVratenie?.checkerPhotos} />
-      </div>
           </>
         ) : binderTab === "protokol" ? (
           <>
