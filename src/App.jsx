@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.751";
+const APP_VERSION = "1.0.752";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -15204,7 +15204,7 @@ function CustomerDetailModal({
   const [email, setEmail] = useState(customer.email || "");
   const [telefon, setTelefon] = useState(customer.telefon || "");
   const [showAddContact, setShowAddContact] = useState(false);
-  const [binderTab, setBinderTab] = useState(null);
+  const [binderTab, setBinderTab, forgetBinder] = useBinderTab("cust:" + customer.id);
   const canEdit = can(user, "customer_edit");
   const canDelete = can(user, "customer_delete");
 
@@ -15213,7 +15213,7 @@ function CustomerDetailModal({
   const contract = framoveZmluvy.find((z) => (z.najomca || "").toLowerCase() === (customer.firma || "").toLowerCase());
 
   return (
-    <Modal eyebrow="Zákazník" title={customer.firma} onClose={onClose}>
+    <Modal eyebrow="Zákazník" title={customer.firma} onClose={() => { forgetBinder(); onClose(); }}>
       <BinderLayout
         tabs={[{ id: "kontakty", label: "Kontakty", count: (customer.contacts || []).length, title: "Kontaktné osoby" }]}
         active={binderTab}
@@ -17498,6 +17498,11 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           </div>
         )
       )}
+      {assignment.resolved && !assignment.skipped && !showForm && (
+        <button type="button" className="btn btn-ghost" style={{ marginBottom: 12, marginLeft: 0 }} onClick={() => openPrintableChecklist(assignment, machine, assignment.checkerBy)}>
+          🖨 Tlačová verzia kontroly
+        </button>
+      )}
       {!waitingForReturnProtocol && (<>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
         Predmet kontroly
@@ -17703,7 +17708,7 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
   );
 }
 function JobDetailModal({ job, machine, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage}) {
-  const [binderTab, setBinderTab] = useState(null); // null | "kontroly" | "protokol" | "zakaznik"
+  const [binderTab, setBinderTab, forgetBinder] = useBinderTab("job:" + job.id); // null | "kontroly" | "protokol" | "zakaznik"
   const showPortalPanel = binderTab === "zakaznik";
   const [portalQr, setPortalQr] = useState(null);
   const [expandedChecklist, setExpandedChecklist] = useState(null); // null | "chooser" — výber, ktorý z dvoch checklistov zobraziť ako náhľad
@@ -17737,8 +17742,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
   const inspectionVratenie = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
   const checklistVyvozReady = (inspectionVyvoz?.checklist || []).some((it) => it.checkerStatus);
   const checklistVratenieReady = (inspectionVratenie?.checklist || []).some((it) => it.checkerStatus);
-  function inspectionField(inspection) {
-    if (!inspection) return "— zatiaľ nevytvorená —";
+  function inspectionField(inspection, checker) {
+    if (!inspection) return checker ? `Zatiaľ nevytvorená (checker ${checker.name})` : "— zatiaľ nevytvorená —";
     const techName = technicianById?.[inspection.technicianId]?.name || "—";
     const overdue = !inspection.resolved && inspection.date < todayISO();
     const text = inspection.skipped
@@ -17764,7 +17769,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           <StatusBadge status={st} />
         </>
       }
-      onClose={onClose}
+      onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
       wide
       headerExtra={
@@ -17798,14 +17803,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         panel={binderTab === "kontroly" ? (
           <>
             <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-        <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
-        <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
-        <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
-        <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {checklistVyvozReady && <button className="btn btn-ghost" onClick={() => openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy)}>🔍 Checklist pred vývozom</button>}
-              {checklistVratenieReady && <button className="btn btn-ghost" onClick={() => openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy)}>🔍 Checklist po vrátení</button>}
+        <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz, checkerVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
+        <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
             </div>
       {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0) && (
         <div style={{ marginTop: 14 }}>
@@ -21317,7 +21316,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
 --------------------------------------------------------- */
 function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, assignments, hasServiceProtocol, onAssignDamage, onAssignmentAction, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage, ezMeasurements }) {
   const m = machine;
-  const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "revizieEz"
+  const [expandedSection, setExpandedSection, forgetBinder] = useBinderTab("machine:" + m.id); // null | "servis" | "prenajom" | "revizieEz"
   const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol z "Ostatné protokoly", ktorý sa práve prideľuje ku zákazke
@@ -21399,7 +21398,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           )}
         </span>
       }
-      onClose={onClose}
+      onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
       headerExtra={can(user, "machine_report_damage") ? (
         <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>
@@ -21990,7 +21989,7 @@ const PERM_GROUP = {
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
 function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
-  const [binderTab, setBinderTab] = useState(null);
+  const [binderTab, setBinderTab, forgetBinder] = useBinderTab("dmg:" + d?.id);
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -22025,7 +22024,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     <Modal
       eyebrow={kindLabel}
       title={<span style={{ color: "var(--accent)" }}>{d.code || "Detail"}</span>}
-      onClose={onClose}
+      onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
       wide
       headerExtra={
@@ -27569,6 +27568,14 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
    Dlaždice = počty, „Na vybavenie“ = konkrétne veci s priamou akciou.
 --------------------------------------------------------- */
 const POZ_OFFICE_ROLES = ["dispecer_pozicovne", "veduci_pozicovne"];
+// Otvorená záložka šanónu sa pamätá, kým sa karta nezavrie krížikom — návrat z náhľadu
+// (kontrola, protokol, detail) ju otvorí na tej istej záložke.
+const _binderMem = {};
+function useBinderTab(key) {
+  const [tab, setTabRaw] = useState(() => _binderMem[key] || null);
+  const setTab = (t) => { if (t) _binderMem[key] = t; else delete _binderMem[key]; setTabRaw(t); };
+  return [tab, setTab, () => { delete _binderMem[key]; }];
+}
 // „Šanón“ na kartách: záložky na ľavom okraji, klik vysunie obsah cez kartu, hlavička karty ostáva.
 function BinderLayout({ tabs, active, setActive, main, panel }) {
   const ref = useRef(null);
