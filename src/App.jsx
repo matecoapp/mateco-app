@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.756";
+const APP_VERSION = "1.0.757";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -9402,7 +9402,7 @@ function DispatcherApp() {
         )}
       <div
         className={`app-main${
-          (module === "servis" || module === "poziciovna") &&
+          // Spodná lišta je na mobile vo všetkých moduloch (aj „Dnes“, Administratíva) — miesto pre ňu tiež.
           (can(effectiveUser, "protocol_write") || can(effectiveUser, "damage_quick_report") || can(effectiveUser, "reservation_add"))
             ? " has-mobile-tech-bar"
             : ""
@@ -13313,6 +13313,7 @@ function ProtocolModal({ html, params, onClose }) {
 function PhotoLightboxModal({ src, onClose }) {
   return (
     <div
+      className="fullscreen-overlay"
       style={{
         position: "fixed",
         inset: 0,
@@ -16635,7 +16636,7 @@ function SignatureOverlay({ label, initialValue, fieldAspect, onCancel, onDone }
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
       {/* Plávajúci pás (nie súčasť flex výšky) — nech má canvas na podpis k
           dispozícii celú výšku obrazovky namiesto toho, aby mu hornú časť
           odhryzol pevný riadok s nadpisom/tipom. */}
@@ -29580,6 +29581,10 @@ function GlobalStyle() {
            nič nerieši) — kým je otvorené čo i len jedno okno, lišta sa
            radšej rovno schová celá. */
         body.has-open-modal .mobile-tech-actions { display: none !important; }
+        /* Celoobrazovkové okná mimo Modal (protokol, tlačová verzia, podpis, fotka, mobilné menu) — lišta preč. */
+        body:has(.protocol-overlay) .mobile-tech-actions,
+        body:has(.fullscreen-overlay) .mobile-tech-actions,
+        body:has(.mobile-nav-overlay) .mobile-tech-actions { display: none !important; }
         .mobile-tech-action-btn {
           flex: 1;
           display: flex;
