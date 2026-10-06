@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.741";
+const APP_VERSION = "1.0.742";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -5468,7 +5468,7 @@ function DispatcherApp() {
     }
     // Obnovená zákazka dostane späť kontrolu checkera; kolízia stroja sa ohlási.
     if (trashEntry.originalTable === "jobs" && record && record.status !== "completed") {
-      ensureCheckerAssignment(record);
+      ensureCheckerAssignment(record, depoCheckers, checkerSubstitutions, [...jobs.filter((j) => j.id !== record.id), record]);
       const clash = jobs.find((j) => j.id !== record.id && j.machineId === record.machineId && !j.notRealized && j.status !== "completed" && rangesOverlap(jobFrom(record), jobTo(record), jobFrom(j), jobTo(j)));
       const machineCode = machineById[record.machineId]?.code || "—";
       [...new Set([record.driverId, record.returnDriverId].filter(Boolean))].forEach((dId) => {
@@ -5476,6 +5476,12 @@ function DispatcherApp() {
         if (driver) pushNotification({ roles: [], userName: driver.name, kind: "assignment_transport", title: "Obnovená preprava", message: `Zákazka ${record.customer || "—"} (stroj ${machineCode}) bola obnovená — preprava opäť platí (${fmtDate(record.departureDate || record.startDate)}).`, link: { module: "poziciovna", view: "prepravy" } });
       });
       if (clash) showNotice(`Pozor: obnovená zákazka sa prekrýva so zákazkou ${clash.customer || ""} (${fmtDate(clash.startDate)}) na tom istom stroji.`);
+    }
+    // Obnovená zákazka je znova predchádzajúcim prenájmom — kontrola nadväzujúcich zákaziek stroja sa prepočíta.
+    if (trashEntry.originalTable === "jobs" && record && !record.notRealized) {
+      const list = [...jobs.filter((j) => j.id !== record.id), record];
+      list.filter((o) => o.id !== record.id && o.machineId === record.machineId && o.status !== "completed" && !o.notRealized && (o.departureDate || o.startDate || "") >= todayISO())
+        .forEach((o) => ensureCheckerAssignment(o, depoCheckers, checkerSubstitutions, list));
     }
     persistTrash((trash) => trash.filter((t) => t.id !== trashEntry.id));
   }
@@ -17094,7 +17100,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const hoursValid = String(workHours).trim() !== "" && hoursNum > 0;
   const partsValid = usedParts.every((p) => p.name.trim());
   // Hotová kontrola: pri úprave nesmie klesnúť pod 4 fotky (staršia s menej fotkami nie pod pôvodný počet).
-  const photosMin = assignment.skipped ? 0 : assignment.resolved ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
+  const photosMin = assignment.resolved && !assignment.skipped ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
   const photosNeeded = phase === "vyvoz" ? Math.max(0, photosMin - photos.length) : 0;
   const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && photosNeeded === 0;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
@@ -17317,7 +17323,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
           {!hoursValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte odpracované hodiny.</div>}
           {!partsValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte názov každého pridaného dielu (alebo ho odstráňte).</div>}
-          {photosNeeded > 0 && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>Pridajte fotky stroja pred vývozom — povinné aspoň {MIN_MACHINE_PHOTOS} (chýba {photosNeeded}).</div>}
+          {photosNeeded > 0 && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
           </div>
@@ -20004,11 +20010,12 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       onOpenJob(j);
                     }}
                     onPointerDown={draggable && !departed ? (e) => startBarDrag(e, "move", "job", j, startCol, endCol, noEnd) : undefined}
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable && !departed ? "grab" : "pointer" }}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable && !departed ? "grab" : "pointer", pointerEvents: turnClip ? "none" : undefined /* deň výmeny: klik len na viditeľnú časť */ }}
                   >
                     {draggable && !departed && (
                       <div
                         className="gantt-drag-handle start"
+                        style={{ pointerEvents: "auto" }}
                         title="Ťahaním zmeníte začiatok"
                         onPointerDown={(e) => startBarDrag(e, "resize-start", "job", j, startCol, endCol, noEnd)}
                       />
@@ -20016,6 +20023,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                     {draggable && !noEnd && (
                       <div
                         className="gantt-drag-handle end"
+                        style={{ pointerEvents: "auto" }}
                         title="Ťahaním zmeníte koniec"
                         onPointerDown={(e) => startBarDrag(e, "resize-end", "job", j, startCol, endCol, noEnd)}
                       />
@@ -20038,6 +20046,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         overflow: "hidden",
                         boxSizing: "border-box",
                         clipPath: turnClip,
+                        pointerEvents: turnClip ? "auto" : undefined,
                       }}
                     />
                     {/* Popisok aj tooltip sú zámerne MIMO farebného pozadia
@@ -20167,11 +20176,12 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       onOpenReservation(r);
                     }}
                     onPointerDown={draggable ? (e) => startBarDrag(e, "move", "reservation", r, startCol, endCol, noEnd) : undefined}
-                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable ? "grab" : "pointer" }}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: draggable ? "grab" : "pointer", pointerEvents: turnClip ? "none" : undefined /* deň výmeny: klik len na viditeľnú časť */ }}
                   >
                     {draggable && (
                       <div
                         className="gantt-drag-handle start"
+                        style={{ pointerEvents: "auto" }}
                         title="Ťahaním zmeníte začiatok"
                         onPointerDown={(e) => startBarDrag(e, "resize-start", "reservation", r, startCol, endCol, noEnd)}
                       />
@@ -20179,6 +20189,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                     {draggable && !noEnd && (
                       <div
                         className="gantt-drag-handle end"
+                        style={{ pointerEvents: "auto" }}
                         title="Ťahaním zmeníte koniec"
                         onPointerDown={(e) => startBarDrag(e, "resize-end", "reservation", r, startCol, endCol, noEnd)}
                       />
@@ -20197,6 +20208,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         boxSizing: "border-box",
                         opacity: isPending ? 0.4 : 0.85,
                         clipPath: turnClip,
+                        pointerEvents: turnClip ? "auto" : undefined,
                       }}
                     />
                     <div
