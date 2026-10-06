@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.743";
+const APP_VERSION = "1.0.749";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -157,20 +157,7 @@ function myAssignableDepos(user) {
   return LEAD_TECHNICIAN_DEPOS[user?.role] || null;
 }
 // Ktorý modul sa má otvoriť ako prvý hneď po prihlásení, podľa role.
-const ROLE_DEFAULT_MODULE = {
-  admin: "poziciovna",
-  veduci_pozicovne: "poziciovna",
-  dispecer_pozicovne: "poziciovna",
-  obchodnik: "poziciovna",
-  sofer: "poziciovna",
-  externy_sofer: "poziciovna",
-  veduci_servisu: "servis",
-  dispecer_servisu: "servis",
-  fakturant_servis: "servis",
-  fakturant_pozicovna: "poziciovna",
-  technik: "servis",
-  veduci_technik_ba: "servis",
-};
+const ROLE_DEFAULT_MODULE = {}; // všetci začínajú na „Dnes“ (etapa 2) — fallback nižšie
 function roleLabel(roleId) {
   return ROLES.find((r) => r.id === roleId)?.label || roleId;
 }
@@ -259,8 +246,8 @@ const PERM = {
   plan_assign: ["veduci_servisu", "dispecer_servisu"],
   plan_quick_events: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba"],
   // ERP obrazovka (checklisty + servisné protokoly na hromadné nahrávanie) —
-  // navyše k tomu, čo vidí dispečer servisu, preto NIE v ROLE_PERM_ALIAS.
-  erp_view: ["fakturant_servis"],
+  // dispečer, vedúci aj fakturant servisu (etapa 2: rovnaké menu, všetci smú „Spracované“).
+  erp_view: ["fakturant_servis", "dispecer_servisu", "veduci_servisu"],
   // ERP podklady (požičovňa) — rovnaký princíp ako erp_view vyššie, len pre
   // ukončené protokoly o vrátení (zvoz), navyše k tomu, čo vidí Obchodník.
   erp_pozicovna_view: ["fakturant_pozicovna"],
@@ -4001,7 +3988,9 @@ function DispatcherApp() {
 
   function setModule(m) {
     setModuleRaw(m);
-    setView(m === "servis" ? "prehlad" : m === "administrativa" ? "zamestnanci" : "calendar");
+    // Prvá záložka modulu podľa menu roly (Prehľad servisu má už len admin — ostatným ho nahradilo „Dnes“).
+    const mod = buildNavModules(effectiveUser, 0, myEmployee).find((x) => x.id === m);
+    setView(mod?.tabs.find((t) => !t.dropdown)?.id || (m === "dnes" ? "dnes" : m === "administrativa" ? "zamestnanci" : "calendar"));
   }
 
   // Zapamätá si aktuálnu obrazovku, nech pri obnovení stránky (F5) ostane
@@ -4853,18 +4842,29 @@ function DispatcherApp() {
     if (client) Sentry.startBrowserTracingNavigationSpan(client, { name, attributes: { "sentry.source": "custom" } });
   }, [module, view]);
 
-  // Poistka pre externého šoféra — nesmie skončiť nikde inde než na Prepravách,
+  // Poistka pre externého šoféra — nesmie skončiť nikde inde než na „Dnes“ (jeho prepravy),
   // ani cez zapamätanú polohu z minula (napr. keď mu niekto rolu zmenil neskôr).
   useEffect(() => {
-    if (currentUser?.role === "externy_sofer" && (module !== "poziciovna" || view !== "prepravy")) {
-      setModuleRaw("poziciovna");
-      setView("prepravy");
+    if (currentUser?.role === "externy_sofer" && (module !== "dnes" || view !== "dnes")) {
+      setModuleRaw("dnes");
+      setView("dnes");
     }
   }, [currentUser, module, view]);
 
   // Vlastný záznam zamestnanca prihláseného človeka (podľa REÁLNEJ identity, nie podľa
   // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
   const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
+
+  // Poistka: zapamätaná obrazovka, ktorú rola v menu nemá (napr. zrušený Prehľad servisu) → prvá záložka modulu, inak „Dnes“.
+  useEffect(() => {
+    if (!loaded || !currentUser || canNavTo(module, view)) return;
+    const mods = buildNavModules(effectiveUser, 0, myEmployee);
+    const m = mods.find((x) => x.id === module) || mods[0];
+    if (!m) return;
+    setModuleRaw(m.id);
+    setView(m.tabs.find((t) => !t.dropdown)?.id || m.tabs[0].id);
+  }, [loaded, currentUser, effectiveUser, myEmployee, module, view]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // ───────── Dispečeri požičovne: dispečer zákazky, dispečer depa, zástupy ─────────
   // Zákazka si pamätá dispečera (jobs.dispatcherId = karta zamestnanca). Upozornenia k nej
@@ -4956,15 +4956,12 @@ function DispatcherApp() {
     if (currentUser && !didSetLandingModule.current) {
       didSetLandingModule.current = true;
       if (!localStorage.getItem("mateco_last_module")) {
-        const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "poziciovna";
+        const landingModule = ROLE_DEFAULT_MODULE[currentUser.role] || "dnes";
         setModule(landingModule);
         // Zapísať hneď — ak sa modul nezmení (napr. šofér už je v Požičovni),
         // efekt vyššie by ho nezapísal a pri F5 by sa úvodná stránka opakovala.
         localStorage.setItem("mateco_last_module", landingModule);
-        // Šofér potrebuje hneď vidieť svoje dnešné rozvozy/zvozy, nie prehľad strojov.
-        if (currentUser.role === "sofer" || currentUser.role === "externy_sofer") setView("prepravy");
-        // Technik/checker — svoj Plán servisu (dnešné úlohy a kontroly).
-        if (currentUser.role === "technik" || currentUser.role === "veduci_technik_ba") setView("plan");
+        // Šofér aj technik začínajú na „Dnes“ (setModule nastaví pohľad).
       } else {
         localStorage.setItem("mateco_last_module", module);
         localStorage.setItem("mateco_last_view", view);
@@ -5813,27 +5810,26 @@ function DispatcherApp() {
   function navigateFromNotification(link) {
     if (!link) return;
     // Šofér nemá Zákazky ani kartu zákazky (číslo protokolu z ERP) — upozornenie ho zavedie do Prepráv.
-    if (["sofer", "externy_sofer"].includes(effectiveUser?.role) && link.module === "poziciovna" && link.view !== "prepravy") {
-      setModule("poziciovna");
-      setView("prepravy");
+    if (["sofer", "externy_sofer"].includes(effectiveUser?.role) && link.module === "poziciovna") {
+      setModule("dnes");
       return;
     }
-    // Problém nahlásený zákazníkom cez portál — servis ho rieši v Servis →
-    // Prehľad (dlaždica "Problémy nahlásené zákazníkom"), nie v zákazkách požičovne.
+    // Problém nahlásený zákazníkom cez portál — servis ho rieši na „Dnes“, nie v zákazkách požičovne.
     if (
       link.module === "poziciovna" && link.view === "jobs" && link.jobId &&
       can(effectiveUser, "damage_status") && !can(effectiveUser, "job_edit") &&
       portalRequests.some((r) => r.jobId === link.jobId && r.type === "problem")
     ) {
-      setModule("servis");
-      setView("prehlad");
+      setModule("dnes");
       return;
     }
     // Administratíva (napr. Autá) len pre toho, kto ju vidí — ostatným sa
     // otvorí len samotná karta (auto), nie prázdna obrazovka.
-    if (link.module !== "administrativa" || can(effectiveUser, "employee_manage")) {
+    if (canNavTo(link.module, link.view)) {
       setModule(link.module);
       setView(link.view);
+    } else if (link.module !== "administrativa") {
+      setModule("dnes");
     }
     if (link.partHandoverId) setPartHandoverFocusId(link.partHandoverId);
     if (link.damageId) {
@@ -7447,6 +7443,24 @@ function DispatcherApp() {
     }));
   }
   // Pridelenie, ku ktorému technik už vypísal servisný protokol, je odvedená práca — preradenie ho nemaže.
+  // Parametre servisného protokolu k prideleniu (rovnako ako v Pláne servisu).
+  function protocolParamsForAssignment(a) {
+    const linkedDamage = a.damageId ? damages.find((d) => d.id === a.damageId) : null;
+    if (linkedDamage) return { ...buildProtocolParams(linkedDamage, technicians, enrichedMachineById), assignmentId: a.id };
+    const machine = a.machineId ? enrichedMachineById[a.machineId] : null;
+    const params = { assignmentId: a.id };
+    if (machine) { params.serial = machine.code; params.machineId = machine.id; }
+    else if (a.externeSerioveCislo || a.externyModel || a.stroj) {
+      params.external = "1";
+      params.serial = a.externeSerioveCislo || a.stroj || "";
+      if (a.externyModel) params.model = a.externyModel;
+    }
+    const tech = technicians.find((t) => t.id === a.technicianId);
+    if (tech?.name) params.tech = tech.name;
+    if (a.firma) params.client = a.firma;
+    if (a.umiestnenie) params.address = a.umiestnenie;
+    return params;
+  }
   function hasServiceProtocol(a) {
     const techName = technicians.find((t) => t.id === a.technicianId)?.name;
     return protocolLogs.some((p) => p.assignmentId === a.id
@@ -9145,6 +9159,91 @@ function DispatcherApp() {
     );
   }
 
+  const todayOfficeProps = {
+    user: effectiveUser,
+    myEmployee: myEmployee,
+    today: today,
+    tomorrow: tomorrow,
+    jobs: jobs,
+    reservations: reservations,
+    portalRequests: portalRequests,
+    handoverProtocols: handoverProtocols,
+    notifications: myNotifications,
+    isMyJob: (j) => {
+              // Dispečer požičovne: len svoje zákazky + tie, za ktoré zastupuje (vedúci a admin všetko).
+              if (effectiveUser?.role !== "dispecer_pozicovne" || !myEmployee || !dispatchers.some((d) => d.id === myEmployee.id)) return true;
+              const t = dispatcherTargets({ job: j });
+              return !t || t.some((x) => x.id === myEmployee.id);
+            },
+    mySubstitutedNames: dispatcherSubstitutions.filter((x) => myEmployee && x.substituteId === myEmployee.id && x.startDate <= today && x.endDate >= today).map((x) => dispatchers.find((d) => d.id === x.dispatcherId)?.name).filter(Boolean),
+    driverById: driverById,
+    damages: damages,
+    assignments: assignments,
+    partHandovers: partHandovers,
+    spareParts: spareParts,
+    ezMeasurements: ezMeasurements,
+    protocolLogs: protocolLogs,
+    employees: employees,
+    depoCheckers: depoCheckers,
+    checkerSubstitutions: checkerSubstitutions,
+    weeklyDuty: weeklyDuty,
+    machineById: enrichedMachineById,
+    hasServiceProtocol: hasServiceProtocol,
+    onGo: navigateFromNotification,
+    onOpenJob: (j) => setJobDetail(j),
+    onOpenReservation: (r) => setReservationCardTarget(r),
+    onCompleteJob: (j) => setCompleteJobTarget(j),
+    onAssignDamage: (d) => setDamageAssignTarget(d),
+    onOpenDamage: (d) => setServiceEventDetail(d),
+    onCheckPartHandover: (p) => setPartHandoverUi({ kind: "edit", rec: p }),
+    onConvertPortalProblem: (r) => convertPortalRequestToDamage(r),
+    onReadNotification: markNotificationRead,
+    onAskDaily: () => setMaskotAskTick((n) => n + 1),
+    whoPanel: <WhoIsWherePanel employees={employees} dispatchers={dispatchers} activeDispatcherSub={activeDispatcherSub} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />,
+    erpPozPanel: effectiveUser?.role === "fakturant_pozicovna" && (
+              <ErpPozicovnaView
+                handoverProtocols={handoverProtocols}
+                jobs={jobs}
+                machineById={enrichedMachineById}
+                onMark={markHandoverProtocolErpProcessed}
+                onRevert={revertHandoverProtocolErpProcessed}
+                onOpenProtocol={(job) => setShowHandoverProtocol(job)}
+              />
+            ),
+  };
+  // Etapa 3: počty v menu — „Dnes“ (čo čaká), Prepravy bez šoféra, Náhradné diely, Podklady (ERP).
+  const navCounts = (() => {
+    const r = effectiveUser?.role;
+    const me = myEmployee?.id;
+    const hpByJob = Object.fromEntries(handoverProtocols.map((h) => [h.jobId, h]));
+    let dnes = 0;
+    if (!DNES_ROLES.includes(r)) dnes = r ? todayOfficeModel(todayOfficeProps).rows.length : 0;
+    else if (me && (r === "sofer" || r === "externy_sofer")) dnes = jobs.filter((j) => { const hp = hpByJob[j.id];
+      return (j.driverId === me && j.status !== "completed" && !hp?.handoverDone && (j.departureDate || j.startDate) <= today)
+        || (j.returnDriverId === me && j.status === "completed" && !j.notRealized && !hp?.returnDone && (j.pickupDate || j.endDate) <= today); }).length;
+    else if (me) dnes = assignments.filter((a) => a.technicianId === me && a.date && a.date >= addDaysISO(today, -7) && a.date <= today
+      && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol(a))).length;
+    const monthAgo = addDaysISO(today, -30);
+    const prepravy = !can(effectiveUser, "transport_assign_driver") ? 0 : jobs.filter((j) => todayOfficeProps.isMyJob(j) && !j.notRealized).reduce((n, j) => {
+      const hp = hpByJob[j.id];
+      const dep = j.departureDate || j.startDate;
+      const back = j.pickupDate || j.endDate;
+      if (j.status !== "completed" && !j.selfPickup && !j.driverId && !hp?.handoverDone && dep && dep >= monthAgo && dep <= tomorrow) n++;
+      if (j.status === "completed" && !j.selfReturn && !j.returnDriverId && !hp?.returnDone && back && back >= monthAgo && back <= tomorrow) n++;
+      return n;
+    }, 0);
+    const depos = myAssignableDepos(effectiveUser);
+    // Počty len tomu, koho sa týkajú: diely na schválenie dispečer/vedúci servisu a vedúci technik BA (svoje depá),
+    // výdaje na kontrolu dispečer/vedúci servisu, výdaje na fakturáciu všetci traja, ERP podklady len fakturant servisu.
+    const billing = isAdminUser(effectiveUser) || r === "fakturant_servis";
+    const diely = ((isAdminUser(effectiveUser) || ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"].includes(r)) ? spareParts.filter((x) => x.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE && (!depos || depos.includes(x.depo))).length : 0)
+      + partHandovers.filter((x) => (phCanManage(effectiveUser) && x.status === "check") || (phCanBill(effectiveUser) && x.status === "billing")).length;
+    const podklady = billing
+      ? assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null && !a.erpProcessed).length + protocolLogs.filter((x) => !x.erpProcessed).length : 0;
+    return { dnes, prepravy, diely, podklady };
+  })();
+
+
   return (
     <div className={`app-shell${darkMode ? " dark" : ""}`}>
       <GlobalStyle />
@@ -9261,6 +9360,7 @@ function DispatcherApp() {
           view={view}
           effectiveUser={effectiveUser}
           damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+          navCounts={navCounts}
           myEmployee={myEmployee}
           onSelectModule={setModule}
           onSelectView={setView}
@@ -9279,20 +9379,12 @@ function DispatcherApp() {
             <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
             <div className="mobile-nav-drawer">
               <div className="mobile-nav-scroll">
-                {effectiveUser?.role === "admin" && (
-                  <button
-                    className="sidebar-group rail-ask"
-                    onClick={() => { setMaskotAskTick((n) => n + 1); setMobileNavOpen(false); }}
-                  >
-                    <ChatBubbleIcon size={15} />
-                    <span>Čo vyriešiť dnes?</span>
-                  </button>
-                )}
                 <SidebarNav
                   module={module}
                   view={view}
                   effectiveUser={effectiveUser}
                   damageAlertCount={damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length}
+          navCounts={navCounts}
                   myEmployee={myEmployee}
                   onSelectModule={setModule}
                   onSelectView={(v) => { setView(v); setMobileNavOpen(false); }}
@@ -9314,6 +9406,66 @@ function DispatcherApp() {
         }`}
         style={{ padding: "12px 24px 20px", flex: 1, minWidth: 0, boxSizing: "border-box" }}
       >
+        {module === "dnes" && !DNES_ROLES.includes(effectiveUser?.role) && (
+          <TodayOffice {...todayOfficeProps}          />
+        )}
+        {module === "dnes" && DNES_ROLES.includes(effectiveUser?.role) && (
+          <TodayView
+            user={effectiveUser}
+            myEmployee={myEmployee}
+            today={today}
+            tomorrow={tomorrow}
+            assignments={assignments}
+            damages={damages}
+            jobs={jobs}
+            machineById={enrichedMachineById}
+            partHandovers={partHandovers}
+            ezMeasurements={ezMeasurements}
+            weeklyDuty={weeklyDuty}
+            hasServiceProtocol={hasServiceProtocol}
+            onProtocol={(a) => openProtocol(protocolParamsForAssignment(a))}
+            onInspection={(a) => setCheckerInspectionTarget(a)}
+            onEzDay={(date) => myEmployee && setEzDayTarget({ technicianId: myEmployee.id, date })}
+            onPartHandover={(rec, prefill) => setPartHandoverUi({ kind: "sign", rec, prefill })}
+            onOpenDamage={(d) => setServiceEventDetail(d)}
+            onAskDaily={() => setMaskotAskTick((n) => n + 1)}
+            whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} activeDispatcherSub={activeDispatcherSub} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />}
+            transportsPanel={["sofer", "externy_sofer"].includes(effectiveUser?.role) ? (
+              <TransportsOverview
+                jobs={jobs}
+                drivers={drivers}
+                jobDispatcher={jobDispatcher}
+                machineById={machineById}
+                today={today}
+                tomorrow={tomorrow}
+                dayAfterTomorrow={dayAfterTomorrow}
+                user={effectiveUser}
+                myEmployee={myEmployee}
+                assignDriver={assignDriver}
+                assignReturnDriver={assignReturnDriver}
+                onSetTransportDate={updateTransportDate}
+                onCheckTransportDate={validateTransportDate}
+                depoCheckers={depoCheckers}
+                checkerSubstitutions={checkerSubstitutions}
+                technicianById={technicianByIdTop}
+                handoverProtocols={handoverProtocols}
+                notesRefreshKey={myNotifications.filter((n) => n.kind === "transport_note").length}
+                onOpenJob={(jobId, transportType) => {
+                  const j = jobs.find((x) => x.id === jobId);
+                  if (!j) return;
+                  setHandoverDirectPhase(transportType === "zvoz" ? "vratenie" : "prevzatie");
+                  setShowHandoverProtocol(j);
+                }}
+                getTransportSendStatus={getTransportSendStatus}
+                recordTransportSend={recordTransportSend}
+                highlightTransportId={highlightTransportId}
+                onDismissTransportHighlight={() => setHighlightTransportId(null)}
+                transportNotes={transportNotes}
+                onReportTransportIssue={(jobId) => setReportTransportIssueTarget(jobs.find((x) => x.id === jobId) || null)}
+              />
+            ) : null}
+          />
+        )}
         {module === "poziciovna" && (view === "dashboard" || view === "drivers" || view === "customers") && (
           <TabSwitcher
             options={[
@@ -9465,6 +9617,7 @@ function DispatcherApp() {
             onReportTransportIssue={(jobId) => setReportTransportIssueTarget(jobs.find((x) => x.id === jobId) || null)}
           />
         )}
+
 
         {module === "poziciovna" && view === "dispeceri" && (
           <DispatchersView
@@ -9849,6 +10002,7 @@ function DispatcherApp() {
             machines={machines}
             user={effectiveUser}
             myEmployee={myEmployee}
+            prefill={partHandoverUi.prefill}
             onClose={() => setPartHandoverUi(null)}
             onSave={savePartHandoverSigned}
           />
@@ -10431,6 +10585,15 @@ function DispatcherApp() {
           myEmployee={myEmployee}
           ezMeasurements={ezMeasurements}
           user={effectiveUser}
+          assignments={assignments}
+          hasServiceProtocol={hasServiceProtocol}
+          onAssignDamage={(d) => { pushCard("machine", machineCard); setDamageAssignTarget(d); setMachineCard(null); }}
+          onAssignmentAction={(a) => {
+            pushCard("machine", machineCard);
+            if (a.kind === "kontrolaStroja") setCheckerInspectionTarget(a);
+            else openProtocol(protocolParamsForAssignment(a));
+            setMachineCard(null);
+          }}
           onClose={() => { setMachineCard(null); setCardHistory([]); }}
           onBack={cardHistory.length > 0 ? () => { goBackCard(); setMachineCard(null); } : null}
           onAssignProtocolToDamage={assignProtocolToDamage}
@@ -10470,9 +10633,9 @@ function DispatcherApp() {
             setShowAddJob({ existing: machineCard.currentJob });
             setMachineCard(null);
           }}
-          onCompleteJob={() => {
+          onCompleteJob={(j) => {
             pushCard("machine", machineCard);
-            setCompleteJobTarget(machineCard.currentJob);
+            setCompleteJobTarget(j?.id ? j : machineCard.currentJob);
             setMachineCard(null);
           }}
           onOpenDamage={(d) => {
@@ -10586,7 +10749,8 @@ function DispatcherApp() {
         />
       )}
       {showPhoneDirectory && (
-        <PhoneDirectoryModal employees={employees} onClose={() => setShowPhoneDirectory(false)} />
+        <PhoneDirectoryModal employees={employees} onClose={() => setShowPhoneDirectory(false)}
+          whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} activeDispatcherSub={activeDispatcherSub} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} compact />} />
       )}
       {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
           Keď sa osvedčí, rozšíriť podmienku na ďalšie role. Skrytý cez telefónny
@@ -10968,6 +11132,8 @@ function DispatcherApp() {
             setJobDetail((prev) => (prev ? { ...prev, portalRevoked: next } : prev));
           }}
           handoverProtocol={handoverProtocols.find((h) => h.jobId === liveJob.id)}
+          machineDamages={damages.filter((d) => d.machineId === liveJob.machineId)}
+          onOpenDamage={(d) => { pushCard("job", liveJob); setServiceEventDetail(d); setJobDetail(null); }}
           onOpenHandoverProtocol={(phase) => {
             pushCard("job", liveJob);
             // U15: pri vyplňovaní rovno formulár danej fázy, bez náhľadu.
@@ -12337,12 +12503,12 @@ function GlobalSearch({ searchIndex, onNavigate }) {
 
 // Skratky modulov v úzkom IconRail páse — písmená namiesto SVG ikon (lepšie
 // čitateľné v tak úzkom stĺpci ako samostatné piktogramy).
-const MODULE_SHORT_LABEL = { poziciovna: "POŽ", servis: "SRV", administrativa: "ADM" };
+const MODULE_SHORT_LABEL = { dnes: "DNES", poziciovna: "POŽ", servis: "SRV", administrativa: "ADM" };
 
 // Zoznam modulov + ich záložiek — zdieľané medzi bočným menu na mobile
 // (SidebarNav, vnútri výsuvnej zásuvky) a ikonovým pásom na webe (IconRail),
 // nech sa tabuľka záložiek nemusí udržiavať na dvoch miestach naraz.
-function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
+function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {}) {
   // Revízie EZ: dispečer/vedúci servisu (ez_measurement_view) len na dohľad,
   // EZ technik (employees.alsoEzTechnik — nie je to rola) navyše aj na
   // spracovanie — obaja musia záložku vidieť, appka rozlíši práva až vnútri.
@@ -12382,18 +12548,25 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
     ...(can(effectiveUser, "trash_view") ? [{ id: "kos", label: "Kôš" }] : []),
     ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }] : []),
   ];
-  // Menu podľa roly: externý šofér len svoje prepravy; šofér Prepravy +
-  // Kalendár (bez Servisu); technik Servis + Kalendár požičovne na nahliadnutie.
+  // Menu podľa roly (ako pred „Dnes“): externý šofér má len „Dnes“ (svoje prepravy); šofér Prepravy +
+  // Kalendár (bez Servisu); technik Servis + Kalendár požičovne na nahliadnutie. „Dnes“ je pre všetkých prvé.
   const role = effectiveUser?.role;
-  const pozTabIds = role === "externy_sofer" ? ["prepravy"] : role === "sofer" ? ["prepravy", "calendar", "dispeceri", "dokumenty"] : role === "technik" ? ["calendar", "dispeceri"] : null;
+  const pozTabIds = role === "externy_sofer" ? [] : role === "sofer" ? ["prepravy", "calendar", "dispeceri", "dokumenty"] : role === "technik" ? ["calendar", "dispeceri"] : null;
+  // Počty pri záložkách (čo čaká na túto rolu); modul = súčet jeho záložiek.
+  const tabCount = { prepravy: counts.prepravy, diely: counts.diely, poskodenia: damageAlertCount, [podkladySubs[0]]: counts.podklady };
+  const withCounts = (m) => {
+    const tabs = m.tabs.map((t) => ({ ...t, badge: tabCount[t.id] || 0 }));
+    return { ...m, tabs, badge: tabs.reduce((n, t) => n + t.badge, 0) };
+  };
   return [
-    {
+    ...(role !== "nezaradeny" ? [{ id: "dnes", label: "Dnes", tabs: [{ id: "dnes", label: "Dnes" }], badge: counts.dnes || 0 }] : []),
+    ...(pozTabIds && pozTabIds.length === 0 ? [] : [{
       id: "poziciovna",
       label: "Požičovňa",
       tabs: pozTabIds ? poziciovnaTabs.filter((t) => pozTabIds.includes(t.id)).sort((a, b) => pozTabIds.indexOf(a.id) - pozTabIds.indexOf(b.id)) : poziciovnaTabs,
       badge: 0,
-    },
-    ...(role !== "externy_sofer" && role !== "sofer" ? [{ id: "servis", label: "Servis", tabs: servisTabs, badge: damageAlertCount }] : []),
+    }].map(withCounts)),
+    ...(role !== "externy_sofer" && role !== "sofer" ? [withCounts({ id: "servis", label: "Servis", tabs: servisTabs })] : []),
     ...(can(effectiveUser, "employee_manage") ? [{ id: "administrativa", label: "Administratíva", tabs: administrativaTabs, badge: 0 }] : []),
   ];
 }
@@ -12403,7 +12576,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee) {
 // presne ten aktívny (module === m.id), žiadny samostatný stav navyše. Klik
 // na iný modul prepne naň (setModule si už aj predtým vyberal jeho prvú
 // záložku), klik na záložku v OTVORENOM module len prepne pohľad.
-function SidebarNav({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
+function SidebarNav({ module, view, effectiveUser, damageAlertCount, navCounts, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, quickActionsByModule, className, docsExpanded: docsExpandedProp, onToggleDocsExpanded }) {
   const [docsExpandedState, setDocsExpandedState] = useState(false);
   // V mobilnej zásuvke si tento stav drží sama (nikto ho nekontroluje zvonku).
   // V IconRail flyoute ho kontroluje IconRail (onToggleDocsExpanded je daný),
@@ -12411,7 +12584,7 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, myEmployee,
   // pridá/uberie im zodpovedajúce bodky.
   const docsExpanded = onToggleDocsExpanded ? docsExpandedProp : docsExpandedState;
   const toggleDocsExpanded = onToggleDocsExpanded || (() => setDocsExpandedState((v) => !v));
-  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee);
+  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee, navCounts);
   // Moduly (Požičovňa/Servis/Administratíva) sú zoskupené hore ako jeden
   // blok, oddelené jednou čiarou od záložiek AKTUÁLNE otvoreného modulu pod
   // nimi — namiesto pôvodného akordeónu (záložky priamo pod svojím modulom,
@@ -12467,7 +12640,7 @@ function SidebarNav({ module, view, effectiveUser, damageAlertCount, myEmployee,
                 }}
               >
                 {t.label}
-                {(t.group || [t.id]).includes("poskodenia") && activeModule.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{activeModule.badge}</span>}
+                {t.badge > 0 && <span className="sidebar-badge" style={{ marginLeft: "auto" }}>{t.badge}</span>}
               </button>
             )
           )}
@@ -12602,11 +12775,11 @@ const RAIL_ICON_RULER = (
 // EZ) — presunuté sem, vizuálne odlíšené (menšie, kruhové, tlmenejšie),
 // keďže nejde o navigáciu ale o akcie. "Odfotiť stroj" zámerne chýba, presne
 // tak ako v spodnej mobilnej lište (mobile-tech-actions).
-function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory, onOpenPartHandover }) {
+function IconRail({ module, view, effectiveUser, damageAlertCount, navCounts, myEmployee, onSelectModule, onSelectView, onPickDocumentsSubView, onOpenQuickDamageReport, onAddReservation, onAskDaily, onOpenPhoneDirectory, onOpenPartHandover }) {
   const [railHover, setRailHover] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
   const hideTimer = useRef(null);
-  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee);
+  const modules = buildNavModules(effectiveUser, damageAlertCount, myEmployee, navCounts);
 
   // .icon-rail-wrap je len "dištančná" medzera vo flex riadku (.app-body-row)
   // — samotný pás a vysunuté menu sú position:fixed, ukotvené priamo na
@@ -12676,6 +12849,7 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
         key: `dot-${activeModule.id}-${t.id}`,
         label: t.label,
         active: !t.dropdown && (t.group || [t.id]).includes(view),
+        badge: t.badge,
         onClick: t.dropdown ? () => setDocsExpanded((v) => !v) : () => { onSelectModule(activeModule.id); onSelectView(t.id); },
       });
       // Rozbalené podzáložky Dokumentov (docsExpanded) sú tiež riadky vo
@@ -12715,11 +12889,6 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
             spodku (flex:1 tu hore necháva zvyšný priestor), nie len "za
             posledným riadkom", keď je obsahu málo. */}
         <div className="rail-scroll">
-          {effectiveUser?.role === "admin" && (
-            <button className="rail-icon quick rail-ask" title="Čo vyriešiť dnes?" onClick={onAskDaily}>
-              {RAIL_ICON_CHAT}
-            </button>
-          )}
           <div className="rail-modules">
             {railRows.filter((r) => r.kind === "module").map((r) => (
               <button
@@ -12737,8 +12906,8 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
             const dividerCls = r.dividerBefore ? " rail-divider-before" : "";
             if (r.kind === "dot") {
               return (
-                <button key={r.key} className={`rail-row${dividerCls}`} title={r.label} onClick={r.onClick} disabled={!r.onClick}>
-                  <span className={`rail-tick${r.active ? " active" : ""}`} />
+                <button key={r.key} className={`rail-row${dividerCls}`} title={r.badge > 0 ? `${r.label} (${r.badge})` : r.label} onClick={r.onClick} disabled={!r.onClick}>
+                  <span className={`rail-tick${r.active ? " active" : ""}${r.badge > 0 ? " alert" : ""}`} />
                 </button>
               );
             }
@@ -12781,18 +12950,13 @@ function IconRail({ module, view, effectiveUser, damageAlertCount, myEmployee, o
       </div>
       <div className={`rail-flyout${railHover ? " rail-flyout-open" : ""}`} style={{ top: railTop }}>
           <div className="rail-flyout-scroll">
-            {effectiveUser?.role === "admin" && (
-              <button className="sidebar-group rail-ask" onClick={onAskDaily}>
-                <ChatBubbleIcon size={15} />
-                <span>Čo vyriešiť dnes?</span>
-              </button>
-            )}
             <SidebarNav
               className="rail-flyout-nav"
               module={module}
               view={view}
               effectiveUser={effectiveUser}
               damageAlertCount={damageAlertCount}
+              navCounts={navCounts}
               myEmployee={myEmployee}
               onSelectModule={onSelectModule}
               onSelectView={onSelectView}
@@ -15038,6 +15202,7 @@ function CustomerDetailModal({
   const [email, setEmail] = useState(customer.email || "");
   const [telefon, setTelefon] = useState(customer.telefon || "");
   const [showAddContact, setShowAddContact] = useState(false);
+  const [binderTab, setBinderTab] = useState(null);
   const canEdit = can(user, "customer_edit");
   const canDelete = can(user, "customer_delete");
 
@@ -15047,6 +15212,35 @@ function CustomerDetailModal({
 
   return (
     <Modal eyebrow="Zákazník" title={customer.firma} onClose={onClose}>
+      <BinderLayout
+        tabs={[{ id: "kontakty", label: "Kontakty", count: (customer.contacts || []).length, title: "Kontaktné osoby" }]}
+        active={binderTab}
+        setActive={setBinderTab}
+        panel={<>
+      {(customer.contacts || []).length === 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Zatiaľ žiadne kontaktné osoby.</div>}
+      {(customer.contacts || []).map((k) => (
+        <CustomerContactRow
+          key={k.id}
+          contact={k}
+          canEdit={canEdit}
+          onEdit={(data) => onUpdateContact(k.id, data)}
+          onDelete={() => onDeleteContact(k.id)}
+        />
+      ))}
+      {canEdit && !showAddContact && (
+        <button className="btn btn-ghost" onClick={() => setShowAddContact(true)}>+ Pridať kontaktnú osobu</button>
+      )}
+      {showAddContact && (
+        <CustomerContactRow
+          contact={{ name: "", role: "", phone: "", email: "" }}
+          canEdit={true}
+          onEdit={(data) => { onAddContact(data); setShowAddContact(false); }}
+          onDelete={() => setShowAddContact(false)}
+        />
+      )}
+
+        </>}
+        main={<>
       {editingInfo ? (
         <>
           <Field label="Firma *">
@@ -15095,29 +15289,6 @@ function CustomerDetailModal({
         </>
       )}
 
-      <div style={{ fontWeight: 700, marginBottom: 8, marginTop: 10 }}>Kontaktné osoby</div>
-      {(customer.contacts || []).length === 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Zatiaľ žiadne kontaktné osoby.</div>}
-      {(customer.contacts || []).map((k) => (
-        <CustomerContactRow
-          key={k.id}
-          contact={k}
-          canEdit={canEdit}
-          onEdit={(data) => onUpdateContact(k.id, data)}
-          onDelete={() => onDeleteContact(k.id)}
-        />
-      ))}
-      {canEdit && !showAddContact && (
-        <button className="btn btn-ghost" onClick={() => setShowAddContact(true)}>+ Pridať kontaktnú osobu</button>
-      )}
-      {showAddContact && (
-        <CustomerContactRow
-          contact={{ name: "", role: "", phone: "", email: "" }}
-          canEdit={true}
-          onEdit={(data) => { onAddContact(data); setShowAddContact(false); }}
-          onDelete={() => setShowAddContact(false)}
-        />
-      )}
-
       <div style={{ fontWeight: 700, marginBottom: 8, marginTop: 20 }}>Súhrn</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, marginBottom: 14 }}>
         <div>Aktívne zákazky: <strong>{activeJobs.length}</strong></div>
@@ -15138,6 +15309,7 @@ function CustomerDetailModal({
           )}
         </div>
       )}
+      </>} />
     </Modal>
   );
 }
@@ -15806,7 +15978,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
   );
 }
 
-function PhoneDirectoryModal({ employees, onClose }) {
+function PhoneDirectoryModal({ employees, onClose, whoPanel }) {
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
   const list = (employees || [])
@@ -15815,6 +15987,7 @@ function PhoneDirectoryModal({ employees, onClose }) {
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <Modal title="Telefónny zoznam" onClose={onClose}>
+      {!search && whoPanel}
       <Field label="Hľadať meno, rolu alebo depo">
         <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} />
       </Field>
@@ -16592,6 +16765,12 @@ function PhotoPickButtons({ onFiles }) {
 }
 
 function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, assignments }) {
+  // Problém s prepravou — v záhlaví vedľa krížika (šofér), nech padne do oka.
+  const issueBtn = onReportTransportIssue && can(user, "transport_issue_report") && !job?.transportIssueNote ? (
+    <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
+      <span className="hd-full">🚨 Problém s prepravou</span><span className="hd-short">🚨 Problém</span>
+    </button>
+  ) : null;
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
   const portalLink = job?.publicToken
     ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
@@ -16823,7 +17002,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // normalne (uz spravne strazene) tlacidla.
   if (cannotCreateNew) {
     return (
-      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
+      <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
           {job?.selfPickup
             ? `Osobný odber — protokol vypíše checker depa od dňa vyzdvihnutia (${fmtDate(job.departureDate || job.startDate)}). Ak zákazník príde skôr, dispečer presunie dátum vyzdvihnutia.`
@@ -16861,7 +17040,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   if (screen === "sent" || screen === "sentReturn") {
     const isRet = screen === "sentReturn";
     return (
-      <Modal eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
+      <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{isRet ? "Protokol o vrátení bol odoslaný" : "Protokol o prevzatí bol odoslaný"}</div>
@@ -16906,17 +17085,12 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           {job.transportIssueDamageId && " — založené poškodenie do servisu"}
         </div>
       )}
-      {onReportTransportIssue && can(user, "transport_issue_report") && !job?.transportIssueNote && (
-        <button className="btn btn-ghost" style={{ color: "var(--danger)", marginBottom: 14 }} onClick={onReportTransportIssue}>
-          🚨 Nahlásiť problém s prepravou
-        </button>
-      )}
     </>
   );
 
   if (screen === "view" && existing) {
     return (
-      <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
+      <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
         {transportIssueBlock}
         {forcePhaseBlocked && (
           <div style={{ background: "var(--panel-2)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 10 }}>
@@ -16944,7 +17118,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   return (
     <>
-    <Modal eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide form>
+    <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide form>
       {transportIssueBlock}
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
         {machine?.type || ""}
@@ -17526,8 +17700,9 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
     </Modal>
   );
 }
-function JobDetailModal({ job, machine, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer}) {
-  const [showPortalPanel, setShowPortalPanel] = useState(false);
+function JobDetailModal({ job, machine, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage}) {
+  const [binderTab, setBinderTab] = useState(null); // null | "kontroly" | "protokol" | "zakaznik"
+  const showPortalPanel = binderTab === "zakaznik";
   const [portalQr, setPortalQr] = useState(null);
   const [expandedChecklist, setExpandedChecklist] = useState(null); // null | "chooser" — výber, ktorý z dvoch checklistov zobraziť ako náhľad
   const portalLink = job.publicToken
@@ -17591,13 +17766,169 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
       onBack={onBack}
       wide
       headerExtra={
-        machine && onOpenMachineCard ? (
-          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
-            Karta stroja
-          </button>
-        ) : null
+        <>
+          {onReportTransportIssue && can(user, "transport_issue_report") && !job.transportIssueNote && (
+            <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
+              <span className="hd-full">🚨 Problém s prepravou</span><span className="hd-short">🚨 Problém</span>
+            </button>
+          )}
+          {machine && onReportDamage && can(user, "job_report_damage") && (
+            <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>
+              <span className="hd-full">Nahlásiť poškodenie</span><span className="hd-short">⚠ Poškodenie</span>
+            </button>
+          )}
+          {machine && onOpenMachineCard && (
+            <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
+              Karta stroja
+            </button>
+          )}
+        </>
       }
     >
+      <BinderLayout
+        tabs={[
+          { id: "kontroly", label: "Kontroly", title: "Kontroly stroja (checklisty)" },
+          { id: "protokol", label: "Protokol", title: "Protokol o odovzdaní a prevzatí" },
+          onGeneratePortalLink && can(user, "job_edit") && { id: "zakaznik", label: "Zákazník", title: "Zákazník — odkaz, QR, email" },
+        ]}
+        active={binderTab}
+        setActive={(t) => { if (t === "zakaznik" && !portalLink) onGeneratePortalLink(); setBinderTab(t); }}
+        panel={binderTab === "kontroly" ? (
+          <>
+            <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
+        <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
+        <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
+        <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {checklistVyvozReady && <button className="btn btn-ghost" onClick={() => openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy)}>🔍 Checklist pred vývozom</button>}
+              {checklistVratenieReady && <button className="btn btn-ghost" onClick={() => openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy)}>🔍 Checklist po vrátení</button>}
+            </div>
+      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0) && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+            Kontrola stroja — fotky
+          </div>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+                Pred vývozom{inspectionVyvoz?.checkerBy ? ` — ${inspectionVyvoz.checkerBy}` : ""}
+              </div>
+              {inspectionVyvoz?.checkerPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0 ? (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[...(inspectionVyvoz?.checkerPhotos || []), ...(handoverProtocol?.handoverPhotos || [])].map((url, i) => (
+                    <img key={i} src={url} alt="Foto pred vývozom" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+                Po vrátení
+              </div>
+              {handoverProtocol?.returnPhotos?.length > 0 ? (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {handoverProtocol.returnPhotos.map((url, i) => (
+                    <img key={i} src={url} alt="Foto po vrátení" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+          </>
+        ) : binderTab === "protokol" ? (
+          <>
+      {handoverProtocol && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+          Protokol o odovzdaní č. {handoverProtocol.protocolNumber}
+          {handoverProtocol.handoverDone && ` · Prevzatie ${fmtDate(handoverProtocol.handoverDate)}`}
+          {handoverProtocol.returnDone && ` · Vrátenie ${fmtDate(handoverProtocol.returnDate)}`}
+        </div>
+      )}
+            {!handoverProtocol && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Protokol zatiaľ nie je vypísaný.</div>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
+          !handoverProtocol ? (
+            job.status !== "completed" && canFillHandoverPhase(job, myEmployee, "prevzatie", user) ? (
+              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("prevzatie")}>📋 Vypísať protokol</button>
+            ) : canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
+              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
+            ) : (
+              <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér, od dňa vývozu" style={{ opacity: 0.5 }}>
+                📋 Vypísať protokol
+              </button>
+            )
+          ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
+            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol()}>📋 Zobraziť protokol</button>
+          )
+        )}
+            </div>
+          </>
+        ) : binderTab === "zakaznik" ? (
+        <div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
+            Odkaz pre zákazníka (bez prihlásenia) — platný od vývozu stroja do 14 dní po jeho vrátení.
+          </div>
+          {portalLink ? (
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12 }} />
+              <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>Kopírovať</button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+              {panelOnline && navigator.onLine ? "Generujem odkaz…" : "Bez signálu sa odkaz zatiaľ nevytvorí — vytvorí sa sám po pripojení."}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+            {portalQr && <img src={portalQr} alt="QR kód pre zákazníka" style={{ width: 120, height: 120 }} />}
+            {onEmailCustomer && portalLink && (
+              <button className="btn btn-ghost" onClick={onEmailCustomer}>✉ Poslať zákazníkovi emailom</button>
+            )}
+          </div>
+          {onTogglePortalRevoked && (portalLink || job.portalRevoked) && (
+            <button className="btn btn-ghost" style={{ color: job.portalRevoked ? "var(--ok)" : "var(--danger)" }} onClick={onTogglePortalRevoked}>
+              {job.portalRevoked ? "Obnoviť odkaz" : "Zneplatniť odkaz"}
+            </button>
+          )}
+          {job.portalRevoked && (
+            <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
+              Odkaz je momentálne ručne zneplatnený — zákazník cez neho nič neuvidí.
+            </div>
+          )}
+        </div>
+        ) : null}
+        main={<>
+      <NextStepBar items={(() => {
+        const today = todayISO();
+        const tomorrow = addDaysISO(today, 1);
+        const canAssign = can(user, "transport_assign_driver") && drivers;
+        const focus = (id) => { const el = document.getElementById(id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); } };
+        const dep = job.departureDate || job.startDate;
+        const back = job.pickupDate || job.endDate;
+        const mine = user?.role === "obchodnik" && job.obchodnik === myEmployee?.name;
+        return [
+          canAssign && !job.notRealized && job.status !== "completed" && !job.selfPickup && !job.driverId && !handoverProtocol?.handoverDone && dep && dep <= tomorrow &&
+            { tone: "red", text: <>Vývoz {relDay(dep, today)} nemá šoféra</>, actions: [{ label: "Prideliť šoféra", onClick: () => focus("job-driver-vyvoz") }] },
+          canAssign && !job.notRealized && job.status === "completed" && !job.selfReturn && !job.returnDriverId && !handoverProtocol?.returnDone &&
+            { tone: "red", text: <>Zvoz {back ? relDay(back, today) : ""} nemá šoféra</>, actions: [{ label: "Prideliť šoféra", onClick: () => focus("job-driver-zvoz") }] },
+          job.status === "active" && job.endDate && job.endDate <= tomorrow && (can(user, "job_complete") || mine) &&
+            { text: <>Prenájom končí {relDay(job.endDate, today)}{job.endDate < today ? " — už je po konci" : ""}</>,
+              actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: onComplete } : job.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${job.customerPhone}` }] },
+          ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
+            text: <>Stroj má otvorené poškodenie: <b>{d.popis || "—"}</b></>, actions: [onOpenDamage && { label: "Detail poškodenia", onClick: () => onOpenDamage(d) }] })),
+          user?.role === "fakturant_pozicovna" && handoverProtocol?.returnDone && !handoverProtocol?.erpProcessed &&
+            { text: "Stroj je vrátený — čaká na spracovanie do ERP (Dnes · Fakturácia)." },
+        ];
+      })()} />
       {job.transportIssueNote && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>
@@ -17681,8 +18012,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           // Šofér sa dá prideliť/zmeniť priamo tu na karte (bez Upraviť alebo Prepráv),
           // kým daná fáza (prevzatie/vrátenie) neprebehla.
           const canAssign = can(user, "transport_assign_driver") && drivers;
-          const driverSelect = (value, onChange) => (
-            <select value={value || ""} onChange={(e) => onChange(e.target.value || null)} style={{ width: "100%", fontSize: 13 }}>
+          const driverSelect = (value, onChange, id) => (
+            <select id={id} value={value || ""} onChange={(e) => onChange(e.target.value || null)} style={{ width: "100%", fontSize: 13 }}>
               <option value="">— neurčený —</option>
               {driverOptionsGrouped(drivers)}
             </select>
@@ -17693,7 +18024,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
                 label="Šofér (vývoz)"
                 value={
                   job.selfPickup ? "Vlastná doprava — osobný odber v depe"
-                  : canAssign && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized ? driverSelect(job.driverId, (id) => onAssignDriver(job.id, id))
+                  : canAssign && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized ? driverSelect(job.driverId, (id) => onAssignDriver(job.id, id), "job-driver-vyvoz")
                   : job.driverId ? driverById[job.driverId]?.name : "— neurčený —"
                 }
               />
@@ -17701,17 +18032,13 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
                 label="Šofér (zvoz)"
                 value={
                   job.selfReturn ? "Vlastná doprava — vráti sám do depa"
-                  : canAssign && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized ? driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id))
+                  : canAssign && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized ? driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id), "job-driver-zvoz")
                   : job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"
                 }
               />
             </>
           );
         })()}
-        <CardField label="Checker (vývoz)" value={checkerVyvoz ? checkerVyvoz.name : "— nenastavené pre toto depo —"} />
-        <CardField label="Checker (zvoz)" value={checkerZvoz ? checkerZvoz.name : "— nenastavené pre toto depo —"} />
-        <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz)} danger={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
-        <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie)} danger={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
         <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik, salespeople)} />
         <CardField label="Číslo zmluvy" value={job.cisloZmluvy} />
         {dispatchers && (() => {
@@ -17743,13 +18070,6 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           {job.notes}
         </div>
       )}
-      {handoverProtocol && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-          Protokol o odovzdaní č. {handoverProtocol.protocolNumber}
-          {handoverProtocol.handoverDone && ` · Prevzatie ${fmtDate(handoverProtocol.handoverDate)}`}
-          {handoverProtocol.returnDone && ` · Vrátenie ${fmtDate(handoverProtocol.returnDate)}`}
-        </div>
-      )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {can(user, "job_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť zákazku</button>}
         {job.status !== "completed" && can(user, "job_complete") && (
@@ -17766,134 +18086,12 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
             ↺ Zrušiť ukončenie
           </button>
         )}
-        {machine && onReportDamage && can(user, "job_report_damage") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportDamage}>
-            Nahlásiť poškodenie
-          </button>
-        )}
-        {onReportTransportIssue && can(user, "transport_issue_report") && !job.transportIssueNote && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onReportTransportIssue}>
-            🚨 Problém s prepravou
-          </button>
-        )}
-        {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
-          !handoverProtocol ? (
-            job.status !== "completed" && canFillHandoverPhase(job, myEmployee, "prevzatie", user) ? (
-              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("prevzatie")}>📋 Vypísať protokol</button>
-            ) : canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
-              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
-            ) : (
-              <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér, od dňa vývozu" style={{ opacity: 0.5 }}>
-                📋 Vypísať protokol
-              </button>
-            )
-          ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
-            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
-          ) : (
-            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol()}>📋 Zobraziť protokol</button>
-          )
-        )}
-        {onGeneratePortalLink && can(user, "job_edit") && (
-          <button className="btn btn-ghost" onClick={() => { if (!showPortalPanel) onGeneratePortalLink(); setShowPortalPanel((v) => !v); }}>
-            👤 Zákazník — odkaz, QR, email
-          </button>
-        )}
+
         {onEmailDriver && (
           <button className="btn btn-ghost" onClick={onEmailDriver}>✉ Email šoférovi</button>
         )}
-        {(checklistVyvozReady || checklistVratenieReady) && (
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              if (checklistVyvozReady && checklistVratenieReady) setExpandedChecklist((v) => (v === "chooser" ? null : "chooser"));
-              else if (checklistVyvozReady) openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy);
-              else openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy);
-            }}
-          >
-            🔍 Kontroly
-          </button>
-        )}
       </div>
-      {expandedChecklist === "chooser" && checklistVyvozReady && checklistVratenieReady && (
-        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setExpandedChecklist(null); openPrintableChecklist(inspectionVyvoz, machine, inspectionVyvoz.checkerBy); }}>
-            Pred vývozom
-          </button>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setExpandedChecklist(null); openPrintableChecklist(inspectionVratenie, machine, inspectionVratenie.checkerBy); }}>
-            Po vrátení
-          </button>
-        </div>
-      )}
-      {showPortalPanel && (
-        <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
-            Odkaz pre zákazníka (bez prihlásenia) — platný od vývozu stroja do 14 dní po jeho vrátení.
-          </div>
-          {portalLink ? (
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12 }} />
-              <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>Kopírovať</button>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-              {panelOnline && navigator.onLine ? "Generujem odkaz…" : "Bez signálu sa odkaz zatiaľ nevytvorí — vytvorí sa sám po pripojení."}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-            {portalQr && <img src={portalQr} alt="QR kód pre zákazníka" style={{ width: 120, height: 120 }} />}
-            {onEmailCustomer && portalLink && (
-              <button className="btn btn-ghost" onClick={onEmailCustomer}>✉ Poslať zákazníkovi emailom</button>
-            )}
-          </div>
-          {onTogglePortalRevoked && (portalLink || job.portalRevoked) && (
-            <button className="btn btn-ghost" style={{ color: job.portalRevoked ? "var(--ok)" : "var(--danger)" }} onClick={onTogglePortalRevoked}>
-              {job.portalRevoked ? "Obnoviť odkaz" : "Zneplatniť odkaz"}
-            </button>
-          )}
-          {job.portalRevoked && (
-            <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
-              Odkaz je momentálne ručne zneplatnený — zákazník cez neho nič neuvidí.
-            </div>
-          )}
-        </div>
-      )}
-      {(inspectionVyvoz?.checkerPhotos?.length > 0 || inspectionVratenie?.checkerPhotos?.length > 0 || handoverProtocol?.returnPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0) && (
-        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Kontrola stroja — fotky
-          </div>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-                Pred vývozom{inspectionVyvoz?.checkerBy ? ` — ${inspectionVyvoz.checkerBy}` : ""}
-              </div>
-              {inspectionVyvoz?.checkerPhotos?.length > 0 || handoverProtocol?.handoverPhotos?.length > 0 ? (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[...(inspectionVyvoz?.checkerPhotos || []), ...(handoverProtocol?.handoverPhotos || [])].map((url, i) => (
-                    <img key={i} src={url} alt="Foto pred vývozom" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
-              )}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-                Po vrátení
-              </div>
-              {handoverProtocol?.returnPhotos?.length > 0 ? (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {handoverProtocol.returnPhotos.map((url, i) => (
-                    <img key={i} src={url} alt="Foto po vrátení" onClick={() => openPhotoLightbox(url)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer" }} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>— žiadne fotky —</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </>} />
     </Modal>
   );
 }
@@ -21115,7 +21313,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
 /* ---------------------------------------------------------
    Machine card modal (karta stroja)
 --------------------------------------------------------- */
-function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage, ezMeasurements }) {
+function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, assignments, hasServiceProtocol, onAssignDamage, onAssignmentAction, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage, ezMeasurements }) {
   const m = machine;
   const [expandedSection, setExpandedSection] = useState(null); // null | "servis" | "prenajom" | "revizieEz"
   const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
@@ -21130,6 +21328,42 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
+  const jobCount = (jobs || []).filter((j) => j.machineId === m.id).length;
+  const binderTabs = [
+    { id: "servis", label: "Servis", count: (history || []).length, title: `Servisná história (${(history || []).length})` },
+    { id: "prenajom", label: "Prenájmy", count: jobCount, title: `História požičania (${jobCount})` },
+    { id: "revizieEz", label: "Revízie", count: machineEzMeasurements.length, title: `Revízie (${machineEzMeasurements.length})` },
+  ];
+  // Etapa 3: „Teraz treba“ — čo sa so strojom práve rieši a priama akcia podľa role.
+  const nextSteps = (() => {
+    const today = todayISO();
+    const tomorrow = addDaysISO(today, 1);
+    const me = myEmployee?.id;
+    const out = [];
+    (history || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).forEach((d) => {
+      const assigned = d.technicianId || (d.technicianIds || []).length;
+      out.push({ tone: "red", text: <>Otvorené poškodenie: <b>{d.popis || "—"}</b> · {assigned ? `pridelené${d.assignedDate ? ` na ${fmtDate(d.assignedDate)}` : ""}` : "zatiaľ nepridelené"}</>,
+        actions: [!assigned && onAssignDamage && can(user, "damage_assign") && { label: "Prideliť technikovi", onClick: () => onAssignDamage(d) }, { label: "Detail", onClick: () => onOpenDamage(d) }] });
+    });
+    if (me) (assignments || []).filter((a) => a.technicianId === me && a.machineId === m.id && a.date && a.date <= today && a.date >= addDaysISO(today, -14)
+      && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol?.(a))).forEach((a) => {
+      out.push({ text: <>Vaša úloha {relDay(a.date, today)}: <b>{a.kind === "kontrolaStroja" ? `kontrola ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}` : "servis"}</b>{a.firma ? ` · ${a.firma}` : ""}</>,
+        actions: [onAssignmentAction && { label: a.kind === "kontrolaStroja" ? "Skontrolovať" : "Vypísať protokol", onClick: () => onAssignmentAction(a) }] });
+    });
+    const hpOf = (j) => (handoverProtocols || []).find((h) => h.jobId === j.id);
+    (jobs || []).filter((j) => j.machineId === m.id && j.status !== "completed" && !j.notRealized).forEach((j) => {
+      const dep = j.departureDate || j.startDate;
+      const hp = hpOf(j);
+      if (me && j.driverId === me && !hp?.handoverDone && dep && dep <= today && onOpenHandoverProtocol)
+        out.push({ text: <>Vývoz {relDay(dep, today)} pre <b>{j.customer || "—"}</b></>, actions: [{ label: "Vypísať protokol", onClick: () => onOpenHandoverProtocol(j) }] });
+      else if (!j.selfPickup && !j.driverId && !hp?.handoverDone && dep && dep <= tomorrow && can(user, "transport_assign_driver"))
+        out.push({ tone: "red", text: <>Vývoz {relDay(dep, today)} pre <b>{j.customer || "—"}</b> nemá šoféra</>, actions: [{ label: "Otvoriť zákazku", onClick: () => onOpenJob(j) }] });
+      if (j.status === "active" && j.endDate && j.endDate <= tomorrow && (can(user, "job_complete") || (user?.role === "obchodnik" && j.obchodnik === myEmployee?.name)))
+        out.push({ text: <>Prenájom pre <b>{j.customer || "—"}</b> končí {relDay(j.endDate, today)}</>,
+          actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: () => onCompleteJob(j) } : j.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${j.customerPhone}` }, { label: "Otvoriť zákazku", onClick: () => onOpenJob(j) }] });
+    });
+    return out;
+  })();
   const matchedModel = isStroj
     ? (machineModels || []).find((mm) => (mm.name || "").trim().toLowerCase() === (m.type || "").trim().toLowerCase())
     : null;
@@ -21165,8 +21399,24 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       }
       onClose={onClose}
       onBack={onBack}
+      headerExtra={can(user, "machine_report_damage") ? (
+        <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>
+          <span className="hd-full">Nahlásiť poškodenie</span><span className="hd-short">⚠ Poškodenie</span>
+        </button>
+      ) : null}
       wide
     >
+      <div className="binder">
+        <div className="binder-tabs">
+          {binderTabs.map((t) => (
+            <button key={t.id} className={`binder-tab${expandedSection === t.id ? " active" : ""}`} onClick={() => setExpandedSection(expandedSection === t.id ? null : t.id)} title={t.title}>
+              {t.label}{t.count != null ? ` (${t.count})` : ""}
+            </button>
+          ))}
+        </div>
+        <div className="binder-body">
+      {!expandedSection && (<>
+      <NextStepBar items={nextSteps} />
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
@@ -21204,10 +21454,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           </div>
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: history?.length ? 16 : 0 }}>
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          Karta zatiaľ zobrazuje polia z lokálnych dát mockupu — po napojení na databázu strojov sa doplnia automaticky.
-        </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "relative" }}>
           {can(user, "job_add") && (
             <button className="btn btn-ghost" onClick={onAddJob}>
@@ -21217,11 +21464,6 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           {can(user, "reservation_add") && (
             <button className="btn btn-ghost" onClick={onAddReservation}>
               Nezáväzná rezervácia
-            </button>
-          )}
-          {can(user, "machine_report_damage") && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)", flexShrink: 0 }} onClick={onReportDamage}>
-              Nahlásiť poškodenie
             </button>
           )}
           {m.currentJob && can(user, "job_edit") && (
@@ -21294,49 +21536,13 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           )}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 16, marginBottom: expandedSection ? 12 : 0, flexWrap: "wrap" }}>
-        {history && history.length > 0 && (
-          <button
-            className="btn"
-            onClick={() => setExpandedSection(expandedSection === "servis" ? null : "servis")}
-            style={{
-              background: expandedSection === "servis" ? "var(--accent-light)" : "transparent",
-              color: expandedSection === "servis" ? "var(--accent)" : "var(--text)",
-              border: "1px solid " + (expandedSection === "servis" ? "var(--accent)" : "var(--border)"),
-              borderRadius: 6,
-            }}
-          >
-            Servisná história ({history.length})
-          </button>
-        )}
-        {jobs && jobs.filter((j) => j.machineId === m.id).length > 0 && (
-          <button
-            className="btn"
-            onClick={() => setExpandedSection(expandedSection === "prenajom" ? null : "prenajom")}
-            style={{
-              background: expandedSection === "prenajom" ? "var(--accent-light)" : "transparent",
-              color: expandedSection === "prenajom" ? "var(--accent)" : "var(--text)",
-              border: "1px solid " + (expandedSection === "prenajom" ? "var(--accent)" : "var(--border)"),
-              borderRadius: 6,
-            }}
-          >
-            História požičania ({jobs.filter((j) => j.machineId === m.id).length})
-          </button>
-        )}
-        <button
-          className="btn"
-          onClick={() => setExpandedSection(expandedSection === "revizieEz" ? null : "revizieEz")}
-          style={{
-            background: expandedSection === "revizieEz" ? "var(--accent-light)" : "transparent",
-            color: expandedSection === "revizieEz" ? "var(--accent)" : "var(--text)",
-            border: "1px solid " + (expandedSection === "revizieEz" ? "var(--accent)" : "var(--border)"),
-            borderRadius: 6,
-          }}
-        >
-          Revízie ({machineEzMeasurements.length})
-        </button>
-      </div>
-
+      </>)}
+      {expandedSection && (
+        <div className="binder-panel">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{binderTabs.find((t) => t.id === expandedSection)?.title}</div>
+            <button className="btn btn-ghost" onClick={() => setExpandedSection(null)}>← Späť na stroj</button>
+          </div>
       {expandedSection === "revizieEz" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <a href={DOCUMENT_SUBTABS.poziciovna[2].url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
@@ -21476,6 +21682,10 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             })}
         </div>
       )}
+        </div>
+      )}
+        </div>
+      </div>
     </Modal>
     {assignProtocolTarget && (
       <Modal eyebrow="Prideliť protokol ku zákazke" title={<span style={{ color: "var(--accent)" }}>{m.code}</span>} onClose={() => setAssignProtocolTarget(null)}>
@@ -21778,6 +21988,7 @@ const PERM_GROUP = {
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
 function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
+  const [binderTab, setBinderTab] = useState(null);
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
   const isExterna = d.type === "externa";
@@ -21823,6 +22034,76 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         ) : null
       }
     >
+      <BinderLayout
+        tabs={[{ id: "protokoly", label: "Protokoly", count: (protocolLogs || []).filter((p) => p.damageId === d.id).length, title: "Servisné protokoly" }]}
+        active={binderTab}
+        setActive={setBinderTab}
+        panel={<>
+      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
+        <div key={p.id} style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)}){p.status ? ` · stav: ${p.status}` : ""}
+            </div>
+            {onUnassignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)", flexShrink: 0 }} onClick={() => onUnassignProtocol(p)}>
+                Vyradiť zo zákazky
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
+            {p.imageUrl && (
+              <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
+            )}
+          </div>
+        </div>
+      ))}
+      {!isSimple && onAssignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
+        <div style={{ marginBottom: 14 }}>
+          {showAssignProtocolPicker ? (
+            <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Nepriradené protokoly pre tento stroj</div>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setShowAssignProtocolPicker(false)}>✕</button>
+              </div>
+              {unassignedProtocolsForMachine.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {unassignedProtocolsForMachine.map((p) => (
+                    <button
+                      key={p.id}
+                      className="panel"
+                      style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
+                      onClick={() => { onAssignProtocol(p.id); setShowAssignProtocolPicker(false); }}
+                    >
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
+                      )}
+                      <div style={{ fontSize: 12, color: "var(--text)" }}>
+                        <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
+                        <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                          {p.workDescription || "— bez popisu vykonanej práce —"}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => setShowAssignProtocolPicker(true)}>
+              + Prideliť ďalší protokol{unassignedProtocolsForMachine.length ? ` (${unassignedProtocolsForMachine.length})` : ""}
+            </button>
+          )}
+        </div>
+      )}
+          {(protocolLogs || []).filter((p) => p.damageId === d.id).length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Zatiaľ žiadny vypísaný protokol.</div>}
+        </>}
+        main={<>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         {isExterna ? (
           <>
@@ -21958,68 +22239,6 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           )}
         </div>
       )}
-      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
-        <div key={p.id} style={{ marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)}){p.status ? ` · stav: ${p.status}` : ""}
-            </div>
-            {onUnassignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)", flexShrink: 0 }} onClick={() => onUnassignProtocol(p)}>
-                Vyradiť zo zákazky
-              </button>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
-            {p.imageUrl && (
-              <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
-            )}
-          </div>
-        </div>
-      ))}
-      {!isSimple && onAssignProtocol && can(user, isExterna ? "external_status" : "damage_status") && (
-        <div style={{ marginBottom: 14 }}>
-          {showAssignProtocolPicker ? (
-            <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Nepriradené protokoly pre tento stroj</div>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setShowAssignProtocolPicker(false)}>✕</button>
-              </div>
-              {unassignedProtocolsForMachine.length === 0 ? (
-                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {unassignedProtocolsForMachine.map((p) => (
-                    <button
-                      key={p.id}
-                      className="panel"
-                      style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
-                      onClick={() => { onAssignProtocol(p.id); setShowAssignProtocolPicker(false); }}
-                    >
-                      {p.imageUrl ? (
-                        <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
-                      )}
-                      <div style={{ fontSize: 12, color: "var(--text)" }}>
-                        <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
-                        <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                          {p.workDescription || "— bez popisu vykonanej práce —"}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <button className="btn btn-ghost" onClick={() => setShowAssignProtocolPicker(true)}>
-              + Prideliť ďalší protokol{unassignedProtocolsForMachine.length ? ` (${unassignedProtocolsForMachine.length})` : ""}
-            </button>
-          )}
-        </div>
-      )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
         {!isSimple && !d.machineId && !isExterna && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign") && (
           <button className="btn btn-accent" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
@@ -22042,6 +22261,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           Upraviť zákazku
         </button>
       )}
+      </>} />
     </Modal>
   );
 }
@@ -27151,6 +27371,501 @@ function copyColumn(rows, key, label) {
 }
 
 /* ---------------------------------------------------------
+   Modul „Dnes“ — úvodná obrazovka podľa role (etapa 1: technik,
+   vedúci technik BA, šofér, externý šofér). Všetko z existujúcich dát,
+   akcie volajú tie isté okná ako Plán servisu / Prepravy.
+--------------------------------------------------------- */
+const DNES_ROLES = ["technik", "veduci_technik_ba", "sofer", "externy_sofer"];
+const TODAY_DEPOS = DEPO_OPTIONS.filter((d) => d !== "Externé");
+const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {p}</a> : null);
+const mapsUrl = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+
+// Kto je dnes kde — dispečer požičovne a checker pre každé depo (aj so zástupmi).
+function WhoIsWherePanel({ employees, dispatchers, activeDispatcherSub, depoCheckers, checkerSubstitutions, today, compact }) {
+  const byId = Object.fromEntries((employees || []).map((e) => [e.id, e]));
+  const rows = TODAY_DEPOS.map((depo) => {
+    const disp = (dispatchers || []).filter((d) => d.depo === depo).map((d) => {
+      const sub = activeDispatcherSub(d.id, today);
+      const s = sub ? byId[sub.substituteId] : null;
+      return s ? { person: s, note: `zastupuje ${d.name}` } : { person: d, note: "" };
+    });
+    const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, depo, today);
+    const baseId = depoCheckers?.[depo] || null;
+    const checker = checkerId ? byId[checkerId] : null;
+    return { depo, disp, checker, checkerNote: checker && baseId && baseId !== checkerId ? `zastupuje ${byId[baseId]?.name || "checkera"}` : "" };
+  }).filter((r) => r.disp.length || r.checker);
+  const person = (p, note) => (
+    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+      <span style={{ fontWeight: 600 }}>{p.name}</span>
+      {note && <span className="badge badge-warn" style={{ fontSize: 10 }}>{note}</span>}
+      {telLink(p.phone)}
+    </div>
+  );
+  return (
+    <div className="panel" style={{ padding: compact ? 10 : 14, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>Kto je dnes kde</div>
+      {rows.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Dispečeri ani checkeri zatiaľ nie sú nastavení.</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 10 }}>
+        {rows.map((r) => (
+          <div key={r.depo} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>{r.depo}</div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Dispečer</div>
+            {r.disp.length ? r.disp.map((x, i) => <div key={i}>{person(x.person, x.note)}</div>) : <div style={{ color: "var(--text-dim)" }}>—</div>}
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Checker</div>
+            {r.checker ? person(r.checker, r.checkerNote) : <div style={{ color: "var(--text-dim)" }}>—</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TodayCard({ tag, tagColor, tagBg, title, sub, accent, actions, children }) {
+  return (
+    <div className="panel" style={{ padding: 12, marginBottom: 10, borderLeft: accent ? `4px solid ${accent}` : undefined }}>
+      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: tagBg, color: tagColor }}>{tag}</span>
+      <div style={{ fontWeight: 700, fontSize: 15, margin: "6px 0 2px" }}>{title}</div>
+      {sub && <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{sub}</div>}
+      {children}
+      {actions?.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {actions.filter(Boolean).map((a, i) => (
+            a.href
+              ? <a key={i} className={`btn ${i === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>{a.label}</a>
+              : <button key={i} className={`btn ${i === 0 ? "btn-accent" : "btn-ghost"}`} onClick={a.onClick}>{a.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TODAY_TAG = {
+  srv: { tagColor: "var(--info)", tagBg: "var(--info-bg)" },
+  chk: { tagColor: "var(--ok)", tagBg: "var(--ok-bg)" },
+  part: { tagColor: "var(--warn)", tagBg: "var(--warn-bg)" },
+  late: { tagColor: "var(--danger)", tagBg: "var(--danger-bg)" },
+  info: { tagColor: "var(--text-dim)", tagBg: "var(--panel-2)" },
+};
+
+function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
+  onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily }) {
+  const role = user?.role;
+  const isDriver = role === "sofer" || role === "externy_sofer";
+  const myId = myEmployee?.id;
+  const weekday = new Date(today + "T00:00:00").toLocaleDateString("sk-SK", { weekday: "long" });
+  const header = (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0, fontSize: 24 }}>Dnes</h2>
+        <div style={{ flex: 1 }} />
+        {isAdminUser(user) && onAskDaily && <button className="btn btn-ghost" onClick={onAskDaily}>💬 Čo vyriešiť dnes?</button>}
+      </div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}</div>
+    </div>
+  );
+  const waitingParts = phCanWrite(user) ? (partHandovers || []).filter((p) => p.status === "waiting" && (p.date || today) <= tomorrow)
+    .sort((a, b) => (b.depo === myEmployee?.depo) - (a.depo === myEmployee?.depo) || (a.date || "").localeCompare(b.date || "")) : [];
+  const partCards = waitingParts.map((p) => (
+    <TodayCard key={p.id} tag={`VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`} {...TODAY_TAG.part}
+      title={`${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`}
+      sub={`${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber · depo ${p.depo || "—"}`} · ${phItemsSummary(p.items)}`}
+      actions={[{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }]} />
+  ));
+
+  if (isDriver) {
+    return (
+      <div style={{ maxWidth: 1100 }}>
+        {header}
+        {transportsPanel}
+        {partCards.length > 0 && <><div className="today-sec">Výdaj dielov ({partCards.length})</div>{partCards}</>}
+        {whoPanel}
+      </div>
+    );
+  }
+
+  // Technik / vedúci technik BA
+  const damageById = Object.fromEntries((damages || []).map((d) => [d.id, d]));
+  const jobById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+  const weekAgo = addDaysISO(today, -7);
+  const mine = (assignments || []).filter((a) => a.technicianId === myId && a.date && a.date >= weekAgo && a.date <= tomorrow);
+  const open = (a) => (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind ? !hasServiceProtocol(a) : false);
+  const servisCard = (a, late) => {
+    const d = a.damageId ? damageById[a.damageId] : null;
+    const m = machineById[a.machineId || d?.machineId];
+    const place = a.umiestnenie || d?.location || "";
+    return (
+      <TodayCard key={a.id} tag={late ? `SERVIS · ${fmtDate(a.date)}` : "SERVIS"} {...(late ? TODAY_TAG.late : TODAY_TAG.srv)} accent={late ? "var(--danger)" : undefined}
+        title={`${a.firma || d?.customer || m?.code || a.stroj || "Servis"}${d?.popis ? ` — ${d.popis}` : a.poznamka ? ` — ${a.poznamka}` : ""}`}
+        sub={[m ? `${m.code}${m.type ? ` (${m.type})` : ""}` : a.stroj, place].filter(Boolean).join(" · ")}
+        actions={[
+          { label: "Vypísať protokol", onClick: () => onProtocol(a) },
+          place && { label: "Navigovať", href: mapsUrl(place) },
+          (d?.contactPhone || d?.telefon) && { label: "Zavolať", href: `tel:${d.contactPhone || d.telefon}` },
+          d && { label: "Detail", onClick: () => onOpenDamage(d) },
+        ]} />
+    );
+  };
+  const checkCard = (a, late) => {
+    const j = jobById[a.jobId];
+    const m = machineById[a.machineId || j?.machineId];
+    const phase = a.phase === "vratenie" ? "PO VRÁTENÍ" : "PRED VÝVOZOM";
+    const dep = j ? j.departureDate || j.startDate : null;
+    return (
+      <TodayCard key={a.id} tag={`KONTROLA ${phase}${late ? ` · ${fmtDate(a.date)}` : ""}`} {...(late ? TODAY_TAG.late : TODAY_TAG.chk)} accent={late ? "var(--danger)" : undefined}
+        title={`${m ? `${m.code}${m.type ? ` · ${m.type}` : ""}` : "Kontrola stroja"}${a.self ? " · osobný odber/vrátenie v depe" : ""}`}
+        sub={[j?.customer, a.phase === "vratenie" ? "" : dep ? `vývoz ${fmtDate(dep)}` : ""].filter(Boolean).join(" · ")}
+        actions={[{ label: "Skontrolovať", onClick: () => onInspection(a) }]} />
+    );
+  };
+  const cardFor = (a, late) => (a.kind === "kontrolaStroja" ? checkCard(a, late) : servisCard(a, late));
+  const late = mine.filter((a) => a.date < today && (a.kind === "kontrolaStroja" || !a.kind) && open(a)).sort((a, b) => a.date.localeCompare(b.date));
+  const todays = mine.filter((a) => a.date === today && (a.kind === "kontrolaStroja" || !a.kind) && open(a));
+  const doneToday = mine.filter((a) => a.date === today && (a.kind === "kontrolaStroja" || !a.kind) && !open(a)).length;
+  const tomorrowList = mine.filter((a) => a.date === tomorrow && (a.kind === "kontrolaStroja" || !a.kind));
+  const infos = mine.filter((a) => a.date === today && a.kind && a.kind !== "kontrolaStroja");
+  const ez = (ezMeasurements || []).filter((m) => m.assignedTechnicianId === myId && !m.processed && m.assignedDate && m.assignedDate <= today);
+  const duty = (weeklyDuty || []).some((w) => w.technicianId === myId && w.weekStart && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
+  const total = late.length + todays.length + waitingParts.length + (ez.length ? 1 : 0);
+  return (
+    <div style={{ maxWidth: 820 }}>
+      {header}
+      <div className="panel" style={{ padding: "10px 12px", marginBottom: 12, fontSize: 13.5, background: "var(--panel-2)" }}>
+        {total === 0 ? "Na dnes nemáte nič otvorené. 👍" : `Máte ${total} ${total === 1 ? "úlohu" : total < 5 ? "úlohy" : "úloh"}${late.length ? `, ${late.length} mešká` : ""}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}
+        {duty && <span className="badge badge-warn" style={{ marginLeft: 8 }}>Tento týždeň máte službu na telefóne</span>}
+        {infos.map((a) => <span key={a.id} className="badge" style={{ marginLeft: 8 }}>{a.kind === "udalost" ? a.poznamka || "Udalosť" : { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" }[a.kind] || a.kind}</span>)}
+      </div>
+      {late.length > 0 && <><div className="today-sec red">Mešká ({late.length})</div>{late.map((a) => cardFor(a, true))}</>}
+      <div className="today-sec">Dnes ({todays.length + waitingParts.length + (ez.length ? 1 : 0)})</div>
+      {todays.map((a) => cardFor(a, false))}
+      {ez.length > 0 && (
+        <TodayCard tag="EZ MERANIA" {...TODAY_TAG.srv} title={`${ez.length} ${ez.length === 1 ? "meranie" : ez.length < 5 ? "merania" : "meraní"} na spracovanie`}
+          sub={ez.slice(0, 4).map((m) => m.machineCode || "—").join(", ")} actions={[{ label: "Otvoriť", onClick: () => onEzDay(ez[0].assignedDate) }]} />
+      )}
+      {partCards}
+      {todays.length + waitingParts.length + ez.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Na dnes nič ďalšie.</div>}
+      {tomorrowList.length > 0 && (
+        <>
+          <div className="today-sec">Zajtra ({tomorrowList.length})</div>
+          <div className="panel" style={{ padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
+            {tomorrowList.map((a) => {
+              const d = a.damageId ? damageById[a.damageId] : null;
+              const m = machineById[a.machineId || d?.machineId || jobById[a.jobId]?.machineId];
+              return <div key={a.id} style={{ padding: "3px 0" }}>{a.kind === "kontrolaStroja" ? "Kontrola" : "Servis"} · {m?.code || a.stroj || "—"}{a.firma || d?.customer || jobById[a.jobId]?.customer ? ` · ${a.firma || d?.customer || jobById[a.jobId]?.customer}` : ""}</div>;
+            })}
+          </div>
+        </>
+      )}
+      {whoPanel}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   „Dnes“ pre kanceláriu (etapa 2): dispečer/vedúci požičovne, dispečer/vedúci/
+   fakturant servisu, fakturant požičovne, obchodník (admin vidí všetko).
+   Dlaždice = počty, „Na vybavenie“ = konkrétne veci s priamou akciou.
+--------------------------------------------------------- */
+const POZ_OFFICE_ROLES = ["dispecer_pozicovne", "veduci_pozicovne"];
+// „Šanón“ na kartách: záložky na ľavom okraji, klik vysunie obsah cez kartu, hlavička karty ostáva.
+function BinderLayout({ tabs, active, setActive, main, panel }) {
+  const ref = useRef(null);
+  const [minH, setMinH] = useState(0);
+  const list = tabs.filter(Boolean);
+  const cur = list.find((t) => t.id === active);
+  return (
+    <div className="binder">
+      <div className="binder-tabs">
+        {list.map((t) => (
+          <button key={t.id} className={`binder-tab${active === t.id ? " active" : ""}`} title={t.title || t.label}
+            onClick={() => { if (!active) setMinH(ref.current?.offsetHeight || 0); setActive(active === t.id ? null : t.id); }}>
+            {t.label}{t.count != null ? ` (${t.count})` : ""}
+          </button>
+        ))}
+      </div>
+      <div className="binder-body" ref={ref} style={{ minHeight: active ? minH : undefined }}>
+        {!cur ? main : (
+          <div className="binder-panel">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{cur.title || cur.label}</div>
+              <button className="btn btn-ghost" onClick={() => setActive(null)}>← Späť</button>
+            </div>
+            {panel}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+// Pás „Teraz treba“ na karte stroja/zákazky (etapa 3) — najbližší krok podľa role a stavu.
+function NextStepBar({ items }) {
+  const list = (items || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div style={{ border: "1px solid var(--border)", borderLeft: "4px solid var(--accent)", borderRadius: 8, padding: "8px 12px", marginBottom: 14, background: "var(--panel-2)" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent)", marginBottom: 4 }}>Teraz treba</div>
+      {list.map((it, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+          <div style={{ flex: "1 1 220px", fontSize: 13.5, color: it.tone === "red" ? "var(--danger)" : "var(--text)" }}>{it.text}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {(it.actions || []).filter(Boolean).map((a, k) => (
+              a.href
+                ? <a key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} style={{ textDecoration: "none", fontSize: 12.5 }}>{a.label}</a>
+                : <button key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} style={{ fontSize: 12.5 }} onClick={a.onClick}>{a.label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+const relDay = (d, today) => (d === today ? "dnes" : d === addDaysISO(today, 1) ? "zajtra" : fmtDate(d));
+const SRV_OFFICE_ROLES = ["dispecer_servisu", "veduci_servisu", "fakturant_servis"];
+const TONE = { red: "var(--danger)", warn: "var(--warn)", info: "var(--info)", ok: "var(--ok)", dim: "var(--text-dim)" };
+const TONE_BG = { red: "var(--danger-bg)", warn: "var(--warn-bg)", info: "var(--info-bg)", ok: "var(--ok-bg)", dim: "var(--panel-2)" };
+const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n > 1 && n < 5 ? b : c}`;
+
+function TodayTiles({ tiles }) {
+  const list = tiles.filter((t) => t.n > 0 || t.always);
+  if (!list.length) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10, marginBottom: 6 }}>
+      {list.map((t) => (
+        <div key={t.label} className="panel" onClick={t.onClick} style={{ padding: "12px 14px", cursor: t.onClick ? "pointer" : "default", borderLeft: `3px solid ${TONE[t.tone]}` }}>
+          <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, color: TONE[t.tone] }}>{t.n}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TodayList({ title, rows, empty }) {
+  return (
+    <div>
+      <div className="today-sec">{title}{rows.length ? ` (${rows.length})` : ""}</div>
+      <div className="panel" style={{ padding: 0 }}>
+        {rows.length === 0 && <div style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-dim)" }}>{empty}</div>}
+        {rows.map((r, i) => (
+          <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderTop: i ? "1px solid var(--border)" : "none", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
+              {r.sub && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.sub}</div>}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(r.actions || []).filter(Boolean).map((a, k) => (
+                a.href
+                  ? <a key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} style={{ textDecoration: "none" }}>{a.label}</a>
+                  : <button key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} onClick={a.onClick}>{a.label}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservations, portalRequests, handoverProtocols, notifications, isMyJob, mySubstitutedNames, driverById,
+  damages, assignments, partHandovers, spareParts, ezMeasurements, protocolLogs, employees, depoCheckers, checkerSubstitutions, weeklyDuty, machineById, hasServiceProtocol,
+  onGo, onOpenJob, onOpenReservation, onCompleteJob, onAssignDamage, onOpenDamage, onCheckPartHandover, onConvertPortalProblem, onReadNotification, onAskDaily, whoPanel, erpPozPanel }) {
+  const role = user?.role;
+  const admin = isAdminUser(user);
+  const poz = admin || POZ_OFFICE_ROLES.includes(role);
+  const srv = admin || SRV_OFFICE_ROLES.includes(role);
+  const sales = role === "obchodnik";
+  const fakPoz = role === "fakturant_pozicovna";
+  const hpByJob = Object.fromEntries((handoverProtocols || []).map((h) => [h.jobId, h]));
+  const jobById = Object.fromEntries((jobs || []).map((j) => [j.id, j]));
+  const mcode = (id) => machineById[id]?.code || "—";
+  const monthAgo = addDaysISO(today, -30);
+  const weekday = new Date(today + "T00:00:00").toLocaleDateString("sk-SK", { weekday: "long" });
+  const tiles = [];
+  const rows = [];
+  let side = null;
+
+  // ───────── Požičovňa (dispečer len svoje zákazky + zastupované) ─────────
+  if (poz) {
+    const mine = (jobs || []).filter((j) => isMyJob(j));
+    const transports = [];
+    mine.forEach((j) => {
+      const hp = hpByJob[j.id];
+      const dep = j.departureDate || j.startDate;
+      if (!j.selfPickup && j.status !== "completed" && !hp?.handoverDone && dep && dep >= monthAgo) transports.push({ id: j.id + "-vyvoz", type: "vyvoz", date: dep, driverId: j.driverId, j });
+      const back = j.pickupDate || j.endDate;
+      if (j.status === "completed" && !j.notRealized && !j.selfReturn && !hp?.returnDone && back && back >= monthAgo) transports.push({ id: j.id + "-zvoz", type: "zvoz", date: back, driverId: j.returnDriverId, j });
+    });
+    const noDriver = transports.filter((t) => !t.driverId && t.date <= tomorrow).sort((a, b) => a.date.localeCompare(b.date));
+    const mismatch = (notifications || []).filter((n) => n.title === "Nesúlad depa pri zvoze" && !n.readBy.includes(user.id));
+    const portal = (portalRequests || []).filter((r) => r.type !== "problem" && r.status === "pending" && jobById[r.jobId] && isMyJob(jobById[r.jobId]));
+    const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow && j.endDate >= monthAgo).sort((a, b) => a.endDate.localeCompare(b.endDate));
+    const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo }));
+    const todayT = transports.filter((t) => t.date === today).sort((a, b) => a.type.localeCompare(b.type));
+    tiles.push(
+      { n: noDriver.length, label: "Prepravy do zajtra bez šoféra", tone: "red", onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
+      { n: mismatch.length, label: "Nesúlad depa pri zvoze", tone: "red" },
+      { n: portal.length, label: "Žiadosti z portálu", tone: "warn" },
+      { n: ending.length, label: "Končia dnes / zajtra", tone: "info", onClick: () => onGo({ module: "poziciovna", view: "jobs" }) },
+      { n: resv.length, label: "Rezervácie na schválenie", tone: "info" },
+      { n: todayT.length, label: "Prepravy dnes", tone: "ok", always: true, onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
+    );
+    noDriver.forEach((t) => rows.push({ key: t.id, tag: "BEZ ŠOFÉRA", tone: t.date < today ? "red" : "warn",
+      title: `${t.type === "vyvoz" ? "Vývoz" : "Zvoz"} ${mcode(t.j.machineId)} ${t.type === "vyvoz" ? "→" : "←"} ${t.j.customer || "—"}`,
+      sub: `${t.date === today ? "dnes" : t.date === tomorrow ? "zajtra" : "mešká od"} ${fmtDate(t.date)} · ${t.type === "vyvoz" ? t.j.fromDepo || "—" : t.j.returnDepo || t.j.fromDepo || "—"}`,
+      actions: [{ label: "Prideliť šoféra", onClick: () => onGo({ module: "poziciovna", view: "prepravy", transportId: t.id }) }] }));
+    mismatch.forEach((n) => rows.push({ key: n.id, tag: "NESÚLAD DEPA", tone: "red", title: n.message, actions: [{ label: "Vyriešiť", onClick: () => { onReadNotification(n.id); onGo(n.link); } }, { label: "Hotovo", onClick: () => onReadNotification(n.id) }] }));
+    portal.forEach((r) => { const j = jobById[r.jobId]; rows.push({ key: r.id, tag: "PORTÁL", tone: "warn", title: `${j.customer || "—"} — ${r.type === "extension" ? `zmena vrátenia na ${fmtDate(r.requestedEndDate)}` : "žiadosť"}`, sub: `${mcode(j.machineId)} · ${r.createdAt ? fmtDate(String(r.createdAt).slice(0, 10)) : ""}`, actions: [{ label: "Otvoriť", onClick: () => onOpenJob(j) }] }); });
+    ending.forEach((j) => rows.push({ key: j.id + "-end", tag: j.endDate < today ? "PO KONCI" : j.endDate === today ? "KONČÍ DNES" : "KONČÍ ZAJTRA", tone: j.endDate < today ? "red" : "info",
+      title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: `koniec ${fmtDate(j.endDate)}${j.obchodnik ? ` · ${j.obchodnik}` : ""}`,
+      actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
+    resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
+    side = (
+      <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "red" : "info",
+        title: `${mcode(t.j.machineId)} ${t.type === "vyvoz" ? "→" : "←"} ${t.j.customer || "—"}`, sub: driverById[t.driverId]?.name || "bez šoféra",
+        actions: [{ label: "Detail", onClick: () => onOpenJob(t.j) }] }))} />
+    );
+  }
+
+  // ───────── Servis (dispečer = vedúci = fakturant servisu) ─────────
+  if (srv) {
+    const open = (d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa");
+    const unassigned = (damages || []).filter((d) => open(d) && !d.technicianId && !(d.technicianIds || []).length);
+    const portalProblems = (portalRequests || []).filter((r) => r.type === "problem" && r.status === "pending");
+    const toCheck = (partHandovers || []).filter((p) => p.status === "check");
+    const lateChecks = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.date && a.date < today).sort((a, b) => a.date.localeCompare(b.date));
+    const partReq = (spareParts || []).filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
+    const ez = (ezMeasurements || []).filter((m) => !m.processed);
+    const revLate = (damages || []).filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
+    const noSub = [];
+    TODAY_DEPOS.forEach((depo) => {
+      const base = depoCheckers?.[depo];
+      if (!base) return;
+      [today, tomorrow].forEach((day) => {
+        const away = (assignments || []).find((a) => a.technicianId === base && a.date === day && (a.kind === "dovolenka" || a.kind === "pn"));
+        if (away && resolveCheckerId(depoCheckers, checkerSubstitutions, depo, day) === base && !noSub.some((x) => x.depo === depo)) noSub.push({ depo, day, base, kind: away.kind });
+      });
+    });
+    const erpChecks = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null && !a.erpProcessed);
+    const erpProtocols = (protocolLogs || []).filter((p) => !p.erpProcessed);
+    // ERP podklady (interné protokoly a kontroly) sú na „Dnes“ len pre fakturanta servisu (a admina) —
+    // dispečer a vedúci servisu ich majú prístupné v menu. Výdaje dielov na fakturáciu vidia všetci traja.
+    const billing = admin || role === "fakturant_servis";
+    const toBill = (partHandovers || []).filter((p) => p.status === "billing").sort((a, b) => (a.checkedAt || "").localeCompare(b.checkedAt || ""));
+    const empById = Object.fromEntries((employees || []).map((e) => [e.id, e]));
+    tiles.push(
+      { n: unassigned.length + portalProblems.length, label: "Nepridelené tikety", tone: "red", onClick: () => onGo({ module: "servis", view: "poskodenia" }) },
+      { n: toCheck.length, label: "Výdaje dielov na kontrolu", tone: "red", onClick: () => onGo({ module: "servis", view: "vydaj" }) },
+      { n: lateChecks.length, label: "Kontroly stroja po termíne", tone: "warn", onClick: () => onGo({ module: "servis", view: "plan" }) },
+      { n: partReq.length, label: "Požiadavky na diely", tone: "warn", onClick: () => onGo({ module: "servis", view: "diely" }) },
+      { n: ez.length, label: "EZ merania na spracovanie", tone: "info", onClick: () => onGo({ module: "servis", view: "ez_merania" }) },
+      { n: revLate.length, label: "Revízie po termíne", tone: "warn", onClick: () => onGo({ module: "servis", view: "revizie" }) },
+      { n: noSub.length, label: "Checker bez zástupu", tone: "warn" },
+      ...(billing ? [
+        { n: erpChecks.length, label: "Kontroly checkera do ERP", tone: "info", onClick: () => onGo({ module: "servis", view: "erp" }) },
+        { n: erpProtocols.length, label: "Servisné protokoly do ERP", tone: "info", onClick: () => onGo({ module: "servis", view: "erp" }) },
+      ] : []),
+      { n: toBill.length, label: "Výdaje dielov na fakturáciu", tone: "info", onClick: () => onGo({ module: "servis", view: "vydaj" }) },
+    );
+    portalProblems.forEach((r) => rows.push({ key: r.id, tag: "PORTÁL", tone: "red", title: `${mcode(r.machineId)} · ${r.customer || "—"}: „${r.message}“`, sub: r.createdAt ? fmtDate(String(r.createdAt).slice(0, 10)) : "",
+      actions: [can(user, "damage_status") && { label: "Založiť ako poškodenie", onClick: () => onConvertPortalProblem(r) }, jobById[r.jobId] && { label: "Zákazka", onClick: () => onOpenJob(jobById[r.jobId]) }] }));
+    unassigned.forEach((d) => rows.push({ key: d.id, tag: d.type === "externa" ? "EXTERNÁ" : "TIKET", tone: "red", title: `${d.code || "bez stroja"} — ${d.popis || "—"}`,
+      sub: [d.customer, d.location, d.dateReported ? `nahlásené ${fmtDate(d.dateReported)}` : ""].filter(Boolean).join(" · "),
+      actions: [can(user, "damage_assign") && d.machineId && { label: "Prideliť", onClick: () => onAssignDamage(d) }, { label: "Detail", onClick: () => onOpenDamage(d) }] }));
+    toCheck.forEach((p) => rows.push({ key: p.id, tag: "VÝDAJ DIELOV", tone: "warn", title: `${p.customer} — ${plural((p.items || []).length, "položka", "položky", "položiek")}`,
+      sub: `odovzdal ${p.handedBy || "—"}${p.handoverNote ? ` · poznámka: ${p.handoverNote}` : ""}`,
+      actions: [phCanManage(user) ? { label: "Skontrolovať", onClick: () => onCheckPartHandover(p) } : { label: "Otvoriť", onClick: () => onGo({ module: "servis", view: "vydaj", partHandoverId: p.id }) }] }));
+    lateChecks.forEach((a) => rows.push({ key: a.id, tag: "KONTROLA", tone: "red", title: `${mcode(a.machineId || jobById[a.jobId]?.machineId)} ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}`,
+      sub: `${empById[a.technicianId]?.name || "bez checkera"} · od ${fmtDate(a.date)}`, actions: [{ label: "Otvoriť", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: a.date }) }] }));
+    partReq.forEach((p) => rows.push({ key: p.id, tag: "DIEL", tone: "warn", title: `${p.cisloDielu || ""} ${p.popisDielu || ""}${p.pocetKusov ? ` ${p.pocetKusov}×` : ""}`.trim() || "Diel",
+      sub: [p.requestedBy, p.depo ? `depo ${p.depo}` : ""].filter(Boolean).join(" · "), actions: [{ label: "Schváliť", onClick: () => onGo({ module: "servis", view: "diely", depo: p.depo }) }] }));
+    noSub.forEach((x) => rows.push({ key: "sub-" + x.depo, tag: "ZÁSTUP", tone: "warn", title: `${empById[x.base]?.name || "Checker"} — ${x.kind === "pn" ? "PN / doktor" : "dovolenka"} ${x.day === today ? "dnes" : "zajtra"}`,
+      sub: `checker ${x.depo} bez zástupu`, actions: [{ label: "Nastaviť", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: x.day }) }] }));
+    toBill.forEach((p) => rows.push({ key: p.id + "-bill", tag: "NA FAKTURÁCIU", tone: "info", title: `${p.customer} — ${plural((p.items || []).length, "položka", "položky", "položiek")}`,
+      sub: `skontrolované ${p.checkedAt ? fmtDate(String(p.checkedAt).slice(0, 10)) : ""} · DL zatiaľ bez čísla`, actions: [{ label: "Spracovať", onClick: () => onGo({ module: "servis", view: "vydaj", partHandoverId: p.id }) }] }));
+    if (!side) {
+      const techs = (employees || []).filter((e) => (e.role === "technik" || e.role === "veduci_technik_ba") && !e.archived)
+        .sort((a, b) => (a.depo || "").localeCompare(b.depo || "") || (a.name || "").localeCompare(b.name || ""));
+      side = (
+        <TodayList title="Technici dnes" empty="Žiadni technici." rows={techs.map((t) => {
+          const mineA = (assignments || []).filter((a) => a.technicianId === t.id);
+          const work = (a) => a.kind === "kontrolaStroja" || !a.kind;
+          const isOpen = (a) => (a.kind === "kontrolaStroja" ? !a.resolved : !hasServiceProtocol(a));
+          const day = mineA.filter((a) => a.date === today && work(a));
+          const late = mineA.filter((a) => a.date < today && a.date >= monthAgo && work(a) && isOpen(a)).length;
+          const away = mineA.find((a) => a.date === today && ["dovolenka", "pn"].includes(a.kind));
+          const duty = (weeklyDuty || []).some((w) => w.technicianId === t.id && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
+          return { key: t.id, tag: DEPO_SHORT_LABELS[t.depo] || t.depo || "—", tone: "dim", title: t.name,
+            sub: away ? (away.kind === "pn" ? "PN / doktor" : "dovolenka") : [plural(day.length, "úloha", "úlohy", "úloh"), day.length ? `${day.filter((a) => !isOpen(a)).length} hotové` : "", late ? `${late} mešká` : "", duty ? "služba na telefóne" : ""].filter(Boolean).join(" · "),
+            actions: [{ label: "Plán", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: today }) }] };
+        })} />
+      );
+    }
+  }
+
+  // ───────── Obchodník: jeho zákazky ─────────
+  if (sales) {
+    const me = myEmployee?.name || user?.name;
+    const mineJobs = (jobs || []).filter((j) => j.obchodnik === me);
+    const ids = new Set(mineJobs.map((j) => j.id));
+    const portal = (portalRequests || []).filter((r) => ids.has(r.jobId) && (r.status === "pending" || r.status === "in_progress"));
+    const ending = mineJobs.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate >= today && j.endDate <= addDaysISO(today, 3)).sort((a, b) => a.endDate.localeCompare(b.endDate));
+    const resv = (reservations || []).filter((r) => r.obchodnik === me && (r.status === "pending" || r.status === "approved"));
+    const running = mineJobs.filter((j) => j.status !== "completed");
+    tiles.push(
+      { n: portal.length, label: "Žiadosti z portálu", tone: "red" },
+      { n: ending.length, label: "Končia do 3 dní", tone: "warn" },
+      { n: resv.length, label: "Moje rezervácie", tone: "info" },
+      { n: running.length, label: "Moje bežiace zákazky", tone: "ok", always: true, onClick: () => onGo({ module: "poziciovna", view: "jobs" }) },
+    );
+    portal.forEach((r) => { const j = jobById[r.jobId]; rows.push({ key: r.id, tag: "PORTÁL", tone: "red", title: `${j.customer || "—"} — ${r.type === "problem" ? "nahlásený problém" : `zmena vrátenia na ${fmtDate(r.requestedEndDate)}`}`, sub: r.type === "problem" ? "rieši servis · info pre vás" : "schvaľuje dispečer · info pre vás", actions: [{ label: "Otvoriť zákazku", onClick: () => onOpenJob(j) }, j.customerPhone && { label: "Zavolať", href: `tel:${j.customerPhone}` }] }); });
+    ending.forEach((j) => rows.push({ key: j.id, tag: j.endDate === today ? "KONČÍ DNES" : `KONČÍ ${fmtDate(j.endDate)}`, tone: "warn", title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: j.returnDriverId ? "" : "zvoz zatiaľ bez šoféra",
+      actions: [j.customerPhone && { label: "Zavolať", href: `tel:${j.customerPhone}` }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
+    resv.forEach((r) => rows.push({ key: r.id, tag: "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.status === "pending" ? "čaká na schválenie dispečerom" : "schválená, čaká na zákazku", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
+  }
+
+  // ───────── Fakturant požičovne: ERP podklady priamo tu ─────────
+  if (fakPoz) {
+    const pending = (handoverProtocols || []).filter((h) => h.returnDone && !h.erpProcessed).length;
+    tiles.push({ n: pending, label: "Ukončené prenájmy do ERP", tone: "info", always: true });
+  }
+
+  return { tiles, rows, side };
+}
+
+function TodayOffice(props) {
+  const { user, myEmployee, today, mySubstitutedNames, onAskDaily, whoPanel, erpPozPanel } = props;
+  const { tiles, rows, side } = todayOfficeModel(props);
+  const role = user?.role;
+  const admin = isAdminUser(user);
+  const poz = admin || POZ_OFFICE_ROLES.includes(role);
+  const sales = role === "obchodnik";
+  const fakPoz = role === "fakturant_pozicovna";
+  const weekday = new Date(today + "T00:00:00").toLocaleDateString("sk-SK", { weekday: "long" });
+  const mineNote = poz && !admin && role !== "veduci_pozicovne" ? ` · moje zákazky${mySubstitutedNames.length ? ` + zastupujem ${mySubstitutedNames.join(", ")}` : ""}` : "";
+  return (
+    <div style={{ maxWidth: 1240 }}>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <h2 style={{ margin: 0, fontSize: 24 }}>{fakPoz ? "Dnes · Fakturácia" : "Dnes"}</h2>
+          <div style={{ flex: 1 }} />
+          {admin && onAskDaily && <button className="btn btn-ghost" onClick={onAskDaily}>💬 Čo vyriešiť dnes?</button>}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""} · {roleLabel(role)}{mineNote}</div>
+      </div>
+      <TodayTiles tiles={tiles} />
+      {fakPoz ? erpPozPanel : (
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: side ? "minmax(0, 1.4fr) minmax(0, 1fr)" : "1fr", gap: 16, alignItems: "start" }}>
+          <TodayList title={sales ? "Treba vybaviť" : "Na vybavenie"} rows={rows} empty="Nič nečaká. 👍" />
+          {side}
+        </div>
+      )}
+      <div style={{ marginTop: 16 }}>{whoPanel}</div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
    Výdaj dielov (dodací list) — tabuľka partHandovers (step77).
    Stav: waiting (zadal dispečer, čaká na odovzdanie) → check (podpísané,
    čaká na kontrolu dispečera) → billing (skontrolované, na fakturáciu) → done.
@@ -27291,10 +28006,10 @@ function PartHandoverFields({ value, onChange, customers, machines, withPrices }
 }
 
 // Odovzdanie: výdaj zadaný dispečerom (údaje len na čítanie) alebo nový výdaj vypísaný priamo v teréne.
-function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onClose, onSave }) {
+function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onClose, onSave, prefill }) {
   const isNew = !rec;
   const [recId] = useState(() => rec?.id || uid());
-  const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: myEmployee?.depo && myEmployee.depo !== "Externé" ? myEmployee.depo : "", items: [{ name: "", pn: "", qty: "", price: "" }] });
+  const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: myEmployee?.depo && myEmployee.depo !== "Externé" ? myEmployee.depo : "", items: [{ name: "", pn: "", qty: "", price: "" }], ...(prefill || {}) });
   const [handoverNote, setHandoverNote] = useState("");
   const [customerAbsent, setCustomerAbsent] = useState(false);
   const [customerName, setCustomerName] = useState(rec?.contactName || "");
@@ -28394,6 +29109,25 @@ function GlobalStyle() {
          .dark trieda na body (nastavovaná v JS podľa darkMode) drží pozadie
          pod appkou správne aj pri "gumovom" overscrolle. */
       html, body { margin: 0; }
+      .today-sec { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 16px 0 8px; }
+      .today-sec.red { color: var(--danger); }
+      .header-damage-btn { color: var(--danger) !important; border-color: var(--danger) !important; font-weight: 700; }
+      .header-damage-btn .hd-short { display: none; }
+      .binder { display: flex; margin-left: -20px; min-height: 200px; }
+      .binder-tabs { flex: 0 0 34px; display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+      .binder-tab { writing-mode: vertical-rl; transform: rotate(180deg); padding: 14px 7px; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px;
+        background: var(--panel-2); color: var(--text-dim); font: 600 12px/1 inherit; font-family: inherit; cursor: pointer; text-align: center; white-space: nowrap; }
+      .binder-tab:hover { color: var(--text); }
+      .binder-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .binder-body { flex: 1; min-width: 0; padding-left: 14px; }
+      .binder-panel { animation: binderIn .18s ease-out; }
+      @keyframes binderIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+      @media (max-width: 700px) {
+        .binder { margin-left: -12px; }
+        .binder-body { padding-left: 10px; }
+        .header-damage-btn .hd-full { display: none; }
+        .header-damage-btn .hd-short { display: inline; }
+      }
       body { background: #f0f0f0; }
       body.dark { background: #14171a; }
       .app-shell.dark {
@@ -28538,6 +29272,7 @@ function GlobalStyle() {
       .rail-icon.quick.rail-ask:hover { background: #2b2b2b; }
       .rail-tick { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: .35; flex-shrink: 0; box-sizing: border-box; }
       .rail-tick.active { width: 8px; height: 8px; background: #fff; border: 2px solid var(--accent); opacity: 1; }
+      .rail-tick.alert:not(.active) { background: var(--danger) !important; opacity: 1; width: 8px; height: 8px; }
       /* rovnaká deliaca čiara ako vo flyoute (.sidebar-quick), box-shadow →
          nezaberá výšku, nerozhodí zarovnanie s textom (moduly/tabs čiaru má
          .rail-modules vyššie) */
