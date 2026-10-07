@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.766";
+const APP_VERSION = "1.0.767";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -10744,12 +10744,17 @@ function DispatcherApp() {
       {/* maSKot — AI asistent, zatiaľ len na testovanie (viditeľný len pre admina).
           Keď sa osvedčí, rozšíriť podmienku na ďalšie role. Skrytý cez telefónny
           zoznam — plávajúce tlačidlo tam prekrývalo obsah. */}
-      {effectiveUser?.role === "admin" && !showPhoneDirectory && (
+      {isAdminUser(currentUser) && !showPhoneDirectory && (
         <MaskotChatWidget
           session={session}
           machines={enrichedMachines}
           onOpenCard={(m) => setMachineCard(m)}
           askTrigger={maskotAskTick}
+          navModules={navModules}
+          quickActions={quickActions}
+          onNavGo={navGo}
+          screen={{ module, view, label: (() => { const mm = navModules.find((x) => x.id === module); const t = mm?.tabs.find((x) => (x.group || [x.id]).includes(view)); return mm ? (mm.id === "dnes" ? "Dnes" : `${mm.label} → ${t?.label || view}`) : module; })() }}
+          viewAsRole={viewAsRole}
         />
       )}
       {showUnknownSerialReport && (
@@ -15137,7 +15142,7 @@ function CustomerDetailModal({
 // klikateľné (tel:/mailto:) — telefón nemá čo skopírovať a vytočiť ručne.
 const PHONE_RE = /(?:\+\d[\d ]{7,}\d|\b0\d[\d ]{7,}\d\b)/;
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}/;
-function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
+function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard, navLink) {
   const parts = String(text).split(new RegExp(`(\\*\\*[^*]+\\*\\*|\\[\\[[^\\]]+\\]\\]|${EMAIL_RE.source}|${PHONE_RE.source})`, "g"));
   return parts.map((p, i) => {
     const key = `${keyPrefix}-${i}`;
@@ -15147,6 +15152,16 @@ function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
     }
     if (new RegExp(`^${PHONE_RE.source}$`).test(p)) {
       return <a key={key} href={`tel:${p.replace(/\s+/g, "")}`} style={{ color: "inherit", textDecoration: "underline" }}>{p}</a>;
+    }
+    // maSKot príručka: [[nav:modul/záložka|Text]] a [[new:kľúč|Text]] — klikateľné, len ak ich rola má.
+    const navM = p.match(/^\[\[(nav|new):([^|\]]+)\|([^\]]+)\]\]$/);
+    if (navM) {
+      const go = navLink?.(navM[1], navM[2].trim());
+      return go ? (
+        <button key={key} className="btn btn-ghost" onClick={go} style={{ padding: "0 6px", fontSize: "inherit", fontWeight: 600, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 4, verticalAlign: "baseline" }}>
+          {navM[3]} →
+        </button>
+      ) : <strong key={key}>{navM[3]}</strong>;
     }
     if (p.startsWith("[[") && p.endsWith("]]")) {
       const code = p.slice(2, -2).trim();
@@ -15177,7 +15192,7 @@ function renderInlineMd(text, keyPrefix, machineByCode, onOpenCard) {
   });
 }
 const norm = (s) => String(s ?? "").toLowerCase();
-function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
+function MaskotMessageContent({ text, machineByCode, onOpenCard, navLink }) {
   const lines = String(text).split("\n");
   const blocks = [];
   let i = 0;
@@ -15221,7 +15236,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
                   <tr>
                     {b.header.map((h, hi) => (
                       <th key={hi} style={{ border: "1px solid rgba(0,0,0,.15)", padding: "3px 6px", textAlign: "left", background: "rgba(0,0,0,.06)", whiteSpace: "nowrap" }}>
-                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard)}
+                        {renderInlineMd(h, `h${bi}-${hi}`, machineByCode, onOpenCard, navLink)}
                       </th>
                     ))}
                   </tr>
@@ -15231,7 +15246,7 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
                     <tr key={ri}>
                       {r.map((c, ci) => (
                         <td key={ci} style={{ border: "1px solid rgba(0,0,0,.1)", padding: "3px 6px", whiteSpace: "nowrap" }}>
-                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard)}
+                          {renderInlineMd(c, `c${bi}-${ri}-${ci}`, machineByCode, onOpenCard, navLink)}
                         </td>
                       ))}
                     </tr>
@@ -15245,14 +15260,14 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
           return (
             <ul key={bi} style={{ margin: "4px 0", paddingLeft: 18 }}>
               {b.items.map((it, ii) => (
-                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard)}</li>
+                <li key={ii}>{renderInlineMd(it, `l${bi}-${ii}`, machineByCode, onOpenCard, navLink)}</li>
               ))}
             </ul>
           );
         }
         return (
           <div key={bi} style={{ whiteSpace: "pre-wrap" }}>
-            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard)}
+            {renderInlineMd(b.text, `p${bi}`, machineByCode, onOpenCard, navLink)}
           </div>
         );
       })}
@@ -15260,13 +15275,24 @@ function MaskotMessageContent({ text, machineByCode, onOpenCard }) {
   );
 }
 
-function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
+function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModules, quickActions, onNavGo, screen, viewAsRole }) {
   const [open, setOpen] = useState(false);
   // Namiesto natívneho window.confirm (jediné miesto v appke, čo ho ešte
   // používalo) — rovnaký dvojkrokový vzor ako inde (klik → červené
   // upozornenie + druhé tlačidlo na potvrdenie).
   const [confirmingClear, setConfirmingClear] = useState(false);
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
+  // Odkaz z odpovede → klik, len ak cieľ v menu / „＋ Nové“ tejto role naozaj je (inak null = len text).
+  const navLink = (kind, target) => {
+    const close = () => { if (window.innerWidth < 700) setOpen(false); };
+    if (kind === "new") {
+      const a = (quickActions || []).find((x) => x.key === target);
+      return a ? () => { close(); a.onClick(); } : null;
+    }
+    const [m, v] = target.split("/");
+    const tab = (navModules || []).find((x) => x.id === m)?.tabs.find((t) => !t.dropdown && (t.group || [t.id]).includes(v));
+    return tab ? () => { close(); onNavGo(m, v); } : null;
+  };
   // Konverzácia sa teraz uchováva aj po zavretí okna/appky (localStorage,
   // viazané na konkrétneho prihláseného, nie zdieľané medzi ľuďmi na tom istom
   // počítači). Načíta sa len raz, pri prvom vytvorení komponentu.
@@ -15334,7 +15360,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
       return;
     }
     window.speechSynthesis.cancel(); // nič rozhovorené navyše, keby toto prišlo uprostred niečoho iného
-    const utter = new SpeechSynthesisUtterance(text);
+    const utter = new SpeechSynthesisUtterance(String(text).replace(/\[\[(?:nav|new):[^|\]]*\|([^\]]+)\]\]/g, "$1").replace(/\[\[([^\]]+)\]\]/g, "$1"));
     utter.lang = "sk-SK";
     utter.onend = () => onDone?.();
     utter.onerror = () => onDone?.();
@@ -15456,6 +15482,8 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
         body: JSON.stringify({
           message: text || "Pozri sa prosím na priloženú fotku a pomôž mi s ňou.",
           history: historyRef.current,
+          screen: { ...screen, mobile: window.innerWidth < 700 },
+          viewAsRole: viewAsRole || undefined,
           image: imageForThisSend ? { mediaType: imageForThisSend.mediaType, base64: imageForThisSend.base64 } : undefined,
         }),
       });
@@ -15725,7 +15753,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger }) {
                 }}
               >
                 {m.imagePreview && <img src={m.imagePreview} alt="" style={{ maxWidth: "100%", borderRadius: 6, marginBottom: 4, display: "block" }} />}
-                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} />
+                <MaskotMessageContent text={m.text} machineByCode={machineByCode} onOpenCard={onOpenCard} navLink={navLink} />
               </div>
             ))}
             {sending && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>maSKot píše...</div>}
