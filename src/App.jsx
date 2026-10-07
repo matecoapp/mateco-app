@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.763";
+const APP_VERSION = "1.0.764";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -19607,7 +19607,6 @@ function machineBreakdowns(damages, machineId) {
   return (damages || []).filter((d) => d.type === "poskodenie" && d.machineId === machineId && d.dateReported)
     .map((d) => ({ d, from: String(d.dateReported).slice(0, 10), to: d.resolved ? String(d.opravaDatum || d.resolvedAt || d.dateReported).slice(0, 10) : null }));
 }
-const breakdownOn = (list, iso) => list.find((b) => b.from <= iso && (!b.to || iso <= b.to));
 function breakdownTooltip(b, technicianNameById) {
   const d = b.d;
   const tech = (d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : []).map((id) => technicianNameById?.[id]).filter(Boolean).join(", ");
@@ -19953,19 +19952,29 @@ const CalendarGrid = React.memo(function CalendarGrid({
           const mJobs = (jobsByMachine[m.id] || []).slice().sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
           const mReservations = reservationsByMachine[m.id] || [];
           const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
-          // Porucha: červené bunky tam, kde stroj nie je v prenájme; v deň opravy so začiatkom prenájmu
-          // (alebo nahlásenia v posledný deň prenájmu) uhlopriečka. Prenájom počas poruchy má červené orámovanie.
+          // Porucha: červený pás tam, kde stroj nie je v prenájme — vykreslený rovnako ako pás zákazky (aj uhlopriečka
+          // v deň opravy so začiatkom prenájmu / nahlásenia v posledný deň prenájmu). Prenájom počas poruchy má červený rámik.
           const mBreaks = machineBreakdowns(damages, m.id);
           const jobOn = (iso) => mJobs.find((j) => !j.notRealized && j.startDate <= iso && (!j.endDate || iso <= j.endDate));
-          const breakCell = (iso) => {
-            const b = breakdownOn(mBreaks, iso);
-            if (!b) return null;
-            const j = jobOn(iso);
-            if (!j) return { b, clip: undefined };
-            if (j.startDate === iso && b.to === iso) return { b, clip: "polygon(0 0, 100% 0, 0 100%)" }; // opravené ráno, odpoludnia prenájom
-            if (j.endDate === iso && b.from === iso) return { b, clip: "polygon(100% 0, 100% 100%, 0 100%)" }; // vrátený a nahlásený v ten istý deň
-            return null;
-          };
+          const breakPieces = [];
+          mBreaks.forEach((b) => {
+            const lastIso = allDays[allDays.length - 1];
+            if (b.from > lastIso || (b.to && b.to < allDays[0])) return;
+            const endIso = b.to && b.to < lastIso ? b.to : lastIso;
+            let cur = null;
+            for (let iso = b.from < allDays[0] ? allDays[0] : b.from; iso <= endIso; iso = addDaysISO(iso, 1)) {
+              const j = jobOn(iso);
+              // Deň sa delí uhlopriečkou len pri viacdňovej zákazke — jednodňovú by dve uhlopriečky zmazali (nedalo by sa na ňu kliknúť).
+              const multi = j && j.endDate && j.endDate !== j.startDate;
+              const shareEnd = multi && j.startDate === iso && b.to === iso; // opravené ráno, odpoludnia prenájom
+              const shareStart = multi && j.endDate === iso && b.from === iso; // vrátený a nahlásený v ten istý deň
+              if (j && !shareEnd && !shareStart) { if (cur) { breakPieces.push(cur); cur = null; } continue; }
+              if (!cur) cur = { b, from: iso, to: iso, startTurn: !!shareStart, endTurn: false };
+              else cur.to = iso;
+              if (shareEnd) { cur.endTurn = true; breakPieces.push(cur); cur = null; }
+            }
+            if (cur) breakPieces.push(cur);
+          });
 
           return (
             <div
@@ -20064,25 +20073,22 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 // požičovne (canTransportNote), inak sa map ani nenapočíta
                 // (viď transportNotesByMachine v CalendarView vyššie).
                 const transportNote = canTransportNote ? transportNotesByMachine[m.id]?.[iso] : null;
-                const brk = breakCell(iso);
                 const clickHandler = transportJob
                   ? () => onOpenJob(transportJob)
                   : transportNote
                   ? () => onOpenTransportDetail(transportNote)
-                  : brk && onBreakdownClick
-                  ? () => onBreakdownClick(m.id, iso, brk.b.d)
                   : onCellClick
                   ? () => onCellClick(m.id, iso)
                   : undefined;
                 return (
                   <div
                     key={`bg-${iso}`}
-                    className={transportNote || brk ? "gantt-bar-wrap" : undefined}
+                    className={transportNote ? "gantt-bar-wrap" : undefined}
                     onClick={clickHandler}
                     title={
                       transportJob
                         ? "Otvoriť zákazku (návoz/zvoz na tento deň)"
-                        : transportNote || brk
+                        : transportNote
                         ? undefined
                         : onCellClick
                         ? "Vytvoriť zákazku na tento deň"
@@ -20094,7 +20100,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       gridRow: 1,
                       alignSelf: "stretch",
                       height: "100%",
-                      borderRight: brk && !brk.clip ? "1px solid #d0021b" : "1px solid var(--border)",
+                      borderRight: "1px solid var(--border)",
                       boxSizing: "border-box",
                       background: isWeekend ? "var(--warn-bg)" : "transparent",
                       cursor: clickHandler ? "pointer" : "default",
@@ -20123,36 +20129,47 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         🚚 Prevoz → {transportNote.targetDepo}{transportNote.confirmed ? " (potvrdené)" : ""}
                       </div>
                     )}
-                    {brk && !transportNote && (
-                      <>
-                        <div className="gantt-breakdown" style={{ clipPath: brk.clip }} />
-                        <div className="gantt-tooltip">{breakdownTooltip(brk.b, technicianNameById)}</div>
-                      </>
-                    )}
                   </div>
                 );
               })}
-              {(() => {
-                // Popisok „⚠ Porucha“ — jeden na každý súvislý úsek červených buniek vo výreze (bez klikania, to riešia bunky).
-                const runs = [];
-                visibleDayIdx.forEach((i) => {
-                  const c = breakCell(allDays[i]);
-                  const last = runs[runs.length - 1];
-                  if (c && !c.clip && last && last.b === c.b && last.i1 === i - 1) last.i1 = i;
-                  else if (c && !c.clip) runs.push({ b: c.b, i0: i, i1: i });
-                });
-                return runs.map((r) => {
-                  const d = r.b.d;
-                  const tech = (d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : []).map((id) => technicianNameById?.[id]).filter(Boolean)[0];
-                  const fix = !r.b.to && d.assignedDate ? ` · oprava ${Number(d.assignedDate.slice(8, 10))}.${Number(d.assignedDate.slice(5, 7))}.${tech ? " " + tech.split(" ")[0] : ""}` : "";
-                  return (
-                    <div key={`brk-${d.id}-${r.i0}`} className="gantt-breakdown-label" style={{ gridColumn: `${r.i0 + 2} / ${r.i1 + 3}`, gridRow: 1 }}>
-                      {/* lepiaci popisok ako pri zákazke — nezájde pod stĺpec s menom stroja */}
-                      <span style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", display: "inline-block", padding: "0 6px" }}>⚠ Porucha{r.i1 > r.i0 ? fix : ""}</span>
+              {breakPieces.map((pc) => {
+                const startCol = colForDate(pc.from, true);
+                const endCol = colForDate(pc.to, false);
+                if (!intersectsVisible(startCol, endCol)) return null;
+                const n = endCol - startCol + 1;
+                const cellPct = 100 / n;
+                // rovnaký tvar uhlopriečky (aj 2px medzera) ako pri nadväzujúcich zákazkách
+                const clip = pc.startTurn || pc.endTurn
+                  ? `polygon(${pc.startTurn ? `calc(${cellPct}% + 2px) 0` : "0 0"}, ${pc.endTurn ? `calc(100% - 2px) 0, calc(${100 - cellPct}% - 2px) 100%` : "100% 0, 100% 100%"}, ${pc.startTurn ? "2px 100%" : "0 100%"})`
+                  : undefined;
+                const d = pc.b.d;
+                const tech = (d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : []).map((id) => technicianNameById?.[id]).filter(Boolean)[0];
+                const fix = !pc.b.to && d.assignedDate ? ` · oprava ${Number(d.assignedDate.slice(8, 10))}.${Number(d.assignedDate.slice(5, 7))}.${tech ? " " + tech.split(" ")[0] : ""}` : "";
+                const showLabel = n - (pc.startTurn ? 1 : 0) - (pc.endTurn ? 1 : 0) >= 1;
+                return (
+                  <div
+                    key={`brk-${d.id}-${pc.from}`}
+                    className="gantt-bar-wrap"
+                    onClick={(e) => {
+                      if (!onBreakdownClick) return;
+                      const r = e.currentTarget.getBoundingClientRect();
+                      const k = Math.max(0, Math.min(n - 1, Math.floor(((e.clientX - r.left) / r.width) * n)));
+                      onBreakdownClick(m.id, addDaysISO(pc.from, k), d);
+                    }}
+                    style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: 1, alignSelf: "stretch", display: "flex", alignItems: "center", cursor: "pointer", pointerEvents: clip ? "none" : undefined }}
+                  >
+                    <div style={{ position: "absolute", inset: 0, background: "#d0021b", borderRadius: 4, boxSizing: "border-box", clipPath: clip, pointerEvents: clip ? "auto" : undefined }} />
+                    {showLabel && (
+                      <div className="gantt-cell" style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: "fit-content", fontSize: 10, color: "#fff", fontWeight: 700, pointerEvents: "none", paddingLeft: pc.startTurn ? `${cellPct}%` : undefined }}>
+                        <div style={{ padding: compactMode ? "1px 6px" : "3px 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>⚠ Porucha{n > 1 ? fix : ""}</div>
+                      </div>
+                    )}
+                    <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible", pointerEvents: "none" }}>
+                      <div className="gantt-tooltip">{breakdownTooltip(pc.b, technicianNameById)}</div>
                     </div>
-                  );
-                });
-              })()}
+                  </div>
+                );
+              })}
               {mJobs.map((j) => {
                 const startCol = colForDate(j.startDate, true);
                 const isDone = j.status === "completed";
@@ -20173,8 +20190,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                 // Nadväzujúci prenájom v ten istý deň: deň výmeny sa rozdelí uhlopriečkou
                 // (odchádzajúca zákazka hore vľavo, nová dole vpravo), farby ostávajú podľa obchodníka.
                 const inView = (d) => d && d >= allDays[0] && d <= allDays[allDays.length - 1];
-                const endTurn = !noEnd && inView(j.endDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.startDate === j.endDate) || mReservations.some((r) => r.expectedStart === j.endDate) || (!j.notRealized && mBreaks.some((b) => b.from === j.endDate)));
-                const startTurn = inView(j.startDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.endDate === j.startDate) || mReservations.some((r) => r.expectedEnd === j.startDate) || (!j.notRealized && mBreaks.some((b) => b.to === j.startDate)));
+                const endTurn = !noEnd && inView(j.endDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.startDate === j.endDate) || mReservations.some((r) => r.expectedStart === j.endDate) || (!j.notRealized && j.endDate !== j.startDate && mBreaks.some((b) => b.from === j.endDate)));
+                const startTurn = inView(j.startDate) && (mJobs.some((o) => o.id !== j.id && !o.notRealized && o.endDate === j.startDate) || mReservations.some((r) => r.expectedEnd === j.startDate) || (!j.notRealized && j.endDate && j.endDate !== j.startDate && mBreaks.some((b) => b.to === j.startDate)));
                 // Porucha počas prenájmu (nie len v deň výmeny) — červené orámovanie a ⚠.
                 const jobBreak = !j.notRealized && mBreaks.find((b) => {
                   const from = b.from === j.endDate ? null : b.from; // nahlásené až v deň vrátenia = len uhlopriečka
@@ -29229,9 +29246,7 @@ function GlobalStyle() {
          kvôli vlastnému tooltipu) prekryla meno stroja v tom istom riadku. */
       .gantt-bar-wrap { position: relative; z-index: 1; }
       .gantt-bar-wrap:hover { z-index: 10; }
-      /* Porucha stroja v kalendári — sýto červené bunky (aj uhlopriečka v deň opravy/nahlásenia). */
-      .gantt-breakdown { position: absolute; top: 2px; bottom: 2px; left: 0; right: -3px; background: #d0021b; } /* right:-2px = cez medzeru mriežky, nech je pás súvislý */
-      .gantt-breakdown-label { align-self: center; font-size: 10px; font-weight: 700; color: #fff; white-space: nowrap; pointer-events: none; z-index: 11; min-width: 0; }
+      /* Porucha stroja v kalendári — pás ako zákazka (CalendarGrid, breakPieces). */
       /* Meno stroja (prvý stĺpec) — musí byť VŽDY nad zákazkami, aj tými, čo
          práve "vyskočili" pri nabehnutí myšou (10 vyššie) — preto tu základná
          hodnota (20) už sama o sebe prevyšuje aj tamten najvyšší prípad. */
