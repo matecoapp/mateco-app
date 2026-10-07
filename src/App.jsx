@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.768";
+const APP_VERSION = "1.0.769";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -8789,7 +8789,7 @@ function DispatcherApp() {
     else {
       if (!partHandovers.some((x) => x.id === draft.id)) { showNotice("Tento výdaj medzičasom zmazal iný používateľ — zmena sa neuložila."); return false; }
       const before = partHandovers.find((x) => x.id === draft.id) || draft;
-      const keys = ["customer", "customerAddress", "contactName", "contactPhone", "customerEmail", "method", "depo", "deliveryAddress", "machineText", "orderNumber", "items", "note", "date"];
+      const keys = ["customer", "customerAddress", "contactName", "contactPhone", "customerEmail", "method", "depo", "deliveryAddress", "machineText", "orderNumber", "items", "note", "date", ...(before.status === "waiting" ? ["assigneeId", "assigneeName"] : [])];
       const changed = keys.some((k) => JSON.stringify(before[k] ?? "") !== JSON.stringify(draft[k] ?? ""));
       // Oprava po podpise (aj ceny sa dopĺňajú až pri kontrole — tie sa za opravu nerátajú).
       const strip = (items) => (items || []).map(({ price, ...rest }) => rest); // eslint-disable-line no-unused-vars
@@ -8800,6 +8800,11 @@ function DispatcherApp() {
     }
     if (persistPartHandovers((list) => (isNew ? [...list, rec] : list.map((x) => (x.id === rec.id ? rec : x)))) === false) return false;
     showToast(isNew ? "Výdaj dielov bol zadaný." : checked ? "Výdaj je skontrolovaný — ide na fakturáciu." : "Výdaj bol upravený.");
+    // Pridelený (alebo zmenený) odovzdávajúci dostane upozornenie — len on ho vidí na „Dnes“.
+    const asg = rec.status === "waiting" && rec.assigneeId && (isNew || partHandovers.find((x) => x.id === rec.id)?.assigneeId !== rec.assigneeId) && employees.find((e) => e.id === rec.assigneeId);
+    if (asg && asg.linkedUserId !== currentUser?.id) pushNotification({ roles: [], userName: asg.name, kind: "spare_parts", title: "Výdaj dielov na odovzdanie",
+      message: `Odovzdajte diely pre ${rec.customer || "—"} (${plural((rec.items || []).length, "položka", "položky", "položiek")})${rec.date ? ` · ${fmtDate(rec.date)}` : ""} · ${rec.method === "delivery" ? `doručenie${rec.deliveryAddress ? ` ${rec.deliveryAddress}` : ""}` : `osobný odber, depo ${rec.depo || "—"}`}.`,
+      link: { module: "dnes", view: "dnes" } });
     return true;
   }
   function billPartHandover(p, { dlNumber, erpDoc, done }) {
@@ -9196,6 +9201,7 @@ function DispatcherApp() {
     onAssignDamage: (d) => setDamageAssignTarget(d),
     onOpenDamage: (d) => setServiceEventDetail(d),
     onCheckPartHandover: (p) => setPartHandoverUi({ kind: "edit", rec: p }),
+    onPartHandover: (p) => setPartHandoverUi({ kind: "sign", rec: p }),
     onConvertPortalProblem: (r) => convertPortalRequestToDamage(r),
     onRejectPortalRequest: (r, note) => rejectPortalRequest(r, note),
     onReadNotification: markNotificationRead,
@@ -9221,11 +9227,12 @@ function DispatcherApp() {
     if (!DNES_ROLES.includes(r)) dnes = r ? todayOfficeModel(todayOfficeProps).rows.length : 0;
     else if (me && (r === "sofer" || r === "externy_sofer")) dnes = jobs.filter((j) => { const hp = hpByJob[j.id];
       return (j.driverId === me && j.status !== "completed" && !hp?.handoverDone && (j.departureDate || j.startDate) <= today)
-        || (j.returnDriverId === me && j.status === "completed" && !j.notRealized && !hp?.returnDone && (j.pickupDate || j.endDate) <= today); }).length;
+        || (j.returnDriverId === me && j.status === "completed" && !j.notRealized && !hp?.returnDone && (j.pickupDate || j.endDate) <= today); }).length
+      + phMineWaiting(partHandovers, myEmployee, tomorrow).length;
     else if (me) dnes = assignments.filter((a) => a.technicianId === me && a.date && a.date <= today
       && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol(a))).length
       // rovnako ako „Máte N úloh“ na Dnes technika: + výdaje dielov na odovzdanie + EZ merania (jedna položka)
-      + (phCanWrite(effectiveUser) ? partHandovers.filter((p) => p.status === "waiting" && (p.date || today) <= tomorrow).length : 0)
+      + phMineWaiting(partHandovers, myEmployee, tomorrow).length
       + (ezMeasurements.some((m) => m.assignedTechnicianId === me && !m.processed && m.assignedDate && m.assignedDate <= today) ? 1 : 0);
     const monthAgo = addDaysISO(today, -30);
     const prepravy = !can(effectiveUser, "transport_assign_driver") ? 0 : jobs.filter((j) => todayOfficeProps.isMyJob(j) && !j.notRealized).reduce((n, j) => {
@@ -9829,6 +9836,9 @@ function DispatcherApp() {
             <PartHandoversView
               partHandovers={partHandovers}
               user={effectiveUser}
+              myEmployee={myEmployee}
+              employees={employees}
+              onAssign={(p, id) => savePartHandoverOffice({ ...p, assigneeId: id, assigneeName: employees.find((e) => e.id === id)?.name || null }, { isNew: false })}
               focusId={partHandoverFocusId}
               onNew={() => setPartHandoverUi({ kind: "edit" })}
               onHandover={(p) => setPartHandoverUi({ kind: "sign", rec: p })}
@@ -9997,6 +10007,7 @@ function DispatcherApp() {
             rec={partHandoverUi.rec ? partHandovers.find((x) => x.id === partHandoverUi.rec.id) || partHandoverUi.rec : null}
             customers={customers}
             machines={machines}
+            employees={employees}
             onClose={() => setPartHandoverUi(null)}
             onSave={savePartHandoverOffice}
           />
@@ -27407,8 +27418,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
       <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}</div>
     </div>
   );
-  const waitingParts = phCanWrite(user) ? (partHandovers || []).filter((p) => p.status === "waiting" && (p.date || today) <= tomorrow)
-    .sort((a, b) => (b.depo === myEmployee?.depo) - (a.depo === myEmployee?.depo) || (a.date || "").localeCompare(b.date || "")) : [];
+  const waitingParts = phMineWaiting(partHandovers, myEmployee, tomorrow).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const partCards = waitingParts.map((p) => (
     <TodayCard key={p.id} tag={`VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`} {...TODAY_TAG.part}
       title={`${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`}
@@ -27680,7 +27690,7 @@ function TodayList({ title, rows, empty }) {
 
 function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservations, portalRequests, handoverProtocols, notifications, isMyJob, mySubstitutedNames, driverById,
   damages, assignments, partHandovers, spareParts, ezMeasurements, protocolLogs, employees, depoCheckers, checkerSubstitutions, weeklyDuty, machineById, hasServiceProtocol,
-  onGo, onOpenJob, onOpenReservation, onCompleteJob, onAssignDamage, onOpenDamage, onCheckPartHandover, onConvertPortalProblem, onRejectPortalRequest, onReadNotification, onAskDaily, whoPanel, erpPozPanel }) {
+  onGo, onOpenJob, onOpenReservation, onCompleteJob, onAssignDamage, onOpenDamage, onCheckPartHandover, onPartHandover, onConvertPortalProblem, onRejectPortalRequest, onReadNotification, onAskDaily, whoPanel, erpPozPanel }) {
   const role = user?.role;
   const admin = isAdminUser(user);
   const poz = admin || POZ_OFFICE_ROLES.includes(role);
@@ -27695,6 +27705,12 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
   const tiles = [];
   const rows = [];
   let side = null;
+
+  // Výdaj dielov pridelený mne na odovzdanie (dispečer, obchodník… — rovnako ako technik/šofér na ich „Dnes“).
+  phMineWaiting(partHandovers, myEmployee, tomorrow).forEach((p) => rows.push({ key: "ph-" + p.id, tag: "VÝDAJ DIELOV", tone: "warn",
+    title: `${p.customer} — ${plural((p.items || []).length, "položka", "položky", "položiek")}`,
+    sub: `${p.date ? fmtDate(p.date) + " · " : ""}${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber · depo ${p.depo || "—"}`}`,
+    actions: [{ label: "Odovzdať", onClick: () => onPartHandover(p) }] }));
 
   // ───────── Požičovňa (dispečer len svoje zákazky + zastupované) ─────────
   if (poz) {
@@ -27890,10 +27906,21 @@ function TodayOffice(props) {
 --------------------------------------------------------- */
 const PH_STATUS = { waiting: "Čaká na odovzdanie", check: "Čaká na kontrolu", billing: "Na fakturáciu", done: "Spracované" };
 const PH_STATUS_COLOR = { waiting: "#e08a00", check: "#c62828", billing: "#1565c0", done: "#2e7d32" };
-function phCanManage(u) { return isAdminUser(u) || ["dispecer_servisu", "veduci_servisu"].includes(u?.role); }
-function phCanBill(u) { return phCanManage(u) || u?.role === "fakturant_servis"; }
-// Fakturant servisu výdaje len fakturuje (DB step77 mu iné zápisy odmietne).
-function phCanWrite(u) { return !!u && !["externy_sofer", "nezaradeny", "fakturant_servis"].includes(u.role); }
+// Kancelária servisu (dispečer = vedúci = fakturant servisu, rozhodnutie 7. 10.) — zadáva, prideľuje, kontroluje, fakturuje.
+function phCanManage(u) { return isAdminUser(u) || SRV_OFFICE_ROLES.includes(u?.role); }
+const phCanBill = phCanManage;
+function phCanWrite(u) { return !!u && !["externy_sofer", "nezaradeny"].includes(u.role); }
+// Komu sa dá výdaj prideliť na odovzdanie — interný zamestnanec s účtom (len ten ho uvidí na „Dnes“).
+const phAssignable = (employees) => (employees || []).filter((e) => !e.archived && e.linkedUserId && e.role !== "externy_sofer").sort((a, b) => a.name.localeCompare(b.name, "sk"));
+const phMineWaiting = (list, myEmployee, tomorrow) => (myEmployee ? (list || []).filter((p) => p.status === "waiting" && p.assigneeId === myEmployee.id && (!tomorrow || (p.date || tomorrow) <= tomorrow)) : []);
+function PhAssigneeSelect({ value, employees, onChange }) {
+  return (
+    <select value={value || ""} onChange={(e) => onChange(e.target.value || null)} style={{ width: "100%" }}>
+      <option value="">— nepridelené (na „Dnes“ ho nikto neuvidí) —</option>
+      {phAssignable(employees).map((e) => <option key={e.id} value={e.id}>{e.name} · {roleLabel(e.role)}{e.depo ? ` · ${e.depo}` : ""}</option>)}
+    </select>
+  );
+}
 const phQty = (q) => Number(String(q ?? "").replace(",", "."));
 const phPrice = (p) => (p === "" || p == null ? null : Number(String(p).replace(",", ".")));
 const phMoney = (n) => `${n.toFixed(2).replace(".", ",")} €`;
@@ -28146,14 +28173,12 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
 
 // Rýchla akcia „Výdaj dielov“ — výdaje čakajúce na odovzdanie + nový výdaj priamo v teréne.
 function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover, onNew }) {
-  const myDepo = myEmployee?.depo;
-  const waiting = (partHandovers || []).filter((p) => p.status === "waiting")
-    .sort((a, b) => (b.depo === myDepo) - (a.depo === myDepo) || (a.date || "").localeCompare(b.date || ""));
+  const waiting = phMineWaiting(partHandovers, myEmployee).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   return (
     <Modal eyebrow="Výdaj dielov" title="Odovzdanie dielov zákazníkovi" onClose={onClose}>
       <button className="btn btn-accent" style={{ marginBottom: 14 }} onClick={onNew}>+ Vypísať nový výdaj</button>
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Čakajú na odovzdanie ({waiting.length})</div>
-      {waiting.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadny výdaj nečaká na odovzdanie.</div>}
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Pridelené mne na odovzdanie ({waiting.length})</div>
+      {waiting.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nemáte pridelený žiadny výdaj.</div>}
       {waiting.map((p) => (
         <div key={p.id} className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 13, minWidth: 0 }}>
@@ -28168,7 +28193,7 @@ function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover
 }
 
 // Zadanie výdaja vopred / kontrola a oprava dispečerom servisu.
-function PartHandoverEditModal({ rec, customers, machines, onClose, onSave }) {
+function PartHandoverEditModal({ rec, customers, machines, employees, onClose, onSave }) {
   const isNew = !rec;
   const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: "", date: todayISO(), items: [{ name: "", pn: "", qty: "", price: "" }] });
   const valid = !!(draft.customer || "").trim() && phItemsValid(draft.items) && (draft.items || []).every((it) => it.price === "" || it.price == null || phPrice(it.price) >= 0);
@@ -28182,7 +28207,10 @@ function PartHandoverEditModal({ rec, customers, machines, onClose, onSave }) {
     <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide>
       {signed && <div style={{ fontSize: 12, background: "var(--warning-bg, #fff3cd)", padding: "8px 12px", borderRadius: 6, marginBottom: 12 }}>Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
       {!signed && (
-        <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
+          <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+          <Field label="Odovzdá"><PhAssigneeSelect value={draft.assigneeId} employees={employees} onChange={(id) => setDraft({ ...draft, assigneeId: id, assigneeName: (employees || []).find((e) => e.id === id)?.name || null })} /></Field>
+        </div>
       )}
       <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices />
       <Field label="Poznámka (na dodací list)"><textarea value={draft.note || ""} onChange={(e) => setDraft({ ...draft, note: e.target.value })} rows={2} style={{ width: "100%" }} /></Field>
@@ -28195,10 +28223,11 @@ function PartHandoverEditModal({ rec, customers, machines, onClose, onSave }) {
 }
 
 // Servis → Náhradné diely → Výdaj dielov: zoznam podľa stavu, kontrola a fakturácia.
-function PartHandoversView({ partHandovers, user, onNew, onHandover, onEdit, onPrint, onSendMail, onBill, onDelete, focusId }) {
+function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssign, onNew, onHandover, onEdit, onPrint, onSendMail, onBill, onDelete, focusId }) {
   const [tab, setTab] = useState(() => (phCanManage(user) ? "check" : phCanBill(user) ? "billing" : "waiting"));
   const counts = Object.fromEntries(Object.keys(PH_STATUS).map((s) => [s, (partHandovers || []).filter((p) => p.status === s).length]));
   const [billDraft, setBillDraft] = useState({});
+  const [assigning, setAssigning] = useState(null); // výdaj, ktorému kancelária prideľuje odovzdávajúceho
   useEffect(() => {
     const f = focusId && (partHandovers || []).find((p) => p.id === focusId);
     if (f) setTab(f.status);
@@ -28230,6 +28259,7 @@ function PartHandoversView({ partHandovers, user, onNew, onHandover, onEdit, onP
               </div>
               <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
                 {p.handedAt ? `odovzdal ${p.handedBy || "—"} ${new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : `${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : `depo ${p.depo || "—"}`}`}
+                {p.status === "waiting" ? (p.assigneeId ? ` · odovzdá ${p.assigneeName || "—"}` : " · nepridelené") : ""}
                 {p.createdBy ? ` · vypracoval ${p.createdBy}` : ""}{p.correctedAt ? " · opravené" : ""}{p.sentAt ? " · poslané zákazníkovi" : ""}
               </div>
               <div style={{ fontSize: 13, marginTop: 4 }}>{phItemsSummary(p.items)}</div>
@@ -28237,7 +28267,8 @@ function PartHandoversView({ partHandovers, user, onNew, onHandover, onEdit, onP
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-start" }}>
               {p.status !== "waiting" && <button className="btn btn-ghost" onClick={() => onPrint(p)}>Dodací list</button>}
-              {p.status === "waiting" && phCanWrite(user) && <button className="btn btn-accent" onClick={() => onHandover(p)}>Odovzdať</button>}
+              {p.status === "waiting" && phCanManage(user) && <button className={p.assigneeId ? "btn btn-ghost" : "btn btn-accent"} onClick={() => setAssigning(p)}>{p.assigneeId ? "Zmeniť odovzdávajúceho" : "+ Prideliť odovzdávajúceho"}</button>}
+              {p.status === "waiting" && (phCanManage(user) || (myEmployee && p.assigneeId === myEmployee.id)) && <button className="btn btn-ghost" onClick={() => onHandover(p)}>Odovzdať</button>}
               {phCanManage(user) && (p.status === "waiting" || p.status === "check" || p.status === "billing") && (
                 <button className={p.status === "check" ? "btn btn-accent" : "btn btn-ghost"} onClick={() => onEdit(p)}>{p.status === "check" ? "Skontrolovať" : "Upraviť"}</button>
               )}
@@ -28262,6 +28293,15 @@ function PartHandoversView({ partHandovers, user, onNew, onHandover, onEdit, onP
           )}
         </div>
       ))}
+      {assigning && (
+        <Modal eyebrow="Výdaj dielov" title="Prideliť odovzdávajúceho" onClose={() => setAssigning(null)}>
+          <div style={{ fontSize: 13, marginBottom: 10 }}>{assigning.customer} · {phItemsSummary(assigning.items)}</div>
+          <Field label="Odovzdá (len on ho uvidí na „Dnes“ a dostane upozornenie)">
+            <PhAssigneeSelect value={assigning.assigneeId} employees={employees} onChange={(id) => setAssigning({ ...assigning, assigneeId: id })} />
+          </Field>
+          <button className="btn btn-accent" onClick={() => { if (onAssign(assigning, assigning.assigneeId || null) !== false) setAssigning(null); }}>Uložiť</button>
+        </Modal>
+      )}
     </div>
   );
 }
