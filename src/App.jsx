@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.767";
+const APP_VERSION = "1.0.768";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -13522,7 +13522,6 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
             </button>
           )}
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
-          {can(user, "job_add") && <button className="btn btn-accent" onClick={onAddJob}>+ Nová zákazka</button>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
@@ -22907,7 +22906,6 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
               Import CSV
             </button>
           )}
-          {can(user, "external_add") && <button className="btn btn-accent" onClick={onAdd}>+ Nahlásiť externú servisnú zákazku</button>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
