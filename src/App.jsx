@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.764";
+const APP_VERSION = "1.0.766";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -19604,16 +19604,19 @@ function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, o
 // Porucha v kalendári (rozhodnutie 7. 10.): každé nahlásené poškodenie stroja od dňa nahlásenia do dňa opravy
 // (dátum z protokolu/uzavretia), otvorené bez konca. Vracia { d, from, to } — to = null = stále otvorené.
 function machineBreakdowns(damages, machineId) {
+  // Aj „Príprava do prenájmu“ (prepCheck pri novom stroji — blokuje zákazku). Bez poruchy opravenej v deň
+  // nahlásenia (stroj nebol mimo prevádzky ani deň).
   return (damages || []).filter((d) => d.type === "poskodenie" && d.machineId === machineId && d.dateReported)
-    .map((d) => ({ d, from: String(d.dateReported).slice(0, 10), to: d.resolved ? String(d.opravaDatum || d.resolvedAt || d.dateReported).slice(0, 10) : null }));
+    .map((d) => ({ d, from: String(d.dateReported).slice(0, 10), to: d.resolved ? String(d.opravaDatum || d.resolvedAt || d.dateReported).slice(0, 10) : null }))
+    .filter((b) => !b.to || b.to > b.from);
 }
 function breakdownTooltip(b, technicianNameById) {
   const d = b.d;
   const tech = (d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : []).map((id) => technicianNameById?.[id]).filter(Boolean).join(", ");
   return (
     <>
-      <div style={{ fontWeight: 600 }}>⚠ Porucha · {d.code || "—"}</div>
-      {d.popis && <div>{d.popis}</div>}
+      <div style={{ fontWeight: 600 }}>⚠ {d.prepCheck ? "Príprava do prenájmu" : "Porucha"} · {d.code || "—"}</div>
+      {d.popis && !d.prepCheck && <div>{d.popis}</div>}
       <div>Nahlásené {fmtDate(b.from)}{d.reportedBy ? ` · ${d.reportedBy}` : ""}</div>
       {b.to ? <div>Opravené {fmtDate(b.to)}</div> : tech ? <div>Oprava: {tech}{d.assignedDate ? ` · ${fmtDate(d.assignedDate)}` : ""}</div> : <div>Oprava zatiaľ nepridelená</div>}
     </>
@@ -20161,7 +20164,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                     <div style={{ position: "absolute", inset: 0, background: "#d0021b", borderRadius: 4, boxSizing: "border-box", clipPath: clip, pointerEvents: clip ? "auto" : undefined }} />
                     {showLabel && (
                       <div className="gantt-cell" style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: "fit-content", fontSize: 10, color: "#fff", fontWeight: 700, pointerEvents: "none", paddingLeft: pc.startTurn ? `${cellPct}%` : undefined }}>
-                        <div style={{ padding: compactMode ? "1px 6px" : "3px 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>⚠ Porucha{n > 1 ? fix : ""}</div>
+                        <div style={{ padding: compactMode ? "1px 6px" : "3px 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>⚠ {d.prepCheck ? "Príprava do prenájmu" : "Porucha"}{n > 1 ? fix : ""}</div>
                       </div>
                     )}
                     <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible", pointerEvents: "none" }}>
@@ -21158,7 +21161,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       )}
     </div>
     {breakdownChoice && (
-      <Modal title="⚠ Porucha" onClose={() => setBreakdownChoice(null)}>
+      <Modal title={breakdownChoice.damage.prepCheck ? "⚠ Príprava do prenájmu" : "⚠ Porucha"} onClose={() => setBreakdownChoice(null)}>
         <div style={{ fontSize: 13, marginBottom: 6 }}>
           <b>{machines.find((m) => m.id === breakdownChoice.machineId)?.code}</b> · {fmtDate(breakdownChoice.date)}
         </div>
@@ -21167,7 +21170,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button className="btn btn-accent" style={{ flex: 1 }} onClick={() => { const c = breakdownChoice; setBreakdownChoice(null); onOpenDamage?.(c.damage); }}>
-            Detail poruchy
+            {breakdownChoice.damage.prepCheck ? "Detail" : "Detail poruchy"}
           </button>
           {onAddJob && (
             <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { const c = breakdownChoice; setBreakdownChoice(null); onAddJob(c.machineId, c.date); }}>
