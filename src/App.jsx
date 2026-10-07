@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.769";
+const APP_VERSION = "1.0.770";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -1003,6 +1003,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
       <div class="field"><span class="l">Checker / Technik</span><span class="v">${esc(technicianName) || "—"}</span></div>
       <div class="field"><span class="l">Dátum</span><span class="v">${esc((assignment.checkerDate || assignment.date || "").slice(0, 10))}</span></div>
       <div class="field"><span class="l">Odpracované hodiny</span><span class="v">${esc(assignment.workHours)} h</span></div>
+      ${assignment.kind === "kontrolaStroja" && (assignment.mth != null || assignment.noMth) ? `<div class="field"><span class="l">Počet MTH</span><span class="v">${assignment.noMth ? "bez počítadla" : esc(fmtMth(assignment.mth))}</span></div>` : ""}
       ${assignment.kind === "kontrolaStroja" ? `<div class="field"><span class="l">Druh kontroly</span><span class="v">${assignment.phase === "vratenie" ? "Po vrátení stroja (po prenájme)" : "Pred vývozom stroja (pred prenájmom)"}</span></div>` : ""}
     </div>
   </div>
@@ -9761,6 +9762,11 @@ function DispatcherApp() {
                 depoFilter={planDepoFilter}
                 setDepoFilter={setPlanDepoFilter}
                 onOpenAssignment={(a, machine, damage) => setAssignmentDetail({ assignment: a, machine, damage })}
+                onInspection={(a) => setCheckerInspectionTarget(a)}
+                onProtocol={(a) => openProtocol(protocolParamsForAssignment(a))}
+                myEmployee={myEmployee}
+                user={effectiveUser}
+                hasServiceProtocol={hasServiceProtocol}
               />
             )}
           </div>
@@ -11318,6 +11324,7 @@ function DispatcherApp() {
             handoverProtocol={handoverForJob}
             myEmployee={myEmployee}
             user={effectiveUser}
+            lastMth={lastMachineMth(assignments, checkerInspectionTarget.machineId || machine?.id, checkerInspectionTarget.id)}
             onClose={() => { setCheckerInspectionTarget(null); goBackCard(); }}
             onSave={(patch) => {
               // Dispečer medzitým zákazku zmazal / kontrolu zrušil — nič neukladať potichu.
@@ -17161,7 +17168,14 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // zoznam priamo na assignments záznam (NIE do handoverProtocols — tá tabuľka
 // v appke inde znamená "prevzatie/vrátenie už prebehlo", a kontrola prebieha
 // skôr než čokoľvek z toho).
-function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, onClose, onSave, onReportServiceStatus, onOpenHandover }) {
+// Posledný známy stav motohodín stroja z kontrol checkera (rozhodnutie 7. 10.: MTH zapisuje checker).
+function lastMachineMth(assignments, machineId, excludeId) {
+  const done = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.machineId === machineId && a.id !== excludeId && (a.mth != null || a.noMth));
+  const last = done.sort((a, b) => ((b.checkerDate || b.date || "") + (b.phase === "vratenie" ? "1" : "0")).localeCompare((a.checkerDate || a.date || "") + (a.phase === "vratenie" ? "1" : "0")))[0];
+  return last ? { value: last.noMth ? null : Number(last.mth), noMth: !!last.noMth, date: last.checkerDate || last.date, by: last.checkerBy || "" } : null;
+}
+const fmtMth = (n) => Number(n).toLocaleString("sk-SK", { maximumFractionDigits: 1 });
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, lastMth, onClose, onSave, onReportServiceStatus, onOpenHandover }) {
   const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
   const [checklist, setChecklist] = useState(() =>
     assignment.checklist
@@ -17177,6 +17191,10 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   // Voliteľné diely, keď checker popri kontrole spravil aj malú opravu —
   // taký checklist ide do ERP osobitne (nie hromadne), viď ErpChecklistsView.
   const [usedParts, setUsedParts] = useState(assignment.usedParts || []);
+  // Počet MTH (stav počítadla) — povinný; „nemá počítadlo“ sa predvyplní podľa poslednej kontroly stroja.
+  const [mth, setMth] = useState(assignment.mth != null ? String(assignment.mth) : "");
+  const [noMth, setNoMth] = useState(assignment.mth != null ? false : !!(assignment.noMth ?? lastMth?.noMth));
+  const [mthConfirmed, setMthConfirmed] = useState(false);
   const [confirmReportDamage, setConfirmReportDamage] = useState(false);
   // Upravovať môže len ten checker, ktorému bola kontrola pridelená, alebo admin —
   // ktokoľvek iný (dispečer, iný technik prezerajúci si plán) ju vidí len na náhľad.
@@ -17239,10 +17257,15 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const hoursNum = Number(String(workHours).replace(",", "."));
   const hoursValid = String(workHours).trim() !== "" && hoursNum > 0;
   const partsValid = usedParts.every((p) => p.name.trim());
+  const mthNum = Number(String(mth).replace(/\s/g, "").replace(",", "."));
+  const mthFilled = String(mth).trim() !== "" && Number.isFinite(mthNum) && mthNum >= 0;
+  // Nižší stav než posledný, alebo skok o viac ako 500 MTH (preklep o nulu) — treba potvrdiť.
+  const mthSuspicious = !noMth && mthFilled && lastMth?.value != null && (mthNum < lastMth.value || mthNum - lastMth.value > 500);
+  const mthValid = noMth || (mthFilled && (!mthSuspicious || mthConfirmed));
   // Hotová kontrola: pri úprave nesmie klesnúť pod 4 fotky (staršia s menej fotkami nie pod pôvodný počet).
   const photosMin = assignment.resolved && !assignment.skipped ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
   const photosNeeded = phase === "vyvoz" ? Math.max(0, photosMin - photos.length) : 0;
-  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && photosNeeded === 0;
+  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && mthValid && photosNeeded === 0;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
   const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
 
@@ -17272,6 +17295,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       checkerDate: assignment.checkerDate || todayISO(),
       workHours: hoursNum,
       usedParts,
+      mth: noMth ? null : mthNum,
+      noMth,
     };
   }
   function handleSave() {
@@ -17393,6 +17418,31 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       )}
       {phase === "vyvoz" && !selfTransport && (handoverProtocol?.handoverPhotos || []).length > 0 && (
         <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
+      )}
+
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
+        Motohodiny
+      </div>
+      {showForm ? (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <Field label="Počet MTH (stav počítadla) *">
+              <input type="text" inputMode="decimal" value={noMth ? "" : mth} disabled={noMth} onChange={(e) => { setMth(e.target.value); setMthConfirmed(false); }} style={{ width: 140 }} />
+            </Field>
+            <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center", marginBottom: 12 }}>
+              <input type="checkbox" checked={noMth} onChange={(e) => { setNoMth(e.target.checked); setMthConfirmed(false); }} /> Stroj nemá počítadlo MTH
+            </label>
+          </div>
+          {lastMth && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Posledný stav: {lastMth.noMth ? "bez počítadla" : `${fmtMth(lastMth.value)} MTH`} ({lastMth.date ? fmtDate(String(lastMth.date).slice(0, 10)) : "—"}{lastMth.by ? `, ${lastMth.by}` : ""})</div>}
+          {mthSuspicious && (
+            <label style={{ fontSize: 12, color: "var(--danger)", display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+              <input type="checkbox" checked={mthConfirmed} onChange={(e) => setMthConfirmed(e.target.checked)} />
+              {mthNum < lastMth.value ? `Menej ako posledný stav (${fmtMth(lastMth.value)} MTH)` : `O ${fmtMth(mthNum - lastMth.value)} MTH viac ako posledný stav`} — áno, {fmtMth(mthNum)} MTH je správne
+            </label>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, marginBottom: 10 }}>{assignment.noMth ? "Stroj nemá počítadlo MTH" : assignment.mth != null ? `${fmtMth(assignment.mth)} MTH` : "— MTH nevyplnené —"}</div>
       )}
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
@@ -21375,6 +21425,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <CardField label="Model" value={m.type} />
         <CardField label="Sériové číslo" value={m.code} />
         <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
+        {(() => { const lm = lastMachineMth(assignments, m.id); return lm ? <CardField label="Motohodiny (posledná kontrola)" value={`${lm.noMth ? "bez počítadla" : `${fmtMth(lm.value)} MTH`} · ${lm.date ? fmtDate(String(lm.date).slice(0, 10)) : "—"}${lm.by ? ` · ${lm.by}` : ""}`} /> : null; })()}
         <CardField
           label="Platnosť revízie ZZ"
           value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : "chýba dátum — po termíne")}
@@ -23910,7 +23961,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
                 <td data-label="Model" style={{ fontWeight: 600 }}>{m?.type || "—"}</td>
                 <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m?.code || "—"}</td>
                 <td data-label="Technik">{t?.name || "—"}</td>
-                <td data-label="Hodiny">{a.workHours} h</td>
+                <td data-label="Hodiny">{a.workHours} h{a.mth != null ? <span style={{ color: "var(--text-dim)" }}> · {fmtMth(a.mth)} MTH</span> : ""}</td>
                 {withParts && (
                   <td data-label="Diely">
                     {(a.usedParts || []).map((p) => `${p.name}${p.partNumber ? " (" + p.partNumber + ")" : ""} × ${p.qty}`).join(", ") || "—"}
@@ -25122,7 +25173,8 @@ function ServisOverview({ damages, technicians, assignments, weeklyDuty, machine
   );
 }
 
-function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, vehicleByEmployeeId, onOpenAssignment, technicianFilter, depoFilter, setDepoFilter }) {
+function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, vehicleByEmployeeId, onOpenAssignment, onInspection, onProtocol, myEmployee, user, hasServiceProtocol, technicianFilter, depoFilter, setDepoFilter }) {
+  const [openChecks, setOpenChecks] = useState({}); // „techId|deň“ → rozbalené kontroly
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const damageById = useMemo(() => Object.fromEntries((damages || []).map((d) => [d.id, d])), [damages]);
   const depoOptions = DEPO_OPTIONS;
@@ -25162,12 +25214,20 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
   function jobLine(a) {
     const machine = a.machineId ? machineById[a.machineId] : null;
     const linkedDamage = a.damageId ? damageById[a.damageId] : null;
-    const label = a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : a.kind ? QUICK_KIND_LABELS[a.kind] || a.kind : (machine?.code || a.stroj || "— stroj neurčený —");
-    const clickable = !a.kind;
+    const check = a.kind === "kontrolaStroja";
+    const label = check ? `Kontrola · ${machine?.code || "—"} · ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}${a.resolved ? " ✓" : ""}`
+      : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : a.kind ? QUICK_KIND_LABELS[a.kind] || a.kind : (machine?.code || a.stroj || "— stroj neurčený —");
+    const clickable = !a.kind || check;
+    // Klik: kontrola → checklist; moja úloha bez protokolu → rovno protokol; inak detail.
+    const open = () => {
+      if (check) return onInspection(a);
+      if (myEmployee && a.technicianId === myEmployee.id && can(user, "protocol_write") && !hasServiceProtocol(a)) return onProtocol(a);
+      onOpenAssignment(a, machine, linkedDamage);
+    };
     return (
       <div
         key={a.id}
-        onClick={clickable ? () => onOpenAssignment(a, machine, linkedDamage) : undefined}
+        onClick={clickable ? open : undefined}
         style={{
           fontSize: 12,
           marginBottom: 4,
@@ -25242,9 +25302,21 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
                     </div>
                     {dayAssignments.length === 0 ? (
                       <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Bez zákazky</div>
-                    ) : (
-                      dayAssignments.map(jobLine)
-                    )}
+                    ) : (() => {
+                      // 3+ kontrol v deň → jeden riadok „Kontroly hotové/všetky“, klik rozbalí zoznam.
+                      const checks = dayAssignments.filter((a) => a.kind === "kontrolaStroja");
+                      if (checks.length < 3) return dayAssignments.map(jobLine);
+                      const key = t.id + "|" + iso;
+                      return (
+                        <>
+                          {dayAssignments.filter((a) => a.kind !== "kontrolaStroja").map(jobLine)}
+                          <div onClick={() => setOpenChecks((o) => ({ ...o, [key]: !o[key] }))} style={{ fontSize: 12, marginBottom: 4, paddingLeft: 8, borderLeft: "2px solid var(--warn)", cursor: "pointer", fontWeight: 600, color: "var(--accent)" }}>
+                            🔍 Kontroly {checks.filter((a) => a.resolved).length}/{checks.length} {openChecks[key] ? "▴" : "▾"}
+                          </div>
+                          {openChecks[key] && checks.map(jobLine)}
+                        </>
+                      );
+                    })()}
                     {onDuty && (
                       <div style={{ fontSize: 11, color: "#6b7280", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
                         <span>☎</span> Služba na telefóne
@@ -25313,6 +25385,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
 function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
+  const [checksDay, setChecksDay] = useState(null); // { technician, date, ids } — zoznam zbalených kontrol v bunke
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
@@ -25721,7 +25794,24 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           }}
                         />
                       ) : (
-                        dayAssignments.map((a) => {
+                        // 3+ kontrol stroja v jednej bunke → jeden štítok „🔍 počet“ (klik = zoznam), nech sa riadok neroztiahne.
+                        (() => {
+                          const checks = dayAssignments.filter((a) => a.kind === "kontrolaStroja");
+                          if (quickMode || checks.length < 3) return dayAssignments;
+                          return [...dayAssignments.filter((a) => a.kind !== "kontrolaStroja"), { id: "checks-" + t.id + iso, __checks: checks }];
+                        })().map((a) => {
+                          if (a.__checks) {
+                            const done = a.__checks.filter((x) => x.resolved || x.skipped).length;
+                            const late = a.__checks.some((x) => !x.resolved && !x.skipped && x.date < today);
+                            return (
+                              <div key={a.id} className="gantt-cell" onClick={() => setChecksDay({ technician: t, date: iso, ids: a.__checks.map((x) => x.id) })}
+                                title={`Kontroly stroja (${done}/${a.__checks.length} hotové): ${a.__checks.map((x) => machineById[x.machineId]?.code || "—").join(", ")}`}
+                                style={{ height: 22, borderRadius: 4, background: "#8b5cf6", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap", cursor: "pointer", padding: "0 4px",
+                                  opacity: done === a.__checks.length ? 0.5 : 1, outline: late ? "2px solid var(--danger)" : undefined }}>
+                                🔍 {a.__checks.length} · {done}✓
+                              </div>
+                            );
+                          }
                           const machine = a.machineId ? machineById[a.machineId] : null;
                           const linkedDamage = a.damageId ? damageById[a.damageId] : null;
                           const quickKind = a.kind ? QUICK_KINDS.find((k) => k.id === a.kind) : null;
@@ -25813,6 +25903,24 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
           </div>
         </div>
       </div>
+      {checksDay && (
+        <Modal eyebrow="Kontroly stroja" title={`${checksDay.technician.name} — ${fmtDate(checksDay.date)}`} onClose={() => setChecksDay(null)}>
+          {assignments.filter((x) => checksDay.ids.includes(x.id)).sort((x, y) => (!!x.resolved - !!y.resolved) || (machineById[x.machineId]?.code || "").localeCompare(machineById[y.machineId]?.code || "")).map((x) => {
+            const mm = machineById[x.machineId];
+            return (
+              <div key={x.id} className="panel" style={{ padding: 10, marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{x.self ? "🏢 " : ""}{mm?.code || "—"} <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>{mm?.type || ""}</span></div>
+                  <div style={{ fontSize: 12, color: x.resolved || x.skipped ? "var(--success, #2e7d32)" : x.date < today ? "var(--danger)" : "var(--text-dim)" }}>
+                    {x.phase === "vratenie" ? "Po vrátení" : "Pred vývozom"} · {x.skipped ? "⊘ vynechaná" : x.resolved ? `✓ hotová${x.checkerBy ? ` (${x.checkerBy})` : ""}` : x.date < today ? "po termíne" : "čaká"}
+                  </div>
+                </div>
+                <button className="btn btn-ghost" onClick={() => { setChecksDay(null); onOpenCheckerInspection(x); }}>Otvoriť checklist</button>
+              </div>
+            );
+          })}
+        </Modal>
+      )}
       {pendingEventCell && (
         <QuickEventNoteModal
           onClose={() => setPendingEventCell(null)}
