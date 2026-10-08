@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.777";
+const APP_VERSION = "1.0.778";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -3901,7 +3901,8 @@ function DispatcherApp() {
   const pushNotificationRef = useRef(null);
   partHandoversRef.current = partHandovers;
   ezMeasurementsRef.current = ezMeasurements;
-  const [dispatcherSubstitutions, setDispatcherSubstitutions] = useState([]); // [{id, dispatcherId, substituteId, startDate, endDate}] — zástupy dispečerov
+  const [dispatcherSubstitutions, setDispatcherSubstitutions] = useState([]);
+  const [showDriverReport, setShowDriverReport] = useState(false); // výkaz prepráv externého šoféra // [{id, dispatcherId, substituteId, startDate, endDate}] — zástupy dispečerov
   const [ezDayTarget, setEzDayTarget] = useState(null); // { technicianId, date } — kliknutie na "EZ" v kalendári servisu
   // Mäkké (odporúčacie) zámky "kto to práve edituje" — { id: "<table>:<recordId>",
   // table, recordId, userName, lockedAt }. Nezabraňuje uloženiu (to rieši _rev/baseRev
@@ -4872,6 +4873,8 @@ function DispatcherApp() {
   const isLeadDispatcher = !!(myEmployee?.alsoVeduciDispecer && DISPATCHER_ROLES.includes(myEmployee.role) && myEmployee.role === effectiveUser?.role);
   const canManageDispatcherSubs = isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne" || isAdminUser(effectiveUser);
   // Zrušiť ukončenie zákazky: admin, vedúci dispečer, vedúci požičovne (DB to stráži rovnako — step73).
+  // Výkaz prepráv externých šoférov: admin, vedúci požičovne, vedúci dispečer (šofér len svoj — na Dnes).
+  const canDriverReport = isAdminUser(effectiveUser) || effectiveUser?.role === "veduci_pozicovne" || isLeadDispatcher;
   const canUncompleteJobs = isAdminUser(effectiveUser) || isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne";
   const dsp = useMemo(() => dispatchResolver(dispatchers, dispatcherSubstitutions), [dispatchers, dispatcherSubstitutions]);
   // Kto za dispečera zákazky koná: on sám, počas dovolenky zástup za depo zákazky (inak za jeho prvé depo); null = nikto.
@@ -5649,9 +5652,10 @@ function DispatcherApp() {
   // Ručné pridanie zákazníka priamo zo záložky Zákazníci (nie automatické
   // doplnenie zo zákazky) — plnohodnotný záznam, rovno aj s poľom na kontakty.
   function addCustomerManual(data) {
+    const id = uid();
     persistCustomers((customers) => [...customers,
       {
-        id: uid(),
+        id,
         firma: (data.firma || "").trim(),
         cisloOdberatela: data.cisloOdberatela || "",
         ico: data.ico || "",
@@ -5664,6 +5668,7 @@ function DispatcherApp() {
       },
     ]);
     showToast("Zákazník bol pridaný.");
+    return id;
   }
   // Úprava základných údajov zákazníka — volajúci (UI) si pred týmto sám
   // vyžiada dvojkrokové potvrdenie, táto funkcia už len uloží.
@@ -9437,6 +9442,7 @@ function DispatcherApp() {
             depoCheckers={depoCheckers}
             checkerSubstitutions={checkerSubstitutions}
             onGo={navigateFromNotification}
+            onDriverReport={effectiveUser?.role === "externy_sofer" ? () => setShowDriverReport(true) : null}
             today={today}
             tomorrow={tomorrow}
             assignments={assignments}
@@ -9603,6 +9609,11 @@ function DispatcherApp() {
           />
         )}
 
+        {module === "poziciovna" && view === "prepravy" && canDriverReport && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button className="btn btn-ghost" onClick={() => setShowDriverReport(true)}>Výkaz externých šoférov</button>
+          </div>
+        )}
         {module === "poziciovna" && view === "prepravy" && (
           <TransportsOverview
             jobs={jobs}
@@ -10240,12 +10251,22 @@ function DispatcherApp() {
       </div>
       </div>
 
+      {showDriverReport && (
+        <DriverReportModal
+          drivers={employees.filter((e) => e.role === "externy_sofer").sort((a, b) => !!a.archived - !!b.archived || a.name.localeCompare(b.name))}
+          selfOnly={effectiveUser?.role === "externy_sofer"}
+          issuedBy={effectiveUser?.role === "externy_sofer" ? "" : currentUser?.name || ""}
+          onClose={() => setShowDriverReport(false)}
+        />
+      )}
       {showAddEmployee && (
         <AddEmployeeModal
           existing={showAddEmployee.existing}
           assignableRoles={assignableRolesFor(effectiveUser)}
           profiles={profiles}
           employees={employees}
+          customers={customers}
+          onAddCustomer={addCustomerManual}
           onClose={() => setShowAddEmployee(null)}
           onSave={(data, linkedUserId) => {
             const existing = showAddEmployee.existing;
@@ -14712,7 +14733,36 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
   );
 }
 
-function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees = [], onClose, onSave }) {
+// Firma externého šoféra — výber zo Zákazníkov alebo nová firma (uloží sa aj do Zákazníkov).
+function CarrierPickModal({ customers, onPick, onClose }) {
+  const [q, setQ] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newIco, setNewIco] = useState("");
+  const low = (x) => (x || "").trim().toLowerCase();
+  const hits = q.trim() ? customers.filter((c) => low(c.firma).includes(low(q)) || (c.ico || "").includes(q.trim())).slice(0, 8) : [];
+  return (
+    <Modal title="Firma externého šoféra" onClose={onClose} elevated>
+      <Field label="Hľadať v Zákazníkoch (názov alebo IČO)"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} /></Field>
+      {hits.map((c) => (
+        <button key={c.id} className="btn btn-ghost" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4 }} onClick={() => onPick({ id: c.id, name: c.firma })}>
+          {c.firma}{c.ico ? ` · IČO ${c.ico}` : ""}
+        </button>
+      ))}
+      {q.trim() && !hits.length && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Nenašla sa — pridajte ju nižšie.</div>}
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>Nová firma (uloží sa aj do Zákazníkov)</div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+        <Field label="Názov firmy"><input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="IČO"><input value={newIco} onChange={(e) => setNewIco(e.target.value)} style={{ width: "100%" }} /></Field>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn btn-ghost" onClick={() => onPick(null)}>Bez firmy</button>
+        <button className="btn btn-accent" disabled={!newName.trim()} onClick={() => onPick({ newName: newName.trim(), ico: newIco.trim() })}>Pridať firmu</button>
+      </div>
+    </Modal>
+  );
+}
+
+function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees = [], customers = [], onAddCustomer, onClose, onSave }) {
   // Prepojenie s prihlasovacím účtom priamo tu. Admin účty sa ponúkať nesmú —
   // prepojenie synchronizuje rolu a omylom by im prepísalo práva.
   const linkedElsewhere = new Set(employees.filter((e) => e.linkedUserId && e.id !== existing?.id).map((e) => e.linkedUserId));
@@ -14732,6 +14782,15 @@ function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees 
   const [alsoEzTechnik, setAlsoEzTechnik] = useState(existing?.alsoEzTechnik || false);
   const [alsoVeduciDispecer, setAlsoVeduciDispecer] = useState(existing?.alsoVeduciDispecer || false);
   const [color, setColor] = useState(existing?.color || "#2563EB");
+  const [carrier, setCarrier] = useState(existing?.carrierName ? { id: existing.carrierCustomerId || null, name: existing.carrierName } : null);
+  const [pickCarrier, setPickCarrier] = useState(false);
+  function pickedCarrier(c) {
+    setPickCarrier(false);
+    if (!c?.newName) return setCarrier(c);
+    // Nová firma: ak už v Zákazníkoch je (rovnaký názov), použije sa tá; inak sa založí.
+    const same = customers.find((x) => (x.firma || "").trim().toLowerCase() === c.newName.toLowerCase());
+    setCarrier(same ? { id: same.id, name: same.firma } : { id: onAddCustomer({ firma: c.newName, ico: c.ico }) || null, name: c.newName });
+  }
 
   const canSave = name.trim() && role && depo.trim();
   const isSalesperson = role === "obchodnik" || alsoObchodnik;
@@ -14740,10 +14799,19 @@ function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees 
     <Modal title={existing ? "Upraviť zamestnanca" : "Pridať zamestnanca"} onClose={onClose}>
       <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Rola *">
-        <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%" }}>
+        <select value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value === "externy_sofer" && !carrier) setPickCarrier(true); }} style={{ width: "100%" }}>
           {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
       </Field>
+      {role === "externy_sofer" && (
+        <Field label="Firma (dopravca)">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ flex: 1 }}>{carrier?.name || <span style={{ color: "var(--text-dim)" }}>— bez firmy —</span>}</span>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setPickCarrier(true)}>{carrier ? "Zmeniť" : "Vybrať firmu"}</button>
+          </div>
+        </Field>
+      )}
+      {pickCarrier && <CarrierPickModal customers={customers} onPick={pickedCarrier} onClose={() => setPickCarrier(false)} />}
       <Field label="Depo *">
         <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
@@ -14803,6 +14871,8 @@ function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees 
             alsoEzTechnik,
             alsoVeduciDispecer: DISPATCHER_ROLES.includes(role) ? alsoVeduciDispecer : false,
             color: isSalesperson ? color : (existing?.color || undefined),
+            carrierCustomerId: role === "externy_sofer" ? carrier?.id || null : null,
+            carrierName: role === "externy_sofer" ? carrier?.name || "" : "",
           }, linkedUserId || null)
         }
       >
@@ -27466,7 +27536,7 @@ const TODAY_TAG = {
 };
 
 function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
-  onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo }) {
+  onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo, onDriverReport }) {
   const role = user?.role;
   const isDriver = role === "sofer" || role === "externy_sofer";
   const myId = myEmployee?.id;
@@ -27477,6 +27547,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
         <h2 style={{ margin: 0, fontSize: 24 }}>Dnes</h2>
         <div style={{ flex: 1 }} />
         {isAdminUser(user) && onAskDaily && <button className="btn btn-ghost" onClick={onAskDaily}>💬 Čo vyriešiť dnes?</button>}
+        {onDriverReport && <button className="btn btn-ghost" onClick={onDriverReport}>📄 Výkaz mojich prepráv</button>}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}</div>
     </div>
@@ -27998,6 +28069,146 @@ function phItemsValid(items) {
 }
 function phItemsSummary(items) {
   return (items || []).map((it) => `${it.name || "—"} ${it.qty || ""} ks`).join(", ");
+}
+
+// Výkaz prepráv externého šoféra — podklad k jeho faktúre (vývozy, zvozy, prevozy za obdobie).
+// rep = výsledok RPC driver_transport_report ({driver, rows}).
+const DR_TYPES = ["Vývoz", "Zvoz", "Prevoz"];
+function driverReportFileBase(rep, from, to) {
+  const slug = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `vykaz-preprav_${slug(rep.driver?.name) || "sofer"}_${from}_${to}`;
+}
+function downloadDriverReportCsv(rep, from, to) {
+  const rows = (rep.rows || []).map((r, i) => ({
+    "#": i + 1, "Dátum": fmtDate(r.date), "Typ": r.type, "Číslo zmluvy": r.contract || "", "Zákazník": r.customer || "",
+    "Odkiaľ": r.from || "", "Kam": r.to || "", "Stroj": [r.machineType, r.machineCode].filter(Boolean).join(" · "),
+  }));
+  const head = `Výkaz vykonaných prepráv;${rep.driver?.carrierName || ""};${rep.driver?.name || ""};${fmtDate(from)} – ${fmtDate(to)}\n`;
+  const csv = head + Papa.unparse(rows, { delimiter: ";" }) + `\n\nSpolu prepráv;${rows.length}\n` + DR_TYPES.map((t) => `${t};${rows.filter((r) => r.Typ === t).length}`).join("\n");
+  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `${driverReportFileBase(rep, from, to)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function openPrintableDriverReport(rep, from, to, issuedBy) {
+  const esc = (s) => (s ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const d = rep.driver || {};
+  const rows = rep.rows || [];
+  const now = new Date().toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const body = rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(fmtDate(r.date))}</td><td>${esc(r.type)}</td><td>${esc(r.contract || "—")}</td><td>${esc(r.customer || (r.type === "Prevoz" ? "presun medzi depami" : "—"))}</td><td>${esc([r.machineType, r.machineCode].filter(Boolean).join(" · "))}</td><td>${esc(r.from || "—")} → ${esc(r.to || "—")}</td></tr>`).join("");
+  const sums = DR_TYPES.map((t) => `<tr><td>${t}y</td><td class="n">${rows.filter((r) => r.type === t).length}</td></tr>`).join("");
+  const docHtml = `<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Výkaz prepráv ${esc(d.name)} ${esc(fmtDate(from))}–${esc(fmtDate(to))}</title><style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
+  .toolbar { text-align: center; padding: 10px 0; position: sticky; top: 0; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .btn { padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; border: none; background: #E30613; color: #fff; }
+  .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); display: flex; flex-direction: column; }
+  .body-content { flex: 1; } .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; border-bottom: 2px solid #E30613; padding-bottom: 10px; } .logo { height: 34px; }
+  h1 { font-size: 18px; color: #E30613; margin: 4px 0 0; text-align: right; } .sub { font-size: 12px; color: #555; margin-top: 4px; text-align: right; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; } .box { border: 1px solid #ccc; border-radius: 4px; padding: 8px 10px; line-height: 1.5; }
+  .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #777; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; } th { text-align: left; font-size: 11px; color: #666; font-weight: normal; border-bottom: 1px solid #ccc; padding: 5px 4px; }
+  td { padding: 5px 4px; border-bottom: 1px solid #eee; vertical-align: top; } td.n { text-align: right; }
+  .sum { margin-left: auto; width: 240px; border: 1px solid #1a1a1a; border-radius: 4px; padding: 4px 8px; } .sum td { border: none; padding: 2px 0; } .sum .tot td { border-top: 1px solid #ccc; font-weight: bold; padding-top: 4px; }
+  .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; font-size: 11px; } .sigs div { border-top: 1px solid #1a1a1a; padding-top: 4px; }
+  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; } .footer .gen { color: #888; font-size: 10px; }
+  @media print { .toolbar { display: none; } body { background: #fff; } .page { box-shadow: none; margin: 0; } @page { size: A4; margin: 0; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button></div>
+<div class="page"><div class="body-content">
+<div class="head"><img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco"><div><h1>VÝKAZ VYKONANÝCH PREPRÁV</h1><div class="sub">Obdobie: <b>${esc(fmtDate(from))} – ${esc(fmtDate(to))}</b></div></div></div>
+<div class="parties">
+<div class="box"><div class="lbl">Objednávateľ</div><b>mateco Slovakia s.r.o.</b><br>Strážska cesta 7892, 960 01 Zvolen<br>IČO 36620114 · DIČ 2020083076</div>
+<div class="box"><div class="lbl">Dopravca (externý šofér)</div><b>${esc(d.carrierName || d.name)}</b>${d.carrierName ? `<br>${esc(d.name)}` : ""}${d.phone ? ` · ${esc(d.phone)}` : ""}${d.carrierIco ? `<br>IČO ${esc(d.carrierIco)}` : ""}</div>
+</div>
+<table><tr><th>#</th><th>Dátum</th><th>Typ</th><th>Číslo zmluvy</th><th>Zákazník</th><th>Stroj</th><th>Trasa</th></tr>${body || `<tr><td colspan="7" style="color:#999">Za toto obdobie žiadne vykonané prepravy.</td></tr>`}</table>
+<table class="sum">${sums}<tr class="tot"><td>Spolu prepráv</td><td class="n">${rows.length}</td></tr></table>
+<div class="sigs"><div>Vystavil (mateco)${issuedBy ? `: ${esc(issuedBy)}` : ""}</div><div>Odsúhlasil (dopravca)</div></div>
+</div>
+<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen · T +421 (0)45 5410763 · www.matecoslovakia.sk<div class="gen">Podklad k faktúre dopravcu · vygenerované v internej platforme ${esc(now)}</div></div>
+</div></body></html>`;
+  if (_printProtocolOpenListener) _printProtocolOpenListener(docHtml);
+  else console.error("Zobrazenie výkazu ešte nie je pripravené.");
+}
+// Okno výkazu: šofér (len externí; pre samotného šoféra pevne on) + obdobie → náhľad → Excel / PDF.
+function DriverReportModal({ drivers, selfOnly, issuedBy, onClose }) {
+  const today = todayISO();
+  const mon = (iso) => { const d = new Date(iso + "T00:00:00"); return addDaysISO(iso, -((d.getDay() + 6) % 7)); };
+  const monthStart = (iso) => iso.slice(0, 8) + "01";
+  const prevMonthEnd = addDaysISO(monthStart(today), -1);
+  const presets = [
+    ["Tento týždeň", mon(today), addDaysISO(mon(today), 6)],
+    ["Minulý týždeň", addDaysISO(mon(today), -7), addDaysISO(mon(today), -1)],
+    ["Tento mesiac", monthStart(today), addDaysISO(monthStart(addDaysISO(monthStart(today), 31)), -1)],
+    ["Minulý mesiac", monthStart(prevMonthEnd), prevMonthEnd],
+  ];
+  const [driverId, setDriverId] = useState(selfOnly ? "" : drivers[0]?.id || "");
+  const [from, setFrom] = useState(presets[3][1]);
+  const [to, setTo] = useState(presets[3][2]);
+  const [rep, setRep] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if ((!selfOnly && !driverId) || !from || !to || from > to) { setRep(null); return; }
+    let live = true;
+    setErr("");
+    supabase.rpc("driver_transport_report", { p_driver_id: selfOnly ? null : driverId, p_from: from, p_to: to }).then(({ data, error }) => {
+      if (!live) return;
+      if (error) { setRep(null); setErr(navigator.onLine ? "Výkaz sa nepodarilo načítať." : "Výkaz sa dá načítať len so signálom."); console.error("driver_transport_report", error); }
+      else setRep(data);
+    });
+    return () => { live = false; };
+  }, [selfOnly, driverId, from, to]);
+  const rows = rep?.rows || [];
+  return (
+    <Modal title="Výkaz prepráv externého šoféra" onClose={onClose} wide>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: selfOnly ? "1fr 1fr" : "2fr 1fr 1fr", gap: 10 }}>
+        {!selfOnly && (
+          <Field label="Šofér">
+            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
+              {drivers.length === 0 && <option value="">— žiadny externý šofér —</option>}
+              {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}{d.carrierName ? ` — ${d.carrierName}` : ""}{d.archived ? " (archivovaný)" : ""}</option>)}
+            </select>
+          </Field>
+        )}
+        <Field label="Od"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Do"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: "100%" }} /></Field>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {presets.map(([label, f, t]) => (
+          <button key={label} className={from === f && to === t ? "btn btn-accent" : "btn btn-ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => { setFrom(f); setTo(t); }}>{label}</button>
+        ))}
+      </div>
+      {err && <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10 }}>{err}</div>}
+      {rep && (
+        <>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>
+            <strong>{rows.length}</strong> vykonaných prepráv — {DR_TYPES.map((t) => `${t.toLowerCase()}y ${rows.filter((r) => r.type === t).length}`).join(" · ")}
+          </div>
+          <div style={{ overflow: "auto", maxHeight: 320, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead><tr>{["Dátum", "Typ", "Zmluva", "Zákazník", "Stroj", "Trasa"].map((h) => <th key={h} style={{ position: "static", padding: 6 }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 8, color: "var(--text-dim)" }}>Za toto obdobie žiadne vykonané prepravy.</td></tr>}
+                {rows.map((r, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: 6, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td><td style={{ padding: 6 }}>{r.type}</td><td style={{ padding: 6 }}>{r.contract || "—"}</td>
+                    <td style={{ padding: 6 }}>{r.customer || (r.type === "Prevoz" ? "presun medzi depami" : "—")}</td>
+                    <td style={{ padding: 6 }}>{[r.machineType, r.machineCode].filter(Boolean).join(" · ")}</td><td style={{ padding: 6 }}>{r.from || "—"} → {r.to || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 12 }}>Rátajú sa len vykonané prepravy: podpísaný protokol vývozu / zvozu a prevoz označený ako prevezený, podľa dátumu vykonania.</div>
+        </>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn btn-ghost" disabled={!rep} onClick={() => downloadDriverReportCsv(rep, from, to)}>Stiahnuť Excel</button>
+        <button className="btn btn-accent" disabled={!rep} onClick={() => openPrintableDriverReport(rep, from, to, issuedBy)}>PDF / tlač</button>
+      </div>
+    </Modal>
+  );
 }
 
 function openPrintablePartHandover(rec) {
