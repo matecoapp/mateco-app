@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.776";
+const APP_VERSION = "1.0.777";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -4864,8 +4864,8 @@ function DispatcherApp() {
 
   // ───────── Dispečeri požičovne: dispečer zákazky, dispečer depa, zástupy ─────────
   // Zákazka si pamätá dispečera (jobs.dispatcherId = karta zamestnanca). Upozornenia k nej
-  // chodia len jemu; počas zástupu aj zastupujúcemu (pôvodný ich dostáva ďalej). Bez dispečera
-  // rozhoduje depo; bez dispečera depa idú všetkým dispečerom (ako doteraz).
+  // chodia len jemu; počas dovolenky aj zástupu za depo (pôvodný ich dostáva ďalej). Bez dispečera
+  // rozhoduje, kto depo rieši (Požičovňa → Dispečeri); nikto → vedúci dispečer + vedúci požičovne.
   const dispatchers = useMemo(() => employees.filter((e) => !e.archived && DISPATCHER_ROLES.includes(e.role)), [employees]);
   const leadDispatchers = useMemo(() => dispatchers.filter((e) => e.alsoVeduciDispecer), [dispatchers]);
   // Vedúci dispečer = dispečer s príznakom na karte (nie rola). Admin „Zobraziť ako“ príznak nededí.
@@ -4873,18 +4873,20 @@ function DispatcherApp() {
   const canManageDispatcherSubs = isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne" || isAdminUser(effectiveUser);
   // Zrušiť ukončenie zákazky: admin, vedúci dispečer, vedúci požičovne (DB to stráži rovnako — step73).
   const canUncompleteJobs = isAdminUser(effectiveUser) || isLeadDispatcher || effectiveUser?.role === "veduci_pozicovne";
-  const activeDispatcherSub = useCallback((dispatcherId, date = todayISO()) =>
-    dispatcherSubstitutions.find((s) => s.dispatcherId === dispatcherId && s.startDate <= date && s.endDate >= date) || null, [dispatcherSubstitutions]);
-  // Kto za dispečera práve koná (zástup, inak on sám). Zastupujúci, ktorý je sám zastúpený → nikto (poistka).
-  const actingDispatcher = useCallback((dispatcherId, date = todayISO()) => {
+  const dsp = useMemo(() => dispatchResolver(dispatchers, dispatcherSubstitutions), [dispatchers, dispatcherSubstitutions]);
+  // Kto za dispečera zákazky koná: on sám, počas dovolenky zástup za depo zákazky (inak za jeho prvé depo); null = nikto.
+  const actingDispatcher = useCallback((dispatcherId, date = todayISO(), depo) => {
     const d = dispatchers.find((e) => e.id === dispatcherId);
     if (!d) return null;
-    const sub = activeDispatcherSub(d.id, date);
-    if (!sub) return d;
-    const s = dispatchers.find((e) => e.id === sub.substituteId);
-    if (!s || activeDispatcherSub(s.id, date)) return null;
-    return s;
-  }, [dispatchers, activeDispatcherSub]);
+    const v = dsp.vacation(d.id, date);
+    if (!v) return d;
+    const dep = depo && dsp.map[depo] === d.id ? depo : dsp.ownedDepos(d.id)[0];
+    if (dep) return dsp.actingForDepo(dep, date);
+    const s = !v.subs && dispatchers.find((e) => e.id === v.substituteId);
+    return s && !dsp.vacation(s.id, date) ? s : null;
+  }, [dispatchers, dsp]);
+  // Záchrana, keď depo nikto nerieši: vedúci dispečeri a vedúci požičovne.
+  const leadFallback = useMemo(() => employees.filter((e) => !e.archived && (e.role === "veduci_pozicovne" || (DISPATCHER_ROLES.includes(e.role) && e.alsoVeduciDispecer))), [employees]);
   // Dispečer zákazky pre šoféra (telefón na karte prepravy).
   // Zástup bez telefónu → telefón pôvodného; bez dispečera zákazky → dispečer depa (kto upozornenia dostáva).
   function jobDispatcher(job) {
@@ -4893,30 +4895,25 @@ function DispatcherApp() {
     const withPhone = t.filter((x) => x.phone);
     return withPhone[withPhone.length - 1] || t[t.length - 1];
   }
-  // Adresáti upozornenia: dispečer zákazky (+ zástup), inak dispečer depa (+ zástup); null = všetkým.
+  // Adresáti upozornenia: dispečer zákazky (na dovolenke + zástup), inak kto rieši depo; null = všetkým.
   const hasAccount = (e) => !!e?.linkedUserId && !_inactiveUserIds.has(e.linkedUserId);
   function dispatcherTargets({ job, machine, depos } = {}) {
-    const pick = (ids) => {
-      const out = [];
-      const add = (e) => { if (hasAccount(e) && !out.some((x) => x.id === e.id)) out.push(e); };
-      for (const id of ids) {
-        const d = dispatchers.find((e) => e.id === id);
-        if (!d) continue;
-        const acting = actingDispatcher(d.id);
-        // Zástup bez zástupu, zastupujúci bez účtu (ako DB job_dispatcher_uids) — radšej všetkým.
-        if (!acting || (acting.id !== d.id && !hasAccount(acting))) return null;
-        add(d); add(acting);
-      }
-      return out.length ? out : null;
-    };
-    if (job?.dispatcherId) {
-      const r = pick([job.dispatcherId]);
-      if (r) return r;
-    }
+    const date = todayISO();
+    const d = job?.dispatcherId ? dispatchers.find((e) => e.id === job.dispatcherId) : null;
+    if (d && hasAccount(d) && !dsp.vacation(d.id, date)) return [d];
     const depoList = (depos || [job?.fromDepo, job?.returnDepo, machine?.depo]).filter(Boolean);
-    if (!depoList.length) return null;
-    const byDepo = dispatchers.filter((e) => depoList.includes(e.depo)).map((e) => e.id);
-    return byDepo.length ? pick(byDepo) : null;
+    if (!d && !depoList.length) return null;
+    const out = [];
+    const add = (e) => { if (hasAccount(e) && !out.some((x) => x.id === e.id)) out.push(e); };
+    const acting = [d ? actingDispatcher(d.id, date, job?.fromDepo) : null, ...depoList.map((x) => dsp.actingForDepo(x, date))].filter(hasAccount);
+    if (d) add(d); // na dovolenke upozornenia dostáva ďalej, koná zástup
+    acting.forEach(add);
+    // Nikto nerieši (depo bez dispečera, dovolenka bez zástupu) → vedúci dispečer a vedúci požičovne; bez nich všetkým.
+    if (!acting.length) {
+      if (!leadFallback.some(hasAccount)) return null;
+      leadFallback.forEach(add);
+    }
+    return out.length ? out : null;
   }
   // Upozornenie dispečingu: adresne (každému zvlášť, bez rolí), alebo všetkým dispečerom, ak sa adresát nedá určiť.
   // lead: navyše aj vedúci dispečeri. extraRoles: iné role (servis), ktoré ho dostanú tak ako doteraz.
@@ -5139,9 +5136,7 @@ function DispatcherApp() {
     const next = employees.map((e) => (e.id === id ? { ...e, ...patch } : e));
     persistEmployees((employees) => employees.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     // Kto prestal byť dispečerom, nemá ostať v zástupoch (inak „— zastupuje …“ a upozornenia všetkým).
-    if (patch.role && !DISPATCHER_ROLES.includes(patch.role) && dispatcherSubstitutions.some((x) => x.dispatcherId === id || x.substituteId === id)) {
-      persistDispatcherSubstitutions((cur) => cur.filter((x) => x.dispatcherId !== id && x.substituteId !== id));
-    }
+    if (patch.role && !DISPATCHER_ROLES.includes(patch.role)) dropDispatcherRefs(id);
     // Ak má zamestnanec prepojený účet, zmena role v Administratíve rovno
     // aktualizuje aj jeho SKUTOČNÉ prihlasovacie práva — nie je to len popisok.
     const prevEmp = employees.find((e) => e.id === id);
@@ -5182,7 +5177,7 @@ function DispatcherApp() {
       persistCheckerSubstitutions((cur) => cur.filter((s) => s.substituteTechnicianId !== id));
       if (emp.role === "sofer" || emp.role === "externy_sofer") releaseDriverTransports(emp, "archivovaný");
       // Dispečer: jeho zástupy (v oboch smeroch) strácajú zmysel.
-      if (dispatcherSubstitutions.some((x) => x.dispatcherId === id || x.substituteId === id)) persistDispatcherSubstitutions((cur) => cur.filter((x) => x.dispatcherId !== id && x.substituteId !== id));
+      dropDispatcherRefs(id);
     }
     persistEmployees(
       (employees) => employees.map((e) =>
@@ -5238,9 +5233,7 @@ function DispatcherApp() {
     } else if (emp?.role === "sofer" || emp?.role === "externy_sofer") {
       releaseDriverTransports(emp, "zmazaný");
     }
-    if (dispatcherSubstitutions.some((x) => x.dispatcherId === id || x.substituteId === id)) {
-      persistDispatcherSubstitutions((cur) => cur.filter((x) => x.dispatcherId !== id && x.substituteId !== id));
-    }
+    dropDispatcherRefs(id);
   }
   // Šofér odchádza (archivácia / zmazanie karty): uvoľnia sa len prepravy, ktoré ešte čakajú
   // a v Prepravách by sa mu ešte ukazovali (14 dní po termíne) — vykonané a staré ostávajú ako história.
@@ -5295,6 +5288,15 @@ function DispatcherApp() {
   const persistEzMeasurements = useCallback(makeRecordPersist("ezMeasurements", setEzMeasurements), []);
   const persistPartHandovers = useCallback(makeRecordPersist("partHandovers", setPartHandovers), []);
   const persistDispatcherSubstitutions = useCallback(makeRecordPersist("dispatcherSubstitutions", setDispatcherSubstitutions), []);
+  // Kto prestal byť dispečerom: zmizne z depí, zo zástupov a jeho dovolenky (inak by depo „riešil“ niekto mimo zoznamu).
+  function dropDispatcherRefs(id) {
+    const hit = (x) => x.dispatcherId === id || x.substituteId === id || Object.values(x.depos || x.subs || {}).includes(id);
+    if (!dispatcherSubstitutions.some(hit)) return;
+    const strip = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== id));
+    persistDispatcherSubstitutions((cur) => cur
+      .filter((x) => x.dispatcherId !== id && x.substituteId !== id)
+      .map((x) => (x.depos ? { ...x, depos: strip(x.depos) } : x.subs ? { ...x, subs: strip(x.subs) } : x)));
+  }
   function addEzMeasurement(data) {
     const item = {
       id: uid(),
@@ -9212,7 +9214,7 @@ function DispatcherApp() {
               const t = dispatcherTargets({ job: j });
               return !t || t.some((x) => x.id === myEmployee.id);
             },
-    mySubstitutedNames: dispatcherSubstitutions.filter((x) => myEmployee && x.substituteId === myEmployee.id && x.startDate <= today && x.endDate >= today).map((x) => dispatchers.find((d) => d.id === x.dispatcherId)?.name).filter(Boolean),
+    mySubstitutedNames: myEmployee ? dispatchers.filter((d) => d.id !== myEmployee.id && dsp.vacation(d.id, today) && dsp.ownedDepos(d.id).some((x) => dsp.actingForDepo(x, today)?.id === myEmployee.id)).map((d) => d.name) : [],
     driverById: driverById,
     damages: damages,
     assignments: assignments,
@@ -9238,7 +9240,7 @@ function DispatcherApp() {
     onRejectPortalRequest: (r, note) => rejectPortalRequest(r, note),
     onReadNotification: markNotificationRead,
     onAskDaily: () => setMaskotAskTick((n) => n + 1),
-    whoPanel: <WhoIsWherePanel employees={employees} dispatchers={dispatchers} activeDispatcherSub={activeDispatcherSub} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />,
+    whoPanel: <WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />,
     erpPozPanel: effectiveUser?.role === "fakturant_pozicovna" && (
               <ErpPozicovnaView
                 handoverProtocols={handoverProtocols}
@@ -9451,7 +9453,7 @@ function DispatcherApp() {
             onPartHandover={(rec, prefill) => setPartHandoverUi({ kind: "sign", rec, prefill })}
             onOpenDamage={(d) => setServiceEventDetail(d)}
             onAskDaily={() => setMaskotAskTick((n) => n + 1)}
-            whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} activeDispatcherSub={activeDispatcherSub} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />}
+            whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />}
             transportsPanel={["sofer", "externy_sofer"].includes(effectiveUser?.role) ? (
               <TransportsOverview
                 jobs={jobs}
@@ -9646,12 +9648,11 @@ function DispatcherApp() {
         {module === "poziciovna" && view === "dispeceri" && (
           <DispatchersView
             dispatchers={dispatchers}
-            substitutions={dispatcherSubstitutions}
-            activeDispatcherSub={activeDispatcherSub}
+            dsp={dsp}
             today={today}
             canManage={canManageDispatcherSubs}
-            onAdd={(sub) => { if (officeOffline("dispatcherSubstitutions")) return; persistDispatcherSubstitutions((cur) => [...cur, { id: uid(), createdBy: currentUser?.name || "", ...sub }]); showToast("Zástup bol uložený."); }}
-            onDelete={(id) => { if (officeOffline("dispatcherSubstitutions")) return; persistDispatcherSubstitutions((cur) => cur.filter((x) => x.id !== id)); showToast("Zástup bol zrušený."); }}
+            createdBy={currentUser?.name || ""}
+            onPersist={(fn, msg) => { if (officeOffline("dispatcherSubstitutions")) return; persistDispatcherSubstitutions(fn); if (msg) showToast(msg); }}
           />
         )}
 
@@ -17942,8 +17943,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         {dispatchers && (() => {
           // Dispečer zákazky — dostáva upozornenia k nej; počas zástupu koná zastupujúci.
           const d = dispatchers.find((x) => x.id === job.dispatcherId);
-          const acting = actingDispatcher ? actingDispatcher(job.dispatcherId) : null;
-          const subNote = d && acting && acting.id !== d.id ? ` (zastupuje ${acting.name})` : "";
+          const acting = actingDispatcher ? actingDispatcher(job.dispatcherId, undefined, job.fromDepo) : d;
+          const subNote = d && acting && acting.id !== d.id ? ` (zastupuje ${acting.name})` : d && !acting ? " (dovolenka — bez zástupu)" : "";
           return (
             <CardField
               label="Dispečer zákazky"
@@ -24279,79 +24280,169 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
    mechanika ako ErpChecklistsView vyššie, len bez tabov (jeden zoznam) a
    s vyhľadávaním (model, sériové číslo, zákazník, číslo zmluvy).
 --------------------------------------------------------- */
-// Požičovňa → Dispečeri: kto má ktoré depo na starosti a kto ho práve zastupuje (vidia všetci,
-// upravuje vedúci dispečer / vedúci požičovne / admin). Zástup = od–do; po skončení sa všetko
-// samo vráti pôvodnému dispečerovi (upozornenia aj správa zákaziek idú podľa dátumu).
-function DispatchersView({ dispatchers, substitutions, activeDispatcherSub, today, canManage, onAdd, onDelete }) {
-  const [dispatcherId, setDispatcherId] = useState("");
-  const [substituteId, setSubstituteId] = useState("");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-  const byId = Object.fromEntries(dispatchers.map((d) => [d.id, d]));
-  const upcoming = substitutions.filter((s) => s.endDate >= today).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
-  const canSave = dispatcherId && substituteId && dispatcherId !== substituteId && startDate && endDate && startDate <= endDate;
-  const sorted = [...dispatchers].sort((a, b) => (a.depo || "").localeCompare(b.depo || "") || a.name.localeCompare(b.name));
+// Požičovňa → Dispečeri: jedna tabuľka dispečer × depo (vidia všetci, upravuje vedúci dispečer /
+// vedúci požičovne / admin). Dovolenka = od–do; depá sa na ten čas odškrtnú, zástup sa zaklikne
+// po depách a po skončení sa všetko vráti samo (upozornenia aj Dnes idú podľa dátumu).
+function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, createdBy }) {
+  const [vacFor, setVacFor] = useState(null); // dispečer, ktorému sa zadáva dovolenka
+  const [vacFrom, setVacFrom] = useState(today);
+  const [vacTo, setVacTo] = useState(today);
+  const [vacErr, setVacErr] = useState("");
+  const sorted = [...dispatchers].sort((a, b) => a.name.localeCompare(b.name));
+  const short = (d) => DEPO_SHORT_LABELS[d] || d;
+  const dm = (iso) => fmtDate(iso).slice(0, 6);
+  const uncovered = TODAY_DEPOS.filter((d) => !dsp.actingForDepo(d, today));
+
+  const setDepoOwner = (depo, id) => onPersist((cur) => {
+    const rec = cur.find((r) => r.id === DISPATCHER_DEPOS_ID);
+    const depos = { ...(rec?.depos || {}) };
+    if (id) depos[depo] = id; else delete depos[depo];
+    const next = { ...(rec || { id: DISPATCHER_DEPOS_ID }), depos };
+    return rec ? cur.map((r) => (r.id === rec.id ? next : r)) : [...cur, next];
+  });
+  const setSub = (vacId, depo, id) => onPersist((cur) => cur.map((r) => {
+    if (r.id !== vacId) return r;
+    // Starý zástup (jeden za všetky depá) sa pri prvej zmene rozpíše po depách.
+    const { substituteId, ...rest } = r;
+    const subs = r.subs ? { ...r.subs } : Object.fromEntries(substituteId ? dsp.ownedDepos(r.dispatcherId).map((d) => [d, substituteId]) : []);
+    if (id) subs[depo] = id; else delete subs[depo];
+    return { ...rest, subs };
+  }));
+  function toggle(row, depo) {
+    const o = dsp.owner(depo);
+    const v = o && o.id !== row.id && dsp.vacation(o.id, today);
+    if (v) {
+      // Depo dispečera na dovolenke: zástup len na čas dovolenky.
+      const a = dsp.actingForDepo(depo, today);
+      if (a?.id === row.id) return setSub(v.id, depo, null);
+      if (a && !window.confirm(`${depo} počas dovolenky (${o.name}) zastupuje ${a.name}. Presunúť zástup na ${row.name}?`)) return;
+      return setSub(v.id, depo, row.id);
+    }
+    if (o?.id === row.id) return setDepoOwner(depo, null);
+    if (o && !window.confirm(`${depo} už rieši ${o.name}. Presunúť depo na ${row.name}?`)) return;
+    setDepoOwner(depo, row.id);
+  }
+  function openVacation(row) {
+    setVacFor(row); setVacFrom(today); setVacTo(today); setVacErr("");
+  }
+  function saveVacation() {
+    if (!vacFrom || !vacTo || vacFrom > vacTo) return setVacErr("Dátum Do musí byť rovnaký alebo neskorší ako Od.");
+    if (vacTo < today) return setVacErr("Dovolenka už skončila.");
+    if (dsp.vacations.some((v) => v.dispatcherId === vacFor.id && v.startDate <= vacTo && v.endDate >= vacFrom)) return setVacErr("V tomto termíne už má dovolenku zadanú.");
+    onPersist((cur) => [...cur, { id: uid(), dispatcherId: vacFor.id, startDate: vacFrom, endDate: vacTo, subs: {}, createdBy }], "Dovolenka bola uložená.");
+    setVacFor(null);
+  }
+  function endVacation(v, row, active) {
+    if (!window.confirm(active ? `Ukončiť dovolenku (${row.name})? Depá sa vrátia hneď a zástupy sa zrušia.` : `Zrušiť plánovanú dovolenku (${row.name}, ${dm(v.startDate)}–${dm(v.endDate)})?`)) return;
+    onPersist((cur) => cur.filter((x) => x.id !== v.id), active ? "Dovolenka bola ukončená." : "Dovolenka bola zrušená.");
+  }
+  const vacRemembered = vacFor ? dsp.ownedDepos(vacFor.id) : [];
+
   return (
     <div>
-      <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>Dispečeri požičovne podľa depa</div>
-        <table className="table-cards">
-          <thead>
-            <tr><th>Depo</th><th>Dispečer</th><th>Telefón</th><th>Email</th><th>Dnes zastupuje</th></tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 && <tr><td colSpan={5} style={{ color: "var(--text-dim)" }}>Žiadny dispečer — rolu a depo nastavuje vedúci v Administratíve → Zamestnanci.</td></tr>}
-            {sorted.map((d) => {
-              const sub = activeDispatcherSub(d.id, today);
-              const s = sub ? byId[sub.substituteId] : null;
-              return (
-                <tr key={d.id}>
-                  <td data-label="Depo" style={{ fontWeight: 600 }}>{d.depo || "—"}</td>
-                  <td data-label="Dispečer">{d.name}{d.alsoVeduciDispecer && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>vedúci dispečer</span>}</td>
-                  <td data-label="Telefón">{d.phone ? <a href={`tel:${d.phone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>📞 {d.phone}</a> : "—"}</td>
-                  <td data-label="Email">{d.email ? <a href={`mailto:${d.email}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{d.email}</a> : "—"}</td>
-                  <td data-label="Dnes zastupuje">{s ? <span style={{ color: "var(--warn)", fontWeight: 600 }}>{s.name}{s.phone ? ` · ${s.phone}` : ""} (do {fmtDate(sub.endDate)})</span> : sub ? <span style={{ color: "var(--danger)" }}>zástup nie je dispečer</span> : "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {uncovered.length > 0 && (
+        <div role="alert" style={{ background: "var(--accent-light)", border: "1px solid var(--danger)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>
+          {uncovered.length === 1 ? `Depo ${uncovered[0]} nemá` : `Depá ${uncovered.join(", ")} nemajú`} dispečera{canManage ? " — zakliknite ho v tabuľke niekomu" : ""}. Kým nikto, upozornenia idú vedúcemu dispečerovi a vedúcemu požičovne.
+        </div>
+      )}
       <div className="panel" style={{ padding: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>Zástupy (dovolenka, PN…)</div>
-        {upcoming.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Žiadny plánovaný zástup.</div>}
-        {upcoming.map((sb) => (
-          <div key={sb.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 13, flexWrap: "wrap" }}>
-            <span style={{ flex: "1 1 auto" }}>
-              <strong>{byId[sb.dispatcherId]?.name || "—"}</strong> → zastupuje <strong>{byId[sb.substituteId]?.name || "—"}</strong>, {fmtDate(sb.startDate)}–{fmtDate(sb.endDate)}
-              {sb.startDate <= today && <span className="badge badge-warn" style={{ marginLeft: 8 }}>prebieha</span>}
-            </span>
-            {canManage && <button className="btn btn-ghost" style={{ fontSize: 12, color: "var(--danger)" }} onClick={() => onDelete(sb.id)}>Zrušiť</button>}
-          </div>
-        ))}
-        {canManage && (
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 10, alignItems: "end", marginTop: 14 }}>
-            <Field label="Dispečer">
-              <select value={dispatcherId} onChange={(e) => setDispatcherId(e.target.value)} style={{ width: "100%" }}>
-                <option value="">— vybrať —</option>
-                {sorted.map((d) => <option key={d.id} value={d.id}>{d.name}{d.depo ? ` (${d.depo})` : ""}</option>)}
-              </select>
-            </Field>
-            <Field label="Zastupuje">
-              <select value={substituteId} onChange={(e) => setSubstituteId(e.target.value)} style={{ width: "100%" }}>
-                <option value="">— vybrať —</option>
-                {sorted.filter((d) => d.id !== dispatcherId).map((d) => <option key={d.id} value={d.id}>{d.name}{d.depo ? ` (${d.depo})` : ""}</option>)}
-              </select>
-            </Field>
-            <Field label="Od"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
-            <Field label="Do"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
-            <button className="btn btn-accent" disabled={!canSave} style={{ marginBottom: 14 }} onClick={() => { onAdd({ dispatcherId, substituteId, startDate, endDate }); setDispatcherId(""); setSubstituteId(""); }}>
-              + Zástup
-            </button>
-          </div>
-        )}
-        {!canManage && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>Zástupy nastavuje vedúci dispečer alebo vedúci požičovne.</div>}
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>Dispečeri požičovne</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 12 }}>
+                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Meno</th>
+                {TODAY_DEPOS.map((d) => <th key={d} title={d} style={{ position: "static", padding: 8, width: 64, textAlign: "center", color: uncovered.includes(d) ? "var(--danger)" : undefined }}>{short(d)}</th>)}
+                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Dovolenka</th>
+                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Kontakt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && <tr><td colSpan={TODAY_DEPOS.length + 3} style={{ padding: 8, color: "var(--text-dim)" }}>Žiadny dispečer — rolu nastavuje vedúci v Administratíve → Zamestnanci.</td></tr>}
+              {sorted.map((row) => {
+                const rowVac = dsp.vacation(row.id, today);
+                const planned = dsp.vacations.filter((v) => v.dispatcherId === row.id && v.startDate > today).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+                return (
+                  <tr key={row.id} style={{ borderBottom: "1px solid var(--border)", color: rowVac ? "var(--text-dim)" : undefined }}>
+                    <td style={{ padding: 8, fontWeight: 600 }}>
+                      {row.name}
+                      {row.alsoVeduciDispecer && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>vedúci dispečer</span>}
+                    </td>
+                    {TODAY_DEPOS.map((depo) => {
+                      if (rowVac) return <td key={depo} style={{ textAlign: "center" }}>—</td>;
+                      const o = dsp.owner(depo);
+                      const v = o && o.id !== row.id && dsp.vacation(o.id, today);
+                      const checked = v ? dsp.actingForDepo(depo, today)?.id === row.id : o?.id === row.id;
+                      return (
+                        <td key={depo} style={{ textAlign: "center", padding: 4, background: v && checked ? "var(--warn-bg, #fdf6ea)" : uncovered.includes(depo) ? "var(--accent-light)" : undefined }}>
+                          <input type="checkbox" checked={checked} disabled={!canManage} onChange={() => toggle(row, depo)}
+                            aria-label={`${row.name} — ${depo}${v ? " (zástup počas dovolenky)" : ""}`}
+                            style={{ width: 20, height: 20, margin: 0, accentColor: v ? "#b86a00" : "var(--accent)", cursor: canManage ? "pointer" : "default" }} />
+                          {v && checked && <div style={{ fontSize: 10, fontWeight: 700, color: "var(--warn)" }}>do {dm(v.endDate)}</div>}
+                        </td>
+                      );
+                    })}
+                    <td style={{ padding: 8, fontSize: 12 }}>
+                      {rowVac && (
+                        <div style={{ marginBottom: 4 }}>
+                          <span className="badge badge-warn">dovolenka do {dm(rowVac.endDate)}</span>
+                          {dsp.ownedDepos(row.id).length > 0 && <div style={{ fontSize: 11, marginTop: 2 }}>po návrate: {dsp.ownedDepos(row.id).map(short).join(", ")}</div>}
+                          {canManage && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px", marginTop: 2 }} onClick={() => endVacation(rowVac, row, true)}>Ukončiť</button>}
+                        </div>
+                      )}
+                      {planned.map((v) => (
+                        <div key={v.id} style={{ marginBottom: 4 }}>
+                          plánovaná {dm(v.startDate)}–{dm(v.endDate)}
+                          {canManage && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px", marginLeft: 4, color: "var(--danger)" }} onClick={() => endVacation(v, row, false)}>Zrušiť</button>}
+                        </div>
+                      ))}
+                      {canManage && !rowVac && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => openVacation(row)}>Dovolenka</button>}
+                    </td>
+                    <td style={{ padding: 8, fontSize: 12 }}>
+                      {row.phone ? <a href={`tel:${row.phone}`} style={{ color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {row.phone}</a> : "—"}
+                      {row.email && <div><a href={`mailto:${row.email}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{row.email}</a></div>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ fontSize: 12 }}>
+                <td style={{ padding: 8, color: "var(--text-dim)" }}>Dnes rieši</td>
+                {TODAY_DEPOS.map((d) => {
+                  const a = dsp.actingForDepo(d, today);
+                  const o = dsp.owner(d);
+                  return <td key={d} style={{ padding: 4, textAlign: "center", fontWeight: 600, color: !a ? "var(--danger)" : a.id !== o?.id ? "var(--warn)" : undefined }}>{a ? a.name.split(" ")[0] : "nikto"}</td>;
+                })}
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
+          {canManage
+            ? "Jedno depo rieši jeden dispečer. Dovolenka: depá sa dispečerovi na ten čas odškrtnú, zástup sa zaklikne v tabuľke (oranžové) a po dovolenke sa depá vrátia samé."
+            : "Depá a dovolenky nastavuje vedúci dispečer alebo vedúci požičovne."}
+        </div>
       </div>
+      {vacFor && (
+        <Modal title={`Dovolenka — ${vacFor.name}`} onClose={() => setVacFor(null)}>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Field label="Od"><input type="date" value={vacFrom} onChange={(e) => { setVacFrom(e.target.value); setVacErr(""); }} style={{ width: "100%" }} /></Field>
+            <Field label="Do (vrátane)"><input type="date" value={vacTo} onChange={(e) => { setVacTo(e.target.value); setVacErr(""); }} style={{ width: "100%" }} /></Field>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
+            {vacRemembered.length
+              ? <>Od začiatku dovolenky sa odškrtnú depá <strong>{vacRemembered.map(short).join(", ")}</strong> a platforma ukáže, že nemajú dispečera — zástup zakliknete v tabuľke. Po dovolenke sa vrátia samé.</>
+              : "Nemá zakliknuté žiadne depo."}
+          </div>
+          {vacErr && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>{vacErr}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setVacFor(null)}>Zrušiť</button>
+            <button className="btn btn-accent" onClick={saveVacation}>Uložiť dovolenku</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -27280,18 +27371,40 @@ function copyColumn(rows, key, label) {
 --------------------------------------------------------- */
 const DNES_ROLES = ["technik", "veduci_technik_ba", "sofer", "externy_sofer"];
 const TODAY_DEPOS = DEPO_OPTIONS.filter((d) => d !== "Externé");
+// Depá dispečerov (Požičovňa → Dispečeri). V tabuľke dispatcherSubstitutions je záznam id "depos"
+// ({depos: {Zvolen: empId, …}}, jedno depo = jeden dispečer); ostatné záznamy sú dovolenky
+// {dispatcherId, startDate, endDate, subs: {Zvolen: empId}} (staré zástupy majú substituteId = za všetky depá).
+// Rovnakú logiku má DB (private.job_dispatcher_uids) aj maSKot (loadDispatching).
+const DISPATCHER_DEPOS_ID = "depos";
+function dispatchResolver(dispatchers, records) {
+  const map = (records || []).find((r) => r.id === DISPATCHER_DEPOS_ID)?.depos || {};
+  const vacations = (records || []).filter((r) => r.id !== DISPATCHER_DEPOS_ID);
+  const byId = (id) => (id && dispatchers.find((e) => e.id === id)) || null;
+  const vacation = (id, date) => vacations.find((v) => v.dispatcherId === id && v.startDate <= date && v.endDate >= date) || null;
+  const owner = (depo) => byId(map[depo]);
+  const ownedDepos = (id) => TODAY_DEPOS.filter((d) => map[d] === id);
+  const subIdOf = (v, depo) => (v.subs ? v.subs[depo] : v.substituteId) || null;
+  // Kto depo v daný deň rieši: vlastník, počas jeho dovolenky zástup za toto depo; null = nikto.
+  const actingForDepo = (depo, date) => {
+    const o = owner(depo);
+    if (!o) return null;
+    const v = vacation(o.id, date);
+    if (!v) return o;
+    const s = byId(subIdOf(v, depo));
+    return s && !vacation(s.id, date) ? s : null;
+  };
+  return { map, vacations, vacation, owner, ownedDepos, subIdOf, actingForDepo };
+}
 const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {p}</a> : null);
 const mapsUrl = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
 // Kto je dnes kde — dispečer požičovne a checker pre každé depo (aj so zástupmi).
-function WhoIsWherePanel({ employees, dispatchers, activeDispatcherSub, depoCheckers, checkerSubstitutions, today, compact }) {
+function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, today, compact }) {
   const byId = Object.fromEntries((employees || []).map((e) => [e.id, e]));
   const rows = TODAY_DEPOS.map((depo) => {
-    const disp = (dispatchers || []).filter((d) => d.depo === depo).map((d) => {
-      const sub = activeDispatcherSub(d.id, today);
-      const s = sub ? byId[sub.substituteId] : null;
-      return s ? { person: s, note: `zastupuje ${d.name}` } : { person: d, note: "" };
-    });
+    const o = dsp.owner(depo);
+    const a = dsp.actingForDepo(depo, today);
+    const disp = !o ? [] : a ? [{ person: a, note: a.id !== o.id ? `zastupuje ${o.name}` : "" }] : [{ person: o, note: "dovolenka — bez zástupu" }];
     const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, depo, today);
     const baseId = depoCheckers?.[depo] || null;
     const checker = checkerId ? byId[checkerId] : null;
