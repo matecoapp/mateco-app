@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.781";
+const APP_VERSION = "1.0.782";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -26733,7 +26733,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
       return { m, last, days: last ? daysBetween(last, today) : null };
     })
     .filter((r) => r.days === null || r.days >= idleMin)
-    .sort((a, b) => (b.days ?? 1e9) - (a.days ?? 1e9));
+    .sort((a, b) => (b.days ?? -1) - (a.days ?? -1)); // stroje bez záznamu (žiadna zákazka v platforme) až na koniec
 
   // Prepravy za obdobie podľa šoféra: vývoz / zvoz (podpísaný protokol), prevoz (prevezený alebo potvrdený).
   const empById = new Map((employees || []).map((e) => [e.id, e]));
@@ -26873,7 +26873,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           {[7, 14, 30, 60].map((d) => <option key={d} value={d}>aspoň {d} dní</option>)}
         </select>
       </div>
-      <div className="panel table-wrap" style={{ padding: 0, marginBottom: 20, maxHeight: 360, overflowY: "auto" }}>
+      <div className="panel table-scroll-inner" style={{ padding: 0, marginBottom: 20, maxHeight: 360, overflowY: "auto" }}>
         {idleRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nestojí tak dlho.</div> : (
           <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>{["Stroj", "Model", "Depo", "Naposledy vrátený", "Dní bez zákazky"].map(th)}</tr></thead>
