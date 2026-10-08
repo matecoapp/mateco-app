@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.774";
+const APP_VERSION = "1.0.775";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -1317,20 +1317,6 @@ const addYearsISO = (iso, years) => {
   const leap = (ny % 4 === 0 && ny % 100 !== 0) || ny % 400 === 0;
   return `${ny}-${m}-${m === "02" && d.slice(0, 2) === "29" && !leap ? "28" : d}`;
 };
-function compressDates(dates) {
-  const sorted = [...dates].sort();
-  if (sorted.length === 0) return "";
-  const ranges = [];
-  let start = sorted[0], prev = sorted[0];
-  for (let i = 1; i < sorted.length; i++) {
-    const d = sorted[i];
-    if (d === addDaysISO(prev, 1)) { prev = d; continue; }
-    ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
-    start = d; prev = d;
-  }
-  ranges.push(start === prev ? fmtDate(start) : `${fmtDate(start)}–${fmtDate(prev)}`);
-  return ranges.join(", ");
-}
 function weekRangeFor(iso) {
   const d = new Date(iso + "T00:00:00");
   const dow = d.getDay();
@@ -3754,8 +3740,8 @@ function DispatcherApp() {
   );
   const salespeople = useMemo(() => employees.filter((e) => !e.archived && (e.role === "obchodnik" || e.alsoObchodnik)), [employees]);
   const [jobs, setJobs] = useState([]);
-  const [module, setModuleRaw] = useState(() => sessionStorage.getItem("mateco_last_module") || "poziciovna");
-  const [view, setView] = useState(() => sessionStorage.getItem("mateco_last_view") || "calendar");
+  const [module, setModuleRaw] = useState(() => (sessionStorage.getItem("mateco_last_view") === "prehlad" ? "dnes" : sessionStorage.getItem("mateco_last_module")) || "poziciovna");
+  const [view, setView] = useState(() => (sessionStorage.getItem("mateco_last_view") === "prehlad" ? "dnes" : sessionStorage.getItem("mateco_last_view")) || "calendar"); // Servis → Prehľad zrušený 8. 10.
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dashboardDepoFilter, setDashboardDepoFilter] = useState(null);
@@ -9698,23 +9684,6 @@ function DispatcherApp() {
           />
         )}
 
-        {module === "servis" && view === "prehlad" && (
-          <ServisOverview
-            damages={damages}
-            technicians={technicians}
-            assignments={assignments}
-            weeklyDuty={weeklyDuty}
-            machineById={enrichedMachineById}
-            depoCheckers={depoCheckers}
-            checkerSubstitutions={checkerSubstitutions}
-            today={today}
-            onNavigate={(v) => setView(v)}
-            user={effectiveUser}
-            portalProblems={portalRequests.filter((r) => r.type === "problem" && r.status === "pending")}
-            onConvertPortalProblem={(r) => convertPortalRequestToDamage(r)}
-            onRejectPortalRequest={(r, note) => rejectPortalRequest(r, note)}
-          />
-        )}
 
         {module === "servis" && view === "plan" && (
           <div>
@@ -12598,7 +12567,6 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
   const canErp = can(effectiveUser, "erp_view");
   const podkladySubs = [...(canSeeEz ? ["ez_merania"] : []), ...(canErp ? ["erp"] : [])];
   const servisTabs = [
-    { id: "prehlad", label: "Prehľad" },
     { id: "plan", label: "Plán servisu" },
     { id: "diely", label: "Náhradné diely", group: ["diely", "vydaj"] },
     { id: "poskodenia", label: "Poškodenia", group: ["poskodenia", "externe"] },
@@ -12660,7 +12628,6 @@ const NAV_ICON_PATHS = {
   erp_pozicovna: "M4 4h16v4H4z M4 12h16v8H4z",
   podklady: "M4 4h16v4H4z M4 12h16v8H4z",
   dokumenty: "M6 2h9l5 5v15H6z M14 2v6h6",
-  prehlad: "M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z",
   plan: "M4 5h16v16H4z M4 9h16 M8 13h3 M8 17h6",
   diely: "M21 8l-9-5-9 5 9 5z M3 8v8l9 5 9-5V8 M12 13v8",
   poskodenia: "M12 3 2 21h20z M12 10v5 M12 18h.01",
@@ -25046,195 +25013,6 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
    Servis — Prehľad: štatistika + rýchly prehľad mesiaca
    (rovnaká logika ako Prehľad Požičovne — dlaždice, klik = presmerovanie)
 --------------------------------------------------------- */
-function ServisOverview({ damages, technicians, assignments, weeklyDuty, machineById, depoCheckers, checkerSubstitutions, today, onNavigate, user, portalProblems, onConvertPortalProblem, onRejectPortalRequest }) {
-  const [depoFilter, setDepoFilter] = useState(null);
-  const depoOptions = DEPO_OPTIONS;
-  const damageDepo = (d) => (d.type === "externa" ? d.assignedDepo : (machineDispatchDepo(machineById[d.machineId]) || d.location)) || "";
-  const damagesInDepo = depoFilter ? damages.filter((d) => damageDepo(d).toLowerCase() === depoFilter.toLowerCase()) : damages;
-  const techniciansInDepo = depoFilter ? technicians.filter((t) => (t.depo || "").toLowerCase() === depoFilter.toLowerCase()) : technicians;
-
-  const newDamages = damagesInDepo.filter((d) => d.type === "poskodenie" && !d.resolved && !d.technicianId);
-  const assignedDamages = damagesInDepo.filter((d) => d.type === "poskodenie" && !d.resolved && d.technicianId);
-  const newExterna = damagesInDepo.filter((d) => d.type === "externa" && !d.resolved);
-  const revisionOverdue = damagesInDepo.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
-  const revisionSoon = damagesInDepo.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
-  const uradneSkusky = damagesInDepo.filter((d) => d.type === "uradnaSkuska" && !d.resolved);
-
-  const tiles = [
-    { key: "new", label: "Nové poškodenia (nepridelené)", color: "var(--danger)", count: newDamages.length, view: "poskodenia" },
-    { key: "assigned", label: "Pridelené poškodenia", color: "var(--info)", count: assignedDamages.length, view: "poskodenia" },
-    { key: "externa", label: "Nové externé zákazky", color: "var(--danger)", count: newExterna.length, view: "externe" },
-    { key: "revOverdue", label: "Revízia po termíne", color: "var(--danger)", count: revisionOverdue.length, view: "revizie" },
-    { key: "revSoon", label: "Revízia do 30 dní", color: "var(--warn)", count: revisionSoon.length, view: "revizie" },
-    { key: "skusky", label: "Úradné skúšky", color: "var(--warn)", count: uradneSkusky.length, view: "uradne_skusky" },
-  ];
-
-  const today0 = today;
-  const monthStartISO = today0.slice(0, 7) + "-01";
-  const lastDay = new Date(Number(today0.slice(0, 4)), Number(today0.slice(5, 7)), 0).getDate();
-  const monthEndISO = today0.slice(0, 7) + "-" + String(lastDay).padStart(2, "0");
-  const monthLabel = new Date(today0 + "T00:00:00").toLocaleDateString("sk-SK", { month: "long", year: "numeric" });
-
-  const monthlySummary = techniciansInDepo
-    .filter((t) => !t.archived)
-    .map((t) => {
-      const kindDates = { pohotovost: [], dovolenka: [], pn: [] };
-      assignments.forEach((a) => {
-        if (a.technicianId !== t.id || !a.kind || !(a.kind in kindDates)) return;
-        if (a.date < monthStartISO || a.date > monthEndISO) return;
-        kindDates[a.kind].push(a.date);
-      });
-      const dutyWeeks = (weeklyDuty || [])
-        .filter((w) => w.technicianId === t.id && w.weekStart <= monthEndISO && w.weekEnd >= monthStartISO)
-        .sort((a, b) => (a.weekStart < b.weekStart ? -1 : 1));
-      return { technician: t, kindDates, dutyWeeks };
-    })
-    .filter((s) => s.dutyWeeks.length > 0 || Object.values(s.kindDates).some((arr) => arr.length > 0));
-
-  return (
-    <div>
-      <div className="quick-filters" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
-      </div>
-      {(portalProblems || []).length > 0 && (
-        // Problémy nahlásené zákazníkom cez portál posudzuje servis (nie požičovňa)
-        // — rovno tu, bez hľadania zákazky.
-        <div className="panel" style={{ padding: 14, marginBottom: 16, borderLeft: "3px solid var(--danger)" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--danger)", marginBottom: 8 }}>
-            📩 Problémy nahlásené zákazníkom ({portalProblems.length})
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {portalProblems.map((r) => {
-              const m = machineById[r.machineId];
-              return (
-                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
-                  <span>
-                    <strong>{m?.code || "—"}</strong> · {r.customer || "—"}: „{r.message}“
-                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}> · {r.createdAt ? fmtDate(String(r.createdAt)) : ""}</span>
-                  </span>
-                  {can(user, "damage_status") && (
-                    <span style={{ display: "flex", gap: 6 }}>
-                      <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => onConvertPortalProblem(r)}>Založiť ako poškodenie</button>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ fontSize: 12, color: "var(--danger)" }}
-                        onClick={() => {
-                          const note = window.prompt("Dôvod zamietnutia (uvidí ho zákazník na portáli):", "");
-                          if (note === null) return;
-                          if (!note.trim()) { showNotice("Zadajte dôvod zamietnutia — zákazník ho uvidí na portáli."); return; }
-                          onRejectPortalRequest(r, note.trim());
-                        }}
-                      >
-                        Zamietnuť
-                      </button>
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
-        {tiles.filter((t) => t.count > 0).map((t) => (
-          <div
-            key={t.key}
-            className="panel"
-            onClick={() => onNavigate(t.view)}
-            style={{ padding: "12px 14px", borderLeft: `3px solid ${t.color}`, cursor: "pointer" }}
-            title="Kliknutím prejdete na podrobný zoznam"
-          >
-            <div className="label-font" style={{ color: t.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{t.count}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: monthlySummary.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Checkeri podľa depa — dnes ({fmtDate(today)})
-          </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Aktuálny checker</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEPO_OPTIONS.map((d) => {
-                  const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, d, today);
-                  const checker = checkerId ? technicians.find((t) => t.id === checkerId) : null;
-                  const isSubstitute = (checkerSubstitutions || []).some(
-                    (s) => s.depo === d && today >= s.startDate && today <= s.endDate
-                  );
-                  return (
-                    <tr key={d} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>{d}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13 }}>
-                        {checker ? checker.name : <span style={{ color: "var(--text-dim)" }}>— nepridelené —</span>}
-                        {isSubstitute && checker && (
-                          <span style={{ fontSize: 11, color: "var(--warn)", marginLeft: 8 }}>(náhrada za dovolenku)</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        {monthlySummary.length > 0 && (
-          <div className="panel" style={{ padding: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-              Rýchly prehľad — {monthLabel}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {monthlySummary.map((s) => (
-                <div key={s.technician.id} style={{ fontSize: 13, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  <span style={{ fontWeight: 600 }}>{s.technician.name}:</span>
-                  {s.kindDates.pohotovost.length > 0 && (
-                    <span><span style={{ color: "var(--danger)", fontWeight: 600 }}>Pohotovosť</span> {compressDates(s.kindDates.pohotovost)}</span>
-                  )}
-                  {s.kindDates.dovolenka.length > 0 && (
-                    <span>{s.kindDates.pohotovost.length > 0 ? " · " : ""}<span style={{ color: "var(--ok)", fontWeight: 600 }}>Dovolenka</span> {compressDates(s.kindDates.dovolenka)}</span>
-                  )}
-                  {s.kindDates.pn.length > 0 && (
-                    <span>{(s.kindDates.pohotovost.length > 0 || s.kindDates.dovolenka.length > 0) ? " · " : ""}<span style={{ color: "var(--warn)", fontWeight: 600 }}>PN / Doktor</span> {compressDates(s.kindDates.pn)}</span>
-                  )}
-                  {s.dutyWeeks.map((w) => (
-                    <span key={w.id}>
-                      {(s.kindDates.pohotovost.length > 0 || s.kindDates.dovolenka.length > 0 || s.kindDates.pn.length > 0) ? " · " : ""}
-                      <span style={{ color: "#6b7280", fontWeight: 600 }}>☎ Služba</span> {fmtDate(w.weekStart)}–{fmtDate(w.weekEnd)}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function TechniciansOverview({ technicians, assignments, machines, damages, weeklyDuty, today, vehicleByEmployeeId, onOpenAssignment, onInspection, onProtocol, myEmployee, user, hasServiceProtocol, technicianFilter, depoFilter, setDepoFilter }) {
   const [openChecks, setOpenChecks] = useState({}); // „techId|deň“ → rozbalené kontroly
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
@@ -27896,14 +27674,14 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const noDriver = transports.filter((t) => !t.driverId && t.date <= tomorrow).sort((a, b) => a.date.localeCompare(b.date));
     const mismatch = (notifications || []).filter((n) => n.title === "Nesúlad depa pri zvoze" && !n.readBy.includes(user.id));
     const portal = (portalRequests || []).filter((r) => r.type !== "problem" && r.status === "pending" && jobById[r.jobId] && isMyJob(jobById[r.jobId]));
-    const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow && j.endDate >= monthAgo).sort((a, b) => a.endDate.localeCompare(b.endDate));
+    const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow).sort((a, b) => a.endDate.localeCompare(b.endDate)); // aj dávno po konci — zabudnuté neukončené
     const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo }));
     const todayT = transports.filter((t) => t.date === today).sort((a, b) => a.type.localeCompare(b.type));
     tiles.push(
       { n: noDriver.length, label: "Prepravy do zajtra bez šoféra", tone: "red", onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
       { n: mismatch.length, label: "Nesúlad depa pri zvoze", tone: "red" },
       { n: portal.length, label: "Žiadosti z portálu", tone: "warn" },
-      { n: ending.length, label: "Končia dnes / zajtra", tone: "info", onClick: () => onGo({ module: "poziciovna", view: "jobs" }) },
+      { n: ending.length, label: "Končia / po konci", tone: ending.some((j) => j.endDate < today) ? "red" : "info", onClick: () => onGo({ module: "poziciovna", view: "jobs" }) },
       { n: resv.length, label: "Rezervácie na schválenie", tone: "info" },
       { n: todayT.length, label: "Prepravy dnes", tone: "ok", always: true, onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
     );
@@ -27934,6 +27712,8 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const partReq = (spareParts || []).filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
     const ez = (ezMeasurements || []).filter((m) => !m.processed);
     const revLate = (damages || []).filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
+    const revSoon = (damages || []).filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
+    const skusky = (damages || []).filter((d) => d.type === "uradnaSkuska" && !d.resolved);
     const noSub = [];
     TODAY_DEPOS.forEach((depo) => {
       const base = depoCheckers?.[depo];
@@ -27957,6 +27737,8 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       { n: partReq.length, label: "Požiadavky na diely", tone: "warn", onClick: () => onGo({ module: "servis", view: "diely" }) },
       { n: ez.length, label: "EZ merania na spracovanie", tone: "info", onClick: () => onGo({ module: "servis", view: "ez_merania" }) },
       { n: revLate.length, label: "Revízie po termíne", tone: "warn", onClick: () => onGo({ module: "servis", view: "revizie" }) },
+      { n: revSoon.length, label: "Revízie do 30 dní", tone: "info", onClick: () => onGo({ module: "servis", view: "revizie" }) },
+      { n: skusky.length, label: "Úradné skúšky", tone: "info", onClick: () => onGo({ module: "servis", view: "uradne_skusky" }) },
       { n: noSub.length, label: "Checker bez zástupu", tone: "warn" },
       ...(billing ? [
         { n: erpChecks.length, label: "Kontroly checkera do ERP", tone: "info", onClick: () => onGo({ module: "servis", view: "erp" }) },
