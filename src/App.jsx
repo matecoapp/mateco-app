@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.775";
+const APP_VERSION = "1.0.776";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -9892,6 +9892,8 @@ function DispatcherApp() {
               // nejde obísť priamym API voľaním.
               const forcedDepo = !canManage ? myEmployee?.depo : null;
               const depo = forcedDepo || items[0]?.depo || "";
+              // Diel bez depa by nikto v zozname nevidel (zoznam je po depách).
+              if (!depo) { showNotice(canManage ? "Vyberte depo." : "Nemáte na karte zamestnanca depo — požiadajte vedúceho servisu, nech vám ho doplní."); return false; }
               if (allowedDepos && (!allowedDepos.includes(depo) || items.some((it) => it.depo && !allowedDepos.includes(it.depo)))) return;
               const nowIso = new Date().toISOString();
               if (persistSpareParts((spareParts) => [...spareParts,
@@ -28291,7 +28293,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   // "Vedúci technik" role vidí/objednáva len na svoje depá (napr. BA + NR),
   // ostatní s právom sparepart_manage (dispečer/vedúci servisu) na všetky.
   const allowedDepos = myAssignableDepos(user);
-  const depoOptions = allowedDepos || DEPO_OPTIONS.filter((d) => d !== "Externé");
+  const depoOptions = [...(allowedDepos || DEPO_OPTIONS.filter((d) => d !== "Externé")), ...(!allowedDepos && spareParts.some((p) => !p.depo) ? [""] : [])];
   // Najprv vlastné depo (ak ho smie spravovať), inak prvé povolené.
   const [activeDepo, setActiveDepo] = useState(canManage ? (depoOptions.includes(myDepo) ? myDepo : depoOptions[0]) : myDepo);
   const [dodavatelFilter, setDodavatelFilter] = useState(null); // null = všetko zaškrtnuté (predvolené)
@@ -28318,7 +28320,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const depo = canManage ? activeDepo : myDepo;
   const { start, end } = periodBounds(periodMode, today, customStart, customEnd);
 
-  const depoRows = spareParts.filter((p) => p.depo === depo);
+  const depoRows = spareParts.filter((p) => (p.depo || "") === depo);
   // Filter obdobia sa týka LEN už objednaných položiek — nevybavené sa majú
   // vidieť vždy, nech sa nestratia z dohľadu len preto, že prešiel mesiac.
   const periodFiltered = periodMode === "all"
@@ -28501,8 +28503,8 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                   border: "1px solid " + (activeDepo === d ? "var(--accent)" : "var(--border)"),
                 }}
               >
-                <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-                {(() => { const n = spareParts.filter((p) => p.depo === d && p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length; return n ? <span className="badge" style={{ marginLeft: 6, background: activeDepo === d ? "#fff" : "var(--accent-light)", color: "var(--accent)" }}>{n}</span> : null; })()}
+                <span className="depo-chip-full">{d || "Bez depa"}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d || "Bez depa"}</span>
+                {(() => { const n = spareParts.filter((p) => (p.depo || "") === d && p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length; return n ? <span className="badge" style={{ marginLeft: 6, background: activeDepo === d ? "#fff" : "var(--accent-light)", color: "var(--accent)" }}>{n}</span> : null; })()}
               </button>
             ))}
           </div>
