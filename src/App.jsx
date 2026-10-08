@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.773";
+const APP_VERSION = "1.0.774";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -1353,14 +1353,36 @@ const daysBetween = (a, b) => {
   return Math.round((d2 - d1) / 86400000);
 };
 // Počet pracovných dní (po–pi) po dátume a až do dátumu b vrátane.
+// Štátne sviatky SR (rest = deň pracovného pokoja). Pre lehoty (2 pracovné dni) sa ráta KAŽDÝ sviatok — rovnako DB private.sk_holiday.
+// ponytail: zmeny zákona (8. 5. a 15. 9. bez voľna len 2026, 1. 9. od 2024, 17. 11. od 2025) sú tu natvrdo — pri ďalšej zmene doplniť.
+const _skHolidayCache = {};
+function skHolidays(y) {
+  if (_skHolidayCache[y]) return _skHolidayCache[y];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easter = `${y}-${String(Math.floor((h + l - 7 * m + 114) / 31)).padStart(2, "0")}-${String(((h + l - 7 * m + 114) % 31) + 1).padStart(2, "0")}`;
+  const list = {
+    "01-01": ["Deň vzniku Slovenskej republiky", true], "01-06": ["Zjavenie Pána (Traja králi)", true], "05-01": ["Sviatok práce", true],
+    "05-08": ["Deň víťazstva nad fašizmom", y !== 2026], "07-05": ["Sviatok svätého Cyrila a svätého Metoda", true],
+    "08-29": ["Výročie Slovenského národného povstania", true], "09-01": ["Deň Ústavy Slovenskej republiky", y < 2024],
+    "09-15": ["Sedembolestná Panna Mária", y !== 2026], "10-28": ["Deň vzniku samostatného česko-slovenského štátu", false],
+    "11-01": ["Sviatok Všetkých svätých", true], "11-17": ["Deň boja za slobodu a demokraciu", y < 2025],
+    "12-24": ["Štedrý deň", true], "12-25": ["Prvý sviatok vianočný", true], "12-26": ["Druhý sviatok vianočný", true],
+  };
+  const out = Object.fromEntries(Object.entries(list).map(([md, [name, rest]]) => [`${y}-${md}`, { name, rest }]));
+  out[addDaysISO(easter, -2)] = { name: "Veľký piatok", rest: true };
+  out[easter] = { name: "Veľkonočná nedeľa", rest: true };
+  out[addDaysISO(easter, 1)] = { name: "Veľkonočný pondelok", rest: true };
+  return (_skHolidayCache[y] = out);
+}
+const holidayInfo = (iso) => (iso ? skHolidays(Number(String(iso).slice(0, 4)))[String(iso).slice(0, 10)] || null : null);
+const holidayLabel = (h) => `Sviatok: ${h.name} — ${h.rest ? "deň pracovného pokoja" : "nie je deň pracovného pokoja"}`;
+const withHoliday = (iso, title) => { const h = holidayInfo(iso); return h ? (title ? `${holidayLabel(h)}\n${title}` : holidayLabel(h)) : title; };
 const workdaysAfter = (a, b) => {
   let n = 0;
-  const d = new Date(a + "T12:00:00");
-  const end = new Date(b + "T12:00:00");
-  while (d < end) {
-    d.setDate(d.getDate() + 1);
-    const wd = d.getDay();
-    if (wd !== 0 && wd !== 6) n++;
+  for (let iso = addDaysISO(a, 1); iso <= b; iso = addDaysISO(iso, 1)) {
+    const wd = new Date(iso + "T12:00:00").getDay();
+    if (wd !== 0 && wd !== 6 && !holidayInfo(iso)) n++;
   }
   return n;
 };
@@ -4375,6 +4397,12 @@ function DispatcherApp() {
         pushNotificationRef.current?.({ roles: ["dispecer_servisu", "veduci_servisu"], kind: "spare_parts", title: "Odovzdanie výdaja sa neuložilo",
           message: `Podpis výdaja dielov${ph?.customer ? ` pre ${ph.customer}` : ""} sa neuložil — výdaj ste medzitým zmenili. Treba ho podpísať znova.`,
           link: { module: "servis", view: "vydaj", partHandoverId: id } });
+      } else if (table === "partHandovers" && /odovzdáva len pridelený/.test(why || "")) {
+        const ph = partHandoversRef.current.find((x) => x.id === id);
+        showNotice(`Odovzdanie výdaja dielov${ph?.customer ? ` pre ${ph.customer}` : ""} sa neuložilo — kancelária ho medzitým pridelila inému kolegovi. Zavolajte kanceláriu servisu.`);
+        pushNotificationRef.current?.({ roles: ["dispecer_servisu", "veduci_servisu"], kind: "spare_parts", title: "Odovzdanie výdaja sa neuložilo",
+          message: `Podpis výdaja dielov${ph?.customer ? ` pre ${ph.customer}` : ""} sa neuložil — podpísal ho kolega, ktorému výdaj už nebol pridelený. Overte, kto diely odovzdal.`,
+          link: { module: "servis", view: "vydaj", partHandoverId: id } });
       } else showToast(why ? `${why} — zmena sa vrátila späť.` : "Túto zmenu nemáte oprávnenie uložiť — vrátila sa späť.", true);
       const setState = setters[table];
       if (!setState) return;
@@ -5399,13 +5427,13 @@ function DispatcherApp() {
       jobs: persistJobs, machines: persistMachines, customers: persistCustomers, reservations: persistReservations,
       damages: persistDamages, employees: persistEmployees, machineModels: persistMachineModels,
       framoveZmluvy: persistFramoveZmluvy, blacklist: persistBlacklist, handoverProtocols: persistHandoverProtocols,
-      vehicles: persistVehicles,
+      vehicles: persistVehicles, partHandovers: persistPartHandovers,
     };
     const persistFn = RESTORE_PERSIST[trashEntry.originalTable];
     if (!persistFn) return;
     let record = trashEntry.originalData;
     // Záznam existuje (offline zmazanie sa nevykonalo) — kópia v Koši je staršia, prepísala by novšie údaje.
-    const CURRENT = { jobs, machines, customers, reservations, damages, employees, machineModels, framoveZmluvy, blacklist, handoverProtocols, vehicles };
+    const CURRENT = { jobs, machines, customers, reservations, damages, employees, machineModels, framoveZmluvy, blacklist, handoverProtocols, vehicles, partHandovers };
     if (record && (CURRENT[trashEntry.originalTable] || []).some((x) => x.id === record.id)) {
       showNotice("Tento záznam už v platforme existuje — v Koši je jeho staršia kópia. Obnova sa nevykonala.");
       return;
@@ -9874,7 +9902,7 @@ function DispatcherApp() {
               onPrint={(p) => openPrintablePartHandover(p)}
               onSendMail={sendPartHandoverMail}
               onBill={billPartHandover}
-              onDelete={(p) => askDelete("tento výdaj dielov", () => persistPartHandovers((list) => list.filter((x) => x.id !== p.id)))}
+              onDelete={(p) => askDelete("tento výdaj dielov", () => { moveToTrash("partHandover", "partHandovers", p, `${p.customer || "—"} · ${phItemsSummary(p.items)}`); persistPartHandovers((list) => list.filter((x) => x.id !== p.id)); }, true)}
             />
           )}
           {view === "diely" && (
@@ -11693,6 +11721,7 @@ const TRASH_TYPE_LABELS = {
   blacklist: "Blacklist",
   handoverProtocol: "Odovzdávací protokol",
   vehicle: "Auto",
+  partHandover: "Výdaj dielov",
 };
 function canSeeTrashEntry(entry, user) {
   if (isAdminUser(user)) return true;
@@ -11705,7 +11734,7 @@ function canSeeTrashEntry(entry, user) {
     return false;
   }
   if (role === "veduci_servisu") {
-    if (entry.recordType === "damage") return true;
+    if (entry.recordType === "damage" || entry.recordType === "partHandover") return true;
     if (entry.recordType === "employee" && ["technik", "dispecer_servisu", "fakturant_servis", "veduci_technik_ba"].includes(entry.originalData?.role)) return true;
     return false;
   }
@@ -19720,7 +19749,7 @@ function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, o
 // Porucha v kalendári (rozhodnutie 7. 10.): každé nahlásené poškodenie stroja od dňa nahlásenia do dňa opravy
 // (dátum z protokolu/uzavretia), otvorené bez konca. Vracia { d, from, to } — to = null = stále otvorené.
 function machineBreakdowns(damages, machineId) {
-  // Aj „Príprava do prenájmu“ (prepCheck pri novom stroji — blokuje zákazku). Bez poruchy opravenej v deň
+  // Aj „Príprava do požičovne“ (prepCheck pri novom stroji — blokuje zákazku). Bez poruchy opravenej v deň
   // nahlásenia (stroj nebol mimo prevádzky ani deň).
   return (damages || []).filter((d) => d.type === "poskodenie" && d.machineId === machineId && d.dateReported)
     .map((d) => ({ d, from: String(d.dateReported).slice(0, 10), to: d.resolved ? String(d.opravaDatum || d.resolvedAt || d.dateReported).slice(0, 10) : null }))
@@ -19731,7 +19760,7 @@ function breakdownTooltip(b, technicianNameById) {
   const tech = (d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : []).map((id) => technicianNameById?.[id]).filter(Boolean).join(", ");
   return (
     <>
-      <div style={{ fontWeight: 600 }}>⚠ {d.prepCheck ? "Príprava do prenájmu" : "Porucha"} · {d.code || "—"}</div>
+      <div style={{ fontWeight: 600 }}>⚠ {d.prepCheck ? "Príprava do požičovne" : "Porucha"} · {d.code || "—"}</div>
       {d.popis && !d.prepCheck && <div>{d.popis}</div>}
       <div>Nahlásené {fmtDate(b.from)}{d.reportedBy ? ` · ${d.reportedBy}` : ""}</div>
       {b.to ? <div>Opravené {fmtDate(b.to)}</div> : tech ? <div>Oprava: {tech}{d.assignedDate ? ` · ${fmtDate(d.assignedDate)}` : ""}</div> : <div>Oprava zatiaľ nepridelená</div>}
@@ -19990,14 +20019,14 @@ const CalendarGrid = React.memo(function CalendarGrid({
             const iso = allDays[i];
             const isToday = iso === today;
             const dow = new Date(iso + "T00:00:00").getDay();
-            const isWeekend = dow === 0 || dow === 6;
+            const isWeekend = dow === 0 || dow === 6 || !!holidayInfo(iso);
             return (
               <div
                 key={iso}
                 ref={isToday ? todayCellRef : null}
                 data-day-iso={iso}
                 className="mono gantt-header-cell"
-                title={iso}
+                title={withHoliday(iso, iso)}
                 style={{
                   gridColumn: i + 2,
                   textAlign: "center",
@@ -20179,7 +20208,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
               {visibleDayIdx.map((i) => {
                 const iso = allDays[i];
                 const dow = new Date(iso + "T00:00:00").getDay();
-                const isWeekend = dow === 0 || dow === 6;
+                const isWeekend = dow === 0 || dow === 6 || !!holidayInfo(iso);
                 // Deň s návozom/zvozom mimo trvania zákazky (prednávoz/
                 // neskorší zvoz) nepatrí pod farebný pás zákazky — klik naň
                 // predtým padol na "vytvoriť zákazku", čo len narazilo na
@@ -20282,7 +20311,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                     <div style={{ position: "absolute", inset: 0, background: "#d0021b", borderRadius: 4, boxSizing: "border-box", clipPath: clip, pointerEvents: clip ? "auto" : undefined }} />
                     {showLabel && (
                       <div className="gantt-cell" style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: "fit-content", fontSize: 10, color: "#fff", fontWeight: 700, pointerEvents: "none", paddingLeft: pc.startTurn ? `${cellPct}%` : undefined }}>
-                        <div style={{ padding: compactMode ? "1px 6px" : "3px 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>⚠ {d.prepCheck ? "Príprava do prenájmu" : "Porucha"}{n > 1 ? fix : ""}</div>
+                        <div style={{ padding: compactMode ? "1px 6px" : "3px 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>⚠ {d.prepCheck ? "Príprava do požičovne" : "Porucha"}{n > 1 ? fix : ""}</div>
                       </div>
                     )}
                     <div style={{ position: "sticky", left: "calc(var(--gantt-name-col) + 6px)", width: 0, height: 0, overflow: "visible", pointerEvents: "none" }}>
@@ -21279,7 +21308,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       )}
     </div>
     {breakdownChoice && (
-      <Modal title={breakdownChoice.damage.prepCheck ? "⚠ Príprava do prenájmu" : "⚠ Porucha"} onClose={() => setBreakdownChoice(null)}>
+      <Modal title={breakdownChoice.damage.prepCheck ? "⚠ Príprava do požičovne" : "⚠ Porucha"} onClose={() => setBreakdownChoice(null)}>
         <div style={{ fontSize: 13, marginBottom: 6 }}>
           <b>{machines.find((m) => m.id === breakdownChoice.machineId)?.code}</b> · {fmtDate(breakdownChoice.date)}
         </div>
@@ -25704,14 +25733,14 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 const mo = Number(iso.slice(5, 7));
                 const isToday = iso === today;
                 const dow = new Date(iso + "T00:00:00").getDay();
-                const isWeekend = dow === 0 || dow === 6;
+                const isWeekend = dow === 0 || dow === 6 || !!holidayInfo(iso);
                 return (
                   <div
                     key={iso}
                     ref={isToday ? todayCellRef : null}
                     data-day-iso={iso}
                     className="mono gantt-header-cell"
-                    title={iso}
+                    title={withHoliday(iso, iso)}
                     style={{
                       textAlign: "center",
                       fontSize: 11,
@@ -25771,7 +25800,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                 </div>
                 {allDays.map((iso) => {
                   const dow = new Date(iso + "T00:00:00").getDay();
-                  const isWeekend = dow === 0 || dow === 6;
+                  const isWeekend = dow === 0 || dow === 6 || !!holidayInfo(iso);
                   const dayAssignments = byTechDate[`${t.id}_${iso}`] || [];
                   const dutyRecord = (weeklyDuty || []).find((w) => w.technicianId === t.id && iso >= w.weekStart && iso <= w.weekEnd);
                   const onDuty = !!dutyRecord;
@@ -25817,7 +25846,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                       {dayAssignments.length === 0 ? (
                         <div
                           onClick={handleClick}
-                          title={clickTitle}
+                          title={withHoliday(iso, clickTitle)}
                           style={{
                             height: 26,
                             borderRadius: 4,
@@ -28066,6 +28095,7 @@ function PhAssigneeSelect({ value, employees, onChange }) {
 const phQty = (q) => Number(String(q ?? "").replace(",", "."));
 const phPrice = (p) => (p === "" || p == null ? null : Number(String(p).replace(",", ".")));
 const phMoney = (n) => `${n.toFixed(2).replace(".", ",")} €`;
+const phPlaceOk = (d) => d.method === "delivery" || !!d.depo; // osobný odber: depo povinné (rozhodnutie 8. 10.)
 function phItemsValid(items) {
   return Array.isArray(items) && items.length > 0 && items.every((it) => (it.name || "").trim() && (it.pn || "").trim() && phQty(it.qty) > 0);
 }
@@ -28165,7 +28195,7 @@ function PartHandoverFields({ value, onChange, customers, machines, withPrices }
         {v.method === "delivery" ? (
           <Field label="Adresa doručenia"><input value={v.deliveryAddress || ""} onChange={(e) => set({ deliveryAddress: e.target.value })} style={{ width: "100%" }} /></Field>
         ) : (
-          <Field label="Depo">
+          <Field label="Depo *">
             <select value={v.depo || ""} onChange={(e) => set({ depo: e.target.value })} style={{ width: "100%" }}>
               <option value="">— vybrať —</option>
               {DEPO_OPTIONS.filter((d) => d !== "Externé").map((d) => <option key={d} value={d}>{d}</option>)}
@@ -28240,7 +28270,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
       }
     }
   }
-  const dataOk = !!(shown.customer || "").trim() && phItemsValid(shown.items);
+  const dataOk = !!(shown.customer || "").trim() && phItemsValid(shown.items) && (!!rec || phPlaceOk(shown));
   const customerOk = customerAbsent ? photos.length > 0 : !!(customerSig && customerName.trim());
   const canSave = uploading === 0 && dataOk && customerOk && !!handerSig && !changedSinceOpen;
   function save() {
@@ -28338,8 +28368,8 @@ function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover
 function PartHandoverEditModal({ rec, customers, machines, employees, onClose, onSave }) {
   const isNew = !rec;
   const [draft, setDraft] = useState(() => rec || { method: "pickup", depo: "", date: todayISO(), items: [{ name: "", pn: "", qty: "", price: "" }] });
-  const valid = !!(draft.customer || "").trim() && phItemsValid(draft.items) && (draft.items || []).every((it) => it.price === "" || it.price == null || phPrice(it.price) >= 0);
   const signed = !!rec && rec.status !== "waiting";
+  const valid = !!(draft.customer || "").trim() && phItemsValid(draft.items) && (signed || phPlaceOk(draft)) && (draft.items || []).every((it) => it.price === "" || it.price == null || phPrice(it.price) >= 0);
   function save(checked) {
     if (!valid) return;
     if (onSave({ ...draft, items: draft.items.map((it) => ({ ...it, name: it.name.trim(), pn: it.pn.trim(), qty: String(it.qty).trim(), price: it.price === "" || it.price == null ? "" : String(it.price).trim() })) }, { isNew, checked }) === false) return;
