@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.770";
+const APP_VERSION = "1.0.773";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -1379,7 +1379,8 @@ const toNumOrText = (v) => {
 const canonJSON = (v) => JSON.stringify(v ?? null, (k, x) => (typeof x === "string" ? toNumOrText(x) : x));
 function revertErpIfChanged(record, patch, fields) {
   if (!record?.erpProcessed || !record.erpSnapshot) return {};
-  const changed = fields.some((f) => canonJSON(patch[f] ?? record[f]) !== canonJSON(record.erpSnapshot[f]));
+  // Staršie snímky nemajú všetky polia (napr. MTH od v1.0.770) — tie sa neporovnávajú.
+  const changed = fields.filter((f) => f in record.erpSnapshot).some((f) => canonJSON(patch[f] ?? record[f]) !== canonJSON(record.erpSnapshot[f]));
   return changed ? { erpProcessed: false } : {};
 }
 // Úprava vytlačeného protokolu posiela všetky polia ako text — do DB ide len to,
@@ -1978,6 +1979,15 @@ function setMergeConflictListener(fn) {
 }
 const _rejectedNotified = new Set();
 let _rejectedProtocolListener = null;
+// Odmietnutý protokol, ktorý je v DB už uložený s tými istými podpismi (napr. dohratie fotiek po uzavretí
+// protokolu iným zápisom) — nie je to „neuložený protokol“, nič nehlásiť.
+async function protocolAlreadySaved(item) {
+  const { data: fr, error } = await supabase.from("handoverProtocols").select("data").eq("id", item.id).maybeSingle();
+  if (error || !fr) return false;
+  const d = fr.data || {};
+  const same = (p) => !item[p + "Done"] || (!!d[p + "Done"] && (d[p + "DriverSignature"] || "") === (item[p + "DriverSignature"] || "") && (d[p + "CustomerSignature"] || "") === (item[p + "CustomerSignature"] || ""));
+  return same("handover") && same("return");
+}
 function setRejectedProtocolListener(fn) {
   _rejectedProtocolListener = fn;
 }
@@ -2063,6 +2073,7 @@ async function flushOutboxOnce() {
         // Podpísaný protokol sa nezahadzuje (napr. dispečer medzitým preradil šoféra) —
         // ostáva vo fronte, kým ho dispečer nevráti; šofér aj dispečer sa to dozvedia raz.
         if (table === "handoverProtocols") {
+          if (await protocolAlreadySaved(item)) { await idbDelete("outbox", qKey); _saveStatusListener?.("ok", table); return; }
           if (!it.rejectedNotified && !_rejectedNotified.has(qKey)) {
             _rejectedNotified.add(qKey); // dva súbežné flushe (online + interval) → len raz
             await idbPut("outbox", qKey, { ...it, rejectedNotified: true });
@@ -2621,6 +2632,7 @@ function saveRecordRow(table, item, base) {
     if (ok === "denied") {
       delete _retryActions[table];
       if (table === "handoverProtocols" && _offlineQueueAllowed) {
+        if (await protocolAlreadySaved(item)) { _saveStatusListener?.("ok", table); return; }
         // Podpísaný protokol sa nezahadzuje (preradenie šoféra, deaktivácia) — ostáva vo fronte ako pri flushi.
         await queueIt();
         if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true })); _rejectedProtocolListener?.(item); }
@@ -5741,12 +5753,12 @@ function DispatcherApp() {
   // afterProtocolId: upozornenie čaká vo fronte, kým sa neodošle protokol (offline) — odmietnutý protokol ho nepošle.
   // deferred: len vráti záznam (uloží ho volajúci neskôr, napr. z offline fronty).
   pushNotificationRef.current = pushNotification; // pre listenery registrované raz (useEffect [])
-  function pushNotification({ roles, userName, title, message, link, kind, system, afterProtocolId, deferred }) {
+  function pushNotification({ roles, userName, userId: explicitUserId, title, message, link, kind, system, afterProtocolId, deferred }) {
     // Osobná notifikácia sa páruje aj podľa ID účtu (userId) — meno v profile a v
     // zázname zamestnanca sa môže líšiť (diakritika, preklep) a človeku by nič neprišlo.
     // createdById: autor akcie — sám sebe notifikáciu nedostane.
     const targetEmployee = userName ? employees.find((e) => e.name === userName) : null;
-    const userId = targetEmployee?.linkedUserId || (userName ? profiles.find((p) => p.name === userName)?.id : null) || null;
+    const userId = explicitUserId || targetEmployee?.linkedUserId || (userName ? profiles.find((p) => p.name === userName)?.id : null) || null;
     // Osobné upozornenie pre človeka bez účtu by nikto nedostal — nezapisovať.
     if (userName && !userId && !(roles || []).length) return;
     // Fakturanti majú práva „materskej“ roly (ROLE_PERM_ALIAS) — dostanú aj jej
@@ -6300,7 +6312,7 @@ function DispatcherApp() {
     persistAssignments(
       (assignments) => assignments.map((a) =>
         ids.has(a.id)
-          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts } }
+          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts, mth: a.mth ?? null, noMth: !!a.noMth } }
           : a
       )
     );
@@ -8473,7 +8485,7 @@ function DispatcherApp() {
     // Existujúcu (nevykonanú) kontrolu len presunieme/prehodíme — to isté ID,
     // nič rozpracované sa nestratí. Upozornenie ide len novému checkerovi.
     const reset = machineChanged && existing.resolved
-      ? { resolved: false, checklist: null, checkerPhotos: [], checkerBy: null, checkerDate: null, workHours: null, usedParts: [], erpProcessed: false, erpProcessedAt: null, erpProcessedBy: null, erpSnapshot: null, erpOrderNumber: null, damageId: null }
+      ? { resolved: false, checklist: null, checkerPhotos: [], checkerBy: null, checkerDate: null, workHours: null, usedParts: [], mth: null, noMth: null, erpProcessed: false, erpProcessedAt: null, erpProcessedBy: null, erpSnapshot: null, erpOrderNumber: null, damageId: null }
       : {};
     const record = existing
       ? { ...existing, technicianId: checkerId, date: inspectionDate, self: !!job.selfPickup, machineId: job.machineId, ...reset }
@@ -8776,6 +8788,7 @@ function DispatcherApp() {
     const cur = partHandoversRef.current.find((x) => x.id === record.id);
     if (!cur && record.source !== "field") { showNotice("Tento výdaj medzičasom zmazal dispečer — neuložil sa."); return false; }
     if (cur && cur.status !== "waiting") { showNotice("Tento výdaj už medzičasom odovzdal niekto iný."); return false; }
+    if (cur && cur.assigneeId !== myEmployee?.id && !phCanManage(effectiveUser)) { showNotice(cur.assigneeId ? "Tento výdaj medzičasom kancelária pridelila inému kolegovi — neuložil sa." : "Tento výdaj vám kancelária medzičasom odobrala — neuložil sa."); return false; }
     if (persistPartHandovers((list) => (list.some((x) => x.id === record.id) ? list.map((x) => (x.id === record.id ? record : x)) : [...list, record])) === false) return false;
     showToast("Výdaj dielov bol odovzdaný — dispečer ho skontroluje.");
     return true;
@@ -8786,11 +8799,11 @@ function DispatcherApp() {
     const nowIso = new Date(serverNowMs()).toISOString();
     const me = myEmployee?.name || currentUser?.name || "";
     let rec;
-    if (isNew) rec = { ...draft, id: uid(), status: "waiting", source: "office", createdAt: nowIso, createdBy: me };
+    if (isNew) { const { _assigneeTouched, ...d } = draft; rec = { ...d, id: uid(), status: "waiting", source: "office", createdAt: nowIso, createdBy: me }; } // eslint-disable-line no-unused-vars
     else {
       if (!partHandovers.some((x) => x.id === draft.id)) { showNotice("Tento výdaj medzičasom zmazal iný používateľ — zmena sa neuložila."); return false; }
       const before = partHandovers.find((x) => x.id === draft.id) || draft;
-      const keys = ["customer", "customerAddress", "contactName", "contactPhone", "customerEmail", "method", "depo", "deliveryAddress", "machineText", "orderNumber", "items", "note", "date", ...(before.status === "waiting" ? ["assigneeId", "assigneeName"] : [])];
+      const keys = ["customer", "customerAddress", "contactName", "contactPhone", "customerEmail", "method", "depo", "deliveryAddress", "machineText", "orderNumber", "items", "note", "date", ...(before.status === "waiting" && draft._assigneeTouched ? ["assigneeId", "assigneeName"] : [])];
       const changed = keys.some((k) => JSON.stringify(before[k] ?? "") !== JSON.stringify(draft[k] ?? ""));
       // Oprava po podpise (aj ceny sa dopĺňajú až pri kontrole — tie sa za opravu nerátajú).
       const strip = (items) => (items || []).map(({ price, ...rest }) => rest); // eslint-disable-line no-unused-vars
@@ -8802,9 +8815,13 @@ function DispatcherApp() {
     if (persistPartHandovers((list) => (isNew ? [...list, rec] : list.map((x) => (x.id === rec.id ? rec : x)))) === false) return false;
     showToast(isNew ? "Výdaj dielov bol zadaný." : checked ? "Výdaj je skontrolovaný — ide na fakturáciu." : "Výdaj bol upravený.");
     // Pridelený (alebo zmenený) odovzdávajúci dostane upozornenie — len on ho vidí na „Dnes“.
-    const asg = rec.status === "waiting" && rec.assigneeId && (isNew || partHandovers.find((x) => x.id === rec.id)?.assigneeId !== rec.assigneeId) && employees.find((e) => e.id === rec.assigneeId);
-    if (asg && asg.linkedUserId !== currentUser?.id) pushNotification({ roles: [], userName: asg.name, kind: "spare_parts", title: "Výdaj dielov na odovzdanie",
-      message: `Odovzdajte diely pre ${rec.customer || "—"} (${plural((rec.items || []).length, "položka", "položky", "položiek")})${rec.date ? ` · ${fmtDate(rec.date)}` : ""} · ${rec.method === "delivery" ? `doručenie${rec.deliveryAddress ? ` ${rec.deliveryAddress}` : ""}` : `osobný odber, depo ${rec.depo || "—"}`}.`,
+    const prevAsgId = isNew ? null : partHandovers.find((x) => x.id === rec.id)?.assigneeId || null;
+    const prevAsg = rec.status === "waiting" && prevAsgId && prevAsgId !== rec.assigneeId && employees.find((e) => e.id === prevAsgId);
+    if (prevAsg?.linkedUserId && prevAsg.linkedUserId !== currentUser?.id) pushNotification({ roles: [], userName: prevAsg.name, userId: prevAsg.linkedUserId, kind: "spare_parts", title: "Výdaj dielov vám bol odobratý",
+      message: rec.assigneeId ? `Výdaj dielov pre ${rec.customer || "—"} odovzdá ${rec.assigneeName || "iný kolega"}.` : `Výdaj dielov pre ${rec.customer || "—"} už nie je pridelený vám.`, link: { module: "dnes", view: "dnes" } });
+    const asg = rec.status === "waiting" && rec.assigneeId && prevAsgId !== rec.assigneeId && employees.find((e) => e.id === rec.assigneeId);
+    if (asg?.linkedUserId && asg.linkedUserId !== currentUser?.id) pushNotification({ roles: [], userName: asg.name, userId: asg.linkedUserId, kind: "spare_parts", title: "Výdaj dielov na odovzdanie",
+      message: `Odovzdajte diely pre ${rec.customer || "—"} (${plural((rec.items || []).length, "položka", "položky", "položiek")})${rec.date ? ` · ${fmtDate(rec.date)}` : ""} · ${rec.method === "delivery" ? `doručenie${rec.deliveryAddress ? ` ${rec.deliveryAddress}` : ""}` : `osobný odber${rec.depo ? `, depo ${rec.depo}` : ""}`}.`,
       link: { module: "dnes", view: "dnes" } });
     return true;
   }
@@ -9837,14 +9854,19 @@ function DispatcherApp() {
         )}
 
         {module === "servis" && (view === "diely" || view === "vydaj") && (
-          <TabSwitcher options={[{ id: "diely", label: "Objednávky dielov" }, { id: "vydaj", label: `Výdaj dielov${partHandovers.filter((p) => p.status === (phCanManage(effectiveUser) ? "check" : phCanBill(effectiveUser) ? "billing" : "waiting")).length ? ` (${partHandovers.filter((p) => p.status === (phCanManage(effectiveUser) ? "check" : phCanBill(effectiveUser) ? "billing" : "waiting")).length})` : ""}` }]} active={view} onSelect={setView}>
+          <TabSwitcher options={[{ id: "diely", label: "Objednávky dielov" }, { id: "vydaj", label: (() => { const n = phCanManage(effectiveUser) ? partHandovers.filter((p) => p.status === "check").length : phMineWaiting(partHandovers, myEmployee).length; return `Výdaj dielov${n ? ` (${n})` : ""}`; })() }]} active={view} onSelect={setView}>
           {view === "vydaj" && (
             <PartHandoversView
               partHandovers={partHandovers}
               user={effectiveUser}
               myEmployee={myEmployee}
               employees={employees}
-              onAssign={(p, id) => savePartHandoverOffice({ ...p, assigneeId: id, assigneeName: employees.find((e) => e.id === id)?.name || null }, { isNew: false })}
+              onAssign={(p, id) => {
+                const cur = partHandovers.find((x) => x.id === p.id);
+                if (!cur) { showNotice("Tento výdaj medzičasom zmazal iný používateľ."); return true; }
+                if (cur.status !== "waiting") { showNotice("Tento výdaj už bol medzičasom odovzdaný — pridelenie sa nemení."); return true; }
+                return savePartHandoverOffice({ ...cur, assigneeId: id, assigneeName: employees.find((e) => e.id === id)?.name || null, _assigneeTouched: true }, { isNew: false });
+              }}
               focusId={partHandoverFocusId}
               onNew={() => setPartHandoverUi({ kind: "edit" })}
               onHandover={(p) => setPartHandoverUi({ kind: "sign", rec: p })}
@@ -11334,7 +11356,7 @@ function DispatcherApp() {
                 goBackCard();
                 return;
               }
-              const erpPatch = revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts"]);
+              const erpPatch = revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]);
               persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null } : a)));
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
               const isReturn = checkerInspectionTarget.phase === "vratenie";
@@ -11375,7 +11397,7 @@ function DispatcherApp() {
                     }
                     const record = reportDamage(machine, popis, undefined, { silent: true, atDepo: true, job: jobs.find((j) => j.id === checkerInspectionTarget.jobId) || undefined });
                     const savePatch = patch
-                      ? { ...patch, ...revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts"]), resolved: true, skipped: false, skippedReason: null }
+                      ? { ...patch, ...revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]), resolved: true, skipped: false, skippedReason: null }
                       : {};
                     persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...savePatch, damageId: record.id } : a)));
                     setCheckerInspectionTarget(null);
@@ -15301,6 +15323,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
   const machineByCode = useMemo(() => new Map((machines || []).map((m) => [String(m.code || "").toLowerCase(), m])), [machines]);
   // Odkaz z odpovede → klik, len ak cieľ v menu / „＋ Nové“ tejto role naozaj je (inak null = len text).
   const navLink = (kind, target) => {
+    if (viewAsRole === "nezaradeny") return null;
     const close = () => { if (window.innerWidth < 700) setOpen(false); };
     if (kind === "new") {
       const a = (quickActions || []).find((x) => x.key === target);
@@ -17170,8 +17193,10 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 // skôr než čokoľvek z toho).
 // Posledný známy stav motohodín stroja z kontrol checkera (rozhodnutie 7. 10.: MTH zapisuje checker).
 function lastMachineMth(assignments, machineId, excludeId) {
-  const done = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.machineId === machineId && a.id !== excludeId && (a.mth != null || a.noMth));
-  const last = done.sort((a, b) => ((b.checkerDate || b.date || "") + (b.phase === "vratenie" ? "1" : "0")).localeCompare((a.checkerDate || a.date || "") + (a.phase === "vratenie" ? "1" : "0")))[0];
+  const done = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.machineId === machineId && a.id !== excludeId && ((a.mth !== null && a.mth !== "" && Number.isFinite(Number(a.mth))) || a.noMth === true));
+  // poradie: dátum kontroly, v rámci dňa čas uloženia (checkerAt); staršie bez času — vrátenie pred vývozom
+  const key = (a) => (a.checkerDate || a.date || "").slice(0, 10) + (a.checkerAt || (a.phase === "vratenie" ? "0" : "1"));
+  const last = done.sort((a, b) => key(b).localeCompare(key(a)))[0];
   return last ? { value: last.noMth ? null : Number(last.mth), noMth: !!last.noMth, date: last.checkerDate || last.date, by: last.checkerBy || "" } : null;
 }
 const fmtMth = (n) => Number(n).toLocaleString("sk-SK", { maximumFractionDigits: 1 });
@@ -17192,7 +17217,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   // taký checklist ide do ERP osobitne (nie hromadne), viď ErpChecklistsView.
   const [usedParts, setUsedParts] = useState(assignment.usedParts || []);
   // Počet MTH (stav počítadla) — povinný; „nemá počítadlo“ sa predvyplní podľa poslednej kontroly stroja.
-  const [mth, setMth] = useState(assignment.mth != null ? String(assignment.mth) : "");
+  const [mth, setMth] = useState(assignment.mth != null ? String(assignment.mth).replace(".", ",") : "");
   const [noMth, setNoMth] = useState(assignment.mth != null ? false : !!(assignment.noMth ?? lastMth?.noMth));
   const [mthConfirmed, setMthConfirmed] = useState(false);
   const [confirmReportDamage, setConfirmReportDamage] = useState(false);
@@ -17257,10 +17282,11 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const hoursNum = Number(String(workHours).replace(",", "."));
   const hoursValid = String(workHours).trim() !== "" && hoursNum > 0;
   const partsValid = usedParts.every((p) => p.name.trim());
-  const mthNum = Number(String(mth).replace(/\s/g, "").replace(",", "."));
-  const mthFilled = String(mth).trim() !== "" && Number.isFinite(mthNum) && mthNum >= 0;
+  const mthStr = String(mth).replace(/\s/g, "").replace(",", ".");
+  const mthNum = Number(mthStr);
+  const mthFilled = /^\d+(\.\d+)?$/.test(mthStr);
   // Nižší stav než posledný, alebo skok o viac ako 500 MTH (preklep o nulu) — treba potvrdiť.
-  const mthSuspicious = !noMth && mthFilled && lastMth?.value != null && (mthNum < lastMth.value || mthNum - lastMth.value > 500);
+  const mthSuspicious = !noMth && mthFilled && lastMth?.value != null && (mthNum < lastMth.value || mthNum - lastMth.value >= 500);
   const mthValid = noMth || (mthFilled && (!mthSuspicious || mthConfirmed));
   // Hotová kontrola: pri úprave nesmie klesnúť pod 4 fotky (staršia s menej fotkami nie pod pôvodný počet).
   const photosMin = assignment.resolved && !assignment.skipped ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
@@ -17297,6 +17323,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       usedParts,
       mth: noMth ? null : mthNum,
       noMth,
+      checkerAt: new Date().toISOString(), // poradie dvoch kontrol toho istého stroja v jeden deň (posledný stav MTH)
     };
   }
   function handleSave() {
@@ -17497,7 +17524,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
               ⚠ {showForm ? "Uložiť a nahlásiť do servisu" : "Nahlásiť servisný stav"}
             </button>
             {showForm && !canSaveForm && (
-              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Najprv dokončite kontrolu (všetky body, hodiny{photosNeeded > 0 ? ` a fotky — chýba ${photosNeeded}` : ""}) — uloží sa spolu s nahlásením.</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Najprv dokončite kontrolu (všetky body, MTH, hodiny{photosNeeded > 0 ? ` a fotky — chýba ${photosNeeded}` : ""}) — uloží sa spolu s nahlásením.</div>
             )}
           </div>
         )
@@ -17522,6 +17549,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         <div style={{ marginTop: 14 }}>
           {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
           {!hoursValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte odpracované hodiny.</div>}
+          {!mthValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>{mthSuspicious ? "Potvrďte počet MTH (je nižší alebo oveľa vyšší ako posledný stav)." : "Vyplňte počet MTH alebo zaškrtnite, že stroj nemá počítadlo."}</div>}
           {!partsValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte názov každého pridaného dielu (alebo ho odstráňte).</div>}
           {photosNeeded > 0 && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -20195,6 +20223,8 @@ const CalendarGrid = React.memo(function CalendarGrid({
                       boxSizing: "border-box",
                       background: isWeekend ? "var(--warn-bg)" : "transparent",
                       cursor: clickHandler ? "pointer" : "default",
+                      // poznámka „Prevoz“ musí ostať klikateľná aj nad pásom poruchy
+                      ...(transportNote ? { zIndex: 2 } : {}),
                     }}
                   >
                     {transportNote && (
@@ -20925,7 +20955,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, []);
+  }, [viewMode]); // po návrate zo Zoznamu je kontajner nový — zmerať a sledovať ten
 
   // Virtualizácia — vykresľuje sa len to, čo je NAOZAJ vo výreze obrazovky
   // (plus malá rezerva navyše, "overscan", nech nie je vidno prázdno pri
@@ -21045,7 +21075,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     }, 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset]);
+  }, [monthOffset, viewMode]); // aj po návrate zo Zoznamu — Gantt sa vytvorí nanovo bez posunu
 
   // Normálny/Kompaktný + zoradenie — na webe stále v 3. stĺpci vpravo, na
   // mobile (viď @media) sa namiesto toho schovajú za ozubené koliesko vedľa
@@ -21260,7 +21290,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           <button className="btn btn-accent" style={{ flex: 1 }} onClick={() => { const c = breakdownChoice; setBreakdownChoice(null); onOpenDamage?.(c.damage); }}>
             {breakdownChoice.damage.prepCheck ? "Detail" : "Detail poruchy"}
           </button>
-          {onAddJob && (
+          {onAddJob && !breakdownChoice.damage.prepCheck && (
             <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { const c = breakdownChoice; setBreakdownChoice(null); onAddJob(c.machineId, c.date); }}>
               Zákazka
             </button>
@@ -23907,6 +23937,9 @@ function erpChecklistDiff(a) {
   }
   if (JSON.stringify(a.erpSnapshot.usedParts || []) !== JSON.stringify(a.usedParts || [])) {
     diffs.push(`diely zmenené (${(a.erpSnapshot.usedParts || []).length} → ${(a.usedParts || []).length})`);
+  }
+  if ("mth" in a.erpSnapshot && ((a.erpSnapshot.mth ?? null) !== (a.mth ?? null) || !!a.erpSnapshot.noMth !== !!a.noMth)) {
+    diffs.push(`MTH: ${a.erpSnapshot.noMth ? "bez počítadla" : a.erpSnapshot.mth ?? "—"} → ${a.noMth ? "bez počítadla" : a.mth ?? "—"}`);
   }
   return diffs.length ? diffs : null;
 }
@@ -27530,7 +27563,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const partCards = waitingParts.map((p) => (
     <TodayCard key={p.id} tag={`VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`} {...TODAY_TAG.part}
       title={`${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`}
-      sub={`${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber · depo ${p.depo || "—"}`} · ${phItemsSummary(p.items)}`}
+      sub={`${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`}
       actions={[{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }]} />
   ));
 
@@ -27817,7 +27850,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
   // Výdaj dielov pridelený mne na odovzdanie (dispečer, obchodník… — rovnako ako technik/šofér na ich „Dnes“).
   phMineWaiting(partHandovers, myEmployee, tomorrow).forEach((p) => rows.push({ key: "ph-" + p.id, tag: "VÝDAJ DIELOV", tone: "warn",
     title: `${p.customer} — ${plural((p.items || []).length, "položka", "položky", "položiek")}`,
-    sub: `${p.date ? fmtDate(p.date) + " · " : ""}${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber · depo ${p.depo || "—"}`}`,
+    sub: `${p.date ? fmtDate(p.date) + " · " : ""}${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`}`,
     actions: [{ label: "Odovzdať", onClick: () => onPartHandover(p) }] }));
 
   // ───────── Požičovňa (dispečer len svoje zákazky + zastupované) ─────────
@@ -27996,7 +28029,7 @@ function TodayOffice(props) {
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""} · {roleLabel(role)}{mineNote}</div>
       </div>
       <TodayTiles tiles={tiles} />
-      {fakPoz ? erpPozPanel : (
+      {fakPoz ? (<>{rows.length > 0 && <div style={{ marginBottom: 16 }}><TodayList title="Na vybavenie" rows={rows} empty="" /></div>}{erpPozPanel}</>) : (
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: side ? "minmax(0, 1.4fr) minmax(0, 1fr)" : "1fr", gap: 16, alignItems: "start" }}>
           <TodayList title={sales ? "Treba vybaviť" : "Na vybavenie"} rows={rows} empty="Nič nečaká. 👍" />
           {side}
@@ -28019,12 +28052,13 @@ function phCanManage(u) { return isAdminUser(u) || SRV_OFFICE_ROLES.includes(u?.
 const phCanBill = phCanManage;
 function phCanWrite(u) { return !!u && !["externy_sofer", "nezaradeny"].includes(u.role); }
 // Komu sa dá výdaj prideliť na odovzdanie — interný zamestnanec s účtom (len ten ho uvidí na „Dnes“).
-const phAssignable = (employees) => (employees || []).filter((e) => !e.archived && e.linkedUserId && e.role !== "externy_sofer").sort((a, b) => a.name.localeCompare(b.name, "sk"));
+const phAssignable = (employees) => (employees || []).filter((e) => !e.archived && e.linkedUserId && !_inactiveUserIds.has(e.linkedUserId) && e.role !== "externy_sofer").sort((a, b) => a.name.localeCompare(b.name, "sk"));
 const phMineWaiting = (list, myEmployee, tomorrow) => (myEmployee ? (list || []).filter((p) => p.status === "waiting" && p.assigneeId === myEmployee.id && (!tomorrow || (p.date || tomorrow) <= tomorrow)) : []);
 function PhAssigneeSelect({ value, employees, onChange }) {
   return (
     <select value={value || ""} onChange={(e) => onChange(e.target.value || null)} style={{ width: "100%" }}>
       <option value="">— nepridelené (na „Dnes“ ho nikto neuvidí) —</option>
+      {value && !phAssignable(employees).some((e) => e.id === value) && <option value={value} disabled>{(employees || []).find((e) => e.id === value)?.name || "zmazaný zamestnanec"} (už nemôže odovzdať)</option>}
       {phAssignable(employees).map((e) => <option key={e.id} value={e.id}>{e.name} · {roleLabel(e.role)}{e.depo ? ` · ${e.depo}` : ""}</option>)}
     </select>
   );
@@ -28291,7 +28325,7 @@ function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover
         <div key={p.id} className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 13, minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{p.customer}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{p.date ? fmtDate(p.date) : ""} · {p.method === "delivery" ? "doručenie" : `depo ${p.depo || "—"}`} · {phItemsSummary(p.items)}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[p.date ? fmtDate(p.date) : "", p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber", phItemsSummary(p.items)].filter(Boolean).join(" · ")}</div>
           </div>
           <button className="btn btn-accent" onClick={() => onHandover(p)}>Odovzdať</button>
         </div>
@@ -28317,7 +28351,7 @@ function PartHandoverEditModal({ rec, customers, machines, employees, onClose, o
       {!signed && (
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
           <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
-          <Field label="Odovzdá"><PhAssigneeSelect value={draft.assigneeId} employees={employees} onChange={(id) => setDraft({ ...draft, assigneeId: id, assigneeName: (employees || []).find((e) => e.id === id)?.name || null })} /></Field>
+          <Field label="Odovzdá"><PhAssigneeSelect value={draft.assigneeId} employees={employees} onChange={(id) => setDraft({ ...draft, assigneeId: id, assigneeName: (employees || []).find((e) => e.id === id)?.name || null, _assigneeTouched: true })} /></Field>
         </div>
       )}
       <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices />
@@ -28366,8 +28400,8 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
                 {p.dlNumber && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--text-dim)" }}>DL {p.dlNumber}</span>}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                {p.handedAt ? `odovzdal ${p.handedBy || "—"} ${new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : `${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : `depo ${p.depo || "—"}`}`}
-                {p.status === "waiting" ? (p.assigneeId ? ` · odovzdá ${p.assigneeName || "—"}` : " · nepridelené") : ""}
+                {p.handedAt ? `odovzdal ${p.handedBy || "—"} ${new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : `${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber"}`}
+                {p.status === "waiting" ? (!p.assigneeId ? " · nepridelené" : phAssignable(employees).some((e) => e.id === p.assigneeId) ? ` · odovzdá ${p.assigneeName || "—"}` : ` · ⚠ ${p.assigneeName || "odovzdávajúci"} už nemôže odovzdať — prideľte znova`) : ""}
                 {p.createdBy ? ` · vypracoval ${p.createdBy}` : ""}{p.correctedAt ? " · opravené" : ""}{p.sentAt ? " · poslané zákazníkovi" : ""}
               </div>
               <div style={{ fontSize: 13, marginTop: 4 }}>{phItemsSummary(p.items)}</div>
@@ -29067,6 +29101,7 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
 // ostatné (bolo by to zbytočné pre 99% otvorení appky) — načíta sa až pri otvorení
 // tejto záložky. Prístup majú len administrátori (rovnako obmedzené aj v RLS).
 const AUDIT_TABLE_LABELS = {
+  partHandovers: "Výdaj dielov",
   damages: "Poškodenia / servis",
   jobs: "Zákazky (požičovňa)",
   machines: "Stroje",
