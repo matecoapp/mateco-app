@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.779";
+const APP_VERSION = "1.0.780";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -10173,6 +10173,11 @@ function DispatcherApp() {
             protocolLogs={protocolLogs}
             assignments={assignments}
             spareParts={spareParts}
+            handoverProtocols={handoverProtocols}
+            transportNotes={transportNotes}
+            damages={damages}
+            portalRequests={portalRequests}
+            employees={employees}
             today={today}
             onUpdateEmployee={updateEmployee}
           />
@@ -26421,7 +26426,35 @@ function periodBounds(period, today, customStart, customEnd) {
   return { start: customStart || today, end: customEnd || today };
 }
 
-function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, assignments, spareParts, today, onUpdateEmployee }) {
+// Porovnávacie obdobie: týždeň → rovnaké dni minulého týždňa, mesiac → rovnaké dni minulého mesiaca,
+// vlastný rozsah → rovnako dlhé obdobie tesne pred ním.
+function comparePeriod(period, start, end) {
+  if (period === "week") return { start: addDaysISO(start, -7), end: addDaysISO(end, -7) };
+  if (period === "month") {
+    const prevEnd = addDaysISO(start, -1); // posledný deň minulého mesiaca
+    const day = Math.min(Number(end.slice(8, 10)), Number(prevEnd.slice(8, 10)));
+    return { start: prevEnd.slice(0, 8) + "01", end: prevEnd.slice(0, 8) + String(day).padStart(2, "0") };
+  }
+  return previousPeriod(start, end);
+}
+const statDays = (s, e) => daysBetween(s, e) + 1;
+// Kedy bol stroj zákazky reálne u zákazníka: od skutočného vývozu po skutočné vrátenie
+// (neukončená = do dnes). Nerealizovaná a ešte nevyvezená zákazka = nič.
+function jobBusyInterval(j, h, today) {
+  if (j.notRealized || !j.startDate) return null;
+  if (!h?.handoverDone && j.status !== "completed") return null;
+  const s = String((h?.handoverDone && h.handoverDate) || j.startDate).slice(0, 10);
+  const e = String(h?.returnDone && h.returnDate ? h.returnDate : j.status === "completed" ? j.endDate || s : today).slice(0, 10);
+  return { s, e: e < s ? s : e };
+}
+const clipDays = (iv, start, end) => {
+  if (!iv) return 0;
+  const a = iv.s > start ? iv.s : start;
+  const b = iv.e < end ? iv.e : end;
+  return a > b ? 0 : statDays(a, b);
+};
+
+function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, assignments, spareParts, handoverProtocols, transportNotes, damages, portalRequests, employees, today, onUpdateEmployee }) {
   const defaultDomain = user?.role === "veduci_servisu" ? "servis" : "poziciovna";
   const [domain, setDomain] = useState(defaultDomain);
   const [period, setPeriod] = useState("month");
@@ -26496,9 +26529,14 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
           machineModels={machineModels}
           jobs={jobs}
           reservations={reservations}
+          handoverProtocols={handoverProtocols}
+          transportNotes={transportNotes}
+          portalRequests={portalRequests}
+          employees={employees}
           today={today}
           start={start}
           end={end}
+          prev={comparePeriod(period, start, end)}
         />
       ) : domain === "servis" ? (
         <ServisStatistiky
@@ -26506,8 +26544,10 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
           technicians={technicians}
           protocolLogs={protocolLogs}
           assignments={assignments}
+          damages={damages}
           start={start}
           end={end}
+          prev={comparePeriod(period, start, end)}
           canEdit={canEditServis}
           showExclusions={showExclusions}
           setShowExclusions={setShowExclusions}
@@ -26584,7 +26624,10 @@ function DielyStatistiky({ spareParts, start, end }) {
   );
 }
 
-function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, today, start, end }) {
+function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, handoverProtocols, transportNotes, portalRequests, employees, today, start, end, prev }) {
+  const [idleMin, setIdleMin] = useState(14);
+  const hpByJob = useMemo(() => new Map((handoverProtocols || []).map((h) => [h.jobId, h])), [handoverProtocols]);
+  const busyOf = (j) => jobBusyInterval(j, hpByJob.get(j.id), today);
   const active = machines.filter((m) => !m.archived);
   // Do štatistík sa automaticky počítajú len Požičovňové stroje — Externé
   // stroje a Príslušenstvo sa vylučujú samy, netreba na to žiadny ručný zoznam.
@@ -26604,32 +26647,21 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
   const totalConverted = periodReservations.filter((r) => r.status === "converted").length;
   const successRatePct = periodReservations.length ? Math.round((totalConverted / periodReservations.length) * 100) : 0;
 
-  // Porovnanie s rovnako dlhým predchádzajúcim obdobím — rýchly pohľad na trend.
-  const prev = previousPeriod(start, end);
+  // Porovnanie s predchádzajúcim obdobím (rovnaké dni minulého týždňa / mesiaca).
   const prevReservations = reservations.filter((r) => r.createdAt && toLocalISO(new Date(r.createdAt)) >= prev.start && toLocalISO(new Date(r.createdAt)) <= prev.end);
   const prevConverted = prevReservations.filter((r) => r.status === "converted").length;
   const prevSuccessRatePct = prevReservations.length ? Math.round((prevConverted / prevReservations.length) * 100) : 0;
   const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
   const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
 
-  // Rentabilita podľa modelu — koľko % dní v zvolenom období boli stroje
-  // daného modelu reálne na zákazke (nie len k dnešku ako Utilizácia vyššie,
-  // ale za celé obdobie). Zoskupené podľa kategórie, ako v kalendári.
+  // Vyťaženosť podľa modelu — koľko % dní v zvolenom období boli stroje daného
+  // modelu reálne u zákazníka (skutočný vývoz → skutočné vrátenie, bez nerealizovaných).
   const totalDaysInPeriod = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
   const rentabilityByModel = {};
   const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
   tracked.forEach((m) => {
-    const machineJobs = jobs.filter((j) => j.machineId === m.id);
     let busyDays = 0;
-    machineJobs.forEach((j) => {
-      const jStart = j.startDate;
-      const jEnd = j.endDate || today;
-      if (!jStart) return;
-      const s = jStart > start ? jStart : start;
-      const e = jEnd < end ? jEnd : end;
-      if (s > e) return;
-      busyDays += Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
-    });
+    jobs.forEach((j) => { if (j.machineId === m.id) busyDays += clipDays(busyOf(j), start, end); });
     busyDays = Math.min(busyDays, totalDaysInPeriod);
     const mm = modelByName.get((m.type || "").trim().toLowerCase());
     const category = mm?.category || "Nezaradené";
@@ -26650,11 +26682,76 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
       return a.pct - b.pct;
     });
 
+  // Zákazky za obdobie: vyvezené, vrátené, priemerná dĺžka prenájmu vrátených, predĺženia z portálu.
+  const inP = (d, p0 = start, p1 = end) => !!d && d >= p0 && d <= p1;
+  const jobStats = (p0, p1) => {
+    let out = 0, back = 0, len = 0;
+    jobs.forEach((j) => {
+      const iv = busyOf(j);
+      if (!iv) return;
+      const h = hpByJob.get(j.id);
+      if (inP(iv.s, p0, p1) && !h?.migratedWithoutHandover) out += 1;
+      if (h?.returnDone && inP(String(h.returnDate || "").slice(0, 10), p0, p1)) { back += 1; len += statDays(iv.s, iv.e); }
+    });
+    const ext = (portalRequests || []).filter((r) => r.type === "extension" && r.status === "approved" && inP(String(r.resolvedAt || "").slice(0, 10), p0, p1)).length;
+    return { out, back, avg: back ? len / back : 0, ext };
+  };
+  const js = jobStats(start, end);
+  const jsPrev = jobStats(prev.start, prev.end);
+
+  // Top zákazníci podľa dní prenájmu v období.
+  const byCustomer = {};
+  jobs.forEach((j) => {
+    const d = clipDays(busyOf(j), start, end);
+    if (!d) return;
+    const k = j.customer || "— neuvedené —";
+    if (!byCustomer[k]) byCustomer[k] = { days: 0, jobs: 0 };
+    byCustomer[k].days += d; byCustomer[k].jobs += 1;
+  });
+  const customerRows = Object.entries(byCustomer).sort((a, b) => b[1].days - a[1].days).slice(0, 10);
+
+  // Stroje, ktoré stoja (stav dnes): bez bežiacej zákazky, od posledného vrátenia aspoň idleMin dní.
+  const idleRows = tracked
+    .filter((m) => !currentJobFor(jobs, m.id, today))
+    .map((m) => {
+      const last = jobs.filter((j) => j.machineId === m.id).map(busyOf).filter((iv) => iv && iv.e <= today).reduce((mx, iv) => (iv.e > mx ? iv.e : mx), "");
+      return { m, last, days: last ? daysBetween(last, today) : null };
+    })
+    .filter((r) => r.days === null || r.days >= idleMin)
+    .sort((a, b) => (b.days ?? 1e9) - (a.days ?? 1e9));
+
+  // Prepravy za obdobie podľa šoféra: vývoz / zvoz (podpísaný protokol), prevoz (prevezený alebo potvrdený).
+  const empById = new Map((employees || []).map((e) => [e.id, e]));
+  const byDriver = {};
+  const addT = (id, kind) => {
+    if (!id) return;
+    if (!byDriver[id]) byDriver[id] = { vyvoz: 0, zvoz: 0, prevoz: 0 };
+    byDriver[id][kind] += 1;
+  };
+  jobs.forEach((j) => {
+    const h = hpByJob.get(j.id);
+    if (!h || j.notRealized) return;
+    if (h.handoverDone && !h.migratedWithoutHandover && inP(String(h.handoverDate || "").slice(0, 10))) addT(j.driverId, "vyvoz");
+    if (h.returnDone && inP(String(h.returnDate || "").slice(0, 10))) addT(j.returnDriverId, "zvoz");
+  });
+  (transportNotes || []).forEach((t) => {
+    if (!t.driverDone && !t.confirmed) return;
+    if (inP(t.driverDoneAt ? toLocalISO(new Date(t.driverDoneAt)) : t.date)) addT(t.driverId, "prevoz");
+  });
+  const driverRows = Object.entries(byDriver)
+    .map(([id, v]) => ({ id, name: empById.get(id)?.name || "— neznámy šofér —", ext: empById.get(id)?.role === "externy_sofer", ...v, sum: v.vyvoz + v.zvoz + v.prevoz }))
+    .sort((a, b) => b.sum - a.sum);
+  const tSum = (k, f = () => true) => driverRows.filter(f).reduce((x, r) => x + r[k], 0);
+
+  const secTitle = (t) => <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>{t}</div>;
+  const th = (t) => <th key={t} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t}</th>;
+  const td = (v, label, bold) => <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: bold ? 600 : undefined }} data-label={label}>{v}</td>;
+
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
-        <StatCard label="Sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
+        <StatCard label="Na zákazke / sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
         <StatCard label="Rezervácií za obdobie" value={periodReservations.length} delta={reservationsDelta} />
         <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} delta={successRateDelta} />
       </div>
@@ -26694,7 +26791,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
       </div>
 
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Rentabilita podľa modelu — % dní v období na zákazke
+        Vyťaženosť podľa modelu — % dní v období u zákazníka
       </div>
       <div className="panel table-wrap" style={{ padding: 0 }}>
         {rentabilityRows.length === 0 ? (
@@ -26734,11 +26831,68 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, tod
           </table>
         )}
       </div>
+
+      <div style={{ marginTop: 20 }}>{secTitle("Zákazky za obdobie")}</div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        <StatCard label="Vyvezené (začaté) zákazky" value={js.out} delta={statDelta(js.out, jsPrev.out)} />
+        <StatCard label="Vrátené (ukončené) zákazky" value={js.back} delta={statDelta(js.back, jsPrev.back)} />
+        <StatCard label="Priemerná dĺžka prenájmu vrátených (dni)" value={js.avg.toFixed(1)} />
+        <StatCard label="Schválené predĺženia z portálu" value={js.ext} delta={statDelta(js.ext, jsPrev.ext)} />
+      </div>
+
+      {secTitle("Top zákazníci — dni prenájmu v období")}
+      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
+        {customerRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne prenájmy v tomto období.</div> : (
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["Zákazník", "Dni prenájmu", "Zákaziek"].map(th)}</tr></thead>
+            <tbody>{customerRows.map(([name, v]) => <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>{td(name, "Zákazník", true)}{td(v.days, "Dni prenájmu")}{td(v.jobs, "Zákaziek")}</tr>)}</tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        {secTitle(`Stroje, ktoré stoja (dnes) — ${idleRows.length}`)}
+        <select value={idleMin} onChange={(e) => setIdleMin(Number(e.target.value))} style={{ fontSize: 12, marginBottom: 8 }} aria-label="Minimálny počet dní bez zákazky">
+          {[7, 14, 30, 60].map((d) => <option key={d} value={d}>aspoň {d} dní</option>)}
+        </select>
+      </div>
+      <div className="panel table-wrap" style={{ padding: 0, marginBottom: 20, maxHeight: 360, overflowY: "auto" }}>
+        {idleRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nestojí tak dlho.</div> : (
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["Stroj", "Model", "Depo", "Naposledy vrátený", "Dní bez zákazky"].map(th)}</tr></thead>
+            <tbody>{idleRows.map(({ m, last, days }) => (
+              <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
+                {td(m.code || "—", "Stroj", true)}{td(m.type || "—", "Model")}{td(m.depo || "—", "Depo")}{td(last ? fmtDate(last) : "bez záznamu", "Naposledy vrátený")}{td(days ?? "—", "Dní bez zákazky", true)}
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
+
+      {secTitle("Prepravy za obdobie podľa šoféra")}
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+        <StatCard label="Vývozy" value={tSum("vyvoz")} />
+        <StatCard label="Zvozy" value={tSum("zvoz")} />
+        <StatCard label="Prevozy" value={tSum("prevoz")} />
+        <StatCard label="Z toho externí šoféri" value={`${tSum("sum", (r) => r.ext)} / ${tSum("sum")}`} />
+      </div>
+      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
+        {driverRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne vykonané prepravy v tomto období.</div> : (
+          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["Šofér", "Typ", "Vývozy", "Zvozy", "Prevozy", "Spolu"].map(th)}</tr></thead>
+            <tbody>{driverRows.map((r) => (
+              <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
+                {td(r.name, "Šofér", true)}{td(r.ext ? "externý" : "interný", "Typ")}{td(r.vyvoz, "Vývozy")}{td(r.zvoz, "Zvozy")}{td(r.prevoz, "Prevozy")}{td(r.sum, "Spolu", true)}
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
 
-function ServisStatistiky({ machines, technicians, protocolLogs, assignments, start, end, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
+function ServisStatistiky({ machines, technicians, protocolLogs, assignments, damages, start, end, prev, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
   // % prepadnutých revízií — stav DNES (nie za obdobie): podiel sledovaných
   // strojov, čo majú revíziu po termíne alebo bez dátumu (rovnaké pravidlo ako
   // pri automatickom zakladaní revíznych zákaziek).
@@ -26748,6 +26902,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
   const revStat = (rows) => ({ total: rows.length, late: rows.filter((r) => r.late).length, pct: rows.length ? Math.round((rows.filter((r) => r.late).length / rows.length) * 100) : 0 });
   const revZz = revStat(revMachines.filter((m) => m.trackRevisions !== false).map((m) => ({ late: isLate(m, "revizia") })));
   const revEz = revStat(revMachines.filter((m) => m.trackRevisionsEZ !== false).map((m) => ({ late: isLate(m, "reviziaEZ") })));
+  const revUs = revStat(revMachines.filter((m) => m.trackUradnaSkuska !== false).map((m) => ({ late: isLate(m, "uradnaSkuska") })));
   const revAll = revStat(
     revMachines
       .filter((m) => m.trackRevisions !== false || m.trackRevisionsEZ !== false)
@@ -26788,7 +26943,8 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
   // textu namiesto súčtu a .toFixed() na výsledku nižšie zhodí appku.
   const totalHours = trackedProtocols.reduce((sum, p) => sum + (Number(p.totalHours) || 0) * trackedNamesOf(p).length, 0) + trackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
   const totalTravelHours = trackedProtocols.reduce((sum, p) => sum + (Number(p.travelHours) || 0) * trackedNamesOf(p).length, 0);
-  const totalTravelKm = trackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0), 0);
+  // Km aj čas na ceste sa pripíšu každému technikovi z protokolu (prešiel ich každý, aj keď v jednom aute).
+  const totalTravelKm = trackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0) * trackedNamesOf(p).length, 0);
 
   const byTechnician = {};
   trackedProtocols.forEach((p) => {
@@ -26813,14 +26969,33 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
   });
   const statusRows = Object.entries(byStatus).sort((a, b) => b[1] - a[1]);
 
-  // Porovnanie s rovnako dlhým predchádzajúcim obdobím.
-  const prev = previousPeriod(start, end);
+  // Porovnanie s predchádzajúcim obdobím (rovnaké dni minulého týždňa / mesiaca).
   const prevPeriodProtocols = (protocolLogs || []).filter((p) => p.createdAt && localDay(p.createdAt) >= prev.start && localDay(p.createdAt) <= prev.end);
   const prevTrackedProtocols = prevPeriodProtocols.filter((p) => trackedNamesOf(p).length > 0);
   const prevTrackedChecklistHours = checklistHours.filter((c) => c.date && c.date >= prev.start && c.date <= prev.end && trackedNames.has(c.technicianName));
   const prevTotalHours = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.totalHours) || 0) * trackedNamesOf(p).length, 0) + prevTrackedChecklistHours.reduce((sum, c) => sum + c.hours, 0);
   const prevTotalTravelHours = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.travelHours) || 0) * trackedNamesOf(p).length, 0);
-  const prevTotalTravelKm = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0), 0);
+  const prevTotalTravelKm = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0) * trackedNamesOf(p).length, 0);
+
+  // Poškodenia: nahlásené a vyriešené v období, priemerný čas od nahlásenia po opravu.
+  const d10 = (x) => String(x || "").slice(0, 10);
+  const dmg = (damages || []).filter((d) => d.type === "poskodenie");
+  const dmgDone = (d) => d.resolved ? d10(d.opravaDatum || d.resolvedAt) : "";
+  const dmgStats = (p0, p1) => {
+    const done = dmg.filter((d) => { const x = dmgDone(d); return x && x >= p0 && x <= p1; });
+    const fix = done.map((d) => d10(d.dateReported) && daysBetween(d10(d.dateReported), dmgDone(d))).filter((x) => typeof x === "number" && x >= 0);
+    return { reported: dmg.filter((d) => d10(d.dateReported) >= p0 && d10(d.dateReported) <= p1).length, resolved: done.length, avg: fix.length ? fix.reduce((x, y) => x + y, 0) / fix.length : 0 };
+  };
+  const ds = dmgStats(start, end);
+  const dsPrev = dmgStats(prev.start, prev.end);
+  const dmgOpen = dmg.filter((d) => !d.resolved).length;
+
+  // Kontroly checkera s termínom v období: urobené, neurobené (preskočené), ešte otvorené.
+  const chk = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && d10(a.checkerDate || a.date) >= start && d10(a.checkerDate || a.date) <= end);
+  const chkDone = chk.filter((a) => a.resolved && !a.skipped).length;
+  const chkSkipped = chk.filter((a) => a.skipped).length;
+  const chkOpen = chk.filter((a) => !a.resolved).length;
+  const chkPct = chkDone + chkSkipped ? Math.round((chkDone / (chkDone + chkSkipped)) * 100) : 0;
   const protocolsDelta = statDelta(periodProtocols.length, prevPeriodProtocols.length);
   const hoursDelta = statDelta(Math.round(totalHours), Math.round(prevTotalHours));
   const travelHoursDelta = statDelta(Math.round(totalTravelHours), Math.round(prevTotalTravelHours));
@@ -26834,10 +27009,26 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, st
         <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
       </div>
 
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label={`Prepadnuté revízie — spolu (${revAll.late} z ${revAll.total} strojov)`} value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger)" : undefined} />
         <StatCard label={`Revízia ZZ po termíne (${revZz.late} z ${revZz.total})`} value={`${revZz.pct} %`} color={revZz.pct > 0 ? "var(--danger)" : undefined} />
         <StatCard label={`Revízia EZ po termíne (${revEz.late} z ${revEz.total})`} value={`${revEz.pct} %`} color={revEz.pct > 0 ? "var(--danger)" : undefined} />
+        <StatCard label={`Úradná skúška po termíne (${revUs.late} z ${revUs.total})`} value={`${revUs.pct} %`} color={revUs.pct > 0 ? "var(--danger)" : undefined} />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "-12px 0 20px" }}>Stav dnes. Stroj bez zadaného dátumu sa ráta ako po termíne; nerátajú sa stroje s vypnutým sledovaním.</div>
+
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        <StatCard label="Poškodenia nahlásené" value={ds.reported} delta={statDelta(ds.reported, dsPrev.reported)} />
+        <StatCard label="Poškodenia vyriešené" value={ds.resolved} delta={statDelta(ds.resolved, dsPrev.resolved)} />
+        <StatCard label="Priemerne dní do opravy" value={ds.avg.toFixed(1)} />
+        <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
+      </div>
+
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        <StatCard label="Kontroly checkera urobené" value={chkDone} />
+        <StatCard label="Neurobené (preskočené)" value={chkSkipped} color={chkSkipped > 0 ? "var(--danger)" : undefined} />
+        <StatCard label="Ešte otvorené" value={chkOpen} />
+        <StatCard label="Urobené z uzavretých" value={`${chkPct} %`} />
       </div>
 
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
