@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.780";
+const APP_VERSION = "1.0.781";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -26413,6 +26413,17 @@ function LoginScreen({ onLogin, onSignUp }) {
    nimi), ale upravovať zoznam vylúčených z počítania smie len ten vedúci, komu
    dané odvetvie patrí. Admin vidí a upravuje všetko.
 --------------------------------------------------------- */
+// Zbaliteľná sekcia štatistík — predvolene zbalená, v hlavičke krátky súhrn.
+function StatSection({ title, hint, children }) {
+  return (
+    <details style={{ marginBottom: 10 }}>
+      <summary style={{ cursor: "pointer", padding: "10px 12px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+        {title}{hint != null && <span style={{ fontWeight: 400, color: "var(--text-dim)", marginLeft: 8 }}>{hint}</span>}
+      </summary>
+      <div style={{ paddingTop: 12 }}>{children}</div>
+    </details>
+  );
+}
 function periodBounds(period, today, customStart, customEnd) {
   if (period === "week") {
     const d = new Date(today + "T00:00:00");
@@ -26578,12 +26589,15 @@ function DielyStatistiky({ spareParts, start, end }) {
 
   return (
     <div>
+      <StatSection title="Objednávky dielov" hint={`${ordered.length} položiek`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Objednaných položiek" value={ordered.length} />
         <StatCard label="Celkovo kusov" value={totalKusov} />
         <StatCard label="Rôznych depí" value={Object.keys(byDepo).length} />
       </div>
+      </StatSection>
 
+      <StatSection title="Podľa depa a najčastejšie diely">
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -26620,6 +26634,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           </div>
         </div>
       </div>
+      </StatSection>
     </div>
   );
 }
@@ -26749,16 +26764,16 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
 
   return (
     <div>
+      <StatSection title="Utilizácia a rezervácie" hint={`${utilizationPct} % · ${periodReservations.length} rezervácií`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
         <StatCard label="Na zákazke / sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
         <StatCard label="Rezervácií za obdobie" value={periodReservations.length} delta={reservationsDelta} />
         <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} delta={successRateDelta} />
       </div>
+      </StatSection>
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Rezervácie podľa obchodníka
-      </div>
+      <StatSection title="Rezervácie podľa obchodníka">
       <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {obchodnikRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne rezervácie v tomto období.</div>
@@ -26789,10 +26804,9 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           </table>
         )}
       </div>
+      </StatSection>
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Vyťaženosť podľa modelu — % dní v období u zákazníka
-      </div>
+      <StatSection title="Vyťaženosť podľa modelu" hint={"% dní v období u zákazníka"}>
       <div className="panel table-wrap" style={{ padding: 0 }}>
         {rentabilityRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
@@ -26831,16 +26845,18 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           </table>
         )}
       </div>
+      </StatSection>
 
-      <div style={{ marginTop: 20 }}>{secTitle("Zákazky za obdobie")}</div>
+      <StatSection title="Zákazky za obdobie" hint={`${js.out} vyvezených · ${js.back} vrátených`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Vyvezené (začaté) zákazky" value={js.out} delta={statDelta(js.out, jsPrev.out)} />
         <StatCard label="Vrátené (ukončené) zákazky" value={js.back} delta={statDelta(js.back, jsPrev.back)} />
         <StatCard label="Priemerná dĺžka prenájmu vrátených (dni)" value={js.avg.toFixed(1)} />
         <StatCard label="Schválené predĺženia z portálu" value={js.ext} delta={statDelta(js.ext, jsPrev.ext)} />
       </div>
+      </StatSection>
 
-      {secTitle("Top zákazníci — dni prenájmu v období")}
+      <StatSection title="Top zákazníci" hint={"dni prenájmu v období"}>
       <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {customerRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne prenájmy v tomto období.</div> : (
           <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -26849,9 +26865,10 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           </table>
         )}
       </div>
+      </StatSection>
 
+      <StatSection title="Stroje, ktoré stoja" hint={`${idleRows.length} (dnes)`}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        {secTitle(`Stroje, ktoré stoja (dnes) — ${idleRows.length}`)}
         <select value={idleMin} onChange={(e) => setIdleMin(Number(e.target.value))} style={{ fontSize: 12, marginBottom: 8 }} aria-label="Minimálny počet dní bez zákazky">
           {[7, 14, 30, 60].map((d) => <option key={d} value={d}>aspoň {d} dní</option>)}
         </select>
@@ -26868,8 +26885,9 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           </table>
         )}
       </div>
+      </StatSection>
 
-      {secTitle("Prepravy za obdobie podľa šoféra")}
+      <StatSection title="Prepravy podľa šoféra" hint={`${tSum("sum")} za obdobie`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
         <StatCard label="Vývozy" value={tSum("vyvoz")} />
         <StatCard label="Zvozy" value={tSum("zvoz")} />
@@ -26888,6 +26906,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           </table>
         )}
       </div>
+      </StatSection>
     </div>
   );
 }
@@ -27003,12 +27022,15 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
 
   return (
     <div>
+      <StatSection title="Protokoly" hint={`${periodProtocols.length} za obdobie`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
         <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
         <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
       </div>
+      </StatSection>
 
+      <StatSection title="Revízie a úradné skúšky" hint={`${revAll.pct} % revízií po termíne`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label={`Prepadnuté revízie — spolu (${revAll.late} z ${revAll.total} strojov)`} value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger)" : undefined} />
         <StatCard label={`Revízia ZZ po termíne (${revZz.late} z ${revZz.total})`} value={`${revZz.pct} %`} color={revZz.pct > 0 ? "var(--danger)" : undefined} />
@@ -27016,27 +27038,35 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
         <StatCard label={`Úradná skúška po termíne (${revUs.late} z ${revUs.total})`} value={`${revUs.pct} %`} color={revUs.pct > 0 ? "var(--danger)" : undefined} />
       </div>
       <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "-12px 0 20px" }}>Stav dnes. Stroj bez zadaného dátumu sa ráta ako po termíne; nerátajú sa stroje s vypnutým sledovaním.</div>
+      </StatSection>
 
+      <StatSection title="Poškodenia" hint={`${ds.reported} nahlásených · ${dmgOpen} otvorených`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Poškodenia nahlásené" value={ds.reported} delta={statDelta(ds.reported, dsPrev.reported)} />
         <StatCard label="Poškodenia vyriešené" value={ds.resolved} delta={statDelta(ds.resolved, dsPrev.resolved)} />
         <StatCard label="Priemerne dní do opravy" value={ds.avg.toFixed(1)} />
         <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
       </div>
+      </StatSection>
 
+      <StatSection title="Kontroly checkera" hint={`${chkDone} urobených · ${chkSkipped} neurobených`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Kontroly checkera urobené" value={chkDone} />
         <StatCard label="Neurobené (preskočené)" value={chkSkipped} color={chkSkipped > 0 ? "var(--danger)" : undefined} />
         <StatCard label="Ešte otvorené" value={chkOpen} />
         <StatCard label="Urobené z uzavretých" value={`${chkPct} %`} />
       </div>
+      </StatSection>
 
+      <StatSection title="Hodiny, cesta a km" hint={`${totalHours.toFixed(1)} h · ${totalTravelKm.toFixed(0)} km`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
         <StatCard label="Čas na ceste (hod.)" value={totalTravelHours.toFixed(1)} delta={travelHoursDelta} />
         <StatCard label="Prejazdené km" value={totalTravelKm.toFixed(0)} delta={travelKmDelta} />
       </div>
+      </StatSection>
 
+      <StatSection title="Najviac servisované modely a stroje">
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
@@ -27073,10 +27103,9 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
           </div>
         </div>
       </div>
+      </StatSection>
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Vyťaženosť podľa technika
-      </div>
+      <StatSection title="Vyťaženosť podľa technika">
       <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {technicianRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
@@ -27103,10 +27132,9 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
           </table>
         )}
       </div>
+      </StatSection>
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Stav servisu za obdobie
-      </div>
+      <StatSection title="Stav servisu za obdobie">
       <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
         {statusRows.length === 0 ? (
           <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
@@ -27119,6 +27147,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
           ))
         )}
       </div>
+      </StatSection>
 
       {canEdit && (
         <div>
