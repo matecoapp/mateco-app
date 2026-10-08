@@ -29,7 +29,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.778";
+const APP_VERSION = "1.0.779";
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -15818,24 +15818,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
                   </button>
                 </span>
               )}
-              {SpeechRecognitionApi && canSpeak && (
-                <button
-                  onClick={toggleConversationMode}
-                  title={conversationMode ? "Rozhovor zapnutý — klikni pre vypnutie" : "Zapnúť rozhovor (hlasom, hands-free)"}
-                  style={{
-                    background: conversationMode ? "#fff" : "rgba(255,255,255,.2)",
-                    color: conversationMode ? "var(--accent)" : "#fff",
-                    border: "none",
-                    borderRadius: 12,
-                    padding: "3px 8px",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  🎧 {conversationMode ? "Rozhovor zapnutý" : "Rozhovor"}
-                </button>
-              )}
+              {/* Rozhovor (hands-free) a mikrofón vypnuté 8. 10. — hlasový vstup cez prehliadač/klávesnicu; vrátiť s ElevenLabs. */}
               <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
             </div>
           </div>
@@ -15892,23 +15875,6 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
               style={{ flex: 1, fontSize: 13 }}
               disabled={sending}
             />
-            {SpeechRecognitionApi && (
-              <button
-                onClick={toggleVoiceInput}
-                disabled={sending}
-                title={listening ? "Nahrávanie... (klikni pre zastavenie)" : "Hlasový vstup"}
-                style={{
-                  padding: "4px 10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  background: listening ? "var(--danger)" : "var(--panel-2)",
-                  color: listening ? "#fff" : "var(--text)",
-                  cursor: "pointer",
-                }}
-              >
-                🎤
-              </button>
-            )}
             <button className="btn btn-accent" onClick={() => send()} disabled={sending} style={{ padding: "4px 12px" }}>
               →
             </button>
