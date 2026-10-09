@@ -29,11 +29,11 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.787";
+const APP_VERSION = "1.0.788";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
-  { v: "1.0.787", items: [
+  { v: "1.0.788", items: [
     { roles: ["sofer", "externy_sofer"], text: "„Prevezené“ funguje aj bez signálu — odošle sa samo, keď bude signál. Zoznam prevozov ostane aj po obnovení stránky." },
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Nové upozornenie „Končí prenájom“ — 2 pracovné dni pred koncom zákazky, kým nemá zvoz šoféra: predĺžiť alebo naplánovať zvoz." },
     { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Dispečeri: zástup sa dá vybrať už pri zadaní dovolenky (aj neskôr tlačidlom „Zástupy“ pri plánovanej dovolenke)." },
@@ -4744,13 +4744,13 @@ function DispatcherApp() {
     if (!profile) return null;
     return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {} };
   }, [session, profiles]);
-  // „Čo je nové“: raz po aktualizácii; prvé spustenie na zariadení len zapamätá verziu (bez starých noviniek).
+  // „Čo je nové“: raz po aktualizácii; na novom zariadení (nič nevidel) len novinky tejto verzie, nie celá história.
   const [whatsNew, setWhatsNew] = useState(null);
   useEffect(() => {
     if (!loaded || !currentUser?.role) return;
     let seen = null;
     try { seen = localStorage.getItem("mateco_seen_version"); localStorage.setItem("mateco_seen_version", APP_VERSION); } catch { return; }
-    if (seen && _verNum(seen) < _verNum(APP_VERSION)) setWhatsNew(whatsNewFor(currentUser.role, seen));
+    if (!seen || _verNum(seen) < _verNum(APP_VERSION)) setWhatsNew(whatsNewFor(currentUser.role, seen || CHANGELOG.find((c) => _verNum(c.v) < _verNum(APP_VERSION))?.v || "0"));
   }, [loaded, currentUser?.role]);
 
   // Push notifikácie — service worker sa zaregistruje hneď pri načítaní appky
