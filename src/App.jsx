@@ -29,10 +29,14 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.789";
+const APP_VERSION = "1.0.790";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.790", items: [
+    { roles: ["veduci_pozicovne", "veduci_servisu"], text: "Každý pondelok ráno príde týždenný súhrn (vyťaženosť a stojace stroje, zákazky po termíne, poškodenia, revízie po termíne, neurobené kontroly) s odkazom na Štatistiky." },
+    { roles: ["admin"], text: "Automatická záloha každú noc (14 dní) — stiahnuť ju ide v Administratíva → Stav platformy, obnoviť cez Import dát." },
+  ] },
   { v: "1.0.789", items: [
     { roles: null, text: "Nový sprievodca platformou — ukáže sa pri otvorení, kým nezaškrtnete „Už nezobrazovať“; znova ho otvoríte v menu účtu → 🧭 Sprievodca platformou." },
   ] },
@@ -11847,6 +11851,7 @@ const NOTIFICATION_KIND_LABELS = {
   vehicle_stk_ek: "STK/EK áut",
   portal_request: "Žiadosti zo zákazníckeho portálu",
   rental_end: "Končí prenájom (predĺžiť / zvoz)",
+  weekly_summary: "Týždenný súhrn (pondelok ráno)",
 };
 // Ktoré kategórie sú pre danú rolu vôbec relevantné — v nastaveniach sa
 // ponúkajú len tieto, nech si niekto nemusí prezerať prepínače pre veci, čo sa
@@ -11855,11 +11860,11 @@ const NOTIFICATION_KIND_LABELS = {
 // vyskúšať, ako to vidí iná rola.
 const ROLE_NOTIFICATION_KINDS = {
   admin: Object.keys(NOTIFICATION_KIND_LABELS),
-  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end"],
+  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end", "weekly_summary"],
   dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end"],
   obchodnik: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek", "portal_request", "rental_end"],
   fakturant_pozicovna: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek"],
-  veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
+  veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "weekly_summary"],
   dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
   fakturant_servis: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
   veduci_technik_ba: ["damage_new", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek"],
@@ -29650,6 +29655,15 @@ function PlatformStatusView() {
     supabase.rpc("admin_platform_status").then(({ data, error }) => (error ? setErr(error.message) : setSt(data)));
   }, []);
   useEffect(load, [load]);
+  const downloadBackup = async (id) => {
+    const { data, error } = await supabase.rpc("admin_backup_get", { p_id: id });
+    if (error || !data) return showNotice(`Zálohu sa nepodarilo stiahnuť${error ? `: ${error.message}` : ""}.`);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `mateco-zaloha-auto-${id}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const ago = (t) => { if (!t) return "—"; const h = (Date.now() - new Date(t).getTime()) / 3600000; return h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
   const when = (t) => (t ? new Date(t).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
   const head = { textAlign: "left", padding: 8, position: "static", fontSize: 12, color: "var(--text-dim)" };
@@ -29709,6 +29723,18 @@ function PlatformStatusView() {
           </tbody>
         </table></div>
       ))}
+      {box("Automatické zálohy (každú noc, 14 dní)", st.backups ? (st.backups.length ? (
+        <div style={{ fontSize: 13 }}>
+          {(Date.now() - new Date(st.backups[0].at).getTime()) / 3600000 > 26 && <div style={{ color: "var(--danger)", fontWeight: 600, marginBottom: 6 }}>Posledná záloha je staršia ako deň — skontrolujte nočnú úlohu mateco-backup.</div>}
+          {st.backups.map((b) => (
+            <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "4px 0", borderTop: "1px solid var(--border)" }}>
+              <span>{fmtDate(b.id)} · {when(b.at)} · {Math.max(1, Math.round((b.size || 0) / 1024))} kB</span>
+              <button className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => downloadBackup(b.id)}>Stiahnuť</button>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>Obnova: menu účtu → Import dát → vybrať stiahnutý súbor.</div>
+        </div>
+      ) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Zatiaľ žiadna — prvá vznikne v noci.</div>) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nedostupné (spustený step91?).</div>)}
       {box("Chyby push / webhookov (posledných ~6 h)", st.httpErrors ? (st.httpErrors.length ? (
         <div style={{ fontSize: 12 }}>{st.httpErrors.map((h, i) => <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}><strong>{when(h.at)}</strong> · {h.status || "bez odpovede"} · {h.error || ""}</div>)}</div>
       ) : <div style={{ fontSize: 13, color: "var(--ok)" }}>Bez chýb.</div>) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nedostupné.</div>)}
