@@ -29,7 +29,23 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.786";
+const APP_VERSION = "1.0.787";
+// „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
+// Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
+const CHANGELOG = [
+  { v: "1.0.787", items: [
+    { roles: ["sofer", "externy_sofer"], text: "„Prevezené“ funguje aj bez signálu — odošle sa samo, keď bude signál. Zoznam prevozov ostane aj po obnovení stránky." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Nové upozornenie „Končí prenájom“ — 2 pracovné dni pred koncom zákazky, kým nemá zvoz šoféra: predĺžiť alebo naplánovať zvoz." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Dispečeri: zástup sa dá vybrať už pri zadaní dovolenky (aj neskôr tlačidlom „Zástupy“ pri plánovanej dovolenke)." },
+    { roles: null, text: "Pri pridávaní zákazníka platforma upozorní na podobného zákazníka (rovnaké IČO alebo podobný názov)." },
+    { roles: ["veduci_servisu", "dispecer_servisu"], text: "Štatistiky servisu rátajú aj vedúceho technika BA." },
+  ] },
+];
+const _verNum = (v) => String(v || "0").split(".").reduce((n, x) => n * 10000 + (Number(x) || 0), 0);
+function whatsNewFor(role, seen) {
+  return CHANGELOG.filter((c) => _verNum(c.v) > _verNum(seen))
+    .flatMap((c) => c.items.filter((i) => !i.roles || role === "admin" || i.roles.includes(role)).map((i) => i.text));
+}
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -4204,6 +4220,14 @@ function DispatcherApp() {
     refreshOutboxCount();
     return () => setOutboxCountListener(null);
   }, []);
+  // Stav platformy pre admina: verzia a čakajúce zmeny bez signálu (step89; staršia DB → ticho nič).
+  useEffect(() => {
+    if (!loaded || !session?.user?.id) return;
+    const report = () => { if (navigator.onLine) supabase.rpc("report_client_status", { p_version: APP_VERSION, p_queued: outboxShown, p_blocked: outboxBlocked }).then(() => {}, () => {}); };
+    const t = setTimeout(report, 5000);
+    const iv = setInterval(report, 30 * 60 * 1000);
+    return () => { clearTimeout(t); clearInterval(iv); };
+  }, [loaded, session?.user?.id, outboxShown, outboxBlocked]);
 
   // Záložný periodický pokus, nezávislý od udalosti "online" — na slabom/zdieľanom
   // WiFi (napr. na predvádzaní) vie prehliadač hlásiť navigator.onLine=true aj keď
@@ -4720,6 +4744,14 @@ function DispatcherApp() {
     if (!profile) return null;
     return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {} };
   }, [session, profiles]);
+  // „Čo je nové“: raz po aktualizácii; prvé spustenie na zariadení len zapamätá verziu (bez starých noviniek).
+  const [whatsNew, setWhatsNew] = useState(null);
+  useEffect(() => {
+    if (!loaded || !currentUser?.role) return;
+    let seen = null;
+    try { seen = localStorage.getItem("mateco_seen_version"); localStorage.setItem("mateco_seen_version", APP_VERSION); } catch { return; }
+    if (seen && _verNum(seen) < _verNum(APP_VERSION)) setWhatsNew(whatsNewFor(currentUser.role, seen));
+  }, [loaded, currentUser?.role]);
 
   // Push notifikácie — service worker sa zaregistruje hneď pri načítaní appky
   // (nezávisle od prihlásenia), a appka si zistí, či toto konkrétne
@@ -10283,9 +10315,18 @@ function DispatcherApp() {
         {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
           <AuditLogView profiles={profiles} />
         )}
+        {module === "administrativa" && view === "stav" && isAdminUser(effectiveUser) && <PlatformStatusView />}
       </div>
       </div>
 
+      {whatsNew && whatsNew.length > 0 && (
+        <Modal title="Čo je nové v platforme" onClose={() => setWhatsNew(null)}>
+          <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
+            {whatsNew.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}
+          </ul>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}><button className="btn btn-accent" onClick={() => setWhatsNew(null)}>Rozumiem</button></div>
+        </Modal>
+      )}
       {showDriverReport && (
         <DriverReportModal
           drivers={employees.filter((e) => e.role === "externy_sofer").sort((a, b) => !!a.archived - !!b.archived || a.name.localeCompare(b.name))}
@@ -10598,6 +10639,8 @@ function DispatcherApp() {
       )}
       {showAddCustomer && (
         <AddCustomerModal
+          customers={customers}
+          onOpenExisting={(c) => { setShowAddCustomer(false); setCustomerCard(c); }}
           onClose={() => setShowAddCustomer(false)}
           onSave={(data) => {
             addCustomerManual(data);
@@ -11784,6 +11827,7 @@ const NOTIFICATION_KIND_LABELS = {
   transport_note_done: "Prevoz hotový (šofér potvrdil)",
   vehicle_stk_ek: "STK/EK áut",
   portal_request: "Žiadosti zo zákazníckeho portálu",
+  rental_end: "Končí prenájom (predĺžiť / zvoz)",
 };
 // Ktoré kategórie sú pre danú rolu vôbec relevantné — v nastaveniach sa
 // ponúkajú len tieto, nech si niekto nemusí prezerať prepínače pre veci, čo sa
@@ -11792,9 +11836,9 @@ const NOTIFICATION_KIND_LABELS = {
 // vyskúšať, ako to vidí iná rola.
 const ROLE_NOTIFICATION_KINDS = {
   admin: Object.keys(NOTIFICATION_KIND_LABELS),
-  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request"],
-  dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request"],
-  obchodnik: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek", "portal_request"],
+  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end"],
+  dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end"],
+  obchodnik: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek", "portal_request", "rental_end"],
   fakturant_pozicovna: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek"],
   veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
   dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
@@ -12643,7 +12687,7 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
     { id: "checkeri", label: "Checkeri podľa depa" },
     ...(can(effectiveUser, "vehicle_manage") ? [{ id: "auta", label: "Autá" }] : []),
     ...(can(effectiveUser, "trash_view") ? [{ id: "kos", label: "Kôš" }] : []),
-    ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }] : []),
+    ...(isAdminUser(effectiveUser) ? [{ id: "audit", label: "Audit log" }, { id: "stav", label: "Stav platformy" }] : []),
   ];
   // Menu podľa roly (ako pred „Dnes“): externý šofér má len „Dnes“ (svoje prepravy); šofér Prepravy +
   // Kalendár (bez Servisu); technik Servis + Kalendár požičovne na nahliadnutie. „Dnes“ je pre všetkých prvé.
@@ -14786,6 +14830,14 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
 }
 
 // Firma externého šoféra — výber zo Zákazníkov alebo nová firma (uloží sa aj do Zákazníkov).
+// Podobní zákazníci: rovnaké IČO alebo názov bez diakritiky, právnej formy a interpunkcie (jeden obsahuje druhý).
+const custKey = (x) => (x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/\b(spol|s\.?\s*r\.?\s*o|a\.?\s*s|k\.?\s*s|v\.?\s*o\.?\s*s|sro|as|ks|vos)\b\.?/g, " ").replace(/[^a-z0-9]+/g, "");
+function similarCustomers(customers, firma, ico) {
+  const k = custKey(firma), i = (ico || "").replace(/\D/g, "");
+  return (customers || []).filter((c) => (i && (c.ico || "").replace(/\D/g, "") === i)
+    || (k.length >= 3 && custKey(c.firma) && (custKey(c.firma) === k || (Math.min(k.length, custKey(c.firma).length) >= 5 && (custKey(c.firma).includes(k) || k.includes(custKey(c.firma))))))).slice(0, 5);
+}
 function CarrierPickModal({ customers, onPick, onClose }) {
   const [q, setQ] = useState("");
   const [newName, setNewName] = useState("");
@@ -14806,9 +14858,14 @@ function CarrierPickModal({ customers, onPick, onClose }) {
         <Field label="Názov firmy"><input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="IČO"><input value={newIco} onChange={(e) => setNewIco(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
+      {newName.trim() && similarCustomers(customers, newName, newIco).map((c) => (
+        <button key={c.id} className="btn btn-ghost" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4, color: "var(--warn)" }} onClick={() => onPick({ id: c.id, name: c.firma })}>
+          ⚠ Už existuje podobná: {c.firma}{c.ico ? ` · IČO ${c.ico}` : ""} — použiť ju
+        </button>
+      ))}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <button className="btn btn-ghost" onClick={() => onPick(null)}>Bez firmy</button>
-        <button className="btn btn-accent" disabled={!newName.trim()} onClick={() => onPick({ newName: newName.trim(), ico: newIco.trim() })}>Pridať firmu</button>
+        <button className="btn btn-accent" disabled={!newName.trim() || customers.some((c) => (c.firma || "").trim().toLowerCase() === newName.trim().toLowerCase())} onClick={() => onPick({ newName: newName.trim(), ico: newIco.trim() })}>Pridať firmu</button>
       </div>
     </Modal>
   );
@@ -15051,13 +15108,15 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
   );
 }
 
-function AddCustomerModal({ onClose, onSave }) {
+function AddCustomerModal({ customers = [], onOpenExisting, onClose, onSave }) {
   const [firma, setFirma] = useState("");
   const [ico, setIco] = useState("");
   const [cisloOdberatela, setCisloOdberatela] = useState("");
   const [email, setEmail] = useState("");
   const [telefon, setTelefon] = useState("");
-  const canSave = firma.trim().length > 0;
+  const sameName = customers.some((c) => (c.firma || "").trim().toLowerCase() === firma.trim().toLowerCase());
+  const similar = firma.trim() || ico.trim() ? similarCustomers(customers, firma, ico) : [];
+  const canSave = firma.trim().length > 0 && !sameName;
   return (
     <Modal title="Pridať zákazníka" onClose={onClose}>
       <Field label="Firma *">
@@ -15078,8 +15137,19 @@ function AddCustomerModal({ onClose, onSave }) {
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
         Kontaktné osoby (meno, funkcia, telefón, e-mail) pridáš po uložení, priamo v karte zákazníka.
       </div>
+      {similar.length > 0 && (
+        <div role="alert" style={{ background: "var(--warn-bg, #fdf6ea)", border: "1px solid var(--warn)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
+          <strong>{sameName ? "Zákazník s týmto názvom už existuje:" : "Podobný zákazník už existuje — nie je to ten istý?"}</strong>
+          {similar.map((c) => (
+            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 4 }}>
+              <span>{c.firma}{c.ico ? ` · IČO ${c.ico}` : ""}</span>
+              {onOpenExisting && <button className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => onOpenExisting(c)}>Otvoriť</button>}
+            </div>
+          ))}
+        </div>
+      )}
       <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ firma, ico, cisloOdberatela, email, telefon })}>
-        Uložiť
+        {similar.length && !sameName ? "Aj tak pridať nového" : "Uložiť"}
       </button>
     </Modal>
   );
@@ -29501,6 +29571,81 @@ const AUDIT_TABLE_LABELS = {
   handoverProtocols: "Protokoly o odovzdaní",
 };
 const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
+// Stav platformy (admin): nočné úlohy, chyby push/webhookov, staré kontroly, platforma u ľudí — step89.
+function PlatformStatusView() {
+  const [st, setSt] = useState(null);
+  const [err, setErr] = useState(null);
+  const load = useCallback(() => {
+    setErr(null);
+    supabase.rpc("admin_platform_status").then(({ data, error }) => (error ? setErr(error.message) : setSt(data)));
+  }, []);
+  useEffect(load, [load]);
+  const ago = (t) => { if (!t) return "—"; const h = (Date.now() - new Date(t).getTime()) / 3600000; return h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
+  const when = (t) => (t ? new Date(t).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+  const head = { textAlign: "left", padding: 8, position: "static", fontSize: 12, color: "var(--text-dim)" };
+  const td = { padding: 8, fontSize: 13, borderTop: "1px solid var(--border)" };
+  const box = (title, children) => (
+    <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>{title}</div>
+      {children}
+    </div>
+  );
+  if (err) return <div className="panel" style={{ padding: 14, color: "var(--danger)" }}>Stav sa nenačítal: {err} (spustený step89?) <button className="btn btn-ghost" onClick={load}>Skúsiť znova</button></div>;
+  if (!st) return <div style={{ color: "var(--text-dim)" }}>Načítava sa…</div>;
+  const clients = st.clients || [];
+  const old = clients.filter((c) => c.version && c.version !== APP_VERSION);
+  const queued = clients.filter((c) => c.queued > 0);
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Stav k {when(st.now)} · táto verzia {APP_VERSION}</span>
+        <button className="btn btn-ghost" onClick={load}>Obnoviť</button>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <StatCard label="Čakajúce zmeny bez signálu" value={queued.reduce((n, c) => n + c.queued, 0)} color={queued.length ? "var(--warn)" : undefined} />
+        <StatCard label="Staršia verzia platformy" value={old.length} color={old.length ? "var(--warn)" : undefined} />
+        <StatCard label="Kontroly stroja z minulých dní" value={st.oldInspections} color={st.oldInspections ? "var(--danger)" : undefined} />
+        <StatCard label="Chyby push / webhookov" value={st.httpErrors ? st.httpErrors.length : "—"} color={st.httpErrors?.length ? "var(--danger)" : undefined} />
+      </div>
+      {box("Nočné úlohy (databáza)", st.cron ? (
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={head}>Úloha</th><th style={head}>Kedy (UTC)</th><th style={head}>Posledný beh</th><th style={head}>Výsledok</th></tr></thead>
+          <tbody>{st.cron.map((c) => (
+            <tr key={c.name}>
+              <td style={td}>{c.name}{!c.active && <span className="badge badge-warn" style={{ marginLeft: 6 }}>vypnutá</span>}</td>
+              <td style={td}>{c.schedule}</td>
+              <td style={td}>{when(c.start)}</td>
+              <td style={{ ...td, color: c.status === "succeeded" ? "var(--ok)" : c.status ? "var(--danger)" : "var(--text-dim)" }}>{c.status === "succeeded" ? "OK" : c.status ? `${c.status}${c.message ? ` — ${c.message}` : ""}` : "ešte nebežala"}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      ) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Plánovač úloh (pg_cron) nie je dostupný.</div>)}
+      {box("Platforma u ľudí", (
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={head}>Meno</th><th style={head}>Rola</th><th style={head}>Verzia</th><th style={head}>Čaká na odoslanie</th><th style={head}>Naposledy online</th></tr></thead>
+          <tbody>
+            {clients.length === 0 && <tr><td style={td} colSpan={5}>Zatiaľ nikto (hlási sa od verzie 1.0.787).</td></tr>}
+            {clients.map((c) => (
+              <tr key={c.id}>
+                <td style={td}>{c.name || "—"}</td>
+                <td style={td}>{ROLES.find((r) => r.id === c.role)?.label || c.role || "—"}</td>
+                <td style={{ ...td, color: c.version !== APP_VERSION ? "var(--warn)" : undefined }}>{c.version || "—"}</td>
+                <td style={{ ...td, color: c.blocked ? "var(--danger)" : c.queued ? "var(--warn)" : undefined }}>
+                  {c.queued ? `${c.queued}${c.blocked ? ` (${c.blocked} odmietnuté)` : ""} · ${ago(c.queueSince)}` : "—"}
+                </td>
+                <td style={td}>{ago(c.lastSeen)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      ))}
+      {box("Chyby push / webhookov (posledných ~6 h)", st.httpErrors ? (st.httpErrors.length ? (
+        <div style={{ fontSize: 12 }}>{st.httpErrors.map((h, i) => <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}><strong>{when(h.at)}</strong> · {h.status || "bez odpovede"} · {h.error || ""}</div>)}</div>
+      ) : <div style={{ fontSize: 13, color: "var(--ok)" }}>Bez chýb.</div>) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nedostupné.</div>)}
+      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Kontroly z minulých dní ráno presúva databáza (cez víkend nie) — číslo nad 0 v pracovný deň po 6:00 znamená, že ranný presun neprebehol. Čakajúce zmeny u človeka sa ukážu, keď je online; „odmietnuté“ treba vyriešiť v dispečingu.</div>
+    </div>
+  );
+}
 function AuditLogView({ profiles }) {
   const [entries, setEntries] = useState(null); // null = ešte sa načítava
   const [tableFilter, setTableFilter] = useState("");
