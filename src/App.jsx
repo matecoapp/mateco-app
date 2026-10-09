@@ -29,10 +29,13 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.788";
+const APP_VERSION = "1.0.789";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.789", items: [
+    { roles: null, text: "Nový sprievodca platformou — ukáže sa pri otvorení, kým nezaškrtnete „Už nezobrazovať“; znova ho otvoríte v menu účtu → 🧭 Sprievodca platformou." },
+  ] },
   { v: "1.0.788", items: [
     { roles: ["sofer", "externy_sofer"], text: "„Prevezené“ funguje aj bez signálu — odošle sa samo, keď bude signál. Zoznam prevozov ostane aj po obnovení stránky." },
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Nové upozornenie „Končí prenájom“ — 2 pracovné dni pred koncom zákazky, kým nemá zvoz šoféra: predĺžiť alebo naplánovať zvoz." },
@@ -4742,8 +4745,16 @@ function DispatcherApp() {
     if (!session?.user) return null;
     const profile = profiles.find((p) => p.id === session.user.id);
     if (!profile) return null;
-    return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {} };
+    return { id: profile.id, name: profile.name, role: profile.role, active: profile.active, email: session.user.email, notificationPrefs: profile.notificationPrefs || {}, tourHidden: !!profile.tourHidden };
   }, [session, profiles]);
+  // Úvodný sprievodca: pri každom otvorení platformy, kým si človek nezaškrtne „Už nezobrazovať“ (profil → tourHidden, step90).
+  const [tourOpen, setTourOpen] = useState(false);
+  const tourAutoShown = useRef(false);
+  useEffect(() => {
+    if (!loaded || !currentUser || tourAutoShown.current) return;
+    tourAutoShown.current = true;
+    if (!currentUser.tourHidden && currentUser.role !== "nezaradeny") setTourOpen(true);
+  }, [loaded, currentUser]);
   // „Čo je nové“: raz po aktualizácii; na novom zariadení (nič nevidel) len novinky tejto verzie, nie celá história.
   const [whatsNew, setWhatsNew] = useState(null);
   useEffect(() => {
@@ -9376,6 +9387,7 @@ function DispatcherApp() {
         onImportBackup={importBackup}
         currentUser={currentUser}
         onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
+        onOpenTour={() => setTourOpen(true)}
         pushEnabled={pushEnabled}
         onEnablePush={enablePush}
         onDisablePush={disablePush}
@@ -10319,7 +10331,11 @@ function DispatcherApp() {
       </div>
       </div>
 
-      {whatsNew && whatsNew.length > 0 && (
+      {tourOpen && effectiveUser && (
+        <PlatformTour role={effectiveUser.role} modules={navModules} hasActions={quickActions.some(Boolean)} hidden={currentUser?.tourHidden} onGo={navGo} bottom={hasMobileBar ? 84 : 20}
+          onClose={(hide) => { setTourOpen(false); if (hide !== !!currentUser?.tourHidden) updateProfileInfo(currentUser.id, { tourHidden: hide }); }} />
+      )}
+      {!tourOpen && whatsNew && whatsNew.length > 0 && (
         <Modal title="Čo je nové v platforme" onClose={() => setWhatsNew(null)}>
           <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
             {whatsNew.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}
@@ -11558,7 +11574,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout, variant }) {
+function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout, variant }) {
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
   const isAdmin = isAdminUser(currentUser);
@@ -11698,6 +11714,9 @@ function UserMenu({ currentUser, onSaveNotificationPrefs, pushEnabled, onEnableP
               onClick={() => { setShowPrefs(true); setOpen(false); }}
             >
               🔔 Notifikácie
+            </button>
+            <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenTour?.(); setOpen(false); }}>
+              🧭 Sprievodca platformou
             </button>
 
             {isAdmin && (
@@ -12976,7 +12995,7 @@ function extractPhone(text) {
   const m = (text || "").match(/(\+?\d[\d \/-]{6,}\d)/);
   return m ? m[1].trim() : null;
 }
-function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenPhoneDirectory, searchIndex, onSearchNavigate, quickActions, phoneInBar }) {
+function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenPhoneDirectory, searchIndex, onSearchNavigate, quickActions, phoneInBar }) {
   // Skutočná výška hlavičky sa mení (mobile zalomenie na 2 riadky, rôzne
   // zoom/rozlíšenie) — meria sa a ukladá do --header-h, aby sa podľa nej
   // vedeli "prilepiť" hlavičky tabuliek presne POD hlavičku, nie pod ňu.
@@ -13056,6 +13075,7 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
                   <UserMenu
                     currentUser={currentUser}
                     onSaveNotificationPrefs={onSaveNotificationPrefs}
+                    onOpenTour={onOpenTour}
                     pushEnabled={pushEnabled}
                     onEnablePush={onEnablePush}
                     onDisablePush={onDisablePush}
@@ -13076,6 +13096,7 @@ function Header({ darkMode, onToggleDarkMode, onExportBackup, onImportBackup, cu
                     variant="mobile-compact"
                     currentUser={currentUser}
                     onSaveNotificationPrefs={onSaveNotificationPrefs}
+                    onOpenTour={onOpenTour}
                     pushEnabled={pushEnabled}
                     onEnablePush={onEnablePush}
                     onDisablePush={onDisablePush}
@@ -29571,6 +29592,55 @@ const AUDIT_TABLE_LABELS = {
   handoverProtocols: "Protokoly o odovzdaní",
 };
 const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
+// Úvodný sprievodca — prechádza skutočné obrazovky platformy (prepne modul/záložku) a vysvetlí ich kartičkou dole.
+// Krok s obrazovkou sa ukáže len tomu, kto ju v menu má; roles: null = všetkým.
+const FIELD_ROLES = ["sofer", "externy_sofer", "technik", "veduci_technik_ba"];
+const POZ_OFFICE = ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"];
+const SRV_OFFICE = ["dispecer_servisu", "veduci_servisu", "fakturant_servis", "veduci_technik_ba"];
+const TOUR_STEPS = [
+  { title: "Vitaj v platforme mateco", text: "Tento krátky sprievodca ťa prevedie hlavnými časťami platformy — prepína obrazovky za teba, stačí klikať „Ďalej“. Znova ho otvoríš v menu účtu (vpravo hore) → 🧭 Sprievodca platformou." },
+  { go: ["dnes", "dnes"], title: "Dnes", text: "Tvoje úlohy na dnes s priamymi tlačidlami — začni deň vždy tu. Číslo pri položke menu ukazuje, koľko vecí na teba čaká." },
+  { needsActions: true, title: "＋ Nové", text: "Nové veci zakladáš tlačidlom ＋ — na počítači v hlavičke, na mobile v strede spodnej lišty: zákazka, protokol, nahlásenie poruchy… podľa toho, čo tvoja rola smie." },
+  { go: ["poziciovna", "calendar"], roles: [...POZ_OFFICE, "sofer", "technik"], title: "Kalendár strojov", text: "Kto má ktorý stroj a dokedy. Červené bunky = porucha, uhlopriečka = deň výmeny. Po prejdení myšou sa ukáže detail, klikom otvoríš zákazku." },
+  { go: ["poziciovna", "jobs"], roles: POZ_OFFICE, title: "Zákazky", text: "Všetky zákazky s rýchlymi filtrami: po termíne, končí čoskoro, bez šoféra. Klik na zákazku otvorí jej kartu so všetkými krokmi." },
+  { go: ["poziciovna", "prepravy"], roles: ["sofer", "dispecer_pozicovne", "veduci_pozicovne"], title: "Prepravy", text: "Vývozy, zvozy a prevozy medzi depami. Šofér tu vypíše protokol o odovzdaní či vrátení a pri prevoze klikne „Prevezené“." },
+  { go: ["poziciovna", "dispeceri"], roles: ["dispecer_pozicovne", "veduci_pozicovne"], title: "Dispečeri", text: "Kto rieši ktoré depo, dovolenky a zástupy. Upozornenia k zákazke idú jej dispečerovi (počas dovolenky jeho zástupu)." },
+  { go: ["servis", "plan"], roles: ["technik", ...SRV_OFFICE], title: "Plán servisu", text: "Plán technikov: servisné zásahy, kontroly strojov (checker), pohotovosti a dovolenky. Technik tu vidí svoje úlohy a otvorí z nich protokol." },
+  { go: ["servis", "poskodenia"], roles: SRV_OFFICE, title: "Poškodenia", text: "Nahlásené poruchy strojov — priradenie technikovi a stav opravy. Kým nie je opravené, svieti stroj v kalendári červeno." },
+  { go: ["servis", "diely"], roles: SRV_OFFICE, title: "Náhradné diely", text: "Objednávky dielov na schválenie a výdaj dielov zákazníkom s podpisom." },
+  { go: ["administrativa", "zamestnanci"], roles: ["veduci_pozicovne", "veduci_servisu", "admin"], title: "Administratíva", text: "Zamestnanci a ich roly, checkeri podľa depa, štatistiky." },
+  { roles: FIELD_ROLES, title: "Bez signálu", text: "Protokoly a kontroly vypĺňaj pokojne aj bez signálu — uložia sa v telefóne a odošlú sa samé. Hore vtedy svieti počet čakajúcich zmien; kým nie je nula, neodhlasuj sa." },
+  { title: "Upozornenia", text: "🔔 v hlavičke zbiera upozornenia, ktoré sa ťa týkajú. V menu účtu → Notifikácie si zapni upozornenia do telefónu a vyber, o čom chceš vedieť." },
+  { title: "Hotovo", text: "To je všetko. Ak ti niečo nejde alebo máš nápad, pošli pripomienku ako doteraz e-mailom. Ak už sprievodcu nechceš vidieť pri každom otvorení, zaškrtni „Už nezobrazovať“." },
+];
+function PlatformTour({ role, modules, hasActions, hidden, onGo, onClose, bottom }) {
+  const has = (m, v) => modules.some((x) => x.id === m && x.tabs.some((t) => t.id === v || (t.group || []).includes(v)));
+  const steps = TOUR_STEPS.filter((st) => (!st.roles || role === "admin" || st.roles.includes(role)) && (!st.go || has(...st.go)) && (!st.needsActions || hasActions));
+  const [i, setI] = useState(0);
+  const [hide, setHide] = useState(!!hidden);
+  const st = steps[Math.min(i, steps.length - 1)];
+  useEffect(() => { if (st.go) onGo(...st.go); }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
+  const last = i >= steps.length - 1;
+  return (
+    <div role="dialog" aria-label="Sprievodca platformou" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom, zIndex: 9000, width: "min(520px, calc(100vw - 24px))", background: "var(--panel)", border: "2px solid var(--accent)", borderRadius: 14, boxShadow: "0 10px 32px rgba(0,0,0,.28)", padding: "14px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent)" }}>Sprievodca · {i + 1} / {steps.length}</div>
+        <button type="button" aria-label="Zavrieť sprievodcu" onClick={() => onClose(hide)} style={{ border: 0, background: "none", fontSize: 22, lineHeight: 1, cursor: "pointer", color: "var(--text-dim)" }}>×</button>
+      </div>
+      <div style={{ fontSize: 17, fontWeight: 700, margin: "4px 0 6px" }}>{st.title}</div>
+      <div style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 12 }}>{st.text}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Už nezobrazovať
+        </label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {i > 0 && <button className="btn btn-ghost" onClick={() => setI(i - 1)}>Späť</button>}
+          <button className="btn btn-accent" onClick={() => (last ? onClose(hide) : setI(i + 1))}>{last ? "Hotovo" : "Ďalej"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // Stav platformy (admin): nočné úlohy, chyby push/webhookov, staré kontroly, platforma u ľudí — step89.
 function PlatformStatusView() {
   const [st, setSt] = useState(null);
