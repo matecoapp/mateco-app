@@ -176,39 +176,45 @@ function buildOfficialProtocolHtml(data) {
 </body></html>`;
 }
 
+// Vzhľad podľa základu dizajnu platformy (v1.0.793): nadpisy sekcií Barlow Condensed,
+// telefóny/emaily čiernou, tlačidlá 48 px, rizikové tlačidlo s červeným obrysom.
+const SEC = { fontFamily: "'Barlow Condensed', 'Barlow', Arial, sans-serif", fontSize: 15, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "#5A5A5A", margin: "18px 0 6px" };
+const LINK = { color: "#1A1A1A", textDecoration: "none" };
+const BTN = { width: "100%", minHeight: 48, padding: "10px 14px", borderRadius: 8, background: "#fff", fontFamily: "inherit", fontWeight: 600, fontSize: 15, cursor: "pointer" };
+
 function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent }) {
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#6b6b6b" }}>{fmtDate(date)}</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
+        <div style={{ fontSize: 14, color: "#5A5A5A", fontVariantNumeric: "tabular-nums" }}>{fmtDate(date)}</div>
       </div>
       <div style={{ marginBottom: 10 }}>
         {HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
           const item = (checklist && checklist[i]) || {};
           const status = item[statusKey];
           const mark = status === "ok" ? "✓" : status === "problem" ? "✗" : "—";
-          const markColor = status === "ok" ? "#2f7d32" : status === "problem" ? "#c62828" : "#bbb";
+          const markColor = status === "ok" ? "#2f7d32" : status === "problem" ? "#c62828" : "#767676";
           const note = status === "problem" && item[noteKey] ? item[noteKey] : null;
           return (
             <div key={i} style={{ padding: "4px 0", borderBottom: i < HANDOVER_CHECKLIST_ITEMS.length - 1 ? "1px solid #f2f2f2" : "none" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
                 <span>{label}</span>
                 <span style={{ color: markColor, fontWeight: 700 }}>{mark}</span>
               </div>
-              {note && <div style={{ fontSize: 11.5, color: "#c62828", marginTop: 2 }}>{note}</div>}
+              {note && <div style={{ fontSize: 13, color: "#8E0A12", marginTop: 2 }}>⚠ {note}</div>}
             </div>
           );
         })}
       </div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
-          <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 11, color: "#c62828", height: 50, display: "flex", alignItems: "center" }}>Zákazník nebol prítomný</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
+          {custAbsent ? <div style={{ fontSize: 13, color: "#8E0A12", height: 50, display: "flex", alignItems: "center" }}>Zákazník nebol prítomný</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
-          <div style={{ fontSize: 10, color: "#999", marginBottom: 4 }}>Podpis prenajímateľa</div>
-          {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 11, color: "#bbb", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
+          {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
       </div>
     </div>
@@ -232,7 +238,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
 
   if (jobLocked) {
     return (
-      <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "8px 0" }}>
+      <div style={{ fontSize: 14, color: "#5A5A5A", padding: "8px 0" }}>
         {type === "problem" ? "Problém je už nahlásený, čaká na vybavenie." : "Žiadosť o zmenu termínu vrátenia už čaká na vybavenie."}
       </div>
     );
@@ -267,26 +273,26 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        style={{ width: "100%", padding: "9px 12px", borderRadius: 6, border: "1px solid #B3131D", background: "#fff", color: "#B3131D", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+        style={{ ...BTN, border: type === "problem" ? "1px solid #C4040F" : "1px solid #1A1A1A", color: type === "problem" ? "#C4040F" : "#1A1A1A" }}
       >
-        {type === "problem" ? "Nahlásiť problém so strojom" : "Zmeniť dátum vrátenia"}
+        {type === "problem" ? "⚠ Nahlásiť problém so strojom" : "Zmeniť dátum vrátenia"}
       </button>
     );
   }
 
   return (
-    <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: 10 }}>
+    <div style={{ border: "1px solid #E2E2E2", borderRadius: 8, padding: 12 }}>
       {type === "problem" ? (
         <textarea maxLength={2000}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={3}
           placeholder="Čo presne sa deje…"
-          style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
+          style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, padding: 10, borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
         />
       ) : (
         <>
-          <div style={{ fontSize: 12, color: "#6b6b6b", marginBottom: 6 }}>
+          <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 6 }}>
             Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.
           </div>
           <input
@@ -294,22 +300,22 @@ function RequestForm({ type, jobLocked, onSubmit }) {
             min={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 8, borderRadius: 4, border: "1px solid #ccc", marginBottom: 8 }}
+            style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, height: 48, padding: "0 10px", borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
           />
         </>
       )}
-      {error && <div style={{ fontSize: 12, color: "#c62828", marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ fontSize: 14, color: "#8E0A12", background: "#FDF1F1", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>⚠ {error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
           disabled={sending || (type === "problem" ? !message.trim() : !endDate)}
-          style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "none", background: "#B3131D", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: sending ? 0.6 : 1 }}
+          style={{ ...BTN, flex: 1, border: "none", background: "#E30613", color: "#fff", opacity: sending ? 0.6 : 1 }}
         >
           {sending ? "Odosielam…" : "Odoslať"}
         </button>
         <button
           onClick={() => setOpen(false)}
-          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", color: "#3d3d3d", fontSize: 13, cursor: "pointer" }}
+          style={{ ...BTN, width: "auto", border: "1px solid #CFCFCF", color: "#1A1A1A" }}
         >
           Zrušiť
         </button>
@@ -322,19 +328,19 @@ function RequestHistory({ requests }) {
   if (!requests || requests.length === 0) return null;
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 6 }}>Vaše žiadosti</div>
+      <div style={{ ...SEC, marginTop: 0 }}>Vaše žiadosti</div>
       {requests.map((r, i) => {
         const st = PORTAL_REQUEST_STATUS_LABEL[r.status] || PORTAL_REQUEST_STATUS_LABEL.pending;
         return (
           <div key={i} style={{ border: "1px solid #eee", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>
                 {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o zmenu termínu vrátenia na ${fmtDate(r.requestedEndDate)}`}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: st.color, background: st.bg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{st.label}</span>
             </div>
-            {r.type === "problem" && <div style={{ fontSize: 12, color: "#6b6b6b", marginTop: 2 }}>{r.message}</div>}
-            {r.responseNote && <div style={{ fontSize: 12, color: "#6b6b6b", marginTop: 2 }}>{r.responseNote}</div>}
+            {r.type === "problem" && <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 2 }}>{r.message}</div>}
+            {r.responseNote && <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 2 }}>{r.responseNote}</div>}
           </div>
         );
       })}
@@ -422,80 +428,83 @@ export default function CustomerPortal({ token }) {
   }, [token]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f0f0", fontFamily: "'Barlow', Arial, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#F2F2F2", color: "#1A1A1A", fontFamily: "'Barlow', Arial, sans-serif" }}>
       <header style={{ background: "#E30613", padding: "10px 16px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>
-          mateco
-          <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: 10 }}>Stav vašej zákazky</span>
+        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px" }}>
+            <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 20, display: "block" }} />
+          </span>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>Stav vašej zákazky</span>
         </div>
       </header>
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "16px 14px 40px" }}>
         {state === "loading" && (
-          <div style={{ textAlign: "center", padding: 40, color: "#6b6b6b" }}>Načítavam…</div>
+          <div style={{ textAlign: "center", padding: 40, color: "#5A5A5A" }}>Načítavam…</div>
         )}
         {state === "invalid" && (
-          <div style={{ background: "#fff", borderRadius: 10, padding: 24, textAlign: "center", color: "#6b6b6b" }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             Tento odkaz už nie je platný.
           </div>
         )}
         {state === "notyet" && (
-          <div style={{ background: "#fff", borderRadius: 10, padding: 24, textAlign: "center", color: "#6b6b6b" }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             Odkaz bude aktívny od {fmtDate(data?.activeFrom)} — od dňa vývozu stroja.
           </div>
         )}
         {state === "error" && (
-          <div style={{ background: "#fff", borderRadius: 10, padding: 24, textAlign: "center", color: "#6b6b6b" }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             Nepodarilo sa načítať stav zákazky. Skúste to prosím neskôr.
           </div>
         )}
         {state === "ok" && data && (
-          <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e0e0e0", overflow: "hidden" }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", overflow: "hidden" }}>
             <div style={{ padding: "16px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 12, color: "#6b6b6b" }}>{!data.code || data.code.includes(" · ") ? "Zákazka" : "Zákazka č."}</div>
-                  <div style={{ fontSize: 15, fontWeight: 600 }}>{data.code || "—"}</div>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{!data.code || data.code.includes(" · ") ? "Zákazka" : "Zákazka č."}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || "—"}</div>
                 </div>
                 <span
                   style={{
-                    background: data.returnDone ? "#f4f4f4" : "#eaf3de",
-                    color: data.returnDone ? "#3d3d3d" : "#27500A",
-                    fontSize: 12,
+                    background: data.returnDone || data.notRealized ? "#EFEFEF" : "#E7EEF9",
+                    color: data.returnDone || data.notRealized ? "#3A3A3A" : "#1F4E99",
+                    fontSize: 13,
                     fontWeight: 600,
-                    padding: "5px 10px",
-                    borderRadius: 6,
+                    padding: "4px 12px",
+                    borderRadius: 999,
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {data.notRealized ? "Nerealizovaná" : data.returnDone ? "Ukončené" : "Aktívny prenájom"}
                 </span>
               </div>
 
-              <div style={{ background: "#f9f9f9", borderRadius: 6, padding: "12px 14px", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ background: "#F7F7F7", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+                {data.machineCode && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title="Sériové číslo">{data.machineCode}</div>}
+                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
                   {data.machineType || "Stroj"}
                 </div>
-                {data.machineCode && <div style={{ fontSize: 13, color: "#6b6b6b" }}>Sériové číslo {data.machineCode}</div>}
-                {data.address && !data.selfPickup && <div style={{ fontSize: 13, color: "#6b6b6b" }}>{data.address}</div>}
+                {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A" }}>{data.address}</div>}
                 {data.selfPickup && (
-                  <div style={{ fontSize: 13, color: "#6b6b6b", marginTop: 4 }}>
+                  <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
                     Vyzdvihnutie v depe {data.fromDepo || ""}{data.departureDate ? ` dňa ${fmtDate(data.departureDate)}` : ""}
                   </div>
                 )}
                 {data.selfReturn && (
-                  <div style={{ fontSize: 13, color: "#6b6b6b", marginTop: 4 }}>
+                  <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
                     Vrátenie do depa {data.returnDepo || data.fromDepo || ""}{data.pickupDate ? ` dňa ${fmtDate(data.pickupDate)}` : ""}
                   </div>
                 )}
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-                <div style={{ flex: 1, background: "#f9f9f9", borderRadius: 6, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 11, color: "#999" }}>Od</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtDate(data.startDate)}</div>
+                <div style={{ flex: 1, background: "#F7F7F7", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>Od</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.startDate)}</div>
                 </div>
-                <div style={{ flex: 1, background: "#f9f9f9", borderRadius: 6, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 11, color: "#999" }}>Do</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtDate(data.endDate)}</div>
+                <div style={{ flex: 1, background: "#F7F7F7", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>Do</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.endDate)}</div>
                 </div>
               </div>
 
@@ -503,7 +512,7 @@ export default function CustomerPortal({ token }) {
                 <RequestHistory requests={data.requests} />
 
                 {data.notRealized && (
-                  <div style={{ fontSize: 13, color: "#6b6b6b", marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 14 }}>
                     Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.
                   </div>
                 )}
@@ -522,31 +531,31 @@ export default function CustomerPortal({ token }) {
                   </div>
                 )}
 
-                <div style={{ fontSize: 12, color: "#999", fontWeight: 600, marginBottom: 4 }}>Kontakty</div>
+                <div style={SEC}>Kontakty</div>
                 {data.salespersonName && (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{data.salespersonName}</div>
+                  <div style={{ marginBottom: 10, fontSize: 15 }}>
+                    <div style={{ fontWeight: 700 }}>{data.salespersonName}</div>
                     {data.salespersonPhone && (
-                      <div style={{ fontSize: 13 }}>
-                        <a href={`tel:${data.salespersonPhone}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonPhone}</a>
+                      <div style={{ fontVariantNumeric: "tabular-nums" }}>
+                        <a href={`tel:${data.salespersonPhone}`} style={LINK}>☎ {data.salespersonPhone}</a>
                       </div>
                     )}
                     {data.salespersonEmail && (
-                      <div style={{ fontSize: 13 }}>
-                        <a href={`mailto:${data.salespersonEmail}`} style={{ color: "#B3131D", textDecoration: "none" }}>{data.salespersonEmail}</a>
+                      <div>
+                        <a href={`mailto:${data.salespersonEmail}`} style={LINK}>{data.salespersonEmail}</a>
                       </div>
                     )}
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: "#999", fontWeight: 600, marginBottom: 2 }}>Nahlasovanie porúch</div>
-                <div style={{ fontSize: 13, marginBottom: 14 }}>
-                  <div><a href="tel:+421905979484" style={{ color: "#B3131D", textDecoration: "none" }}>+421 905 979 484</a></div>
-                  <div><a href="mailto:servis@matecoslovakia.sk" style={{ color: "#B3131D", textDecoration: "none" }}>servis@matecoslovakia.sk</a></div>
+                <div style={{ fontSize: 15, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700 }}>Nahlasovanie porúch</div>
+                  <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}>☎ +421 905 979 484</a></div>
+                  <div><a href="mailto:servis@matecoslovakia.sk" style={LINK}>servis@matecoslovakia.sk</a></div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                <div style={{ fontSize: 12, color: "#999", fontWeight: 600 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                <div style={{ ...SEC, margin: 0 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
                 {((data.handoverDone && !data.migratedWithoutHandover) || data.returnDone) && (
                   <button
                     onClick={() => {
@@ -555,16 +564,16 @@ export default function CustomerPortal({ token }) {
                       w.document.write(buildOfficialProtocolHtml(data));
                       w.document.close();
                     }}
-                    style={{ border: "1px solid #B3131D", background: "#fff", color: "#B3131D", fontWeight: 600, fontSize: 12, padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}
+                    style={{ ...BTN, width: "auto", minHeight: 44, fontSize: 14, border: "1px solid #CFCFCF", color: "#1A1A1A" }}
                   >
                     🖨️ Vytlačiť / uložiť ako PDF
                   </button>
                 )}
               </div>
               {!data.handoverDone ? (
-                <div style={{ fontSize: 13, color: "#999", padding: "10px 0" }}>{data.returnDone ? "Prevzatie nebolo zdokumentované." : "Zatiaľ nevypísaný."}</div>
+                <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>{data.returnDone ? "Prevzatie nebolo zdokumentované." : "Zatiaľ nevypísaný."}</div>
               ) : data.migratedWithoutHandover ? (
-                <div style={{ fontSize: 12.5, color: "#6b6b6b", padding: "10px 0" }}>
+                <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>
                   Stroj bol prevzatý pred zavedením tohto systému — prevzatie nie je zdokumentované.
                 </div>
               ) : (
@@ -593,8 +602,8 @@ export default function CustomerPortal({ token }) {
                   />
                 ) : (
                   <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Vrátenie</div>
-                    <div style={{ fontSize: 12.5, color: "#6b6b6b" }}>Stroj je v prenájme — zatiaľ nebol vrátený.</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Vrátenie</div>
+                    <div style={{ fontSize: 14, color: "#5A5A5A" }}>Stroj je v prenájme — zatiaľ nebol vrátený.</div>
                   </div>
                 )
               )}

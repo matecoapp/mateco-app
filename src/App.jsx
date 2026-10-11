@@ -29,10 +29,39 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.790";
+const APP_VERSION = "1.0.797";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.797", items: [
+    { roles: null, text: "Obnovenie stránky alebo zatvorenie platformy počas rozpísaného formulára (protokol, zákazka…) sa najprv opýta — fotky, podpisy ani text sa nestratia omylom." },
+    { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servisu", "technik", "veduci_technik_ba"], text: "Plán servisu: kontrola checkera pred vývozom má tmavšiu fialovú, text je lepšie čitateľný." },
+  ] },
+  { v: "1.0.796", items: [
+    { roles: null, text: "Opravy: Prepravy na mobile – rýchly prehľad sa dá posunúť do strany (aj tlačidlo Odoslať), karta zákazky sa po zmene priamo na nej zavrie klikom mimo, obnova zamestnanca z Koša vždy ponúkne vrátiť účtu rolu, „Čo je nové“ sa na zdieľanom zariadení ukáže každému používateľovi. Na mobile kompaktnejšia lišta detailu poškodenia, prepínač stavu externých zákaziek bez orezania a pole pri písaní už nezakrýva spodná lišta. Pri vypnutých animáciách v systéme sa platforma nehýbe." },
+  ] },
+  { v: "1.0.795", items: [
+    { roles: null, text: "Nový vzhľad ďalších okien – ukončenie zákazky, pridelenie technikovi, problém s prepravou, výdaj dielov, telefónny zoznam, výkaz šoféra, zhrnutie poškodení a ďalšie: väčšie polia, dole lišta Zrušiť + hlavné tlačidlo, menej červenej. Tmavý režim je čitateľný všade (hlavička, tlačidlá, štítky, polia, podpis) a na mobile sú tlačidlá väčšie, písmo min. 13 px a prepínače sa už nelámu na osamotený riadok. Okraje polí sú výraznejšie aj vo svetlom režime." },
+  ] },
+  { v: "1.0.794", items: [
+    { roles: null, text: "Nový vzhľad formulárov: väčšie polia a popisky, dole lišta s tlačidlami (Zrušiť a hlavné uloženie) a s tým, čo ešte chýba." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne"], text: "Preberací protokol a kontrola checkera: očíslované kroky a pri každom bode veľké tlačidlá V poriadku / Problém." },
+    { roles: ["technik", "veduci_technik_ba", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol ostáva bez zmeny." },
+  ] },
+  { v: "1.0.793", items: [
+    { roles: null, text: "Nový vzhľad ostatných obrazoviek (dáta požičovne, ERP podklady, náhradné diely, revízie, administratíva, prihlásenie…): prehľadné tabuľky, prepínače namiesto červených tlačidiel, menej časté akcie v ⋯." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: lišta s filtrami a mesiacom v jednom riadku." },
+  ] },
+  { v: "1.0.792", items: [
+    { roles: null, text: "Karty strojov, zákazníkov, šoférov, technikov, áut, poškodení, servisných pridelení, prevozov, výdaja dielov a rezervácií sa otvárajú ako panel z pravej strany — rovnako ako karta zákazky. Menej časté akcie sú v ⋯." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: zrušený pohľad Zoznam, ostáva Gantt." },
+  ] },
+  { v: "1.0.791", items: [
+    { roles: null, text: "Nový vzhľad: správne písmo, väčšie tlačidlá, červená len pre hlavnú akciu a problémy, čísla a telefóny čiernou." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Karta zákazky sa otvára ako panel sprava; Zákazky ako tabuľka (Upraviť/Ukončiť v ⋯); Prepravy podľa dní; formulár zákazky v dvoch stĺpcoch." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Dispečeri: riadok = depo, kto ho dnes rieši; dovolenky a zástupy pod tabuľkou." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Dnes: ďalšia úloha navrchu s veľkými tlačidlami; pás „Bez signálu“, keď niečo čaká na odoslanie." },
+  ] },
   { v: "1.0.790", items: [
     { roles: ["veduci_pozicovne", "veduci_servisu"], text: "Každý pondelok ráno príde týždenný súhrn (vyťaženosť a stojace stroje, zákazky po termíne, poškodenia, revízie po termíne, neurobené kontroly) s odkazom na Štatistiky." },
     { roles: ["admin"], text: "Automatická záloha každú noc (14 dní) — stiahnuť ju ide v Administratíva → Stav platformy, obnoviť cez Import dát." },
@@ -433,8 +462,11 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
       return `<div class="checkrow"><span>${i + 1}. ${esc(label)}</span><span class="mark ${markClass}">${mark}</span></div>${note}`;
     }).join("");
   }
+  // Vedľajšie akcie lišty (na mobile v ⋯) — jediné červené je Tlačiť.
+  const tbSecondary = `${canEdit ? `<button class="btn btn-ghost" onclick="requestEdit()">✏️ Upraviť protokol</button>` : ""}${canGoReturn ? `<button class="btn btn-ghost" onclick="requestGoReturn()">▶ Vykonať vrátenie</button>` : ""}${qrDataUrl ? `<button class="btn btn-ghost" onclick="showQr()">📱 QR pre zákazníka</button>` : ""}${canEmail ? `<button class="btn btn-ghost" onclick="requestSendMail()">✉️ Poslať zákazníkovi</button>` : ""}`;
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
+<meta name="mateco-bar" content="Protokol o odovzdaní a prevzatí stroja · ${esc(machine?.code || "")}">
 <title>Protokol ${esc(p.protocolNumber)}</title>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
@@ -453,6 +485,13 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   .modal-panel .msg { font-size: 14px; margin-bottom: 18px; color: #1a1a1a; }
   .modal-panel .actions { display: flex; gap: 8px; }
   @media print { .toolbar, .modal-overlay { display: none !important; } }
+  .tb-sec { display: contents; }
+  .tb-more { display: none; position: relative; }
+  .tb-more summary { list-style: none; }
+  .tb-more summary::-webkit-details-marker { display: none; }
+  .tb-menu { position: absolute; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 220px; box-shadow: 0 6px 20px rgba(0,0,0,.12); z-index: 60; }
+  .tb-menu .btn { text-align: left; }
+  @media (max-width: 720px) { .tb-sec, .tb-long { display: none; } .tb-more { display: inline-block; } }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
   .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 14mm 14mm 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
   .body-content { flex: 1; }
@@ -488,11 +527,9 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
 </style></head>
 <body>
   <div class="toolbar">
-    ${canEdit ? `<button class="btn btn-ghost" onclick="requestEdit()">✏️ Upraviť protokol</button>` : ""}
-    ${canGoReturn ? `<button class="btn btn-accent" onclick="requestGoReturn()">▶ Vykonať vrátenie</button>` : ""}
-    <button class="btn btn-accent" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button>
-    ${qrDataUrl ? `<button class="btn btn-ghost" onclick="showQr()">📱 QR pre zákazníka</button>` : ""}
-    ${canEmail ? `<button class="btn btn-ghost" onclick="requestSendMail()">✉️ Poslať zákazníkovi</button>` : ""}
+    <span class="tb-sec">${tbSecondary}</span>
+    ${tbSecondary.trim() ? `<details class="tb-more"><summary class="btn btn-ghost" aria-label="Ďalšie akcie">⋯</summary><div class="tb-menu">${tbSecondary}</div></details>` : ""}
+    <button class="btn btn-accent" onclick="window.print()">🖨 Tlačiť<span class="tb-long"> / uložiť ako PDF</span></button>
   </div>
 
   <div id="confirmOverlay" class="modal-overlay" onclick="if(event.target===this) closeConfirmEdit()">
@@ -1882,13 +1919,13 @@ function showNotice(msg) {
   const box = document.createElement("div");
   box.className = "mateco-notice";
   box.dataset.text = text;
-  box.style.cssText = "background:#FFF4E5;color:#5A3B00;border:1px solid #E0A100;border-left:5px solid #E0A100;border-radius:8px;padding:10px 40px 10px 14px;font:14px/1.4 Barlow,Arial,sans-serif;white-space:pre-wrap;box-shadow:0 6px 20px rgba(0,0,0,.18);position:relative";
+  box.style.cssText = "background:#FFF4E5;color:#5A3B00;border:1px solid #E0A100;border-left:5px solid #E0A100;border-radius:8px;padding:10px 50px 10px 14px;font:14px/1.4 Barlow,Arial,sans-serif;white-space:pre-wrap;box-shadow:0 6px 20px rgba(0,0,0,.18);position:relative";
   box.textContent = text;
   const x = document.createElement("button");
   x.type = "button";
   x.textContent = "×";
   x.setAttribute("aria-label", "Zavrieť");
-  x.style.cssText = "position:absolute;top:4px;right:6px;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:inherit;padding:4px 8px";
+  x.style.cssText = "position:absolute;top:4px;right:6px;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:inherit;padding:4px 8px;min-width:44px;min-height:44px";
   x.onclick = () => box.remove();
   box.appendChild(x);
   host.appendChild(box);
@@ -3212,39 +3249,15 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
 function TabSwitcher({ options, active, onSelect, children }) {
   return (
     <div>
-      <div style={{ display: "flex", gap: 4 }}>
-        {options.map((o) => {
-          const isActive = o.id === active;
-          return (
-            <button
-              key={o.id}
-              onClick={() => onSelect(o.id)}
-              style={{
-                position: "relative",
-                zIndex: isActive ? 2 : 1,
-                marginTop: isActive ? 0 : 4,
-                background: isActive ? "var(--panel)" : "var(--panel-2)",
-                border: "1px solid var(--border)",
-                borderBottom: "none",
-                borderTop: isActive ? "3px solid var(--accent)" : "3px solid transparent",
-                borderRadius: "10px 10px 0 0",
-                padding: "12px 22px 14px",
-                fontSize: isActive ? 14 : 13.5,
-                fontWeight: isActive ? 700 : 500,
-                color: isActive ? "var(--accent)" : "var(--text-dim)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {o.label}
-            </button>
-          );
-        })}
+      <div className="utabs" role="tablist" style={{ marginTop: 0 }}>
+        {options.map((o) => (
+          <button key={o.id} type="button" role="tab" aria-selected={o.id === active} className={`utab${o.id === active ? " active" : ""}`} onClick={() => onSelect(o.id)}>
+            {o.label}
+            {o.count > 0 && <span className="seg-n" style={{ display: "inline-block", minWidth: 20, padding: "0 6px", borderRadius: 10, background: "var(--text)", color: "var(--panel)", fontSize: 13, fontWeight: 600, opacity: 1 }}>{o.count}</span>}
+          </button>
+        ))}
       </div>
-      <div
-        className="panel"
-        style={{ borderRadius: "0 10px 10px 10px", marginTop: -1, position: "relative", zIndex: 2, padding: 20 }}
-      >
+      <div style={{ marginTop: 16 }}>
         {children}
       </div>
     </div>
@@ -3266,6 +3279,12 @@ function StatusBadge({ status }) {
   return <span className={`badge ${m.cls}`}>{m.label}</span>;
 }
 
+// Stav zákazky ako pilulka (zoznam zákaziek) — farby podľa základu dizajnu.
+function JobStatusPill({ status }) {
+  const m = { active: ["spill-active", "Na zákazke"], planned: ["spill-planned", "Naplánovaná"], overdue: ["spill-problem", "⚠ Po termíne"], completed: ["spill-done", "Dokončená"] }[status] || ["spill-planned", status];
+  return <span className={`spill ${m[0]}`}>{m[1]}</span>;
+}
+
 // Skeleton riadky — namiesto textu "Načítavam…" počas async načítania (napr.
 // audit log zo Supabase). Len šedé pruhy v tvare tabuľky.
 function SkeletonRows({ rows = 5, cols = 4 }) {
@@ -3285,25 +3304,26 @@ function SkeletonRows({ rows = 5, cols = 4 }) {
 // Kebab menu (⋮) pre riadky s viacerými akciami — namiesto radu tlačidiel v
 // riadku tabuľky/karty. actions: [{ label, onClick, href?, danger? }, ...] —
 // falsy položky (napr. akcia skrytá podľa práv) sa preskočia.
-function KebabMenu({ actions }) {
+function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
   const [open, setOpen] = useState(false);
   const items = actions.filter(Boolean);
   if (items.length === 0) return null;
   return (
     <div style={{ position: "relative", display: "inline-block" }} onClick={(e) => e.stopPropagation()}>
       <button
-        className="btn btn-ghost"
-        style={{ fontSize: 15, padding: "4px 9px", lineHeight: 1 }}
+        className={btnClass || "btn btn-ghost"}
+        style={btnStyle || { fontSize: 15, padding: "4px 9px", lineHeight: 1 }}
         onClick={() => setOpen((v) => !v)}
-        aria-label="Akcie"
-        title="Akcie"
+        aria-label={name || "Akcie"}
+        aria-expanded={open}
+        title={name || "Akcie"}
       >
-        ⋮
+        {label || "⋮"}
       </button>
       {open && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
-          <div className="panel dropdown-panel" style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 190, zIndex: 201, padding: 6 }}>
+          <div className="panel dropdown-panel" style={{ position: "absolute", [up ? "bottom" : "top"]: "calc(100% + 4px)", [up ? "left" : "right"]: 0, minWidth: 190, zIndex: 201, padding: 6 }}>
             {items.map((a, i) =>
               a.href ? (
                 <a
@@ -3345,7 +3365,7 @@ let openModalCount = 0;
 // Poradie otvorených okien — klávesy (Esc/Enter) patria len najvrchnejšiemu,
 // inak Esc v potvrdení zavrel naraz aj formulár pod ním.
 const _modalStack = [];
-function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerExtra, elevated, form }) {
+function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerExtra, elevated, form, side, footer }) {
   // Esc zatvorí — jedno miesto, všetky okná postavené na Modal ho tým pádom
   // dostanú automaticky. Zámerne len na Escape (nie iné klávesy) a len
   // onClose (nie onBack) — Esc má vždy znamenať "zavrieť celé okno", nie
@@ -3363,6 +3383,18 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   const dirtyRef = useRef(false);
   const pressedOnOverlay = useRef(false);
   const confirmDiscard = () => !(dirtyRef.current || form) || window.confirm("Zavrieť okno? Rozpísané údaje sa neuložia.");
+  // Karta v bočnom paneli (side bez form): výber/zaškrtnutie sa ukladá hneď — nie je čo stratiť;
+  // rozpísaný text (poznámka, úprava firmy, výdaj dielov) sa stále chráni.
+  // F5 / zatvorenie platformy s rozpísaným oknom — prehliadač sa najprv opýta (inak by sa stratili fotky, podpisy, text).
+  useEffect(() => {
+    const onBeforeUnload = (e) => { if (dirtyRef.current || form) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [form]);
+  const markDirty = (e) => {
+    const t = e.target;
+    if (form || !side || t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["checkbox", "radio", "file"].includes(t.type))) dirtyRef.current = true;
+  };
   useEffect(() => {
     const token = {};
     tokenRef.current = token;
@@ -3407,7 +3439,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   }, []);
   return (
     <div
-      className="modal-overlay"
+      className={`modal-overlay${side ? " modal-side" : ""}`}
       style={{
         position: "fixed",
         inset: 0,
@@ -3422,10 +3454,11 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
         // vypadnúť pod kartu, z ktorej bolo vyvolané.
         zIndex: elevated ? 170 : 160,
         display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: "40px 16px",
-        overflowY: "auto",
+        // side: bočný panel cez celú výšku vpravo (karta zákazky), scrolluje sa panel, nie overlay
+        alignItems: side ? "stretch" : "flex-start",
+        justifyContent: side ? "flex-end" : "center",
+        padding: side ? 0 : "40px 16px",
+        overflowY: side ? "hidden" : "auto",
       }}
       // Zatvorí sa len klik, ktorý aj ZAČAL mimo okna (ťah myšou z okna von
       // pri označovaní textu/podpise okno nezavrie) a len bez rozpísaných údajov.
@@ -3438,13 +3471,27 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
     >
       <div
         ref={panelRef}
-        className="panel modal-panel"
+        className={`panel modal-panel${side ? " modal-side-panel" : ""}`}
         onClick={(e) => e.stopPropagation()}
-        onInput={() => { dirtyRef.current = true; }}
-        onChange={() => { dirtyRef.current = true; }}
-        style={{ width: xwide ? 980 : wide ? 640 : 460, maxWidth: "100%", padding: 20 }}
+        onInput={markDirty}
+        onChange={markDirty}
+        style={{ width: side ? 580 : xwide ? 980 : wide ? 640 : 460, maxWidth: "100%", padding: side ? 0 : 20 }}
       >
-        {eyebrow ? (
+        {side ? (
+          <>
+            <div className="side-head">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="side-eyebrow">{eyebrow}</span>
+                {onBack && <button className="btn btn-ghost" style={{ marginLeft: "auto" }} onClick={onBack}>← Späť</button>}
+                <button className="modal-close-x" style={{ marginLeft: onBack ? 0 : "auto" }} onClick={() => { if (confirmDiscard()) onClose(); }} aria-label="Zavrieť" title="Zavrieť">×</button>
+              </div>
+              <h3 className="side-title">{title}</h3>
+              {headerExtra}
+            </div>
+            <div className="side-body">{children}</div>
+            {footer && <div className="side-foot">{footer}</div>}
+          </>
+        ) : eyebrow ? (
           <>
             {/* Horný "toolbar" riadok — všetky tlačidlá pohromade vpravo
                 (Karta stroja/iná súvisiaca akcia, Späť, ×), vždy na tom istom
@@ -3466,12 +3513,12 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
             </div>
             <div className="modal-title-block">
               <div className="modal-eyebrow">{eyebrow}</div>
-              <h3 className="label-font modal-title-main">{title}</h3>
+              <h3 className="modal-title-main">{title}</h3>
             </div>
           </>
         ) : (
           <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 }}>
-            <h3 className="label-font" style={{ fontSize: 18, margin: 0, color: "var(--accent)" }}>
+            <h3 className="modal-title-main">
               {title}
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -3487,7 +3534,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
             </div>
           </div>
         )}
-        {children}
+        {!side && children}
       </div>
     </div>
   );
@@ -3498,15 +3545,14 @@ function ConfirmDeleteModal({ label, onClose, onConfirm, trash }) {
   if (trash) {
     return (
       <Modal title="Presunúť do Koša?" onClose={onClose} elevated>
-        <div style={{ fontSize: 14, marginBottom: 18 }}>
+        <div style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45 }}>
           Vymazať {label}? Presunie sa do Koša — vedúci ho tam vie obnoviť.
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-          <button className="btn" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => { onConfirm(); onClose(); }}>
+        <FormFoot confirm>
+          <button className="btn btn-accent" onClick={() => { onConfirm(); onClose(); }}>
             Presunúť do Koša
           </button>
-        </div>
+        </FormFoot>
       </Modal>
     );
   }
@@ -3514,24 +3560,21 @@ function ConfirmDeleteModal({ label, onClose, onConfirm, trash }) {
     <Modal title={step === 1 ? "Naozaj vymazať?" : "Potvrďte vymazanie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18 }}>Naozaj chcete vymazať {label}?</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-            <button className="btn" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => setStep(2)}>
+          <div style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45 }}>Naozaj chcete vymazať {label}?</div>
+          <FormFoot confirm>
+            <button className="btn btn-accent" onClick={() => setStep(2)}>
               Áno, pokračovať
             </button>
-          </div>
+          </FormFoot>
         </>
       ) : (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--danger)", fontWeight: 600 }}>
+          <div className="fnote fnote-r" style={{ fontSize: 15 }}>⚠ 
             Potvrďte vymazanie: {label}. Tento krok sa nedá vrátiť späť.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+          <FormFoot confirm>
             <button
-              className="btn"
-              style={{ background: "var(--danger)", color: "#fff" }}
+              className="btn btn-accent"
               onClick={() => {
                 onConfirm();
                 onClose();
@@ -3539,7 +3582,7 @@ function ConfirmDeleteModal({ label, onClose, onConfirm, trash }) {
             >
               Vymazať natrvalo
             </button>
-          </div>
+          </FormFoot>
         </>
       )}
     </Modal>
@@ -3556,35 +3599,32 @@ function UnassignProtocolModal({ protocol, onClose, onConfirm }) {
     <Modal title={step === 1 ? "Vyradiť protokol zo zákazky?" : "Potvrďte vyradenie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
-          <div style={{ fontSize: 14, marginBottom: 6 }}>
+          <div style={{ fontSize: 15, marginBottom: 6, lineHeight: 1.45 }}>
             Protokol — {protocol.technicianName || "—"} ({fmtDate(protocol.createdAt)}) — sa odpojí od tejto
             zákazky a vráti sa medzi "Ostatné protokoly" na karte stroja. Samotný protokol sa nezmaže.
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18, whiteSpace: "pre-line" }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 18, whiteSpace: "pre-line" }}>
             {protocol.workDescription || "— bez popisu vykonanej práce —"}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-            <button className="btn" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => setStep(2)}>
+          <FormFoot confirm>
+            <button className="btn btn-accent" onClick={() => setStep(2)}>
               Áno, vyradiť →
             </button>
-          </div>
+          </FormFoot>
         </>
       ) : (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--danger)", fontWeight: 600 }}>
+          <div className="fnote fnote-r" style={{ fontSize: 15 }}>⚠ 
             Naozaj vyradiť tento protokol zo zákazky? Zákazka tým môže ostať bez priradeného protokolu.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+          <FormFoot confirm>
             <button
-              className="btn"
-              style={{ background: "var(--danger)", color: "#fff" }}
+              className="btn btn-accent"
               onClick={() => { onConfirm(); onClose(); }}
             >
               Vyradiť zo zákazky
             </button>
-          </div>
+          </FormFoot>
         </>
       )}
     </Modal>
@@ -3603,31 +3643,28 @@ function ReopenConfirmModal({ label, onClose, onConfirm }) {
     <Modal title={step === 1 ? "Otvoriť znova?" : "Potvrďte opätovné otvorenie"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18 }}>
+          <div style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45 }}>
             Naozaj chcete znova otvoriť {label}? Vráti sa medzi nevyriešené.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-            <button className="btn" style={{ background: "var(--warn)", color: "#fff" }} onClick={() => setStep(2)}>
+          <FormFoot confirm>
+            <button className="btn btn-black" onClick={() => setStep(2)}>
               Áno, pokračovať →
             </button>
-          </div>
+          </FormFoot>
         </>
       ) : (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--warn)", fontWeight: 600 }}>
+          <div className="fnote fnote-y" style={{ fontSize: 15, fontWeight: 600 }}>
             Potvrďte: {label} sa znova otvorí ako nevyriešené.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+          <FormFoot confirm>
             <button
-              className="btn"
-              style={{ background: "var(--warn)", color: "#fff" }}
+              className="btn btn-black"
               onClick={() => { onConfirm(); onClose(); }}
             >
               Otvoriť znova
             </button>
-          </div>
+          </FormFoot>
         </>
       )}
     </Modal>
@@ -3642,11 +3679,11 @@ function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }
     <Modal title={step === 1 ? "Zrušiť ukončenie zákazky?" : "Potvrďte zrušenie ukončenia"} onClose={onClose} elevated>
       {step === 1 ? (
         <>
-          <div style={{ fontSize: 14, marginBottom: 10 }}>
+          <div style={{ fontSize: 15, marginBottom: 10, lineHeight: 1.45 }}>
             Zákazka {job.code || job.cisloZmluvy ? `${job.code || job.cisloZmluvy} ` : ""}sa vráti medzi aktívne — prestane byť "ukončená". Koniec, zvoz, depo
             návratu aj depo stroja sa vrátia na hodnoty spred ukončenia.
           </div>
-          <div style={{ fontSize: 13, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 18 }}>
+          <div className="fnote fnote-i tnum">
             <div style={{ marginBottom: 4 }}>
               Protokol o prevzatí: {hasHandover ? `✓ áno (${fmtDate(handoverProtocol.handoverDate)})` : "— nie je vypísaný"}
             </div>
@@ -3654,28 +3691,25 @@ function UncompleteJobConfirmModal({ job, handoverProtocol, onClose, onConfirm }
               Protokol o vrátení: {hasReturn ? `✓ áno (${fmtDate(handoverProtocol.returnDate)})` : "— nie je vypísaný"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
-            <button className="btn" style={{ background: "var(--warn)", color: "#fff" }} onClick={() => setStep(2)}>
+          <FormFoot confirm>
+            <button className="btn btn-black" onClick={() => setStep(2)}>
               Áno, zrušiť ukončenie →
             </button>
-          </div>
+          </FormFoot>
         </>
       ) : (
         <>
-          <div style={{ fontSize: 14, marginBottom: 18, color: "var(--warn)", fontWeight: 600 }}>
+          <div className="fnote fnote-y" style={{ fontSize: 15, fontWeight: 600 }}>
             Naozaj zrušiť ukončenie tejto zákazky? Vráti sa medzi aktívne, kým ju niekto znova neukončí.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+          <FormFoot confirm>
             <button
-              className="btn"
-              style={{ background: "var(--warn)", color: "#fff" }}
+              className="btn btn-black"
               onClick={() => { onConfirm(); onClose(); }}
             >
               Zrušiť ukončenie
             </button>
-          </div>
+          </FormFoot>
         </>
       )}
     </Modal>
@@ -3690,7 +3724,7 @@ function ArchiveReasonModal({ label, reasons, onClose, onConfirm }) {
   const [note, setNote] = useState("");
   return (
     <Modal title="Archivovať" onClose={onClose}>
-      <div style={{ fontSize: 13, color: "var(--warn)", marginBottom: 14, background: "var(--warn-bg)", padding: "8px 12px", borderRadius: 6 }}>
+      <div style={{ fontSize: 15, marginBottom: 16, lineHeight: 1.45 }}>
         Chystáte sa archivovať {label}. Archivované položky sa skryjú z bežných zoznamov a nedajú sa ďalej prideľovať, ale dáta zostanú zachované — dá sa to kedykoľvek vrátiť späť.
       </div>
       <Field label="Dôvod archivácie *">
@@ -3702,8 +3736,7 @@ function ArchiveReasonModal({ label, reasons, onClose, onConfirm }) {
       <Field label="Poznámka">
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Voliteľný detail…" style={{ width: "100%" }} />
       </Field>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+      <FormFoot confirm missing={!reason ? ["dôvod"] : []}>
         <button
           className="btn btn-accent"
           disabled={!reason}
@@ -3714,7 +3747,7 @@ function ArchiveReasonModal({ label, reasons, onClose, onConfirm }) {
         >
           Potvrdiť archiváciu
         </button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -3725,9 +3758,8 @@ function ArchiveReasonModal({ label, reasons, onClose, onConfirm }) {
 function ConfirmActionModal({ message, confirmLabel, onClose, onConfirm }) {
   return (
     <Modal title="Potvrdenie" onClose={onClose} elevated>
-      <div style={{ fontSize: 14, marginBottom: 18 }}>{message}</div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+      <div style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45 }}>{message}</div>
+      <FormFoot confirm>
         <button
           className="btn btn-accent"
           onClick={() => {
@@ -3737,18 +3769,44 @@ function ConfirmActionModal({ message, confirmLabel, onClose, onConfirm }) {
         >
           {confirmLabel || "Potvrdiť"}
         </button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <label className="label-font" style={{ fontSize: 11, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
-        {label}
-      </label>
+    <div className="fld">
+      <label className="fld-l">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// Zrušiť v spodnej lište = to isté ako × okna (vrátane otázky pri rozpísaných údajoch).
+const closeOwnModal = (e) => e.currentTarget.closest(".modal-panel")?.querySelector(".modal-close-x")?.click();
+// Spoločná spodná lišta formulára/potvrdenia (v1.0.794): vľavo `left` a čo chýba,
+// vpravo Zrušiť + jedno hlavné tlačidlo (children). confirm = potvrdzovacie okno
+// (na mobile ostáva Zrušiť vedľa akcie, vo formulári ho nahrádza × v hlavičke).
+function FormFoot({ missing, left, cancel = true, confirm, children }) {
+  return (
+    <div className={`job-form-foot${confirm ? " ff-confirm" : ""}`}>
+      {left}
+      {missing?.length > 0 && <span className="miss-pill">Chýba: {missing.join(", ")}</span>}
+      <div className="ff-btns">
+        {cancel && <button type="button" className="btn btn-outline ff-cancel" onClick={closeOwnModal}>Zrušiť</button>}
+        {children}
+      </div>
+    </div>
+  );
+}
+// Očíslovaný nadpis kroku dlhého formulára (protokol, kontrola, meranie, import).
+function FormStep({ n, title, right }) {
+  return (
+    <div className="fstep">
+      {n != null && <span className="fstep-n">{n}</span>}
+      <span className="fstep-t">{title}</span>
+      {right}
     </div>
   );
 }
@@ -4764,9 +4822,11 @@ function DispatcherApp() {
   useEffect(() => {
     if (!loaded || !currentUser?.role) return;
     let seen = null;
-    try { seen = localStorage.getItem("mateco_seen_version"); localStorage.setItem("mateco_seen_version", APP_VERSION); } catch { return; }
+    // Per používateľ (zdieľané zariadenie); starý kľúč zariadenia sa už len číta ako východisko a ďalej nemení.
+    const key = `mateco_seen_version:${currentUser.id}`;
+    try { seen = localStorage.getItem(key) || localStorage.getItem("mateco_seen_version"); localStorage.setItem(key, APP_VERSION); } catch { return; }
     if (!seen || _verNum(seen) < _verNum(APP_VERSION)) setWhatsNew(whatsNewFor(currentUser.role, seen || CHANGELOG.find((c) => _verNum(c.v) < _verNum(APP_VERSION))?.v || "0"));
-  }, [loaded, currentUser?.role]);
+  }, [loaded, currentUser?.role, currentUser?.id]);
 
   // Push notifikácie — service worker sa zaregistruje hneď pri načítaní appky
   // (nezávisle od prihlásenia), a appka si zistí, či toto konkrétne
@@ -5543,7 +5603,10 @@ function DispatcherApp() {
     // Zmazanie zamestnanca vzalo účtu rolu — obnova ju vráti, ale len účtu, ktorý je
     // práve nezaradený, len ak položku zmazal admin/vedúci (autora zapisuje DB) a po potvrdení.
     if (trashEntry.originalTable === "employees" && record?.linkedUserId && !record.archived) {
-      const prof = profiles.find((p) => p.id === record.linkedUserId);
+      // Rola priamo z DB — zoznam profiles v pamäti môže byť starší než zmazanie (rolu vzalo až ono).
+      const { data: fresh } = await supabase.from("profiles").select("role").eq("id", record.linkedUserId).maybeSingle();
+      const prof0 = profiles.find((p) => p.id === record.linkedUserId);
+      const prof = prof0 && fresh?.role ? { ...prof0, role: fresh.role } : prof0;
       const deleter = profiles.find((p) => p.id === trashEntry.deletedById);
       const trusted = deleter && (isAdminUser(deleter) || ["veduci_pozicovne", "veduci_servisu"].includes(deleter.role));
       if (prof && !isAdminUser(prof) && prof.role === "nezaradeny" && record.role && record.role !== "nezaradeny" && trusted
@@ -9313,7 +9376,7 @@ function DispatcherApp() {
     onRejectPortalRequest: (r, note) => rejectPortalRequest(r, note),
     onReadNotification: markNotificationRead,
     onAskDaily: () => setMaskotAskTick((n) => n + 1),
-    whoPanel: <WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />,
+    whoPanel: <WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} myDepo={myEmployee?.depo} hideMobile /* telefóny sú na mobile v záložke Telefón alebo pod ikonou v hlavičke */ />,
     erpPozPanel: effectiveUser?.role === "fakturant_pozicovna" && (
               <ErpPozicovnaView
                 handoverProtocols={handoverProtocols}
@@ -9434,13 +9497,13 @@ function DispatcherApp() {
       )}
 
       {saveErrors.length > 0 && (
-        <div style={{ background: "var(--danger)", color: "#fff", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ background: "var(--accent-fill)", color: "#fff", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13 }}>
             Niektoré zmeny sa nepodarilo uložiť ({saveErrors.join(", ")}). Skontrolujte pripojenie a skúste znova — záznamy (protokoly, checklisty...) sa odošlú aj samé pri návrate signálu, platformové nastavenia nie.
           </span>
           <button
             className="btn"
-            style={{ background: "#fff", color: "var(--danger)", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
+            style={{ background: "#fff", color: "var(--accent-fill)", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
             onClick={() => saveErrors.forEach((k) => retrySave(k))}
           >
             Skúsiť znova
@@ -9449,11 +9512,13 @@ function DispatcherApp() {
       )}
 
       {outboxCount > 0 && (
-        <div style={{ background: "var(--warn-bg)", borderBottom: "2px solid var(--warn)", color: "var(--warn)", padding: "8px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13 }}>
-            {outboxCount - outboxBlocked > 0 && <>{changesText(Math.max(1, outboxShown))} na odoslanie (offline) — odošle sa samo, keď sa platforma pripojí. Netreba nič robiť, len platformu nezmazať. </>}
-            {outboxBlocked > 0 && <>Protokol sa neuložil — databáza ho odmietla (zákazku medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Protokol ostáva v tomto zariadení; zavolajte dispečing.</>}
-          </span>
+        <div className="sync-strip" role="status">
+          {outboxCount - outboxBlocked > 0 && <>
+            {!navigator.onLine && <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.6a10 10 0 0 1 14 0" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="m3 3 18 18" /></svg>}
+            <span>{!navigator.onLine && "Bez signálu · "}{changesText(Math.max(1, outboxShown))} na odoslanie</span>
+            <span className="sync-more">— odošle sa samo, keď sa platforma pripojí. Netreba nič robiť, len platformu nezmazať.</span>
+          </>}
+          {outboxBlocked > 0 && <span style={{ fontSize: 13 }}>Protokol sa neuložil — databáza ho odmietla (zákazku medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Protokol ostáva v tomto zariadení; zavolajte dispečing.</span>}
         </div>
       )}
 
@@ -9465,7 +9530,7 @@ function DispatcherApp() {
           </span>
           <button
             className="btn"
-            style={{ background: "var(--warn)", color: "#fff", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
+            style={{ background: "var(--warn-fill)", color: "#fff", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
             onClick={applyNewVersion}
           >
             Obnoviť teraz
@@ -9528,9 +9593,10 @@ function DispatcherApp() {
             onPartHandover={(rec, prefill) => setPartHandoverUi({ kind: "sign", rec, prefill })}
             onOpenDamage={(d) => setServiceEventDetail(d)}
             onAskDaily={() => setMaskotAskTick((n) => n + 1)}
-            whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} />}
+            whoPanel={<WhoIsWherePanel employees={employees} dispatchers={dispatchers} dsp={dsp} depoCheckers={depoCheckers} checkerSubstitutions={checkerSubstitutions} today={today} myDepo={myEmployee?.depo} hideMobile /* telefóny sú na mobile v záložke Telefón alebo pod ikonou v hlavičke */ />}
             transportsPanel={["sofer", "externy_sofer"].includes(effectiveUser?.role) ? (
               <TransportsOverview
+                dnes
                 jobs={jobs}
                 drivers={drivers}
                 jobDispatcher={jobDispatcher}
@@ -9777,39 +9843,16 @@ function DispatcherApp() {
 
         {module === "servis" && view === "plan" && (
           <div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              <button
-                className="btn"
-                onClick={() => setPlanMode("gantt")}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  background: planMode === "gantt" ? "var(--accent)" : "transparent",
-                  color: planMode === "gantt" ? "#fff" : "var(--text-dim)",
-                  border: "1px solid " + (planMode === "gantt" ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                📊 Kalendár
-              </button>
-              <button
-                className="btn"
-                onClick={() => setPlanMode("zoznam")}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  background: planMode === "zoznam" ? "var(--accent)" : "transparent",
-                  color: planMode === "zoznam" ? "#fff" : "var(--text-dim)",
-                  border: "1px solid " + (planMode === "zoznam" ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                📋 Prehľad najbližších 5 dní
-              </button>
+            <div className="utabs" role="tablist" aria-label="Pohľad" style={{ marginTop: 0, marginBottom: 14 }}>
+              <button type="button" role="tab" aria-selected={planMode === "gantt"} className={`utab${planMode === "gantt" ? " active" : ""}`} onClick={() => setPlanMode("gantt")}>Kalendár</button>
+              <button type="button" role="tab" aria-selected={planMode === "zoznam"} className={`utab${planMode === "zoznam" ? " active" : ""}`} onClick={() => setPlanMode("zoznam")}>Prehľad najbližších 5 dní</button>
             </div>
-            <div className="quick-filters" style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div className="quick-filters" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
               <select
                 value={planTechnicianFilter}
                 onChange={(e) => setPlanTechnicianFilter(e.target.value)}
-                style={{ minWidth: 160, fontSize: 11, padding: "3px 6px" }}
+                aria-label="Technik"
+                style={{ minWidth: 200, height: 40, fontSize: 14, padding: "0 10px", borderRadius: 8, border: "1px solid var(--control-line)", background: "var(--panel)" }}
               >
                 <option value="">— všetci technici —</option>
                 {technicians.filter((t) => !t.archived).map((t) => (
@@ -9820,7 +9863,7 @@ function DispatcherApp() {
                   (TechnicianPlanner) — jedno a to isté filtrovanie na dvoch
                   miestach, odstránené. */}
               {planMode === "gantt" && can(effectiveUser, "technician_archive") && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--text)", minHeight: 44 }}>
                   <input type="checkbox" checked={planShowArchived} onChange={(e) => setPlanShowArchived(e.target.checked)} />
                   Zobraziť archivovaných
                 </label>
@@ -9879,8 +9922,8 @@ function DispatcherApp() {
         {module === "servis" && (view === "poskodenia" || view === "externe") && (
           <TabSwitcher
             options={[
-              { id: "poskodenia", label: "Poškodenia požičovne" },
-              { id: "externe", label: "Externé zákazky" },
+              { id: "poskodenia", label: "Poškodenia požičovne", count: damages.filter((d) => !d.resolved && d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa").length },
+              { id: "externe", label: "Externé zákazky", count: damages.filter((d) => !d.resolved && d.type === "externa").length },
             ]}
             active={view}
             onSelect={setView}
@@ -10319,7 +10362,9 @@ function DispatcherApp() {
             onDelete={(v) => askDelete(`auto ${v.spz || ""}`, () => deleteVehicle(v.id), true)}
           />
         )}
-        {module === "administrativa" && view === "kos" && can(effectiveUser, "trash_view") && (
+        {module === "administrativa" && view === "kos" && can(effectiveUser, "trash_view") && (<>
+          <h1 className="page-h1">Kôš</h1>
+          <p className="page-intro">Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.</p>
           <TrashView
             trash={trash}
             currentUser={effectiveUser}
@@ -10327,7 +10372,7 @@ function DispatcherApp() {
             onPermanentDelete={permanentlyDeleteFromTrash}
             askDelete={askDelete}
           />
-        )}
+        </>)}
         {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
           <AuditLogView profiles={profiles} />
         )}
@@ -11169,7 +11214,7 @@ function DispatcherApp() {
               right: 20,
               zIndex: 300,
               maxWidth: 320,
-              background: "var(--accent)",
+              background: "var(--accent-fill)",
               color: "#fff",
               borderRadius: 10,
               padding: "12px 14px",
@@ -11186,7 +11231,7 @@ function DispatcherApp() {
               {away && (
                 <button
                   onClick={goToHighlight}
-                  style={{ flex: 1, background: "#fff", color: "var(--accent)", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  style={{ flex: 1, background: "#fff", color: "var(--accent-fill)", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                 >
                   Prejsť na záznam
                 </button>
@@ -11556,18 +11601,18 @@ function MailChoiceModal({ mail, onClose }) {
   }
 
   return (
-    <Modal title="Ako chcete odoslať email?" onClose={onClose} elevated>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-        <button className="btn btn-accent" style={{ padding: "12px 16px", textAlign: "left" }} onClick={() => choose("web")}>
+    <Modal eyebrow="Email" title="Ako chcete odoslať email?" onClose={onClose} elevated>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+        <button className="btn btn-accent" style={{ minHeight: 52, padding: "10px 16px", textAlign: "left", fontSize: 15 }} onClick={() => choose("web")}>
           🌐 Outlook Web (otvorí v novej karte prehliadača)
         </button>
-        <button className="btn btn-ghost" style={{ padding: "12px 16px", textAlign: "left" }} onClick={() => choose("desktop")}>
+        <button className="btn btn-outline" style={{ minHeight: 52, padding: "10px 16px", textAlign: "left", fontSize: 15 }} onClick={() => choose("desktop")}>
           💻 Outlook desktop / mobilná platforma
         </button>
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+      <label className="fck" style={{ marginBottom: 0 }}>
         <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-        Zapamätať si túto voľbu (nabudúce sa už nepýtať)
+        <span>Zapamätať si túto voľbu<small>nabudúce sa už nepýtať</small></span>
       </label>
     </Modal>
   );
@@ -11647,7 +11692,7 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
                 fontSize: 12,
                 fontWeight: 700,
                 color: "#fff",
-                background: "rgba(255,255,255,.16)",
+                background: "rgba(0,0,0,.14)",
                 border: "1px solid rgba(255,255,255,.3)",
                 cursor: "pointer",
                 display: "flex",
@@ -11885,62 +11930,54 @@ function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisa
   }
   const relevantKinds = ROLE_NOTIFICATION_KINDS[currentUser.role] || Object.keys(NOTIFICATION_KIND_LABELS);
   return (
-    <Modal title="Nastavenie upozornení" onClose={onClose}>
-      <div
-        style={{
-          background: pushEnabled ? "var(--ok-bg)" : "var(--accent-light)",
-          border: `1px solid ${pushEnabled ? "var(--ok)" : "var(--accent)"}`,
-          borderRadius: 6,
-          padding: 12,
-          marginBottom: 16,
-        }}
-      >
-        {pushEnabled ? (
-          <>
-            <div style={{ fontSize: 13, color: "var(--ok)", marginBottom: 8 }}>✓ Upozornenia do telefónu/počítača sú na tomto zariadení zapnuté.</div>
-            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onDisablePush}>
-              Vypnúť na tomto zariadení
-            </button>
-          </>
-        ) : browserBlocked ? (
-          <div style={{ fontSize: 13 }}>
-            Upozornenia sú v prehliadači vyslovene zablokované — platforma sa vás už znova nespýta, musíte to povoliť ručne
-            v nastaveniach prehliadača (zvyčajne ikonka zámku/"i" vľavo od adresy stránky → Upozornenia/Notifications → Povoliť),
-            a potom toto okno znova otvoriť.
+    <Modal title="Nastavenie upozornení" onClose={onClose} wide>
+      {pushEnabled ? (
+        <div className="fnote fnote-g" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 220 }}>✓ Upozornenia do telefónu/počítača sú na tomto zariadení zapnuté.</span>
+          <button className="btn btn-outline" style={{ minHeight: 40 }} onClick={onDisablePush}>
+            Vypnúť na tomto zariadení
+          </button>
+        </div>
+      ) : browserBlocked ? (
+        <div className="fnote fnote-i">
+          Upozornenia sú v prehliadači vyslovene zablokované — platforma sa vás už znova nespýta, musíte to povoliť ručne
+          v nastaveniach prehliadača (zvyčajne ikonka zámku/"i" vľavo od adresy stránky → Upozornenia/Notifications → Povoliť),
+          a potom toto okno znova otvoriť.
+        </div>
+      ) : (
+        <div className="fnote fnote-y">
+          <div style={{ marginBottom: 10 }}>
+            Zatiaľ nemáte zapnuté upozornenia do telefónu/počítača na tomto zariadení — bez toho vás platforma nevie
+            upozorniť, kým ju nemáte práve otvorenú.
           </div>
-        ) : (
-          <>
-            <div style={{ fontSize: 13, marginBottom: 8 }}>
-              Zatiaľ nemáte zapnuté upozornenia do telefónu/počítača na tomto zariadení — bez toho vás platforma nevie
-              upozorniť, kým ju nemáte práve otvorenú.
-            </div>
-            <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={onEnablePush}>
-              Zapnúť upozornenia
-            </button>
-          </>
-        )}
-      </div>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+          <button className="btn btn-outline" style={{ minHeight: 44 }} onClick={onEnablePush}>
+            Zapnúť upozornenia
+          </button>
+        </div>
+      )}
+      <div className="fhint" style={{ marginBottom: 12, fontSize: 14 }}>
         Vypnuté kategórie vám neprídu ako upozornenie do telefónu/počítača — v platforme (zvonček) uvidíte vždy všetko.
         Zobrazujú sa len kategórie, ktoré sa týkajú vašej role.
       </div>
       {relevantKinds.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
+        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 18 }}>
           Pre vašu rolu momentálne platforma neposiela žiadne notifikácie na nastavenie.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
-          {relevantKinds.map((kind) => (
-            <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, gap: 10 }}>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+          {relevantKinds.map((kind, i) => (
+            <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 15, gap: 10, minHeight: 44, padding: "0 14px", borderTop: i ? "1px solid var(--border)" : 0, cursor: "pointer" }}>
               <span>{NOTIFICATION_KIND_LABELS[kind]}</span>
               <input type="checkbox" checked={prefs[kind] !== false} onChange={() => toggle(kind)} />
             </label>
           ))}
         </div>
       )}
-      <button className="btn btn-accent" onClick={() => { onSave(prefs); onClose(); }}>
-        Uložiť
-      </button>
+      <FormFoot>
+        <button className="btn btn-accent" onClick={() => { onSave(prefs); onClose(); }}>
+          Uložiť
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -11981,7 +12018,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
         style={{
           fontSize: 13,
           color: "#fff",
-          background: unreadCount > 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.16)",
+          background: unreadCount > 0 ? "rgba(0,0,0,.2)" : "rgba(0,0,0,.14)",
           border: "1px solid rgba(255,255,255,.3)",
           borderRadius: 4,
           padding: "3px 9px",
@@ -11997,7 +12034,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
               position: "absolute",
               top: -5,
               right: -5,
-              background: "var(--danger)",
+              background: "var(--accent-fill)",
               color: "#fff",
               borderRadius: 10,
               fontSize: 10,
@@ -12142,7 +12179,7 @@ function AddRecordModal({ title, fields, onClose, onSave, customers, customerNam
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.key, ""])));
   const canSave = fields.filter((f) => f.required).every((f) => (values[f.key] || "").trim());
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} wide>
       {customers && customerNameKey && (
         <Field label="Vybrať existujúceho zákazníka (voliteľné)">
           <CustomerAutocomplete
@@ -12154,14 +12191,18 @@ function AddRecordModal({ title, fields, onClose, onSave, customers, customerNam
           />
         </Field>
       )}
-      {fields.map((f) => (
-        <Field key={f.key} label={f.label + (f.required ? " *" : "")}>
-          <input type={f.type || "text"} value={values[f.key]} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} style={{ width: "100%" }} />
-        </Field>
-      ))}
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(values)}>
-        Uložiť
-      </button>
+      <div className="fgrid2">
+        {fields.map((f) => (
+          <Field key={f.key} label={f.label + (f.required ? " *" : "")}>
+            <input type={f.type || "text"} value={values[f.key]} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} style={{ width: "100%" }} />
+          </Field>
+        ))}
+      </div>
+      <FormFoot missing={fields.filter((f) => f.required && !(values[f.key] || "").trim()).map((f) => f.label.toLowerCase())}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(values)}>
+          Uložiť
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -12205,15 +12246,16 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
 
   return (
     <Modal title={title} onClose={onClose} wide>
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV súbor">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
             {fields.map((f) => (
-              <Field key={f.key} label={`Stĺpec = ${f.label}${f.required ? " *" : ""}`}>
+              <Field key={f.key} label={`${f.label}${f.required ? " *" : ""}`}>
                 <select value={mapping[f.key] || ""} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))} style={{ width: "100%" }}>
                   <option value="">—</option>
                   {headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -12221,11 +12263,13 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
               </Field>
             ))}
           </div>
-          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-            Importovať {rows.length} záznamov
-          </button>
         </>
       )}
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať {rows.length} záznamov
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -12263,53 +12307,50 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+      <div className="tbar">
+        <select aria-label="Typ záznamu" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ minHeight: 40 }}>
           <option value="all">Všetky typy</option>
           {availableTypes.map((t) => (
             <option key={t} value={t}>{TRASH_TYPE_LABELS[t] || t}</option>
           ))}
         </select>
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.
-        </div>
       </div>
-      <div className="panel" style={{ overflowX: "clip", padding: 0 }}>
-        <table className="mono table-cards" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
-              <th style={{ padding: 10 }}>Typ</th>
-              <th style={{ padding: 10 }}>Záznam</th>
-              <th style={{ padding: 10 }}>Kto zmazal</th>
-              <th style={{ padding: 10 }}>Kedy</th>
-              <th style={{ padding: 10 }}>Zostáva</th>
-              <th style={{ padding: 10 }}></th>
+            <tr>
+              <th>Typ</th>
+              <th>Záznam</th>
+              <th>Kto zmazal</th>
+              <th>Kedy</th>
+              <th>Zostáva</th>
+              <th><span className="sr-only">Akcie</span></th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((t) => (
-              <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: 10, color: "var(--text-dim)" }} data-label="Typ">{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
-                <td style={{ padding: 10, fontWeight: 600 }} data-label="Záznam">{t.label || "—"}</td>
-                <td style={{ padding: 10 }} data-label="Kto zmazal">{t.deletedByName || "—"}</td>
-                <td style={{ padding: 10 }} data-label="Kedy">{fmtDate(t.deletedAt)}</td>
-                <td style={{ padding: 10, color: daysLeft(t.deletedAt) <= 3 ? "var(--danger)" : "var(--text-dim)" }} data-label="Zostáva">
-                  {daysLeft(t.deletedAt)} {daysLeft(t.deletedAt) === 1 ? "deň" : daysLeft(t.deletedAt) < 5 ? "dni" : "dní"}
+            {visible.map((t) => {
+              const left = daysLeft(t.deletedAt);
+              const leftTxt = `${left} ${left === 1 ? "deň" : left < 5 ? "dni" : "dní"}`;
+              return (
+              <tr key={t.id} className={left <= 3 ? "row-problem" : ""}>
+                <td data-label="Typ">{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
+                <td className="td-plain" style={{ fontWeight: 600 }}>{t.label || "—"}</td>
+                <td data-label="Kto zmazal">{t.deletedByName || "—"}</td>
+                <td data-label="Kedy" className="tnum">{fmtDate(t.deletedAt)}</td>
+                <td data-label="Zostáva" className="tnum">
+                  {left <= 3 ? <span className="spill spill-problem">⚠ {leftTxt}</span> : leftTxt}
                 </td>
-                <td style={{ padding: 10, display: "flex", gap: 6, justifyContent: "flex-end" }} className="td-actions">
-                  <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => onRestore(t)}>
+                <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn btn-outline" onClick={() => onRestore(t)}>
                     Obnoviť
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 12, color: "var(--danger)" }}
-                    onClick={() => askDelete(`natrvalo "${t.label}" z koša (toto sa už NEDÁ vrátiť späť)`, () => onPermanentDelete(t.id))}
-                  >
-                    Vymazať natrvalo
-                  </button>
+                  </button>{" "}
+                  <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+                    { label: "Vymazať natrvalo", danger: true, onClick: () => askDelete(`natrvalo "${t.label}" z koša (toto sa už NEDÁ vrátiť späť)`, () => onPermanentDelete(t.id)) },
+                  ]} />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -12322,35 +12363,42 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
   const [showImport, setShowImport] = useState(false);
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <span className="label-font" style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
+      <div className="tbar">
+        <h1 className="page-h1" style={{ margin: 0 }}>{title}</h1>
         {canEdit && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => setShowImport(true)}>Import CSV</button>
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import CSV</button>
             <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Pridať</button>
           </div>
         )}
       </div>
-      <div className="panel" style={{ padding: 0, overflowX: "clip" }}>
-        <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
               {fields.map((f) => <th key={f.key}>{f.label}</th>)}
-              {canEdit && <th></th>}
+              {canEdit && <th><span className="sr-only">Akcie</span></th>}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
-              <tr><td colSpan={fields.length + 1} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne záznamy.</td></tr>
+              <tr><td className="td-plain" colSpan={fields.length + 1} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne záznamy.</td></tr>
             )}
             {items.map((item) => (
-              <tr key={item.id}>
-                {fields.map((f) => <td key={f.key} data-label={f.label}>{item[f.key] || "—"}</td>)}
+              <tr key={item.id} className={customerNameKey === "nazovZakaznika" ? "row-problem" : ""}>
+                {fields.map((f, i) => {
+                  const v = item[f.key];
+                  // Len zobrazenie: ISO dátum ako 02.03.2024, prázdne sivou pomlčkou; prvý stĺpec (názov) tučne.
+                  const shown = !v ? <span style={{ color: "var(--text-dim)" }}>—</span> : f.type === "date" && /^\d{4}-\d{2}-\d{2}/.test(v) ? fmtDate(v) : v;
+                  return (
+                    <td key={f.key} data-label={f.label} className={i === 0 ? "td-plain" : f.type === "date" ? "tnum" : undefined} style={i === 0 ? { fontWeight: 600 } : undefined}>
+                      {i === 0 && v && customerNameKey === "nazovZakaznika" ? <span style={{ color: "var(--danger-text)" }}>⚠ {v}</span> : shown}
+                    </td>
+                  );
+                })}
                 {canEdit && (
-                  <td className="td-actions">
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={() => onDelete(item.id)}>
-                      Zmazať
-                    </button>
+                  <td className="td-actions" style={{ textAlign: "right" }}>
+                    <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Zmazať", danger: true, onClick: () => onDelete(item.id) }]} />
                   </td>
                 )}
               </tr>
@@ -12421,9 +12469,9 @@ function ExportPhotosPanel() {
   }
 
   return (
-    <div className="panel" style={{ padding: 24, maxWidth: 520 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>Export fotiek (ZIP)</div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
+    <div className="panel" style={{ padding: 24, maxWidth: 560 }}>
+      <h2 className="page-h1" style={{ fontSize: 20 }}>Export fotiek (ZIP)</h2>
+      <div className="fintro" style={{ marginTop: 0, marginBottom: 18 }}>
         Stiahne fotky a protokoly (tie, na ktoré platforma niekde odkazuje) do jedného ZIP súboru — na
         zálohu, napr. na presun na SharePoint. Pri väčšom počte fotiek to môže trvať niekoľko minút,
         nezatvárajte počas toho túto kartu.
@@ -12431,46 +12479,48 @@ function ExportPhotosPanel() {
 
       {!running && !done && (
         <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-              <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />
+          <div className="flegend" style={{ marginTop: 0 }}>ČO EXPORTOVAŤ</div>
+          <div className="ckl" style={{ marginBottom: 18 }}>
+            <label className="cki" style={{ minHeight: 48, fontSize: 15, cursor: "pointer" }}>
+              <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} style={{ width: 20, height: 20, accentColor: "var(--text)", margin: 0 }} />
               Exportovať všetko
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-              <input type="radio" checked={mode === "last"} onChange={() => setMode("last")} disabled={!lastExportAt} />
-              Len od posledného exportu{lastExportAt ? ` (${new Date(lastExportAt).toLocaleString("sk-SK")})` : " (zatiaľ žiadny)"}
+            <label className="cki" style={{ minHeight: 48, fontSize: 15, cursor: lastExportAt ? "pointer" : "not-allowed", color: lastExportAt ? undefined : "var(--text-dim)" }}>
+              <input type="radio" checked={mode === "last"} onChange={() => setMode("last")} disabled={!lastExportAt} style={{ width: 20, height: 20, accentColor: "var(--text)", margin: 0 }} />
+              <span className="tnum">Len od posledného exportu{lastExportAt ? ` (${new Date(lastExportAt).toLocaleString("sk-SK")})` : " (zatiaľ žiadny)"}</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-              <input type="radio" checked={mode === "since"} onChange={() => setMode("since")} />
+            <label className="cki" style={{ minHeight: 48, fontSize: 15, cursor: "pointer" }}>
+              <input type="radio" checked={mode === "since"} onChange={() => setMode("since")} style={{ width: 20, height: 20, accentColor: "var(--text)", margin: 0 }} />
               Od dátumu:
               <input
                 type="date"
+                aria-label="Od dátumu"
                 value={sinceDate}
                 onChange={(e) => { setSinceDate(e.target.value); setMode("since"); }}
-                style={{ marginLeft: 4 }}
+                style={{ minHeight: 44, fontSize: 15 }}
               />
             </label>
           </div>
-          <button className="btn btn-primary" onClick={run} disabled={mode === "since" && !sinceDate}>
+          <button className="btn btn-accent" style={{ minHeight: 44, fontSize: 14 }} onClick={run} disabled={mode === "since" && !sinceDate}>
             Spustiť export
           </button>
         </>
       )}
       {running && (
-        <div style={{ fontSize: 13 }}>
+        <div className="fnote fnote-i tnum" role="status">
           {progress.total ? `Sťahujem… ${progress.done} / ${progress.total} súborov` : "Hľadám fotky v dátach…"}
         </div>
       )}
       {done && (
-        <div style={{ fontSize: 13, color: progress.total ? "var(--ok)" : "var(--warn)" }}>
+        <div className={`fnote ${progress.total ? "fnote-g" : "fnote-y"}`} role="status">
           {progress.total
             ? `Hotovo — ${progress.done} súborov, ZIP sa stiahol do Downloads.`
             : "Nenašla sa žiadna fotka na export."}
         </div>
       )}
-      {error && <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 8 }}>{error}</div>}
+      {error && <div className="fnote fnote-r" role="alert" style={{ marginTop: 8 }}>⚠ {error}</div>}
       {done && (
-        <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setDone(false)}>
+        <button className="btn btn-outline" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setDone(false)}>
           Spustiť ďalší export
         </button>
       )}
@@ -12588,7 +12638,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         className="global-search-mobile-trigger header-icon-btn"
         onClick={() => setMobileExpanded(true)}
         aria-label="Hľadať"
-        style={{ display: "none", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
+        style={{ display: "none", background: "rgba(0,0,0,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
       >
         🔍
       </button>
@@ -12618,7 +12668,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
             className="global-search-mobile-close header-icon-btn"
             onClick={() => { setMobileExpanded(false); setOpen(false); setQuery(""); }}
             aria-label="Zavrieť hľadanie"
-            style={{ display: "none", flex: "0 0 auto", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
+            style={{ display: "none", flex: "0 0 auto", background: "rgba(0,0,0,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
           >
             ✕
           </button>
@@ -12812,7 +12862,7 @@ function NavList({ modules, module, view, exclude = [], collapsed, rowClass, onG
               >
                 <NavIcon id={navKey(t)} />
                 {!collapsed && <span className="nav-lbl">{t.label}{t.dropdown ? (open ? " ▴" : " ▾") : ""}</span>}
-                {t.badge > 0 && <span className="nav-b">{t.badge}</span>}
+                {t.badge > 0 && <span className={`nav-b${navKey(t) === "poskodenia" ? " nav-b-problem" : ""}`}>{t.badge}</span>}
               </button>
               {t.dropdown && open && !collapsed &&
                 (DOCUMENT_SUBTABS[m.id] || []).map((st) => (
@@ -13024,7 +13074,7 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
   }, []);
   return (
     <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{ background: "var(--accent)" }}>
+      <div style={{ background: "var(--accent-fill)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           {/* Logo je z tlačového watermarku — kreslené na biele pozadie, na
               červenej hlavičke bez neho vyzeralo rozmazane/nekontrastne.
@@ -13039,10 +13089,10 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
               dosť miesta pre vyhľadávanie a zvonček aj na užších telefónoch. */}
           <div className="header-brand-sub" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span className="header-divider" style={{ width: 1, height: 16, background: "rgba(255,255,255,.35)" }} />
-            <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "rgba(255,255,255,.9)" }}>
+            <span className="header-subtitle" style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase", color: "#fff" }}>
               Interná platforma
             </span>
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,.55)", fontWeight: 600 }}>v{APP_VERSION}</span>
+            <span style={{ fontSize: 11, color: "#fff", fontWeight: 600 }}>v{APP_VERSION}</span>
           </div>
           <div className="header-search-wrap" style={{ flex: "1 1 auto", display: "flex", justifyContent: "center", minWidth: 120 }}>
             {effectiveUser?.role !== "externy_sofer" && <GlobalSearch searchIndex={searchIndex} onNavigate={onSearchNavigate} />}
@@ -13053,7 +13103,7 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
                 className="header-offline-badge"
                 role="status"
                 title="Zariadenie je bez signálu. Zmeny v kancelárii sa teraz neuložia; protokoly v teréne sa odošlú samé po pripojení."
-                style={{ background: "#fff", color: "var(--danger)", borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}
+                style={{ background: "#fff", color: "var(--accent-fill)", borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}
               >
                 ⚠ Bez signálu
               </span>
@@ -13146,56 +13196,55 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
         return params;
       })();
 
+  const canReschedule = damage && !damage.resolved && onReschedule && can(user, "plan_assign");
+  const canProtocol = can(user, "protocol_write");
   return (
     <Modal
       eyebrow="Servisné pridelenie"
-      title={
-        <>
-          <span style={{ color: "var(--accent)" }}>{machine?.code || a.stroj || "Zákazka"}</span>
-          {machine?.type ? ` · ${machine.type}` : ""}
-        </>
-      }
+      title={<>{machine?.code || a.stroj || "Zákazka"}{machine?.type && <span className="side-title-sub">{machine.type}</span>}</>}
       onClose={onClose}
-      wide
+      side
       headerExtra={
-        machine && onOpenMachineCard ? (
-          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
-            Karta stroja
-          </button>
-        ) : null
+        <div className="side-summary">
+          <div><span>Technik</span><b>{technician?.name || "—"}</b></div>
+          <div><span>Dátum</span><b className="tnum">{fmtDate(a.date) || "—"}</b></div>
+          <div><span>Firma</span><b>{a.firma || "—"}</b></div>
+          <div><span>Umiestnenie</span><b>{machineCurrentLocation(machine) || a.umiestnenie || "—"}</b></div>
+        </div>
       }
-    >
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Technik" value={technician?.name} />
-        <CardField label="Dátum" value={fmtDate(a.date)} />
-        <CardField label="Umiestnenie" value={machineCurrentLocation(machine) || a.umiestnenie} />
-        <CardField label="Firma" value={a.firma} />
-      </div>
-      {a.poznamka && (
-        <div style={{ fontSize: 13, marginBottom: 14 }}>{a.poznamka}</div>
-      )}
-      {damage && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-          Stav: {damageLabel(damage)}
-        </div>
-      )}
-      {damage && !damage.resolved && onReschedule && can(user, "plan_assign") && (
-        <button className="btn btn-ghost" style={{ color: "var(--accent)", marginBottom: 14 }} onClick={() => onReschedule(damage)}>
-          Preplánovať (zmeniť dátum alebo technika)
-        </button>
-      )}
-      {can(user, "protocol_write") && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
-            Vypísať protokol
-          </button>
-          {machine && isEzRevision(damage) && (
-            <button className="btn btn-ghost" onClick={() => openEzMeasurement(machine)}>
-              Záznam z merania pre VTZ EZ
-            </button>
+      footer={(canReschedule || canProtocol || (machine && onOpenMachineCard)) && (
+        <>
+          {machine && onOpenMachineCard && (
+            <KebabMenu up label="⋯" actions={[{ label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }]} />
           )}
-        </div>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {canReschedule && (
+              <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={() => onReschedule(damage)}>
+                Preplánovať (zmeniť dátum alebo technika)
+              </button>
+            )}
+            {canProtocol && machine && isEzRevision(damage) && (
+              <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={() => openEzMeasurement(machine)}>
+                Záznam z merania pre VTZ EZ
+              </button>
+            )}
+            {canProtocol && (
+              <button className="btn btn-accent" onClick={() => openProtocol(protocolParams)}>
+                Vypísať protokol
+              </button>
+            )}
+          </div>
+        </>
       )}
+    >
+      <dl className="side-dl">
+        <dt>Technik</dt><dd>{technician?.name || "—"}</dd>
+        <dt>Dátum</dt><dd className="tnum">{fmtDate(a.date) || "—"}</dd>
+        <dt>Umiestnenie</dt><dd>{machineCurrentLocation(machine) || a.umiestnenie || "—"}</dd>
+        <dt>Firma</dt><dd>{a.firma || "—"}</dd>
+        {a.poznamka && <><dt>Poznámka</dt><dd style={{ whiteSpace: "pre-wrap" }}>{a.poznamka}</dd></>}
+        {damage && <><dt>Stav</dt><dd>{damageLabel(damage)}</dd></>}
+      </dl>
     </Modal>
   );
 }
@@ -13281,71 +13330,59 @@ function ProtocolModal({ html, params, onClose }) {
 // princíp ako ProtocolModal vyššie (iframe namiesto window.open, ktoré je v appke
 // blokované), len bez "predvyplnené" odznaku, ktorý sem nepatrí.
 function PhotoLightboxModal({ src, onClose }) {
+  // Tmavé pozadie bez presvitania stránky, horná lišta so „✕ Zavrieť“, fotka na celú plochu; klik mimo fotky zatvára.
   return (
     <div
       className="fullscreen-overlay"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.85)",
-        zIndex: 300,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        cursor: "zoom-out",
-      }}
+      style={{ position: "fixed", inset: 0, background: "#111", zIndex: 300, display: "flex", flexDirection: "column", cursor: "zoom-out" }}
       onClick={onClose}
     >
-      <img
-        src={src}
-        alt="Náhľad fotky"
-        style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6, boxShadow: "0 4px 24px rgba(0,0,0,.5)", cursor: "default" }}
-        onClick={(e) => e.stopPropagation()}
-      />
-      <button
-        className="btn"
-        style={{ position: "absolute", top: 16, right: 16, background: "var(--panel-2)", color: "var(--text)" }}
-        onClick={onClose}
-      >
-        ✕ Zavrieť
-      </button>
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "max(12px, env(safe-area-inset-top)) 16px 8px" }}>
+        <button
+          className="btn"
+          style={{ minHeight: 48, fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", cursor: "pointer" }}
+          onClick={onClose}
+        >
+          ✕ Zavrieť
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 16px max(16px, env(safe-area-inset-bottom))" }}>
+        <img
+          src={src}
+          alt="Náhľad fotky"
+          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, cursor: "default" }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
     </div>
   );
 }
 
+// Ovládacia lišta tlačového náhľadu (v1.0.794): „✕ Zavrieť“ a názov ležia nad ľavou časťou
+// panela s akciami dokumentu (ten sa sem len preštýluje) — samotný dokument sa nemení.
+const PRINT_BAR_CSS = `.toolbar{display:flex!important;justify-content:flex-end!important;align-items:center;text-align:right!important;gap:8px!important;flex-wrap:wrap;margin:0 0 10px!important;padding:10px 16px 10px min(46vw,520px)!important;min-height:64px;background:#fff!important;border-bottom:1px solid #E2E2E2;box-shadow:none!important}
+.toolbar .btn{min-height:44px;font-size:14px;border-radius:8px;padding:0 14px}
+.toolbar .btn-ghost{border-color:#CFCFCF;color:#1A1A1A}
+@media (max-width:720px){.toolbar{padding:8px 10px 8px 52vw!important;min-height:60px}}
+@media print{.toolbar{display:none!important}}`;
+const _htmlDecode = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 function PrintProtocolModal({ html, onClose }) {
+  const title = _htmlDecode((html.match(/<meta name="mateco-bar" content="([^"]*)"/) || html.match(/<title>([^<]*)<\/title>/) || [])[1] || "Protokol");
+  const doc = html.replace("</head>", `<style>${PRINT_BAR_CSS}</style></head>`);
   return (
     <div className="protocol-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, overflow: "hidden" }}>
       <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, top: "env(safe-area-inset-top)", background: "#fff" }}>
         <iframe
           title="Servisný protokol"
-          srcDoc={html}
+          srcDoc={doc}
           sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
       </div>
-      <button
-        className="btn"
-        title="Zavrieť protokol"
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: "calc(env(safe-area-inset-top) + 6px)",
-          right: 8,
-          width: 32,
-          height: 32,
-          padding: 0,
-          borderRadius: "50%",
-          background: "var(--panel-2)",
-          color: "var(--text)",
-          fontSize: 16,
-          lineHeight: "32px",
-          textAlign: "center",
-        }}
-      >
-        ✕
-      </button>
+      <div className="print-bar-x">
+        <button className="btn btn-outline" title="Zavrieť protokol" onClick={onClose}>✕<span className="print-bar-long"> Zavrieť</span></button>
+        <span className="print-bar-title">{title}</span>
+      </div>
     </div>
   );
 }
@@ -13385,18 +13422,18 @@ function Dashboard({
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Strojov celkom" value={stats.total} color="var(--text)" />
-        <StatCard label="Na zákazke" value={stats.onJob} color="var(--info)" />
-        <StatCard label="Voľné" value={stats.free} color="var(--ok)" />
-        <StatCard label="Po termíne" value={stats.overdue} color="var(--danger)" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+        <StatCard label="Strojov celkom" value={stats.total} />
+        <StatCard label="Na zákazke" value={stats.onJob} />
+        <StatCard label="Voľné" value={stats.free} />
+        <StatCard label="⚠ Po termíne" value={stats.overdue} color={stats.overdue > 0 ? "var(--danger-text)" : undefined} />
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
         <FilterPopover activeCount={activeFilterCount} onClear={clearFilters}>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Stav</div>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Stav</div>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: "100%" }}>
               <option value="all">Všetky stavy</option>
               <option value="free">Voľné</option>
@@ -13405,105 +13442,99 @@ function Dashboard({
             </select>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Depo</div>
+            <div className="seg" role="group" aria-label="Depo">
               {depoOptions.map((d) => (
-                <button
-                  key={d}
-                  className="btn depo-chip-btn"
-                  onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-                  style={{
-                    padding: "5px 10px",
-                    fontSize: 11,
-                    background: depoFilter === d ? "var(--accent)" : "transparent",
-                    color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                    border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-                  }}
-                >
-                  <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
+                <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)} style={{ padding: "0 9px" }}>
+                  {DEPO_SHORT_LABELS[d] || d}
                 </button>
               ))}
             </div>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Zobraziť archivované
           </label>
         </FilterPopover>
         <div style={{ flex: 1 }} />
-        {can(user, "machine_clear_all") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-            Vymazať všetky stroje
-          </button>
+        {can(user, "machine_import_csv") && (
+          <button className="btn btn-outline who-hide-mobile" onClick={onImport}>Import CSV</button>
         )}
         {can(user, "machine_import_csv") && (
-          <button className="btn btn-ghost" onClick={onImport}>Import CSV</button>
-        )}
-        {can(user, "machine_import_csv") && (
-          <button className="btn btn-ghost" onClick={onExportCsv}>Export CSV</button>
+          <button className="btn btn-outline who-hide-mobile" onClick={onExportCsv}>Export CSV</button>
         )}
         {can(user, "machine_add") && (
           <button className="btn btn-accent" onClick={onAddMachine}>+ Pridať stroj</button>
         )}
+        <span className="who-hide-mobile">
+          <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+            can(user, "machine_clear_all") && { label: "Vymazať všetky stroje", danger: true, onClick: onClearAll },
+          ]} />
+        </span>
+        <span className="m-only">
+          <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+            can(user, "machine_import_csv") && { label: "Import CSV", onClick: onImport },
+            can(user, "machine_import_csv") && { label: "Export CSV", onClick: onExportCsv },
+            can(user, "machine_clear_all") && { label: "Vymazať všetky stroje", danger: true, onClick: onClearAll },
+          ]} />
+        </span>
       </div>
 
-      <div className="panel" style={{ overflowX: "clip" }}>
-        <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
-              <th>Sériové číslo</th>
-              <th>Model</th>
+              <th>Stroj</th>
               <th>Revízia ZZ</th>
               <th>Revízia EZ</th>
-              <th>Depo</th>
               <th>Stav</th>
               <th>Zákazka</th>
-              <th>Zákazka do</th>
               <th>Ďalšia zákazka</th>
             </tr>
           </thead>
           <tbody>
             {visibleMachines.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
+                <td colSpan={6} className="td-plain" style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
                   Žiadne stroje. Pridajte ich ručne alebo cez CSV import.
                 </td>
               </tr>
             )}
             {visibleMachines.map((m) => {
               const overdueDays = m.currentJob && m.status === "overdue" ? daysBetween(m.currentJob.endDate, today) : 0;
-              const reviziaDays = m.revizia ? daysBetween(today, m.revizia) : null;
-              const reviziaColor = m.trackRevisions === false ? "var(--text-dim)" : reviziaDays === null ? "var(--text-dim)" : reviziaDays < 0 ? "var(--danger)" : reviziaDays <= 30 ? "var(--warn)" : "var(--text)";
-              const reviziaEZDays = m.reviziaEZ ? daysBetween(today, m.reviziaEZ) : null;
-              const reviziaEZColor = m.trackRevisionsEZ === false ? "var(--text-dim)" : reviziaEZDays === null ? "var(--text-dim)" : reviziaEZDays < 0 ? "var(--danger)" : reviziaEZDays <= 30 ? "var(--warn)" : "var(--text)";
-              const barColor = m.hasOpenDamage
-                ? "var(--danger)"
-                : m.status === "overdue" ? "var(--danger)" : m.status === "active" ? "var(--info)" : "var(--ok)";
+              const revCell = (track, date) => {
+                if (track === false) return <span style={{ color: "var(--text-dim)" }}>Nesledované</span>;
+                if (!date) return <span style={{ color: "var(--text-dim)" }}>—</span>;
+                const d = daysBetween(today, date);
+                if (d < 0) return <span className="spill spill-problem tnum">⚠ {fmtDate(date)}</span>;
+                return <span className="tnum" style={{ color: d <= 30 ? "var(--warn)" : undefined, fontWeight: d <= 30 ? 600 : undefined }}>{fmtDate(date)}</span>;
+              };
+              const statusPill = m.status === "overdue"
+                ? <span className="spill spill-problem">⚠ Po termíne +{overdueDays} dní</span>
+                : m.status === "active" ? <span className="spill spill-active">Na zákazke</span> : <span className="spill spill-done">Voľný</span>;
               return (
                 <tr
                   key={m.id}
-                  style={{
-                    borderLeft: `3px solid ${barColor}`,
-                    cursor: "pointer",
-                    background: m.hasOpenDamage ? "var(--danger-row-bg)" : "transparent",
-                    opacity: m.archived ? 0.55 : 1,
-                  }}
+                  className={m.hasOpenDamage || m.status === "overdue" ? "row-problem" : ""}
+                  style={{ cursor: "pointer", opacity: m.archived ? 0.55 : 1 }}
                   onClick={() => onOpenCard(m)}
                 >
-                  <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m.code}{m.archived ? " (archivovaný)" : ""}</td>
-                  <td data-label="Model" style={{ fontWeight: 600 }}>{m.type || "—"}</td>
-                  <td data-label="Revízia ZZ" className="mono" style={{ color: reviziaColor }}>{m.trackRevisions === false ? "Nesledované" : (m.revizia ? fmtDate(m.revizia) : "—")}</td>
-                  <td data-label="Revízia EZ" className="mono" style={{ color: reviziaEZColor }}>{m.trackRevisionsEZ === false ? "Nesledované" : (m.reviziaEZ ? fmtDate(m.reviziaEZ) : "—")}</td>
-                  <td data-label="Depo">{m.depo || "—"}</td>
-                  <td data-label="Stav">
-                    <StatusBadge status={m.status} />
-                    {m.status === "overdue" && (
-                      <span style={{ fontSize: 11, color: "var(--danger)", marginLeft: 6 }}>+{overdueDays} dní</span>
-                    )}
+                  <td className="td-plain">
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+                      <strong className="tnum">{m.code}{m.archived ? " (archivovaný)" : ""}</strong>
+                      <span className="m-only">{statusPill}</span>
+                    </span>
+                    <div className="cell-sub">{[m.type, m.depo].filter(Boolean).join(" · ") || "—"}</div>
+                    {m.hasOpenDamage && <div style={{ marginTop: 4 }}><span className="spill spill-problem">⚠ otvorená porucha</span></div>}
                   </td>
-                  <td data-label="Zákazka">{m.currentJob ? (m.currentJob.customer || m.currentJob.toLocation) : "— voľný —"}</td>
-                  <td data-label="Zákazka do" className="mono">{m.currentJob ? (m.currentJob.endDate ? fmtDate(m.currentJob.endDate) : <span style={{ color: "var(--warn)" }}>bez konca</span>) : "—"}</td>
-                  <td data-label="Ďalšia zákazka" style={{ color: "var(--text-dim)" }}>
+                  <td data-label="Revízia ZZ">{revCell(m.trackRevisions, m.revizia)}</td>
+                  <td data-label="Revízia EZ">{revCell(m.trackRevisionsEZ, m.reviziaEZ)}</td>
+                  <td data-label="Stav" className="who-hide-mobile">{statusPill}</td>
+                  <td data-label="Zákazka" className={m.currentJob ? "" : "who-hide-mobile"}>
+                    {m.currentJob ? (m.currentJob.customer || m.currentJob.toLocation) : <span style={{ color: "var(--text-dim)" }}>voľný</span>}
+                    {m.currentJob && <div className="cell-sub tnum">{m.currentJob.endDate ? `do ${fmtDate(m.currentJob.endDate)}` : <span style={{ color: "var(--warn)" }}>bez konca</span>}</div>}
+                  </td>
+                  <td data-label="Ďalšia zákazka" className={m.nextJob ? "tnum" : "who-hide-mobile"} style={{ color: "var(--text-dim)" }}>
                     {m.nextJob ? `${fmtDate(m.nextJob.startDate)} → ${m.nextJob.toLocation}` : "—"}
                   </td>
                 </tr>
@@ -13647,41 +13678,23 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
     );
   }
   const sorted = [...filtered].sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+  const bucketCount = (id) => jobs.filter((j) => statusBucket(j) === id && matchesSearchAndDepo(j)).length;
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
-        {quickTiles.filter((t) => t.items.length > 0).map((t) => (
-          <div
-            key={t.id}
-            className="panel"
-            onClick={() => setQuickCategory(t.id)}
-            style={{ padding: "12px 14px", borderLeft: `3px solid ${t.color}`, cursor: "pointer" }}
-          >
-            <div className="label-font" style={{ color: t.color, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{t.items.length}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
-          </div>
-        ))}
-      </div>
-      {isMyselfObchodnik && (
-        <div style={{ marginBottom: 10 }}>
-          <button
-            className="btn"
-            onClick={() => setObchodnikFilter(obchodnikFilter ? "" : myEmployee.name)}
-            style={{
-              padding: "5px 12px",
-              fontSize: 12,
-              background: obchodnikFilter ? "var(--accent)" : "transparent",
-              color: obchodnikFilter ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (obchodnikFilter ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {obchodnikFilter ? "👤 Zobrazujem len moje — klik pre všetky" : "Zobraziť len moje zákazky"}
-          </button>
-        </div>
-      )}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="seg" role="group" aria-label="Stav zákazky">
+          {filterButtons.map((f) => (
+            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {f.label}<span className="seg-n">{bucketCount(f.id)}</span>
+            </button>
+          ))}
+        </div>
+        <select aria-label="Depo" value={depoFilter || ""} onChange={(e) => setDepoFilter(e.target.value || null)} style={{ minHeight: 40 }}>
+          <option value="">Všetky depá</option>
+          {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
           {can(user, "job_clear_all") && (
             <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
               Vymazať všetky zákazky
@@ -13690,95 +13703,69 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import z CSV</button>}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        {filterButtons.map((f) => (
-          <button
-            key={f.id}
-            className="btn"
-            onClick={() => toggleFilter(f.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: activeFilters.has(f.id) ? "var(--accent)" : "transparent",
-              color: activeFilters.has(f.id) ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (activeFilters.has(f.id) ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {sorted.length === 0 && (
-          <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
-            {activeFilters.size === 0 ? "Vyberte aspoň jeden filter." : "Žiadne zákazky nezodpovedajú filtru."}
-          </div>
-        )}
-        {sorted.map((j) => {
-          const st = effectiveStatus(j, today);
-          const barColor = { overdue: "var(--danger)", active: "var(--info)", planned: "var(--warn)", completed: "var(--ok)" }[st];
-          return (
-            <div
-              key={j.id}
-              className="panel"
-              style={{ padding: 14, borderLeft: `3px solid ${barColor}`, cursor: onOpenJob ? "pointer" : "default" }}
-              onClick={() => onOpenJob && onOpenJob(j)}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                    <span className="mono" style={{ fontWeight: 600, fontSize: 15, color: onOpenJob ? "var(--accent)" : "inherit" }}>{machineById[j.machineId]?.code || "?"}</span>
-                    {j.machineDisplayName && (
-                      <span style={{ fontSize: 12, color: "var(--text-dim)" }}>({j.machineDisplayName})</span>
-                    )}
-                    <StatusBadge status={st} />
-                    {!j.endDate && j.status !== "completed" && (
-                      <span className="badge badge-warn" title="Zákazka nemá zadaný dátum ukončenia">⚠ Bez konca</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                    {j.selfPickup ? `Vyzdvihnutie v depe ${j.fromDepo || ""}` : `${j.fromDepo} → ${j.toLocation || "—"}`} {j.customer ? `· ${j.customer}` : ""}
-                  </div>
-                  <div className="mono" style={{ fontSize: 12, marginTop: 4 }}>
-                    {fmtDate(j.startDate)} — {j.endDate ? fmtDate(j.endDate) : "bez určeného konca"} · {j.selfPickup ? "Vlastná doprava" : `Šofér: ${driverById[j.driverId]?.name || "— neurčený —"}`}
-                  </div>
-                  {j.notes && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Pozn.: {j.notes}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
-                  {can(user, "job_edit") && (
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(j)}>
-                      Upraviť
-                    </button>
-                  )}
-                  {st !== "completed" && can(user, "job_complete") && (
-                    <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onComplete(j)}>
-                      Ukončiť
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {(isMyselfObchodnik || quickTiles.some((t) => t.items.length > 0)) && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {isMyselfObchodnik && (
+            <button type="button" className={`fchip${obchodnikFilter ? " on" : ""}`} aria-pressed={!!obchodnikFilter} onClick={() => setObchodnikFilter(obchodnikFilter ? "" : myEmployee.name)}>
+              {obchodnikFilter ? "👤 Zobrazujem len moje — klik pre všetky" : "Zobraziť len moje zákazky"}
+            </button>
+          )}
+          {quickTiles.filter((t) => t.items.length > 0).map((t) => (
+            <button key={t.id} type="button" className={`fchip${t.id === "overdue" ? " problem" : ""}`} onClick={() => setQuickCategory(t.id)}>
+              {t.id === "overdue" && "⚠ "}{t.label}<span className="seg-n">{t.items.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {sorted.length === 0 ? (
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
+          {activeFilters.size === 0 ? "Vyberte aspoň jeden filter." : "Žiadne zákazky nezodpovedajú filtru."}
+        </div>
+      ) : (
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+          <table className="table-cards jobs-table">
+            <thead>
+              <tr><th>Stroj</th><th>Zákazník · Kam</th><th>Obdobie</th><th>Šofér</th><th>Stav</th><th><span className="sr-only">Akcie</span></th></tr>
+            </thead>
+            <tbody>
+              {sorted.map((j) => {
+                const st = effectiveStatus(j, today);
+                const m = machineById[j.machineId];
+                return (
+                  <tr key={j.id} className={st === "overdue" ? "row-problem" : ""} style={{ cursor: onOpenJob ? "pointer" : "default" }} onClick={() => onOpenJob && onOpenJob(j)}>
+                    <td className="td-plain">
+                      <strong className="tnum">{m?.code || "?"}</strong>
+                      <div className="cell-sub">{[j.machineDisplayName || m?.type, j.fromDepo].filter(Boolean).join(" · ")}</div>
+                    </td>
+                    <td className="td-plain">
+                      {j.customer || "—"}
+                      <div className="cell-sub">{j.selfPickup ? `Vyzdvihnutie v depe ${j.fromDepo || ""}` : j.toLocation || "—"}</div>
+                      {j.notes && <div className="cell-sub">Pozn.: {j.notes}</div>}
+                    </td>
+                    <td data-label="Obdobie" className="tnum" style={{ whiteSpace: "nowrap" }}>
+                      {fmtDate(j.startDate)} – {j.endDate ? fmtDate(j.endDate) : "bez určeného konca"}
+                    </td>
+                    <td data-label="Šofér">{j.selfPickup ? "Vlastná doprava" : driverById[j.driverId]?.name || <span style={{ color: "var(--text-dim)" }}>— neurčený —</span>}</td>
+                    <td data-label="Stav">
+                      <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <JobStatusPill status={st} />
+                        {!j.endDate && j.status !== "completed" && <span className="spill spill-wait" title="Zákazka nemá zadaný dátum ukončenia">⚠ Bez konca</span>}
+                      </span>
+                    </td>
+                    <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                      {onOpenJob && <button type="button" className="btn btn-outline" onClick={() => onOpenJob(j)}>Otvoriť</button>}{" "}
+                      <KebabMenu label="⋯" actions={[
+                        can(user, "job_edit") && { label: "Upraviť", onClick: () => onEdit(j) },
+                        st !== "completed" && can(user, "job_complete") && { label: "Ukončiť", onClick: () => onComplete(j) },
+                      ]} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {activeTile && (
         <JobsQuickDrilldownModal tile={activeTile} machineById={machineById} salespeople={salespeople} onClose={() => setQuickCategory(null)} onOpenJob={onOpenJob} onOpenReservation={onOpenReservation} />
       )}
@@ -13806,48 +13793,43 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
   );
 
   return (
-    <Modal title={`${tile.label} (${drillItems.length}${drillItems.length !== tile.items.length ? ` z ${tile.items.length}` : ""})`} onClose={onClose} wide>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+    <Modal eyebrow="Rýchly prehľad" title={<>{tile.id === "overdue" && "⚠ "}{tile.label} <span className="tnum" style={{ color: "var(--text-dim)", fontWeight: 500 }}>({drillItems.length}{drillItems.length !== tile.items.length ? ` z ${tile.items.length}` : ""})</span></>} onClose={onClose} wide>
+      <div className="seg" role="group" aria-label="Depo" style={{ marginBottom: 10, flexWrap: "wrap" }}>
         {DEPO_OPTIONS.map((d) => (
           <button
             key={d}
-            className="btn"
+            type="button"
+            className={drillDepoFilter === d ? "on" : ""}
+            aria-pressed={drillDepoFilter === d}
             onClick={() => setDrillDepoFilter(drillDepoFilter === d ? null : d)}
-            style={{
-              padding: "4px 9px",
-              fontSize: 11,
-              background: drillDepoFilter === d ? "var(--accent)" : "transparent",
-              color: drillDepoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (drillDepoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
           >
             {d}
           </button>
         ))}
       </div>
       <div style={{ marginBottom: 14 }}>
-        <select value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px" }}>
+        <select aria-label="Obchodník" value={drillObchodnikFilter} onChange={(e) => setDrillObchodnikFilter(e.target.value)} style={{ minWidth: 240, maxWidth: "100%" }}>
           <option value="">— všetci obchodníci —</option>
           {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
         </select>
       </div>
-      <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className={drillItems.length ? "flist" : undefined} style={{ maxHeight: "60vh", overflowY: "auto" }}>
         {drillItems.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne záznamy.</div>
+          <div className="fnote fnote-i">Žiadne záznamy.</div>
         ) : tile.isReservation ? (
           drillItems.map((r) => {
             const m = machineById[r.machineId];
             return (
-              <div key={r.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div key={r.id} className="frow quick-job-row">
                 <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
                   <span
                     className="mono"
-                    style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+                    style={{ fontWeight: 700, fontSize: 15, color: "var(--text)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}
                     onClick={() => onOpenReservation(r)}
                   >
                     {m?.code || "—"}
                   </span>
-                  <span style={{ fontSize: 13 }}>
+                  <span className="tnum" style={{ fontSize: 15 }}>
                     od {fmtDate(r.expectedStart)}{r.expectedEnd ? ` do ${fmtDate(r.expectedEnd)}` : ""} · {r.customer}
                     {r.obchodnik ? ` · ${r.obchodnik}` : ""}
                   </span>
@@ -13859,17 +13841,17 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
           drillItems.map((j) => {
             const m = machineById[j.machineId];
             return (
-              <div key={j.id} className="panel quick-job-row" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div key={j.id} className="frow quick-job-row" style={tile.id === "overdue" ? { background: "var(--danger-bg)" } : undefined}>
                 <div className="quick-job-info" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
                   <span
                     className="mono"
-                    style={{ fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+                    style={{ fontWeight: 700, fontSize: 15, color: "var(--text)", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}
                     onClick={() => onOpenJob(j)}
                   >
                     {m?.code || "—"}
                   </span>
-                  <span style={{ fontSize: 13 }}>
-                    {tile.id === "overdue" && `mal skončiť ${fmtDate(j.endDate)}`}
+                  <span className="tnum" style={{ fontSize: 15, color: tile.id === "overdue" ? "var(--danger-text)" : undefined }}>
+                    {tile.id === "overdue" && `⚠ mal skončiť ${fmtDate(j.endDate)}`}
                     {tile.id === "endingSoon" && `do ${fmtDate(j.endDate)}`}
                     {tile.id === "noDriver" && `od ${fmtDate(j.startDate)} → ${j.toLocation}`}
                     {tile.id === "noEndDate" && `beží od ${fmtDate(j.startDate)} — dátum konca nezadaný`}
@@ -13879,8 +13861,8 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
                 </div>
                 {tile.id === "endingSoon" && (
                   <button
-                    className="btn btn-ghost quick-job-btn"
-                    style={{ fontSize: 11, padding: "4px 8px", marginLeft: "auto" }}
+                    className="btn btn-outline quick-job-btn"
+                    style={{ marginLeft: "auto" }}
                     title={!j.customerEmail ? "Zákazka nemá vyplnený email — doplníte ho priamo v maile" : ""}
                     onClick={() => {
                       const portalLink = j.publicToken ? `${window.location.origin}${window.location.pathname}?portal=${j.publicToken}` : "";
@@ -13911,7 +13893,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
+function DriverTransportsList({ dnes, items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -13955,6 +13937,29 @@ function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob
       )}
     </div>
   );
+
+  // „Dnes“ šoféra: prvá preprava (po termíne / dnes) ako veľká karta, ostatné ako kompaktné riadky (ťuk = celá karta).
+  if (dnes) {
+    const card = (t, hero) => (
+      <DriverTransportCard key={t.id} t={t} hero={hero} machineById={machineById} handoverProtocols={handoverProtocols} onOpenJob={onOpenJob}
+        highlighted={t.id === highlightTransportId} onDismissHighlight={onDismissTransportHighlight} onReportIssue={onReportIssue} preview={t.date > today} />
+    );
+    const row = (t) => (
+      <TodayCompactRow key={t.id} id={`transport-${t.id}`} problem={t.overdue} defaultOpen={t.id === highlightTransportId}
+        title={`${t.type === "vyvoz" ? "Vývoz" : "Zvoz"} · ${machineById[t.machineId]?.code || "—"}`}
+        sub={[t.customer, t.date !== today ? fmtDate(t.date) : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
+    );
+    const [first, ...restNow] = items.filter((t) => t.overdue || t.date === today);
+    const later = items.filter((t) => !t.overdue && t.date > today);
+    return (
+      <div>
+        {transportNotesPanel}
+        {first ? card(first, true) : <div style={{ fontSize: 16, color: "var(--text-dim)", margin: "4px 0 14px" }}>Na dnes žiadne prepravy.</div>}
+        {restNow.length > 0 && <><div className="today-sec">Ďalej dnes · {restNow.length}</div>{restNow.map(row)}</>}
+        {later.length > 0 && <><div className="today-sec">Zajtra a neskôr · {later.length}</div>{later.map(row)}</>}
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -14014,7 +14019,7 @@ function DriverTransportsList({ items, machineById, handoverProtocols, onOpenJob
   );
 }
 
-function DriverTransportCard({ t, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight, onReportIssue, preview }) {
+function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight, onReportIssue, preview }) {
   const machine = machineById[t.machineId];
   const isVyvoz = t.type === "vyvoz";
   const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
@@ -14030,6 +14035,26 @@ function DriverTransportCard({ t, machineById, handoverProtocols, onOpenJob, hig
       : "✓ Hotovo — zobraziť protokol"
     : "📋 Dokončiť vrátenie";
   const statusColor = isVyvoz && hp ? "var(--ok)" : "var(--accent)";
+  const open = () => { if (highlighted) onDismissHighlight?.(); onOpenJob && onOpenJob(t.jobId, t.type); };
+  if (hero) {
+    return (
+      <section id={`transport-${t.id}`} aria-label="Ďalšia preprava" className={`today-hero${t.overdue ? " today-problem" : ""}`} style={{ outline: highlighted ? "2px solid var(--accent)" : "none" }}>
+        <div className={`today-hero-tag${t.overdue ? " today-problem-title" : ""}`}>{t.overdue ? `⚠ Po termíne · ${fmtDate(t.date)} · ` : "Ďalšia · "}{isVyvoz ? "Vývoz" : "Zvoz"}</div>
+        <div className="today-hero-id">{machine?.code || "—"} {machine?.type && <small>{machine.type}</small>}</div>
+        <div className="today-hero-sub">{t.customer && <>{t.customer}<br /></>}{t.from} → {t.to}</div>
+        {t.issue && <div style={{ fontSize: 14, color: "var(--danger-text)", fontWeight: 600, whiteSpace: "pre-line" }}>🚨 {t.issue}</div>}
+        <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : "btn-accent"} today-main`} onClick={open}>{statusLabel}</button>
+        {t.site && <a className="btn btn-ghost today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer">🧭 Navigovať</a>}
+        {(t.customerPhone || t.dispatcher?.phone || onReportIssue) && (
+          <div className="today-hero-more">
+            {t.customerPhone && <a className="btn btn-ghost" href={`tel:${t.customerPhone}`}><PhoneIcon size={16} /> Zavolať</a>}
+            {t.dispatcher?.phone && <a className="btn btn-ghost" href={`tel:${t.dispatcher.phone}`} title={`Dispečer zákazky: ${t.dispatcher.name}`}><PhoneIcon size={16} /> Dispečer</a>}
+            {onReportIssue && <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onReportIssue(t.jobId)}>🚨 Problém</button>}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
     <div
@@ -14119,7 +14144,7 @@ function TransportDateInput({ date, onSave, title, check }) {
     />
   );
 }
-function TransportsOverview({ jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey }) {
+function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey }) {
   // Šoférovi patriace "Prevoz" dlaždice — poznámky o presune stroja medzi
   // depami, ktoré mu priradil dispečer/vedúci požičovne, ešte nenahlásené
   // ako hotové. Tabuľka "transportNotes" ostáva v DB prísne zamknutá len na
@@ -14347,26 +14372,13 @@ function TransportsOverview({ jobs, drivers, jobDispatcher, machineById, today, 
     });
   }
 
-  const groups = useMemo(() => {
-    const map = {};
-    filtered.forEach((t) => {
-      const key = t.driverId || "unassigned";
-      (map[key] = map[key] || []).push(t);
-    });
-    return map;
-  }, [filtered]);
-
-  const orderedDriverIds = [
-    ...(groups.unassigned ? ["unassigned"] : []),
-    ...drivers.map((d) => d.id).filter((id) => groups[id]),
-  ];
-
   // Šofér nepotrebuje dispečerský hustý zoznam (vyhľadávanie, depo filtre, rýchly
   // prehľad, priraďovanie) — vidí len svoje vlastné prepravy, zoskupené podľa dňa,
   // ako veľké karty s jasnou akciou.
   if (isMyselfSofer || isLockedExternalSofer) {
     return (
       <DriverTransportsList
+        dnes={dnes}
         items={filtered}
         machineById={machineById}
         handoverProtocols={handoverProtocols}
@@ -14386,103 +14398,79 @@ function TransportsOverview({ jobs, drivers, jobDispatcher, machineById, today, 
     const machine = machineById[t.machineId];
     const isVyvoz = t.type === "vyvoz";
     const highlighted = t.id === highlightTransportId;
+    const checkerDepo = isVyvoz ? t.from : t.to;
+    const checkerId = resolveCheckerId(depoCheckers, checkerSubstitutions, checkerDepo, t.date);
+    const checker = checkerId ? technicianById?.[checkerId] : null;
+    const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
+    const showProtocol = (hp || can(user, "handover_protocol_write")) && (!hp || can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked"));
+    // Vývoz sleduje handoverDone (fáza prevzatia), zvoz sleduje returnDone
+    // (fáza vrátenia) — každá karta len svoju vlastnú fázu, nie tú druhú.
+    const protocol = isVyvoz ? (!hp ? ["", "Bez protokolu"] : ["spill-done", "Hotovo"]) : !hp?.returnDone ? ["spill-wait", "Čaká na vrátenie"] : ["spill-done", "Hotovo"];
     return (
       <div
         key={t.id}
         id={`transport-${t.id}`}
+        className={`tr-row${t.overdue ? " row-problem" : ""}`}
         onClick={() => {
           if (highlighted) onDismissTransportHighlight?.();
           onOpenJob && onOpenJob(t.jobId, t.type);
         }}
         style={{
-          padding: "8px 0",
-          borderTop: t.overdue ? "1px solid var(--danger)" : "1px solid var(--border)",
           cursor: onOpenJob ? "pointer" : "default",
           outline: highlighted ? "2px solid var(--accent)" : "none",
           boxShadow: highlighted ? "0 0 0 4px var(--accent-light)" : "none",
           transition: "box-shadow .3s, outline .3s",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`} style={{ minWidth: 52, textAlign: "center" }}>
-            {isVyvoz ? "Vývoz" : "Zvoz"}
-          </span>
-          <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
-          {can(user, "transport_assign_driver") && (
-            <TransportDateInput
-              date={t.date}
-              onSave={(d) => onSetTransportDate && onSetTransportDate(t.jobId, t.type, d)}
-              check={(d) => onCheckTransportDate?.(t.jobId, t.type, d)}
-              title={isVyvoz ? "Zmeniť skutočný dátum vývozu" : "Zmeniť skutočný dátum zvozu"}
-            />
-          )}
-          {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
-          <span className="mono" style={{ fontSize: 12 }}>{machine?.code || "—"}</span>
-          <span style={{ fontSize: 12 }}>
-            {t.from} <span style={{ color: "var(--text-dim)" }}>→</span> {t.to}
-          </span>
-          {t.customer && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>· {t.customer}</span>}
-        </div>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>
-              Checker {isVyvoz ? "(vývoz)" : "(zvoz)"}
-            </div>
-            {(() => {
-              const depo = isVyvoz ? t.from : t.to;
-              const techId = resolveCheckerId(depoCheckers, checkerSubstitutions, depo, t.date);
-              const tech = techId ? technicianById?.[techId] : null;
-              return (
-                <span style={{ fontSize: 11, color: tech ? "var(--text)" : "var(--text-dim)" }} title={`Podľa depa: ${depo}`}>
-                  {tech ? tech.name : "— nenastavené pre toto depo —"}
-                </span>
-              );
-            })()}
-          </div>
-          <div onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Šofér</div>
-            {can(user, "transport_assign_driver") ? (
-              <select
-                value={t.driverId || ""}
-                onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
-                style={{ fontSize: 11, padding: "4px 6px" }}
-              >
-                <option value="">— neurčený —</option>
-                {driverOptionsGrouped(drivers)}
-              </select>
-            ) : (
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
+        <span style={{ fontWeight: 700 }}>{isVyvoz ? "VÝVOZ" : "ZVOZ"}</span>
+        <span style={{ minWidth: 0 }}>
+          <strong className="tnum">{machine?.code || "—"}</strong>{t.customer ? ` · ${t.customer}` : ""}
+          <span className="cell-sub" style={{ display: "block" }}>{t.from} → {t.to}</span>
+          <span className="cell-sub" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="tnum" style={{ color: t.overdue ? "var(--danger-text)" : undefined, fontWeight: t.overdue ? 600 : undefined }}>{fmtDate(t.date)}</span>
+            {can(user, "transport_assign_driver") && (
+              <TransportDateInput
+                date={t.date}
+                onSave={(d) => onSetTransportDate && onSetTransportDate(t.jobId, t.type, d)}
+                check={(d) => onCheckTransportDate?.(t.jobId, t.type, d)}
+                title={isVyvoz ? "Zmeniť skutočný dátum vývozu" : "Zmeniť skutočný dátum zvozu"}
+              />
             )}
-          </div>
-          {(() => {
-            const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
-            if (!hp && !can(user, "handover_protocol_write")) return null;
-            if (hp && !can(user, "handover_protocol_write") && !can(user, "handover_protocol_edit_locked")) return null;
-            // Vývoz sleduje handoverDone (fáza prevzatia), zvoz sleduje returnDone
-            // (fáza vrátenia) — každá karta len svoju vlastnú fázu, nie tú druhú.
-            const statusLabel =
-              t.type === "vyvoz"
-                ? (!hp ? "Bez protokolu" : "Hotovo")
-                : !hp?.returnDone
-                ? "Čaká na vrátenie"
-                : "Hotovo";
-            const statusColor =
-              t.type === "vyvoz"
-                ? (!hp ? "var(--text-dim)" : "var(--ok)")
-                : !hp?.returnDone
-                ? "var(--warn)"
-                : "var(--ok)";
-            return (
-              <div>
-                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--text-dim)", marginBottom: 2 }}>Protokol</div>
-                <span style={{ fontSize: 11, color: statusColor }}>{statusLabel}</span>
-              </div>
-            );
-          })()}
+            <span title={`Podľa depa: ${checkerDepo}`}>Checker {isVyvoz ? "(vývoz)" : "(zvoz)"}: {checker ? checker.name : "— nenastavené pre toto depo —"}</span>
+          </span>
+        </span>
+        <div onClick={(e) => e.stopPropagation()}>
+          {can(user, "transport_assign_driver") ? (
+            <select
+              aria-label="Šofér"
+              value={t.driverId || ""}
+              onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
+              style={{ borderColor: t.driverId ? undefined : "var(--danger)" }}
+            >
+              <option value="">— neurčený —</option>
+              {driverOptionsGrouped(drivers)}
+            </select>
+          ) : (
+            <span style={{ color: t.driverId ? undefined : "var(--text-dim)" }}>{t.driverId ? drivers.find((d) => d.id === t.driverId)?.name : "— neurčený —"}</span>
+          )}
         </div>
+        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {t.overdue && <span className="spill spill-problem">⚠ Po termíne</span>}
+          {!t.driverId && <span className="spill spill-problem">Bez šoféra</span>}
+          {showProtocol && <span className={`spill ${protocol[0]}`}>{protocol[1]}</span>}
+        </span>
       </div>
     );
   }
+
+  const filterDesc = [depoFilter && `depo ${depoFilter}`, driverFilter && `šofér ${driverFilter === "unassigned" ? "Nepridelené" : drivers.find((d) => d.id === driverFilter)?.name || ""}`, search.trim() && `„${search.trim()}“`].filter(Boolean).join(", ");
+  const clearFilters = () => { setDepoFilter(null); setDriverFilter(""); setSearch(""); };
+  const dayLabel = (d) => {
+    const dt = new Date(`${d}T12:00:00`);
+    const base = `${dt.toLocaleDateString("sk-SK", { weekday: "long" })} ${dt.getDate()}. ${dt.getMonth() + 1}.`;
+    return d === today ? `Dnes · ${base}` : d === tomorrow ? `Zajtra · ${base}` : d < today ? `⚠ Po termíne · ${base}` : base;
+  };
+  const dayKeys = [...new Set([today, tomorrow, ...filtered.map((t) => t.date)])].sort();
 
   return (
     <div>
@@ -14545,16 +14533,22 @@ function TransportsOverview({ jobs, drivers, jobDispatcher, machineById, today, 
         {isLockedExternalSofer ? (
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>Vaše prepravy: {myEmployee.name}</div>
         ) : (
-          <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200 }}>
+          <select aria-label="Šofér" value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} style={{ minWidth: 200, minHeight: 40 }}>
             <option value="">— všetci šoféri —</option>
             <option value="unassigned">Nepridelené</option>
             {driverOptionsGrouped(drivers)}
           </select>
         )}
+        <select aria-label="Depo" value={depoFilter || ""} onChange={(e) => setDepoFilter(e.target.value || null)} style={{ minHeight: 40 }}>
+          <option value="">Všetky depá</option>
+          {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        {depoFilter && <span className="fchip">Filter: depo {depoFilter}<button type="button" className="fchip-x" aria-label="Zrušiť filter depa" onClick={() => setDepoFilter(null)}>×</button></span>}
+        {driverFilter && !isLockedExternalSofer && <span className="fchip">Filter: šofér {driverFilter === "unassigned" ? "Nepridelené" : drivers.find((d) => d.id === driverFilter)?.name}<button type="button" className="fchip-x" aria-label="Zrušiť filter šoféra" onClick={() => setDriverFilter("")}>×</button></span>}
       </div>
 
       {summaryDriverIds.length > 0 && (
-        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "clip" }}>
+        <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes a 2 pracovné dni{effectiveDriverFilter ? " (len vybraný šofér)" : ""} · ↑ vývoz · ↓ zvoz
           </div>
@@ -14643,47 +14637,21 @@ function TransportsOverview({ jobs, drivers, jobDispatcher, machineById, today, 
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
-          Žiadne prepravy nezodpovedajú filtru.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {orderedDriverIds.map((key) => {
-            const driver = key === "unassigned" ? null : drivers.find((d) => d.id === key);
-            const items = groups[key];
-            return (
-              <div key={key} className="panel" style={{ overflow: "hidden" }}>
-                <div style={{ background: driver ? "#1a1a1a" : "var(--danger)", color: "#fff", padding: "8px 14px" }}>
-                  <span className="label-font" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase" }}>
-                    {driver ? driver.name : "Nepridelené"}
-                  </span>
-                </div>
-                <div style={{ padding: "0 14px" }}>{items.map(transportLine)}</div>
+      {dayKeys.map((d) => {
+        const items = filtered.filter((t) => t.date === d);
+        return (
+          <section key={d}>
+            <h2 className={`day-sec${d < today ? " red" : ""}`}>{dayLabel(d)} · {items.length}</h2>
+            {items.length === 0 ? (
+              <div className="panel" style={{ boxShadow: "none", border: "1px dashed var(--line-strong)", borderRadius: 12, padding: "14px 20px", color: "var(--text-dim)" }}>
+                {filterDesc ? <>Žiadne prepravy nezodpovedajú filtru ({filterDesc}). <button type="button" className="btn btn-outline" style={{ marginLeft: 8 }} onClick={clearFilters}>Zrušiť filter</button></> : "Žiadne prepravy."}
               </div>
-            );
-          })}
-        </div>
-      )}
+            ) : (
+              <div className="panel" style={{ boxShadow: "none", borderRadius: 12, overflow: "hidden" }}>{items.map(transportLine)}</div>
+            )}
+          </section>
+        );
+      })}
       {quickFilter && (() => {
         // Recomputed live from the current `transports` on every render — never a frozen snapshot,
         // so reassigning a driver from inside this modal is reflected immediately.
@@ -14774,27 +14742,26 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+      <h1 className="page-h1">Zamestnanci</h1>
+      <p className="page-intro who-hide-mobile">
         Zoznam zamestnancov — odtiaľto platforma ťahá zoznamy technikov, šoférov a obchodníkov na
         ostatných miestach. Vidíte a spravujete len role z vlastnej oblasti.
-      </div>
+      </p>
       {duplicateKeys.length > 0 && (
         <div style={{ background: "#fff7e6", border: "1px solid #f0b429", color: "#7a5200", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           ⚠ Duplicitný záznam — {duplicateKeys.map((k) => `"${nameDisplay[k]}" (${nameCounts[k]}×)`).join(", ")}. Skontrolujte nižšie (označené) a jeden zo záznamov zmažte.
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <SearchInput placeholder="Hľadať zamestnanca…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-            Zobraziť archivovaných
-          </label>
-        </div>
-        <button className="btn btn-accent" onClick={onAdd}>+ Pridať zamestnanca</button>
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať zamestnanca…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Zobraziť archivovaných
+        </label>
+        <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={onAdd}>+ Pridať zamestnanca</button>
       </div>
-      <div className="panel">
-      <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+      <table className="table-cards jobs-table dense">
         <thead>
           <tr>
             <th>Meno</th>
@@ -14804,7 +14771,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
             <th>Email</th>
             <th>Prepojený účet</th>
             <th>Stav</th>
-            <th></th>
+            <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
@@ -14814,30 +14781,39 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
           {visible.map((e) => {
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
             const isDuplicate = !e.archived && duplicateKeys.includes(e.name.trim().toLowerCase());
+            const statusPill = e.archived ? <span className="spill">Archivovaný</span> : <span className="spill spill-done">Aktívny</span>;
             return (
               <tr key={e.id} style={isDuplicate ? { background: "#fff7e6", color: "#1a1a1a" } : undefined}>
-                <td className="td-plain" style={{ fontWeight: 600 }}>
-                  {e.name}
-                  {isDuplicate && (
-                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: "#7a5200" }} title="Rovnaké meno má aj iný aktívny záznam">
-                      ⚠ duplicita
+                <td className="td-plain">
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+                    <span style={{ fontWeight: 600 }}>
+                      {e.name}
+                      {isDuplicate && (
+                        <span style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: "#7a5200" }} title="Rovnaké meno má aj iný aktívny záznam">
+                          ⚠ duplicita
+                        </span>
+                      )}
                     </span>
-                  )}
+                    <span className="m-only">{statusPill}</span>
+                  </span>
+                  <div className="cell-sub m-only">{[roleLabel(e.role), e.depo].filter(Boolean).join(" · ")}</div>
                 </td>
-                <td data-label="Rola">{roleLabel(e.role)}{e.alsoObchodnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>aj obchodník</span>}{e.alsoEzTechnik && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>EZ technik</span>}{e.alsoVeduciDispecer && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>vedúci dispečer</span>}</td>
-                <td data-label="Depo">{e.depo || "—"}</td>
-                <td data-label="Telefón">{e.phone || "—"}</td>
-                <td data-label="Email">{e.email || "—"}</td>
-                <td data-label="Prepojený účet">
+                <td data-label="Rola" className="who-hide-mobile">{roleLabel(e.role)}{e.alsoObchodnik && <span className="spill spill-active" style={{ marginLeft: 6 }}>aj obchodník</span>}{e.alsoEzTechnik && <span className="spill spill-active" style={{ marginLeft: 6 }}>EZ technik</span>}{e.alsoVeduciDispecer && <span className="spill spill-active" style={{ marginLeft: 6 }}>vedúci dispečer</span>}</td>
+                <td data-label="Depo" className="who-hide-mobile">{e.depo || "—"}</td>
+                <td data-label="Telefón" className="tnum">{e.phone || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td data-label="Email" className="who-hide-mobile">{e.email || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td data-label="Prepojený účet" className="who-hide-mobile">
                   {linkedProfile ? (
-                    <span className="badge badge-ok">{linkedProfile.name}</span>
+                    <span>✓ {linkedProfile.name}</span>
                   ) : (
-                    <span style={{ color: "var(--text-dim)" }}>— nepriradený —</span>
+                    <span className="spill spill-wait">Nepriradený</span>
                   )}
                 </td>
-                <td data-label="Stav">{e.archived ? <span className="badge badge-danger">Archivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+                <td data-label="Stav" className="who-hide-mobile">{statusPill}</td>
                 <td className="td-actions" style={{ textAlign: "right" }}>
                   <KebabMenu
+                    label="⋯"
+                    name="Ďalšie akcie"
                     actions={[
                       { label: "Upraviť", onClick: () => onEdit(e) },
                       { label: e.archived ? "Aktivovať" : "Archivovať", onClick: () => onArchive(e) },
@@ -14873,26 +14849,30 @@ function CarrierPickModal({ customers, onPick, onClose }) {
   return (
     <Modal title="Firma externého šoféra" onClose={onClose} elevated>
       <Field label="Hľadať v Zákazníkoch (názov alebo IČO)"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} /></Field>
-      {hits.map((c) => (
-        <button key={c.id} className="btn btn-ghost" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4 }} onClick={() => onPick({ id: c.id, name: c.firma })}>
-          {c.firma}{c.ico ? ` · IČO ${c.ico}` : ""}
-        </button>
-      ))}
-      {q.trim() && !hits.length && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Nenašla sa — pridajte ju nižšie.</div>}
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>Nová firma (uloží sa aj do Zákazníkov)</div>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+      {hits.length > 0 && (
+        <div className="flist">
+          {hits.map((c) => (
+            <button key={c.id} type="button" onClick={() => onPick({ id: c.id, name: c.firma })}>
+              <b>{c.firma}</b>{c.ico && <small className="tnum">IČO {c.ico}</small>}
+            </button>
+          ))}
+        </div>
+      )}
+      {q.trim() && !hits.length && <div className="fhint" style={{ marginTop: -6, marginBottom: 8 }}>Nenašla sa — pridajte ju nižšie.</div>}
+      <div className="flegend">Alebo nová firma <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, color: "var(--text-dim)" }}>(uloží sa aj do Zákazníkov)</span></div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
         <Field label="Názov firmy"><input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="IČO"><input value={newIco} onChange={(e) => setNewIco(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
       {newName.trim() && similarCustomers(customers, newName, newIco).map((c) => (
-        <button key={c.id} className="btn btn-ghost" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4, color: "var(--warn)" }} onClick={() => onPick({ id: c.id, name: c.firma })}>
-          ⚠ Už existuje podobná: {c.firma}{c.ico ? ` · IČO ${c.ico}` : ""} — použiť ju
-        </button>
+        <div key={c.id} className="fnote fnote-y" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <span>⚠ Už existuje podobná: <b>{c.firma}</b>{c.ico ? ` · IČO ${c.ico}` : ""}</span>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 36 }} onClick={() => onPick({ id: c.id, name: c.firma })}>Použiť ju</button>
+        </div>
       ))}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={() => onPick(null)}>Bez firmy</button>
+      <FormFoot cancel={false} confirm left={<button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => onPick(null)}>Bez firmy</button>}>
         <button className="btn btn-accent" disabled={!newName.trim() || customers.some((c) => (c.firma || "").trim().toLowerCase() === newName.trim().toLowerCase())} onClick={() => onPick({ newName: newName.trim(), ico: newIco.trim() })}>Pridať firmu</button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -14932,66 +14912,80 @@ function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees 
   const isSalesperson = role === "obchodnik" || alsoObchodnik;
 
   return (
-    <Modal title={existing ? "Upraviť zamestnanca" : "Pridať zamestnanca"} onClose={onClose}>
-      <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Rola *">
-        <select value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value === "externy_sofer" && !carrier) setPickCarrier(true); }} style={{ width: "100%" }}>
-          {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-        </select>
-      </Field>
-      {role === "externy_sofer" && (
-        <Field label="Firma (dopravca)">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ flex: 1 }}>{carrier?.name || <span style={{ color: "var(--text-dim)" }}>— bez firmy —</span>}</span>
-            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setPickCarrier(true)}>{carrier ? "Zmeniť" : "Vybrať firmu"}</button>
+    <Modal title={existing ? "Upraviť zamestnanca" : "Pridať zamestnanca"} onClose={onClose} xwide>
+      <div className="job-form-cols">
+        <fieldset>
+          <legend>ZAMESTNANEC</legend>
+          <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
+          <Field label="Rola *">
+            <select value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value === "externy_sofer" && !carrier) setPickCarrier(true); }} style={{ width: "100%" }}>
+              {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </Field>
+          {role === "externy_sofer" && (
+            <Field label="Firma (dopravca)">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 15 }}>{carrier?.name || <span style={{ color: "var(--text-dim)" }}>— bez firmy —</span>}</span>
+                <button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => setPickCarrier(true)}>{carrier ? "Zmeniť" : "Vybrať firmu"}</button>
+              </div>
+            </Field>
+          )}
+          {pickCarrier && <CarrierPickModal customers={customers} onPick={pickedCarrier} onClose={() => setPickCarrier(false)} />}
+          <div className="fgrid2">
+            <Field label="Depo *">
+              <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— vybrať depo —</option>
+                {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </Field>
+            {role === "technik" && (
+              <Field label="Skratka"><input value={skratka} onChange={(e) => setSkratka(e.target.value)} style={{ width: "100%" }} /></Field>
+            )}
           </div>
-        </Field>
-      )}
-      {pickCarrier && <CarrierPickModal customers={customers} onPick={pickedCarrier} onClose={() => setPickCarrier(false)} />}
-      <Field label="Depo *">
-        <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— vybrať depo —</option>
-          {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Field>
-      {role === "technik" && (
-        <Field label="Skratka"><input value={skratka} onChange={(e) => setSkratka(e.target.value)} style={{ width: "100%" }} /></Field>
-      )}
-      {role !== "obchodnik" && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
-          <input type="checkbox" checked={alsoObchodnik} onChange={(e) => setAlsoObchodnik(e.target.checked)} />
-          Počítať aj ako obchodníka (objaví sa v zozname obchodníkov pri zákazkách/rezerváciách)
-        </label>
-      )}
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
-        <input type="checkbox" checked={alsoEzTechnik} onChange={(e) => setAlsoEzTechnik(e.target.checked)} />
-        Revízny technik EZ (vidí a spracúva frontu záznamov z merania VTZ EZ)
-      </label>
-      {DISPATCHER_ROLES.includes(role) && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "8px 0 14px" }}>
-          <input type="checkbox" checked={alsoVeduciDispecer} onChange={(e) => setAlsoVeduciDispecer(e.target.checked)} />
-          Vedúci dispečer (v Požičovni → Dispečeri nastavuje zástupy dispečerov; dostáva upozornenia „Prepravy bez šoféra“)
-        </label>
-      )}
-      {isSalesperson && (
-        <Field label="Farba v kalendári (voliteľné)">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: 44, height: 30, padding: 2, border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }} />
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Použije sa pri jeho zákazkách/rezerváciách v Kalendári</span>
+        </fieldset>
+        <fieldset>
+          <legend>KONTAKT A PRIHLÁSENIE</legend>
+          <div className="fgrid2">
+            <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
+            <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
           </div>
-        </Field>
-      )}
-      <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Prihlasovací účet">
-        <select value={linkedUserId} onChange={(e) => setLinkedUserId(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— nepriradený —</option>
-          {accountOptions.map((p) => <option key={p.id} value={p.id}>{p.name}{p.email ? ` (${p.email})` : ""}</option>)}
-        </select>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-          Účet dostane rovnakú rolu ako zamestnanec — rozhoduje o tom, čo človek v platforme uvidí a môže robiť.
-        </div>
-      </Field>
+          <Field label="Prihlasovací účet">
+            <select value={linkedUserId} onChange={(e) => setLinkedUserId(e.target.value)} style={{ width: "100%" }}>
+              <option value="">— nepriradený —</option>
+              {accountOptions.map((p) => <option key={p.id} value={p.id}>{p.name}{p.email ? ` (${p.email})` : ""}</option>)}
+            </select>
+            <div className="fhint">
+              Účet dostane rovnakú rolu ako zamestnanec — rozhoduje o tom, čo človek v platforme uvidí a môže robiť.
+            </div>
+          </Field>
+          <div className="flegend" style={{ marginTop: 6 }}>ĎALŠIE ÚLOHY</div>
+          {role !== "obchodnik" && (
+            <label className="fck">
+              <input type="checkbox" checked={alsoObchodnik} onChange={(e) => setAlsoObchodnik(e.target.checked)} />
+              <span>Počítať aj ako obchodníka<small>objaví sa v zozname obchodníkov pri zákazkách/rezerváciách</small></span>
+            </label>
+          )}
+          <label className="fck">
+            <input type="checkbox" checked={alsoEzTechnik} onChange={(e) => setAlsoEzTechnik(e.target.checked)} />
+            <span>Revízny technik EZ<small>vidí a spracúva frontu záznamov z merania VTZ EZ</small></span>
+          </label>
+          {DISPATCHER_ROLES.includes(role) && (
+            <label className="fck">
+              <input type="checkbox" checked={alsoVeduciDispecer} onChange={(e) => setAlsoVeduciDispecer(e.target.checked)} />
+              <span>Vedúci dispečer<small>v Požičovni → Dispečeri nastavuje zástupy dispečerov; dostáva upozornenia „Prepravy bez šoféra“</small></span>
+            </label>
+          )}
+          {isSalesperson && (
+            <Field label="Farba v kalendári (voliteľné)">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: 44, height: 32, padding: 2, border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }} />
+                <span className="fhint" style={{ marginTop: 0 }}>Použije sa pri jeho zákazkách/rezerváciách v Kalendári</span>
+              </div>
+            </Field>
+          )}
+        </fieldset>
+      </div>
+      <FormFoot missing={[!name.trim() && "meno", !role && "rola", !depo.trim() && "depo"].filter(Boolean)}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -15014,6 +15008,7 @@ function AddEmployeeModal({ existing, assignableRoles, profiles = [], employees 
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
       </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -15023,14 +15018,14 @@ function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) 
   const visible = drivers.filter((d) => (showArchived ? true : !d.archived));
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
+      <div className="tbar" style={{ justifyContent: "flex-end" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
       </div>
-      <div className="panel">
-        <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
               <th>Meno</th>
@@ -15039,24 +15034,22 @@ function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) 
               <th>Depo</th>
               <th>Auto</th>
               <th>Dnes</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td className="td-plain" colSpan={7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
+              <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni šoféri.</td></tr>
             )}
             {visible.map((d) => {
               const activeJob = jobs.find((j) => j.driverId === d.id && j.status !== "completed" && j.startDate <= today && (!j.endDate || j.endDate >= today));
               return (
                 <tr key={d.id} onClick={() => onOpenCard(d)} style={{ cursor: "pointer", opacity: d.archived ? 0.6 : 1 }}>
                   <td className="td-plain" style={{ fontWeight: 600 }}>{d.name}{d.archived ? " (archivovaný)" : ""}</td>
-                  <td className="mono" data-label="Telefón">{d.phone || "—"}</td>
-                  <td className="mono" data-label="Email">{d.email || "—"}</td>
+                  <td className="tnum" data-label="Telefón">{d.phone || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                  <td data-label="Email">{d.email || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
                   <td data-label="Depo">{d.depo || "—"}</td>
-                  <td className="mono" data-label="Auto">{vehicleByEmployeeId[d.id]?.spz || "—"}</td>
-                  <td data-label="Dnes">{activeJob ? <StatusBadge status="active" /> : <StatusBadge status="free" />}</td>
-                  <td className="td-plain"></td>
+                  <td className="tnum" data-label="Auto">{vehicleByEmployeeId[d.id]?.spz ? <strong>{vehicleByEmployeeId[d.id].spz}</strong> : <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                  <td data-label="Dnes">{activeJob ? <span className="spill spill-active">Na zákazke</span> : <span className="spill spill-done">Voľný</span>}</td>
                 </tr>
               );
             })}
@@ -15088,17 +15081,17 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <SearchInput placeholder="Hľadať firmu…" value={search} onChange={setSearch} style={{ minWidth: 240 }} />
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať firmu…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         {canAdd && (
-          <div style={{ display: "flex", gap: 8 }}>
-            {isAdminUser(user) && <button className="btn btn-ghost" onClick={onImport}>Import zákazníkov</button>}
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            {isAdminUser(user) && <button className="btn btn-outline" onClick={onImport}>Import zákazníkov</button>}
             <button className="btn btn-accent" onClick={onAdd}>+ Pridať zákazníka</button>
           </div>
         )}
       </div>
-      <div className="panel" style={{ padding: 0, overflowX: "clip" }}>
-        <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
               <th>Firma</th>
@@ -15116,13 +15109,13 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
             {visible.map((c) => (
               <tr key={c.id} onClick={() => onOpenCard(c)} style={{ cursor: "pointer" }}>
                 <td className="td-plain" style={{ fontWeight: 600 }}>{c.firma}</td>
-                <td className="mono" data-label="IČO">{c.ico || "—"}</td>
-                <td className="mono" data-label="Číslo odberateľa">{c.cisloOdberatela || "—"}</td>
-                <td data-label="Kontaktné osoby">{(c.contacts || []).length || "—"}</td>
-                <td data-label="Aktívne zákazky">{jobCountFor(c) || "—"}</td>
+                <td className="tnum" data-label="IČO">{c.ico || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td className="tnum" data-label="Číslo odberateľa">{c.cisloOdberatela || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td className="tnum" data-label="Kontaktné osoby">{(c.contacts || []).length || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td className="tnum" data-label="Aktívne zákazky">{jobCountFor(c) || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
                 <td className="td-actions">
                   {isBlacklisted(c) && (
-                    <span className="badge badge-danger" style={{ fontSize: 10 }}>Blacklist</span>
+                    <span className="spill spill-problem">⚠ Blacklist</span>
                   )}
                 </td>
               </tr>
@@ -15148,35 +15141,39 @@ function AddCustomerModal({ customers = [], onOpenExisting, onClose, onSave }) {
       <Field label="Firma *">
         <input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <Field label="IČO">
-        <input value={ico} onChange={(e) => setIco(e.target.value)} style={{ width: "100%" }} />
-      </Field>
-      <Field label="Číslo odberateľa">
-        <input value={cisloOdberatela} onChange={(e) => setCisloOdberatela(e.target.value)} style={{ width: "100%" }} />
-      </Field>
-      <Field label="Všeobecný email firmy">
-        <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
-      </Field>
-      <Field label="Všeobecný telefón firmy">
-        <input value={telefon} onChange={(e) => setTelefon(e.target.value)} style={{ width: "100%" }} />
-      </Field>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-        Kontaktné osoby (meno, funkcia, telefón, e-mail) pridáš po uložení, priamo v karte zákazníka.
-      </div>
       {similar.length > 0 && (
-        <div role="alert" style={{ background: "var(--warn-bg, #fdf6ea)", border: "1px solid var(--warn)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
+        <div role="alert" className="fnote fnote-y" style={{ marginTop: -6 }}>
           <strong>{sameName ? "Zákazník s týmto názvom už existuje:" : "Podobný zákazník už existuje — nie je to ten istý?"}</strong>
           {similar.map((c) => (
-            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
               <span>{c.firma}{c.ico ? ` · IČO ${c.ico}` : ""}</span>
-              {onOpenExisting && <button className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => onOpenExisting(c)}>Otvoriť</button>}
+              {onOpenExisting && <button className="btn btn-outline" style={{ minHeight: 36 }} onClick={() => onOpenExisting(c)}>Otvoriť</button>}
             </div>
           ))}
         </div>
       )}
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ firma, ico, cisloOdberatela, email, telefon })}>
-        {similar.length && !sameName ? "Aj tak pridať nového" : "Uložiť"}
-      </button>
+      <div className="fgrid2">
+        <Field label="IČO">
+          <input value={ico} onChange={(e) => setIco(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+        <Field label="Číslo odberateľa">
+          <input value={cisloOdberatela} onChange={(e) => setCisloOdberatela(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+        <Field label="Všeobecný email firmy">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+        <Field label="Všeobecný telefón firmy">
+          <input value={telefon} onChange={(e) => setTelefon(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+      </div>
+      <div className="fhint" style={{ marginTop: 0, marginBottom: 16 }}>
+        Kontaktné osoby (meno, funkcia, telefón, e-mail) pridáš po uložení, priamo v karte zákazníka.
+      </div>
+      <FormFoot missing={!firma.trim() ? ["firma"] : []}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ firma, ico, cisloOdberatela, email, telefon })}>
+          {similar.length && !sameName ? "Aj tak pridať nového" : "Uložiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -15190,17 +15187,23 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete, startEditing }
   const [email, setEmail] = useState(contact.email || "");
   if (editing) {
     return (
-      <div className="panel" style={{ padding: 10, marginBottom: 8 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-          <Field label="Meno"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Funkcia"><input value={role} onChange={(e) => setRole(e.target.value)} /></Field>
-          <Field label="Telefón"><input value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
-          <Field label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+      <div
+        className="fnote fnote-i"
+        style={{ padding: 14 }}
+        // Enter v poli kontaktu uloží kontakt.
+        onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); e.currentTarget.querySelector(".btn-black")?.click(); } }}
+      >
+        <div className="fgrid2">
+          <Field label="Meno"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", minHeight: 44, fontSize: 15 }} /></Field>
+          <Field label="Funkcia"><input value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", minHeight: 44, fontSize: 15 }} /></Field>
+          <Field label="Telefón"><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%", minHeight: 44, fontSize: 15 }} /></Field>
+          <Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", minHeight: 44, fontSize: 15 }} /></Field>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost" onClick={() => { setEditing(false); if (startEditing) onDelete(); }}>Zrušiť</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-outline" style={{ minHeight: 44, fontSize: 14 }} onClick={() => { setEditing(false); if (startEditing) onDelete(); }}>Zrušiť</button>
           <button
-            className="btn btn-accent"
+            className="btn btn-black"
+            style={{ minHeight: 44, fontSize: 14 }}
             onClick={() => {
               onEdit({ name, role, phone, email });
               setEditing(false);
@@ -15213,29 +15216,29 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete, startEditing }
     );
   }
   return (
-    <div className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    <div style={{ padding: "12px 0", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontWeight: 600 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontWeight: 600, fontSize: 15 }}>
           {contact.name || "—"}
-          {contact.role && <span className="badge">{contact.role}</span>}
+          {contact.role && <span className="spill">{contact.role}</span>}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4, fontSize: 12, color: "var(--text-dim)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 4, fontSize: 14 }}>
           {contact.phone && (
-            <a href={`tel:${contact.phone}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <PhoneIcon size={12} /> {contact.phone}
+            <a href={`tel:${contact.phone}`} className="tnum" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text)" }}>
+              <PhoneIcon size={14} /> {contact.phone}
             </a>
           )}
           {contact.email && (
-            <a href={`mailto:${contact.email}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <MailIcon size={12} /> {contact.email}
+            <a href={`mailto:${contact.email}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text)", overflowWrap: "anywhere" }}>
+              <MailIcon size={14} /> {contact.email}
             </a>
           )}
         </div>
       </div>
       {canEdit && (
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px" }} onClick={() => setEditing(true)}>Upraviť</button>
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)" }} onClick={() => setConfirmingDelete(true)}>Zmazať</button>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          <button className="btn btn-outline" style={{ minHeight: 40, fontSize: 14 }} onClick={() => setEditing(true)}>Upraviť</button>
+          <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minHeight: 40, minWidth: 40, padding: "0 10px", borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať", danger: true, onClick: () => setConfirmingDelete(true) }]} />
         </div>
       )}
       {confirmingDelete && (
@@ -15276,8 +15279,38 @@ function CustomerDetailModal({
   const contract = framoveZmluvy.find((z) => (z.najomca || "").toLowerCase() === (customer.firma || "").toLowerCase());
 
   return (
-    <Modal eyebrow="Zákazník" title={customer.firma} onClose={() => { forgetBinder(); onClose(); }}>
+    <Modal
+      eyebrow="Zákazník"
+      title={<>{customer.firma}{customer.ico && <span className="side-title-sub">IČO {customer.ico}</span>}{blEntry && <span className="spill spill-problem">⚠ Blacklist</span>}</>}
+      onClose={() => { forgetBinder(); onClose(); }}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Číslo odberateľa</span><b>{customer.cisloOdberatela || "—"}</b></div>
+          <div><span>Aktívne zákazky</span><b className="tnum">{activeJobs.length}</b></div>
+          <div><span>Rámcová zmluva</span><b>{contract ? `Áno — č. ${contract.cisloRZ || "—"}` : "Nie"}</b></div>
+          <div><span>Blacklist</span><b style={blEntry ? { color: "var(--danger)" } : undefined}>{blEntry ? "Áno" : "Nie"}</b></div>
+        </div>
+      }
+      footer={((canDelete && blockingRefs.length === 0) || (canEdit && !editingInfo)) && (
+        <>
+          {canDelete && blockingRefs.length === 0 && (
+            <KebabMenu up label="⋯" actions={[{ label: "Zmazať zákazníka →", danger: true, onClick: onDeleteCustomer }]} />
+          )}
+          {canEdit && !editingInfo && (
+            <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={() => {
+              const snap = { firma: customer.firma || "", ico: customer.ico || "", cisloOdberatela: customer.cisloOdberatela || "", email: customer.email || "", telefon: customer.telefon || "" };
+              infoSnapRef.current = snap;
+              setFirma(snap.firma); setIco(snap.ico); setCisloOdberatela(snap.cisloOdberatela); setEmail(snap.email); setTelefon(snap.telefon);
+              setBinderTab(null);
+              setEditingInfo(true);
+            }}>Upraviť údaje firmy →</button>
+          )}
+        </>
+      )}
+    >
       <BinderLayout
+        horizontal
         tabs={[{ id: "kontakty", label: "Kontakty", count: (customer.contacts || []).length, title: "Kontaktné osoby" }]}
         active={binderTab}
         setActive={setBinderTab}
@@ -15338,41 +15371,21 @@ function CustomerDetailModal({
           </div>
         </>
       ) : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>IČO</div><div style={{ fontWeight: 600 }}>{customer.ico || "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>ČÍSLO ODBERATEĽA</div><div style={{ fontWeight: 600 }}>{customer.cisloOdberatela || "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: "var(--text-dim)" }}>VŠEOBECNÝ EMAIL/TELEFÓN</div><div style={{ fontWeight: 600 }}>{customer.email || "—"} {customer.telefon ? `· ${customer.telefon}` : ""}</div></div>
-          </div>
-          {canEdit && (
-            <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={() => {
-              const snap = { firma: customer.firma || "", ico: customer.ico || "", cisloOdberatela: customer.cisloOdberatela || "", email: customer.email || "", telefon: customer.telefon || "" };
-              infoSnapRef.current = snap;
-              setFirma(snap.firma); setIco(snap.ico); setCisloOdberatela(snap.cisloOdberatela); setEmail(snap.email); setTelefon(snap.telefon);
-              setEditingInfo(true);
-            }}>Upraviť údaje firmy →</button>
-          )}
-        </>
+        <dl className="side-dl">
+          <dt>Firma</dt><dd>{customer.firma || "—"}</dd>
+          <dt>IČO</dt><dd className="tnum">{customer.ico || "—"}</dd>
+          <dt>Číslo odberateľa</dt><dd className="tnum">{customer.cisloOdberatela || "—"}</dd>
+          <dt>Všeobecný email</dt><dd>{customer.email ? <a href={`mailto:${customer.email}`}>{customer.email}</a> : "—"}</dd>
+          <dt>Všeobecný telefón</dt><dd className="tnum">{customer.telefon ? <a href={`tel:${customer.telefon}`}>{customer.telefon}</a> : "—"}</dd>
+          <dt>Aktívne zákazky</dt><dd className="tnum"><strong>{activeJobs.length}</strong></dd>
+          <dt>Blacklist</dt><dd>{blEntry ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>⚠ Áno — {blEntry.dovod || "bez uvedeného dôvodu"}</span> : "Nie"}</dd>
+          <dt>Rámcová zmluva</dt><dd>{contract ? <span style={{ fontWeight: 600 }}>Áno — č. {contract.cisloRZ || "—"}</span> : "Nie"}</dd>
+        </dl>
       )}
 
-      <div style={{ fontWeight: 700, marginBottom: 8, marginTop: 20 }}>Súhrn</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, marginBottom: 14 }}>
-        <div>Aktívne zákazky: <strong>{activeJobs.length}</strong></div>
-        <div>Blacklist: {blEntry ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>Áno — {blEntry.dovod || "bez uvedeného dôvodu"}</span> : "Nie"}</div>
-        <div>Rámcová zmluva: {contract ? <span style={{ fontWeight: 600 }}>Áno — č. {contract.cisloRZ || "—"}</span> : "Nie"}</div>
-      </div>
-
-      {canDelete && (
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 10 }}>
-          {blockingRefs.length > 0 ? (
-            <div style={{ fontSize: 12, color: "var(--danger)" }}>
-              Zákazníka nie je možné zmazať — má naviazané: {blockingRefs.join(", ")}. Najprv doriešte tieto veci.
-            </div>
-          ) : (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDeleteCustomer}>
-              Zmazať zákazníka →
-            </button>
-          )}
+      {canDelete && blockingRefs.length > 0 && (
+        <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 14 }}>
+          Zákazníka nie je možné zmazať — má naviazané: {blockingRefs.join(", ")}. Najprv doriešte tieto veci.
         </div>
       )}
       </>} />
@@ -15932,7 +15945,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
             overflow: "hidden",
           }}
         >
-          <div style={{ padding: "10px 12px", background: "var(--accent)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "10px 12px", background: "var(--accent-fill)", color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 26, height: 26, borderRadius: 7, background: "#1a1a1a", color: "#e6392e", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <ChatBubbleIcon size={15} />
@@ -15954,7 +15967,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
                   <button
                     onClick={() => { clearConversation(); setConfirmingClear(false); }}
                     title="Naozaj vymazať celý rozhovor"
-                    style={{ background: "#fff", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "3px 8px" }}
+                    style={{ background: "#fff", border: "none", color: "var(--accent-fill)", cursor: "pointer", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "3px 8px" }}
                   >
                     Vymazať?
                   </button>
@@ -15985,7 +15998,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
                 key={i}
                 style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  background: m.role === "user" ? "var(--accent)" : "var(--panel-2)",
+                  background: m.role === "user" ? "var(--accent-fill)" : "var(--panel-2)",
                   color: m.role === "user" ? "#fff" : "var(--text)",
                   padding: "6px 10px",
                   borderRadius: 8,
@@ -16045,18 +16058,18 @@ function PhoneDirectoryModal({ employees, onClose }) {
   return (
     <Modal title="Telefónny zoznam" onClose={onClose}>
       <Field label="Hľadať meno, rolu alebo depo">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} />
+        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}>
-        {list.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "10px 0" }}>Nikto nezodpovedá hľadaniu.</div>}
+      <div className={list.length ? "flist" : undefined} style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", marginBottom: 0 }}>
+        {list.length === 0 && <div className="fnote fnote-i">Nikto nezodpovedá hľadaniu.</div>}
         {list.map((e) => (
-          <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{roleLabel(e.role)}{e.depo ? ` · ${e.depo}` : ""}</div>
+          <div key={e.id} className="frow" style={{ flexWrap: "nowrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{e.name}</div>
+              <div className="cell-sub">{roleLabel(e.role)}{e.depo ? ` · ${e.depo}` : ""}</div>
             </div>
-            <a href={`tel:${e.phone}`} className="btn btn-accent" style={{ fontSize: 12, textDecoration: "none" }}>
-              📞 {e.phone}
+            <a href={`tel:${e.phone}`} className="btn btn-outline tnum" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 15 }}>
+              <PhoneIcon size={15} /> {e.phone}
             </a>
           </div>
         ))}
@@ -16073,31 +16086,40 @@ function DriverCardModal({ driver, jobs, today, onClose, vehicleSpz }) {
     .slice(0, 8);
 
   return (
-    <Modal eyebrow="Vodič" title={d.name} onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Telefón" value={d.phone} />
-        <CardField label="Email" value={d.email} />
-        <CardField label="Depo" value={d.depo} />
-        <CardField label="Auto" value={vehicleSpz} />
-      </div>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-        Nadchádzajúce zákazky
-      </div>
-      {upcoming.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>Zatiaľ nič naplánované.</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-          {upcoming.map((j) => (
-            <div key={j.id} style={{ fontSize: 12, paddingLeft: 8, borderLeft: "2px solid var(--border)" }}>
-              <span className="mono" style={{ fontWeight: 600 }}>{fmtDate(j.startDate)}</span>
-              {" · "}
-              <span style={{ fontWeight: 600 }}>{j.toLocation}</span>
-              <span style={{ color: "var(--text-dim)" }}>{j.customer ? " · " + j.customer : ""}</span>
-            </div>
-          ))}
+    <Modal
+      eyebrow="Vodič"
+      title={<>{d.name}{d.depo && <span className="side-title-sub">{d.depo}</span>}</>}
+      onClose={onClose}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Depo</span><b>{d.depo || "—"}</b></div>
+          <div><span>Auto</span><b>{vehicleSpz || "—"}</b></div>
+          <div><span>Telefón</span><b className="tnum">{d.phone || "—"}</b></div>
+          <div><span>Email</span><b>{d.email || "—"}</b></div>
         </div>
+      }
+    >
+      <dl className="side-dl">
+        <dt>Telefón</dt><dd className="tnum">{d.phone ? <a href={`tel:${d.phone}`}>{d.phone}</a> : "—"}</dd>
+        <dt>Email</dt><dd>{d.email ? <a href={`mailto:${d.email}`}>{d.email}</a> : "—"}</dd>
+        <dt>Depo</dt><dd>{d.depo || "—"}</dd>
+        <dt>Auto</dt><dd>{vehicleSpz || "—"}</dd>
+      </dl>
+      <div className="side-sec">Nadchádzajúce zákazky</div>
+      {upcoming.length === 0 ? (
+        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 14 }}>Zatiaľ nič naplánované.</div>
+      ) : (
+        <dl className="side-dl">
+          {upcoming.map((j) => (
+            <React.Fragment key={j.id}>
+              <dt className="tnum">{fmtDate(j.startDate)}</dt>
+              <dd><b>{j.toLocation}</b><span style={{ color: "var(--text-dim)" }}>{j.customer ? " · " + j.customer : ""}</span></dd>
+            </React.Fragment>
+          ))}
+        </dl>
       )}
-      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 14 }}>
         Úprava údajov a archivácia sa robí v Administratíve → Zamestnanci.
       </div>
     </Modal>
@@ -16182,17 +16204,19 @@ function AddMachineModal({ existing, machineModels, machines, onClose, onSave, o
   }
 
   return (
-    <Modal title={existing ? "Upraviť údaje stroja" : "Pridať stroj"} onClose={onClose}>
+    <Modal title={existing ? "Upraviť údaje stroja" : "Pridať stroj"} onClose={onClose} xwide={(isStroj || !existing)}>
+      <div className="job-form-cols">
+        <fieldset>
+          <legend>STROJ</legend>
       <Field label="Sériové číslo *"><input value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} /></Field>
       {duplicateMachine && (
-        <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", background: "var(--warn-bg, #fff8e1)", border: "1px solid #f0b429", borderRadius: 6, padding: "8px 10px", marginBottom: 12 }}>
-          ⚠ Stroj s týmto sériovým číslom už existuje: {duplicateMachine.code}
+        <div className="fnote fnote-y" style={{ marginTop: -6 }}>
+          ⚠ Stroj s týmto sériovým číslom už existuje: <b className="tnum">{duplicateMachine.code}</b>
           {duplicateMachine.type ? ` · ${duplicateMachine.type}` : ""}
           {duplicateMachine.depo ? ` · ${duplicateMachine.depo}` : ""}
           {duplicateMachine.archived ? " (archivovaný)" : ""}. Uložením vznikne duplicita.
         </div>
       )}
-      <Field label="Poznámka (voliteľné, napr. VOLVO nie)"><input value={note} onChange={(e) => setNote(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Objekt *">
         <select value={objekt} onChange={(e) => setObjekt(e.target.value)} style={{ width: "100%" }}>
           {MACHINE_OBJEKT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -16253,7 +16277,7 @@ function AddMachineModal({ existing, machineModels, machines, onClose, onSave, o
         <Field label="Názov príslušenstva *"><input value={type} onChange={(e) => setType(e.target.value)} style={{ width: "100%" }} /></Field>
       )}
       {isExterny && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14, background: "var(--panel-2)", padding: "8px 12px", borderRadius: 6 }}>
+        <div className="fnote fnote-i">
           Externý stroj — model sa tu nezadáva, zobrazí sa ako "Externý stroj". Pri konkrétnej zákazke sa dá názov upraviť (napr. na skutočný model subdodávky).
         </div>
       )}
@@ -16264,37 +16288,55 @@ function AddMachineModal({ existing, machineModels, machines, onClose, onSave, o
           {DEPO_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
       </Field>
+      <Field label="Poznámka"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Voliteľné, napr. VOLVO nie" style={{ width: "100%" }} /></Field>
+        </fieldset>
+        {(isStroj || !existing) && (
+        <fieldset>
+          {isStroj && (
+            <>
+            <legend>TERMÍNY REVÍZIÍ</legend>
+            <div className="fgrid2">
+              <Field label="Najbližšia revízia ZZ"><input type="date" value={revizia} onChange={(e) => setRevizia(e.target.value)} style={{ width: "100%" }} /></Field>
+              <label className="fck" style={{ marginTop: 32 }}>
+                <input type="checkbox" checked={trackRevisions} onChange={(e) => setTrackRevisions(e.target.checked)} />
+                <span>Sledovať revíziu ZZ</span>
+              </label>
+            </div>
+            <div className="fgrid2">
+              <Field label="Najbližšia revízia EZ"><input type="date" value={reviziaEZ} onChange={(e) => setReviziaEZ(e.target.value)} style={{ width: "100%" }} /></Field>
+              <label className="fck" style={{ marginTop: 32 }}>
+                <input type="checkbox" checked={trackRevisionsEZ} onChange={(e) => setTrackRevisionsEZ(e.target.checked)} />
+                <span>Sledovať revíziu EZ</span>
+              </label>
+            </div>
+            <div className="fgrid2">
+              <Field label="Najbližšia úradná skúška"><input type="date" value={uradnaSkuska} onChange={(e) => setUradnaSkuska(e.target.value)} style={{ width: "100%" }} /></Field>
+              <label className="fck" style={{ marginTop: 32 }}>
+                <input type="checkbox" checked={trackUradnaSkuska} onChange={(e) => setTrackUradnaSkuska(e.target.checked)} />
+                <span>Sledovať úradnú skúšku</span>
+              </label>
+            </div>
+            <div className="fhint" style={{ marginTop: -4, marginBottom: 14 }}>Niektoré stroje revíziu/skúšku proste nemajú — vtedy zrušte „Sledovať“.</div>
+            </>
+          )}
+          {!existing && (
+            <>
+              <div className="flegend">PO ULOŽENÍ</div>
+              <label className="fck">
+                <input type="checkbox" checked={prepareForRental} onChange={(e) => setPrepareForRental(e.target.checked)} />
+                <span>Pripraviť do požičovne<small>založí poškodenie „Príprava do požičovne"; kým sa nevyrieši, na stroj sa nedá vytvoriť zákazka</small></span>
+              </label>
+            </>
+          )}
+        </fieldset>
+        )}
+      </div>
 
-      {isStroj && (
-        <>
-          <Field label="Dátum najbližšej revízie ZZ"><input type="date" value={revizia} onChange={(e) => setRevizia(e.target.value)} style={{ width: "100%" }} /></Field>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
-            <input type="checkbox" checked={trackRevisions} onChange={(e) => setTrackRevisions(e.target.checked)} />
-            Sledovať revíziu ZZ (niektoré stroje ju proste nemajú)
-          </label>
-          <Field label="Dátum najbližšej revízie EZ"><input type="date" value={reviziaEZ} onChange={(e) => setReviziaEZ(e.target.value)} style={{ width: "100%" }} /></Field>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
-            <input type="checkbox" checked={trackRevisionsEZ} onChange={(e) => setTrackRevisionsEZ(e.target.checked)} />
-            Sledovať revíziu EZ (niektoré stroje ju proste nemajú)
-          </label>
-          <Field label="Dátum najbližšej úradnej skúšky"><input type="date" value={uradnaSkuska} onChange={(e) => setUradnaSkuska(e.target.value)} style={{ width: "100%" }} /></Field>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
-            <input type="checkbox" checked={trackUradnaSkuska} onChange={(e) => setTrackUradnaSkuska(e.target.checked)} />
-            Sledovať úradnú skúšku (niektoré stroje ju proste nemajú)
-          </label>
-        </>
-      )}
-
-      {!existing && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
-          <input type="checkbox" checked={prepareForRental} onChange={(e) => setPrepareForRental(e.target.checked)} />
-          Pripraviť do požičovne — založí poškodenie „Príprava do požičovne"; kým sa nevyrieši, na stroj sa nedá vytvoriť zákazka
-        </label>
-      )}
-
-      <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
-        {existing ? "Uložiť zmeny" : "Uložiť"}
-      </button>
+      <FormFoot missing={[!code.trim() && "sériové číslo", !isExterny && !type.trim() && (objekt === "Príslušenstvo" ? "názov" : "model"), !depo.trim() && "depo"].filter(Boolean)}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
+          {existing ? "Uložiť zmeny" : "Uložiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -16314,21 +16356,22 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
   const employeeById = Object.fromEntries(employees.map((e) => [e.id, e]));
   return (
     <div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+      <h1 className="page-h1">Autá</h1>
+      <p className="page-intro">
         Vozový park — STK a emisná kontrola (jeden spoločný termín, robia sa vždy naraz). Priradená osoba dostane upozornenie 30 dní vopred a klikom naň otvorí kartu auta (aj bez prístupu do Administratívy).
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+      </p>
+      <div className="tbar" style={{ justifyContent: "flex-end" }}>
         <button className="btn btn-accent" onClick={onAdd}>+ Pridať auto</button>
       </div>
-      <div className="panel">
-        <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
               <th>ŠPZ</th>
               <th>Značka / model</th>
               <th>Priradená osoba</th>
               <th>STK/EK</th>
-              <th></th>
+              <th><span className="sr-only">Akcie</span></th>
             </tr>
           </thead>
           <tbody>
@@ -16339,13 +16382,13 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
               const stkEk = vehicleDateStatus(v.stkEkDate, today);
               return (
                 <tr key={v.id}>
-                  <td className="td-plain" style={{ fontWeight: 600, cursor: "pointer" }} onClick={() => onOpenCard(v)}>{v.spz || "—"}</td>
+                  <td className="td-plain tnum" style={{ fontWeight: 700, cursor: "pointer" }} onClick={() => onOpenCard(v)}>{v.spz || "—"}</td>
                   <td data-label="Značka / model">{v.znacka || "—"}</td>
-                  <td data-label="Priradená osoba">{employeeById[v.assignedEmployeeId]?.name || "— nepriradené —"}</td>
-                  <td data-label="STK/EK">{v.stkEkDate ? (stkEk.cls ? <span className={`badge ${stkEk.cls}`}>{fmtDate(v.stkEkDate)}{stkEk.label ? " · " + stkEk.label : ""}</span> : fmtDate(v.stkEkDate)) : "—"}</td>
-                  <td className="td-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onEdit(v)}>Upraviť</button>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(v)}>Zmazať</button>
+                  <td data-label="Priradená osoba">{employeeById[v.assignedEmployeeId]?.name || <span style={{ color: "var(--text-dim)" }}>— nepriradené —</span>}</td>
+                  <td data-label="STK/EK" className="tnum">{v.stkEkDate ? <>{fmtDate(v.stkEkDate)}{stkEk.cls && stkEk.label ? <span className={`spill ${stkEk.cls === "badge-danger" ? "spill-problem" : "spill-wait"}`} style={{ marginLeft: 8 }}>{stkEk.cls === "badge-danger" ? "⚠ " : ""}{stkEk.label}</span> : null}</> : <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                  <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button className="btn btn-outline" onClick={() => onEdit(v)}>Upraviť</button>{" "}
+                    <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Zmazať", danger: true, onClick: () => onDelete(v) }]} />
                   </td>
                 </tr>
               );
@@ -16364,17 +16407,21 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
   const canSave = spz.trim();
   return (
     <Modal title={existing ? "Upraviť auto" : "Pridať auto"} onClose={onClose}>
-      <Field label="ŠPZ *"><input value={spz} onChange={(e) => setSpz(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Značka / model"><input value={znacka} onChange={(e) => setZnacka(e.target.value)} style={{ width: "100%" }} /></Field>
-      <Field label="Priradená osoba (dostáva upozornenia)">
+      <div className="fgrid2">
+        <Field label="ŠPZ *"><input value={spz} onChange={(e) => setSpz(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Značka / model"><input value={znacka} onChange={(e) => setZnacka(e.target.value)} style={{ width: "100%" }} /></Field>
+      </div>
+      <Field label="Priradená osoba">
         <select value={assignedEmployeeId} onChange={(e) => setAssignedEmployeeId(e.target.value)} style={{ width: "100%" }}>
           <option value="">— nepriradené —</option>
           {employees.filter((e) => !e.archived).sort((a, b) => a.name.localeCompare(b.name)).map((e) => (
             <option key={e.id} value={e.id}>{e.name}</option>
           ))}
         </select>
+        <div className="fhint">Dostáva upozornenia (30 dní pred STK/EK).</div>
       </Field>
       <Field label="Dátum platnosti STK/EK"><input type="date" value={stkEkDate} onChange={(e) => setStkEkDate(e.target.value)} style={{ width: "100%" }} /></Field>
+      <FormFoot missing={!spz.trim() ? ["ŠPZ"] : []}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -16382,6 +16429,7 @@ function AddVehicleModal({ existing, employees, onClose, onSave }) {
       >
         {existing ? "Uložiť zmeny" : "Uložiť"}
       </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -16397,46 +16445,49 @@ function VehicleCardModal({ vehicle, employees, today, user, myEmployee, onClose
   const canEdit = can(user, "vehicle_manage") || (myEmployee && myEmployee.id === vehicle.assignedEmployeeId);
   const date = vehicle.stkEkDate;
   const status = vehicleDateStatus(date, today);
+  const pillCls = status.cls === "badge-danger" ? "spill-problem" : status.cls === "badge-warn" ? "spill-wait" : "";
 
   return (
-    <Modal eyebrow="Auto" title={<span style={{ color: "var(--accent)" }}>{vehicle.spz || "—"}</span>} onClose={onClose}>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {vehicle.znacka || "—"} · priradené: {employee?.name || "— nikto —"}
-      </div>
-      <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>STK/EK</div>
-        <div style={{ marginBottom: 4 }}>
-          {date ? (
-            status.cls ? (
-              <span className={`badge ${status.cls}`} style={{ fontSize: 13 }}>{fmtDate(date)}{status.label ? " · " + status.label : ""}</span>
-            ) : (
-              fmtDate(date)
-            )
-          ) : (
-            "— nezadané —"
-          )}
+    <Modal
+      eyebrow="Auto"
+      title={<>{vehicle.spz || "—"}{vehicle.znacka && <span className="side-title-sub">{vehicle.znacka}</span>}{pillCls && <span className={`spill ${pillCls}`}>{pillCls === "spill-problem" ? "⚠ " : ""}STK/EK {status.label}</span>}</>}
+      onClose={onClose}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Typ</span><b>{vehicle.znacka || "—"}</b></div>
+          <div><span>Priradené</span><b>{employee?.name || "— nikto —"}</b></div>
+          <div><span>STK/EK</span><b className="tnum">{date ? fmtDate(date) : "— nezadané —"}</b></div>
+          <div><span>Naposledy zmenené</span><b className="tnum">{vehicle.stkEkChangedAt ? fmtDate(vehicle.stkEkChangedAt) : "—"}</b></div>
         </div>
-        {vehicle.stkEkChangedAt && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>
-            Naposledy zmenené {fmtDate(vehicle.stkEkChangedAt)}{vehicle.stkEkChangedBy ? ` · ${vehicle.stkEkChangedBy}` : ""}
-          </div>
-        )}
-        {!canEdit ? (
-          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Len na čítanie — zadať nový dátum smie priradený zamestnanec alebo vedúci.</div>
-        ) : editing ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-            <button className="btn btn-accent" disabled={!newDate} onClick={() => { onSetDate(vehicle.id, newDate); setEditing(false); setNewDate(""); }}>Uložiť</button>
-            <button className="btn btn-ghost" onClick={() => setEditing(false)}>Zrušiť</button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn btn-accent" onClick={() => { setEditing(true); setNewDate(""); }}>Hotovo — nový dátum</button>
-            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 1)}>Odložiť o 24 h</button>
-            <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 7)}>Odložiť o 7 dní</button>
-          </div>
-        )}
-      </div>
+      }
+      footer={canEdit && !editing && (
+        <>
+          <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 1)}>Odložiť o 24 h</button>
+          <button className="btn btn-ghost" onClick={() => onSnooze(vehicle.id, 7)}>Odložiť o 7 dní</button>
+          <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={() => { setEditing(true); setNewDate(""); }}>Hotovo — nový dátum</button>
+        </>
+      )}
+    >
+      <dl className="side-dl">
+        <dt>ŠPZ</dt><dd>{vehicle.spz || "—"}</dd>
+        <dt>Typ</dt><dd>{vehicle.znacka || "—"}</dd>
+        <dt>Priradené</dt><dd>{employee?.name || "— nikto —"}</dd>
+        <dt>STK/EK</dt>
+        <dd className={`tnum${status.cls === "badge-danger" ? " warn" : ""}`}>
+          {date ? `${status.cls === "badge-danger" ? "⚠ " : ""}${fmtDate(date)}${status.cls && status.label ? " · " + status.label : ""}` : "— nezadané —"}
+        </dd>
+        {vehicle.stkEkChangedAt && <><dt>Naposledy zmenené</dt><dd className="tnum">{fmtDate(vehicle.stkEkChangedAt)}{vehicle.stkEkChangedBy ? ` · ${vehicle.stkEkChangedBy}` : ""}</dd></>}
+      </dl>
+      {!canEdit ? (
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 14 }}>Len na čítanie — zadať nový dátum smie priradený zamestnanec alebo vedúci.</div>
+      ) : editing ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
+          <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+          <button className="btn btn-accent" disabled={!newDate} onClick={() => { onSetDate(vehicle.id, newDate); setEditing(false); setNewDate(""); }}>Uložiť</button>
+          <button className="btn btn-ghost" onClick={() => setEditing(false)}>Zrušiť</button>
+        </div>
+      ) : null}
     </Modal>
   );
 }
@@ -16469,23 +16520,27 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
   const canSave = endDate && returnDepo.trim() && !dateError;
 
   return (
-    <Modal eyebrow="Ukončiť zákazku" title={<span style={{ color: "var(--accent)" }}>{machine?.code || "—"}</span>} onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-        {job.customer || job.toLocation} · od {fmtDate(job.startDate)}
+    <Modal eyebrow="Ukončiť zákazku" title={machine?.code || "—"} onClose={onClose} form>
+      <div className="fsum">
+        <div><span>Zákazník</span>{job.customer || job.toLocation}</div>
+        <div><span>Začiatok</span><span className="tnum">{fmtDate(job.startDate)}</span></div>
       </div>
       <Field label="Dátum konca zákazky *"><input type="date" value={endDate} min={job.startDate || undefined} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
-      {dateError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>{dateError}</div>}
+      {dateError && <div className="fnote fnote-r">⚠ {dateError}</div>}
       {!handoverDone && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 12 }}>
+        <label className="fck">
           <input type="checkbox" checked={notRealized} onChange={(e) => setNotRealized(e.target.checked)} />
-          Stroj neodišiel — zákazka sa nerealizovala (bez zvozu a kontroly po vrátení)
+          <span>Stroj neodišiel — zákazka sa nerealizovala<small>bez zvozu a kontroly po vrátení</small></span>
         </label>
       )}
       {notRealized ? (
-        <button className="btn btn-accent" disabled={!endDate || !!dateError} onClick={() => onSave({ endDate, notRealized: true })}>
-          Ukončiť ako nerealizovanú
-        </button>
+        <FormFoot missing={!endDate ? ["dátum konca"] : []}>
+          <button className="btn btn-accent" disabled={!endDate || !!dateError} onClick={() => onSave({ endDate, notRealized: true })}>
+            Ukončiť ako nerealizovanú
+          </button>
+        </FormFoot>
       ) : (<>
+      <div className="flegend">ZVOZ</div>
       <Field label="Depo návratu *">
         <select value={returnDepo} onChange={(e) => setReturnDepo(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať depo —</option>
@@ -16498,10 +16553,10 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
       {selfReturn ? (
         <Field label="Dátum vrátenia do depa">
           <input type="date" value={returnDate || endDate} onChange={(e) => setReturnDate(e.target.value)} style={{ width: "100%" }} />
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Zákazník vráti stroj sám — protokol o vrátení aj kontrolu robí checker depa.</div>
+          <div className="fhint">Zákazník vráti stroj sám — protokol o vrátení aj kontrolu robí checker depa.</div>
         </Field>
       ) : (
-        <>
+        <div className="fgrid2">
           <Field label="Dátum zvozu">
             <input type="date" value={pickupDate || endDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
           </Field>
@@ -16511,21 +16566,23 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
               {driverOptionsGrouped(drivers)}
             </select>
           </Field>
-        </>
+        </div>
       )}
-      <button
-        className="btn btn-accent"
-        disabled={!canSave}
-        onClick={() =>
-          onSave(
-            selfReturn
-              ? { endDate, returnDepo: returnDepo.trim(), returnDriverId: null, selfReturn: true, pickupDate: returnDate || endDate }
-              : { endDate, returnDepo: returnDepo.trim(), returnDriverId: returnDriverId || null, selfReturn: false, pickupDate: pickupDate || endDate }
-          )
-        }
-      >
-        Ukončiť zákazku
-      </button>
+      <FormFoot missing={[!endDate && "dátum konca", !returnDepo.trim() && "depo návratu"].filter(Boolean)}>
+        <button
+          className="btn btn-accent"
+          disabled={!canSave}
+          onClick={() =>
+            onSave(
+              selfReturn
+                ? { endDate, returnDepo: returnDepo.trim(), returnDriverId: null, selfReturn: true, pickupDate: returnDate || endDate }
+                : { endDate, returnDepo: returnDepo.trim(), returnDriverId: returnDriverId || null, selfReturn: false, pickupDate: pickupDate || endDate }
+            )
+          }
+        >
+          Ukončiť zákazku
+        </button>
+      </FormFoot>
       </>)}
     </Modal>
   );
@@ -16541,7 +16598,7 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
 // (SignatureOverlay nižšie), lebo na mobile sa do 100px vysokého pásika
 // nedá poriadne podpísať. Po "Hotovo" sa podpis zmenší späť do tohto poľa
 // presne ako doteraz (rovnaký onChange(dataUrl) kontrakt, nič okolo sa nemení).
-function SignaturePad({ value, onChange, label }) {
+function SignaturePad({ value, onChange, label, summary }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   return (
@@ -16559,7 +16616,7 @@ function SignaturePad({ value, onChange, label }) {
         {value ? (
           <img src={value} alt={label} style={{ maxWidth: "100%", maxHeight: "100%" }} />
         ) : (
-          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>✍️ Klikni sem pre podpis</span>
+          <span style={{ fontSize: 13, color: "#5A5A5A" }}>✍️ Klikni sem pre podpis</span>
         )}
       </button>
       {value && (
@@ -16570,6 +16627,7 @@ function SignaturePad({ value, onChange, label }) {
       {open && (
         <SignatureOverlay
           label={label}
+          summary={summary}
           initialValue={value}
           fieldAspect={btnRef.current ? btnRef.current.getBoundingClientRect().width / btnRef.current.getBoundingClientRect().height : 3.2}
           onCancel={() => setOpen(false)}
@@ -16584,7 +16642,7 @@ function SignaturePad({ value, onChange, label }) {
 // otočiť telefón, canvas sa responzívne roztiahne, žiadny orientation-lock
 // hack). Pri resize/otočení sa obsah zachytí a prekreslí do nových rozmerov
 // (nie vymaže), aby otočenie počas podpisovania podpis nezmazalo.
-function SignatureOverlay({ label, initialValue, fieldAspect, onCancel, onDone }) {
+function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel, onDone }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drawingRef = useRef(false);
@@ -16688,15 +16746,23 @@ function SignatureOverlay({ label, initialValue, fieldAspect, onCancel, onDone }
   }
 
   return (
-    <div className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      {/* Plávajúci pás (nie súčasť flex výšky) — nech má canvas na podpis k
-          dispozícii celú výšku obrazovky namiesto toho, aby mu hornú časť
-          odhryzol pevný riadok s nadpisom/tipom. */}
-      <div style={{ position: "absolute", top: "env(safe-area-inset-top)", left: 0, right: 0, zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "rgba(255,255,255,0.88)", pointerEvents: "none" }}>
-        <strong style={{ fontSize: 17, color: "var(--red, #c0392b)" }}>✍️ {label}</strong>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Otočte telefón pre viac miesta</span>
+    <div className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "var(--panel)", color: "var(--text)", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      {/* Hlavička + zhrnutie (čo sa podpisuje) sú nad plochou; canvas si dopočíta zvyšnú výšku sám (wrapRef). */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "max(8px, env(safe-area-inset-top)) 12px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <button type="button" onClick={onCancel} style={{ minHeight: 44, padding: "0 6px", border: 0, background: "none", font: "inherit", fontSize: 16, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>Zrušiť</button>
+        <strong style={{ flex: 1, textAlign: "center", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: ".05em", textTransform: "uppercase" }}>{label}</strong>
+        <span style={{ width: 60 }} />
       </div>
+      {summary?.title && (
+        <section aria-label="Čo podpisujete" style={{ margin: "12px 16px 0", background: "var(--panel-2)", borderRadius: 12, padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px 14px", fontSize: 15, flexShrink: 0 }}>
+          <div className="tnum" style={{ gridColumn: "1 / -1", fontSize: 18, fontWeight: 700 }}>{summary.title}</div>
+          {(summary.rows || []).filter(([, v]) => v).map(([k, v]) => (
+            <div key={k}><div style={{ fontSize: 13, color: "var(--text-dim)" }}>{k}</div><strong>{v}</strong></div>
+          ))}
+        </section>
+      )}
       <div ref={wrapRef} style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, boxSizing: "border-box", touchAction: "none" }}>
+        <div style={{ position: "relative", lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
           style={{ touchAction: "none", background: "#fff", border: "2px solid var(--border)", borderRadius: 10, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}
@@ -16708,11 +16774,15 @@ function SignatureOverlay({ label, initialValue, fieldAspect, onCancel, onDone }
           onTouchMove={move}
           onTouchEnd={end}
         />
+        <button type="button" aria-label="Vymazať podpis" title="Vymazať" onClick={clear}
+          style={{ position: "absolute", top: 8, right: 8, width: 48, height: 48, borderRadius: 12, border: "1px solid #D0D0D0", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3A3A3A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+        </button>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
-        <button type="button" className="btn btn-ghost" onClick={clear}>Vymazať</button>
-        <button type="button" className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={done}>Hotovo</button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 16px max(14px, env(safe-area-inset-bottom))", flexShrink: 0 }}>
+        <button type="button" className="btn btn-accent" style={{ width: "100%", minHeight: 56, fontSize: 18, fontWeight: 700, justifyContent: "center" }} onClick={done}>Hotovo</button>
+        <span style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center" }}>Otočte telefón pre viac miesta</span>
       </div>
     </div>
   );
@@ -16749,42 +16819,36 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
   // Vždy plná dĺžka podľa HANDOVER_CHECKLIST_ITEMS (staršie/neúplné záznamy).
   const checklist = HANDOVER_CHECKLIST_ITEMS.map((_, i) => raw[i] || {});
   const setItem = (i, patch) => onChange(checklist.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const btn = (active, color, bg) => ({
-    fontSize: 13, minHeight: 40, minWidth: 40, padding: "8px 14px", borderRadius: 6, cursor: "pointer",
-    border: "1px solid " + (active ? color : "var(--border)"),
-    background: active ? bg : "transparent",
-    color: active ? color : "var(--text-dim)",
-    fontWeight: active ? 600 : 400,
-  });
   const anyEmpty = checklist.some((it) => it[statusKey] !== "ok" && it[statusKey] !== "problem");
   return (
     <>
       {anyEmpty && (
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ minHeight: 40, marginBottom: 8, color: "var(--ok)", borderColor: "var(--ok)" }}
-          onClick={() => onChange(checklist.map((it) => (it[statusKey] === "problem" ? it : { ...it, [statusKey]: "ok" })))}
-        >
-          ✓ Všetko v poriadku
-        </button>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ minHeight: 48, color: "var(--s-done)", borderColor: "#9CCBA9" }}
+            onClick={() => onChange(checklist.map((it) => (it[statusKey] === "problem" ? it : { ...it, [statusKey]: "ok" })))}
+          >
+            ✓ Všetko v poriadku
+          </button>
+          <span className="fhint" style={{ marginTop: 0 }}>alebo po jednom — problém otvorí pole na popis</span>
+        </div>
       )}
-      <div style={{ border: "1px solid var(--border)", borderRadius: 8, marginBottom: 14, overflow: "hidden" }}>
+      <div className="ckl">
         {HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
           const item = checklist[i] || {};
           const status = item[statusKey];
           return (
-            <div key={i} style={{ padding: "8px 12px", borderBottom: i < HANDOVER_CHECKLIST_ITEMS.length - 1 ? "1px solid var(--border)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13 }}>{i + 1}. {label}</span>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button type="button" onClick={() => setItem(i, { [statusKey]: "ok" })} style={btn(status === "ok", "var(--ok)", "var(--ok-bg)")}>
-                    V poriadku
-                  </button>
-                  <button type="button" onClick={() => setItem(i, { [statusKey]: "problem" })} style={btn(status === "problem", "var(--danger)", "var(--danger-bg)")}>
-                    Problém
-                  </button>
-                </div>
+            <div key={i} className={`cki${status === "problem" ? " prob" : ""}`}>
+              <span className="ckt">{i + 1}. {label}</span>
+              <div className="cks" role="group" aria-label={label}>
+                <button type="button" aria-pressed={status === "ok"} className={status === "ok" ? "okon" : ""} onClick={() => setItem(i, { [statusKey]: "ok" })}>
+                  V poriadku
+                </button>
+                <button type="button" aria-pressed={status === "problem"} className={status === "problem" ? "pon" : ""} onClick={() => setItem(i, { [statusKey]: "problem" })}>
+                  {status === "problem" ? "⚠ Problém" : "Problém"}
+                </button>
               </div>
               {status === "problem" && (
                 <textarea
@@ -16792,7 +16856,6 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
                   onChange={(e) => setItem(i, { [noteKey]: e.target.value })}
                   placeholder="Popíšte problém, napr. stroj znečistený"
                   rows={2}
-                  style={{ width: "100%", fontSize: 13, marginTop: 6 }}
                 />
               )}
             </div>
@@ -16808,11 +16871,11 @@ function PhotoPickButtons({ onFiles }) {
   const pick = (e) => { onFiles(e.target.files); e.target.value = ""; };
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-      <label className="btn btn-accent" style={{ minHeight: 40, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
         📷 Odfotiť
         <input type="file" accept="image/*" capture="environment" onChange={pick} style={{ display: "none" }} />
       </label>
-      <label className="btn btn-ghost" style={{ minHeight: 40, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", cursor: "pointer", borderColor: "var(--line-strong)" }}>
         🖼 Z galérie
         <input type="file" accept="image/*" multiple onChange={pick} style={{ display: "none" }} />
       </label>
@@ -16864,6 +16927,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       HANDOVER_CHECKLIST_ITEMS.map(() => ({ handoverStatus: null, handoverNote: "", returnStatus: null, returnNote: "" }))
   );
   const isReturnPhase = phase === "vratenie";
+  const sigSummary = { title: [isReturnPhase ? "Vrátenie" : "Prevzatie", machine?.code].filter(Boolean).join(" · "), rows: [["Zákazník", job?.customer], ["Stroj", machine?.type]] };
   const statusKey = isReturnPhase ? "returnStatus" : "handoverStatus";
   const noteKey = isReturnPhase ? "returnNote" : "handoverNote";
   const isCorrection = existing && ((isReturnPhase && existing.returnDone) || (!isReturnPhase && existing.handoverDone));
@@ -17146,7 +17210,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   if (screen === "view" && existing) {
     return (
-      <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
+      <Modal headerExtra={<>{issueBtn}{canDelete && <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}</>} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
         {transportIssueBlock}
         {forcePhaseBlocked && (
           <div style={{ background: "var(--panel-2)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 10 }}>
@@ -17161,13 +17225,6 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ width: "100%", height: "75vh", border: "1px solid var(--border)", borderRadius: 8 }}
         />
-        {canDelete && (
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
-              Zmazať protokol
-            </button>
-          </div>
-        )}
       </Modal>
     );
   }
@@ -17176,142 +17233,97 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     <>
     <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide form>
       {transportIssueBlock}
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-        {machine?.type || ""}
-      </div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}
+      <div className="fsum">
+        <div><span>Stroj</span><b className="tnum">{machine?.code || "—"}</b>{machine?.type ? ` · ${machine.type}` : ""}</div>
+        <div><span>Zákazník</span>{job?.customer || "—"}{job?.cisloZmluvy ? ` · Zmluva č. ${job.cisloZmluvy}` : ""}</div>
         {job?.customerPhone && (
-          <a href={`tel:${job.customerPhone}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
-            <PhoneIcon size={12} /> {job.customerPhone}
-          </a>
+          <div><span>Telefón</span>
+            <a href={`tel:${job.customerPhone}`} className="tnum" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <PhoneIcon size={13} /> {job.customerPhone}
+            </a>
+          </div>
         )}
       </div>
 
       {isCorrection && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14, fontWeight: 600 }}>
+        <div className="fnote fnote-r">
           ✏️ Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená.
         </div>
       )}
 
-      {/* Číslo z ERP dopĺňa dispečer — šofér/checker ho v teréne nepotrebuje. */}
+      {/* Číslo z ERP a fáza — len dispečer/vedúci; šofér/checker ich v teréne nepotrebuje. */}
       {can(user, "handover_protocol_edit_locked") && (
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div className="fgrid2">
           <Field label="Číslo protokolu (z ERP)">
             <input value={protocolNumber} onChange={(e) => setProtocolNumber(e.target.value)} placeholder="napr. 222493211" style={{ width: "100%" }} />
+          </Field>
+          <Field label="Fáza">
+            <div className="seg" style={{ display: "flex" }}>
+              <button type="button" className={phase === "prevzatie" ? "on" : ""} style={{ minHeight: 44 }} onClick={() => switchPhase("prevzatie")}>
+                Prevzatie {existing?.handoverDone && "✓"}
+              </button>
+              <button type="button" className={phase === "vratenie" ? "on" : ""} style={{ minHeight: 44 }} onClick={() => switchPhase("vratenie")} disabled={!existing?.handoverDone} title={!existing?.handoverDone ? "Najprv dokončite Prevzatie" : ""}>
+                Vrátenie {existing?.returnDone && "✓"}
+              </button>
+            </div>
           </Field>
         </div>
       )}
 
-      {can(user, "handover_protocol_edit_locked") && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => switchPhase("prevzatie")}
-            style={{
-              flex: 1,
-              background: phase === "prevzatie" ? "var(--accent)" : "transparent",
-              color: phase === "prevzatie" ? "#fff" : "var(--text)",
-              border: "1px solid " + (phase === "prevzatie" ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            Prevzatie {existing?.handoverDone && "✓"}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => switchPhase("vratenie")}
-            disabled={!existing?.handoverDone}
-            title={!existing?.handoverDone ? "Najprv dokončite Prevzatie" : ""}
-            style={{
-              flex: 1,
-              background: phase === "vratenie" ? "var(--accent)" : "transparent",
-              color: phase === "vratenie" ? "#fff" : existing?.handoverDone ? "var(--text)" : "var(--text-dim)",
-              border: "1px solid " + (phase === "vratenie" ? "var(--accent)" : "var(--border)"),
-              opacity: existing?.handoverDone ? 1 : 0.5,
-            }}
-          >
-            Vrátenie {existing?.returnDone && "✓"}
-          </button>
-        </div>
-      )}
-
       {isReturnPhase && existing?.handoverDate && !existing?.returnDone && (
-        <div style={{ background: "var(--ok-bg)", color: "var(--ok)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
+        <div className="fnote fnote-g">
           Prevzatie bolo dokončené {fmtDate(existing.handoverDate)}. Teraz sa dopĺňa vrátenie k tomu istému protokolu.
         </div>
       )}
 
       {!isReturnPhase && (
         checkerInspection?.resolved && !checkerInspection.skipped ? (
-          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy)}>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy)}>
             🔍 Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
           </button>
         ) : (
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Kontrola checkera v depe zatiaľ nebola vykonaná.</div>
+          <div className="fhint">Kontrola checkera v depe zatiaľ nebola vykonaná.</div>
         )
       )}
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Predmet kontroly
-      </div>
+      <FormStep n={1} title="Predmet kontroly" right={<span className="spill tnum">{checklist.filter((it) => it?.[statusKey] === "ok" || it?.[statusKey] === "problem").length} / {HANDOVER_CHECKLIST_ITEMS.length}</span>} />
       <ChecklistEditor checklist={checklist} statusKey={statusKey} noteKey={noteKey} onChange={setChecklist} />
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Zásady prenájmu pracovnej plošiny
+      <FormStep n={2} title={`Fotky stavu stroja pri ${isReturnPhase ? "zvoze" : "vývoze"}`} right={<span className="fhint" style={{ marginTop: 0 }}>{isCorrection ? (customerAbsent ? "povinné" : "") : photosRequired ? `povinné, aspoň ${MIN_MACHINE_PHOTOS}` : "nepovinné"}</span>} />
+      <div className="fphotos">
+        {returnPhotos.map((url, i) => (
+          <div key={i} className="fphoto">
+            <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} />
+            <button type="button" onClick={() => setReturnPhotos((prev) => prev.filter((_, idx) => idx !== i))} title="Odstrániť fotku" aria-label="Odstrániť fotku">✕</button>
+          </div>
+        ))}
       </div>
-      <ol style={{ fontSize: 11, color: "var(--text-dim)", margin: "0 0 6px", paddingLeft: 18 }}>
+      <PhotoPickButtons onFiles={handleReturnPhotoFiles} />
+      {uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
+      {photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
+      {photosNeeded > 0 && (
+        <div className="fhint" style={{ color: "var(--danger-text)" }}>
+          {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — " : ""}Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
+        </div>
+      )}
+
+      <FormStep n={3} title="Zásady prenájmu pracovnej plošiny" />
+      <ol style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 6px", paddingLeft: 20, lineHeight: 1.45 }}>
         {HANDOVER_LEGAL_RULES.map((rule, i) => <li key={i} style={{ marginBottom: 2 }}>{rule}</li>)}
       </ol>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>{HANDOVER_VOP_NOTE}</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>{HANDOVER_VOP_NOTE}</div>
 
+      <FormStep n={4} title={`Podpisy — ${isReturnPhase ? "vrátenie" : "prevzatie"}`} />
       {/* Osobný odber/vrátenie je v depe so zákazníkom — tam voľba nemá zmysel. */}
       {(customerAbsent || !(isReturnPhase ? job?.selfReturn : job?.selfPickup)) && (
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, marginBottom: 14, cursor: "pointer" }}>
+      <label className="fck">
         <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} />
-        Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)
+        <span>Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)</span>
       </label>
       )}
-
-      {(
-        <>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Fotky stavu stroja pri {isReturnPhase ? "zvoze" : "vývoze"}{isCorrection ? (customerAbsent ? " *" : "") : photosRequired ? ` * (aspoň ${MIN_MACHINE_PHOTOS})` : " (nepovinné)"}
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            {returnPhotos.map((url, i) => (
-              <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-                <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
-                <button
-                  type="button"
-                  onClick={() => setReturnPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                  title="Odstrániť fotku"
-                  style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--panel)", color: "var(--danger)", fontSize: 11, lineHeight: 1, cursor: "pointer" }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-          <PhotoPickButtons onFiles={handleReturnPhotoFiles} />
-          {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
-          {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
-          {photosNeeded > 0 && (
-            <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>
-              {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — " : ""}Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
-            </div>
-          )}
-          <div style={{ marginBottom: 14 }} />
-        </>
-      )}
-
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Podpisy — {isReturnPhase ? "vrátenie" : "prevzatie"}
-      </div>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="fgrid2">
         {customerAbsent ? (
-          <div style={{ fontSize: 13, color: "var(--text-dim)", alignSelf: "center" }}>Za nájomcu: zákazník nebol prítomný</div>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", alignSelf: "center", marginBottom: 14 }}>Za nájomcu: zákazník nebol prítomný</div>
         ) : (
         <Field label="Za nájomcu — meno *">
           <input
@@ -17332,39 +17344,37 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" value={customerSig} onChange={setCustomerSig} />}
-        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" value={driverSig} onChange={setDriverSig} />
+        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} />}
+        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} />
       </div>
 
-      {!canSave && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-          Chýba: {[
-            uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
-            !checklistComplete && "všetky body checklistu",
-            photosNeeded > 0 && `fotky stroja (${photosNeeded})`,
-            photosNeeded === 0 && customerAbsent && returnPhotos.length === 0 && "fotka stroja",
-            !customerAbsent && !customerName.trim() && "meno nájomcu",
-            !customerAbsent && !customerSig && "podpis nájomcu",
-            !driverName.trim() && "meno prenajímateľa",
-            !driverSig && "podpis prenajímateľa",
-          ].filter(Boolean).join(", ")}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button className="btn btn-accent" style={{ minHeight: 44 }} disabled={!canSave} onClick={handleSave}>
+      <FormFoot
+        cancel={false}
+        missing={canSave ? [] : [
+          uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
+          !checklistComplete && "všetky body checklistu",
+          photosNeeded > 0 && `fotky stroja (${photosNeeded})`,
+          photosNeeded === 0 && customerAbsent && returnPhotos.length === 0 && "fotka stroja",
+          !customerAbsent && !customerName.trim() && "meno nájomcu",
+          !customerAbsent && !customerSig && "podpis nájomcu",
+          !driverName.trim() && "meno prenajímateľa",
+          !driverSig && "podpis prenajímateľa",
+        ].filter(Boolean)}
+        left={(existing || canDelete) && (
+          <>
+            {canDelete && existing && <KebabMenu up label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 44, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}
+            {existing && (
+              <button type="button" className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => setScreen("view")}>
+                ← Späť na náhľad
+              </button>
+            )}
+          </>
+        )}
+      >
+        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
           {isCorrection ? "Uložiť opravu" : isReturnPhase ? "Dokončiť vrátenie" : "Uložiť prevzatie"}
         </button>
-        {existing && (
-          <button className="btn btn-ghost" onClick={() => setScreen("view")}>
-            ← Späť na náhľad
-          </button>
-        )}
-        {canDelete && existing && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(existing.id)}>
-            Zmazať protokol
-          </button>
-        )}
-      </div>
+      </FormFoot>
     </Modal>
     </>
   );
@@ -17524,68 +17534,72 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       wide
       form={showForm}
     >
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
-        {machine?.type || ""}
-      </div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {job?.customer || "—"} · {selfTransport ? (phase === "vratenie" ? "Vrátenie do depa" : "Vyzdvihnutie v depe") : phase === "vratenie" ? "Zvoz" : "Vývoz"}{" "}
-        {(() => {
-          const d = phase === "vratenie" ? job?.pickupDate || job?.endDate : job?.departureDate || job?.startDate;
-          return d ? fmtDate(d) : "—";
-        })()}
+      <div className="fsum">
+        <div><span>Stroj</span><b className="tnum">{machine?.code || "—"}</b>{machine?.type ? ` · ${machine.type}` : ""}</div>
+        <div><span>{selfTransport ? (phase === "vratenie" ? "Vrátenie do depa" : "Vyzdvihnutie v depe") : phase === "vratenie" ? "Zvoz" : "Vývoz"}</span>
+          <span className="tnum">{(() => {
+            const d = phase === "vratenie" ? job?.pickupDate || job?.endDate : job?.departureDate || job?.startDate;
+            return d ? fmtDate(d) : "—";
+          })()}</span> · {job?.customer || "—"}
+        </div>
         {job?.customerPhone && (
-          <a href={`tel:${job.customerPhone}`} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", textDecoration: "none" }}>
-            <PhoneIcon size={12} /> {job.customerPhone}
-          </a>
+          <div><span>Telefón</span>
+            <a href={`tel:${job.customerPhone}`} className="tnum" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <PhoneIcon size={13} /> {job.customerPhone}
+            </a>
+          </div>
         )}
       </div>
 
       {waitingForReturnProtocol ? (
-        <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Krok 1: protokol o vrátení so zákazníkom</div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+        <div className="fnote fnote-i">
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Krok 1: protokol o vrátení so zákazníkom</div>
+          <div style={{ color: "var(--text-dim)", marginBottom: 10 }}>
             Zákazník vracia stroj sám. Najprv spíšte so zákazníkom protokol o vrátení (jeho podpis), potom sa tu odomkne kontrola stroja.
           </div>
           {canEdit && onOpenHandover && (
-            <button type="button" className="btn btn-accent" onClick={() => onOpenHandover("vratenie")}>📋 Protokol o vrátení</button>
+            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("vratenie")}>📋 Protokol o vrátení</button>
           )}
         </div>
       ) : phase === "vratenie" ? (
         // Fotky z vrátenia (šofér pri zvoze) sú priamo nižšie pri kontrole — bez odkazu na protokol.
         !handoverProtocol?.returnDone && (
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Šofér zatiaľ nevyplnil protokol o vrátení.</div>
+          <div className="fhint" style={{ marginBottom: 10 }}>Šofér zatiaľ nevyplnil protokol o vrátení.</div>
         )
       ) : selfTransport && (
         handoverDone ? (
-          <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
+          <button type="button" className="btn btn-outline" style={{ marginBottom: 12, borderColor: "var(--line-strong)" }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
             📋 Zobraziť protokol o odovzdaní
           </button>
         ) : assignment.resolved && canEdit && onOpenHandover ? (
-          <div style={{ background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Kontrola je hotová — odovzdajte stroj zákazníkovi</div>
-            <button type="button" className="btn btn-accent" onClick={() => onOpenHandover("prevzatie")}>📋 Odovzdať zákazníkovi (protokol)</button>
+          <div className="fnote fnote-i">
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Kontrola je hotová — odovzdajte stroj zákazníkovi</div>
+            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("prevzatie")}>📋 Odovzdať zákazníkovi (protokol)</button>
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+          <div className="fhint" style={{ marginBottom: 10 }}>
             Osobný odber — po uložení kontroly odovzdáte stroj zákazníkovi protokolom.
           </div>
         )
       )}
       {assignment.resolved && !assignment.skipped && !showForm && (
-        <button type="button" className="btn btn-ghost" style={{ marginBottom: 12, marginLeft: 0 }} onClick={() => openPrintableChecklist(assignment, machine, assignment.checkerBy)}>
+        <button type="button" className="btn btn-outline" style={{ marginBottom: 4, borderColor: "var(--line-strong)" }} onClick={() => openPrintableChecklist(assignment, machine, assignment.checkerBy)}>
           🖨 Tlačová verzia kontroly
         </button>
       )}
       {!waitingForReturnProtocol && (<>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-        Predmet kontroly
-      </div>
+      <FormStep n={1} title="Predmet kontroly" right={showForm && <span className="spill tnum">{checklist.filter((it) => it?.checkerStatus === "ok" || it?.checkerStatus === "problem").length} / {HANDOVER_CHECKLIST_ITEMS.length}</span>} />
       {!showForm ? (
         <HandoverProtocolChecklistRecap checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" />
       ) : (
         <ChecklistEditor checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" onChange={setChecklist} />
       )}
 
+      <FormStep
+        n={2}
+        title={<>{phase === "vratenie" ? "Fotky po vrátení — checker" : "Fotky pred vývozom — checker"}{assignment.checkerBy ? ` · ${assignment.checkerBy}` : ""}{assignment.checkerDate ? ` · ${fmtDate(String(assignment.checkerDate).slice(0, 10))}` : ""}</>}
+        right={<span className="fhint" style={{ marginTop: 0 }}>{phase === "vratenie" ? "voliteľné, ak šofér niečo prehliadol" : `aspoň ${photosMin}`}</span>}
+      />
       {phase === "vratenie" && (
         <MachinePhotoGroup
           title={selfTransport ? "Pri vrátení v depe — protokol o vrátení" : "Pri zvoze — šofér"}
@@ -17594,71 +17608,51 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           empty={selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1) — zatiaľ žiadne." : "Zatiaľ žiadne — šofér ich odfotí pri zvoze."}
         />
       )}
-      {(
+      {!showForm && photos.length === 0 && <div className="fhint" style={{ marginBottom: 8 }}>Bez fotiek.</div>}
+      <div className="fphotos">
+        {photos.map((url, i) => (
+          <div key={i} className="fphoto">
+            <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} />
+            {showForm && (
+              <button type="button" onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))} title="Odstrániť fotku" aria-label="Odstrániť fotku">✕</button>
+            )}
+          </div>
+        ))}
+      </div>
+      {showForm && (
         <>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            {phase === "vratenie" ? "Po vrátení — checker (voliteľné, ak šofér niečo prehliadol)" : "Pred vývozom — checker"}
-            {assignment.checkerBy ? ` · ${assignment.checkerBy}` : ""}{assignment.checkerDate ? ` · ${fmtDate(String(assignment.checkerDate).slice(0, 10))}` : ""}
-          </div>
-          {!showForm && photos.length === 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Bez fotiek.</div>}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            {photos.map((url, i) => (
-              <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-                <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
-                {showForm && (
-                  <button
-                    type="button"
-                    onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                    title="Odstrániť fotku"
-                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--panel)", color: "var(--danger)", fontSize: 11, lineHeight: 1, cursor: "pointer" }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          {showForm && (
-            <>
-              <PhotoPickButtons onFiles={handlePhotoFiles} />
-              {uploadingPhotos > 0 && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Nahrávam fotky…</div>}
-              {photoUploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 6 }}>{photoUploadError}</div>}
-            </>
-          )}
+          <PhotoPickButtons onFiles={handlePhotoFiles} />
+          {uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
+          {photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
+          {photosNeeded > 0 && <div className="fhint" style={{ color: "var(--danger-text)" }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
         </>
       )}
       {phase === "vyvoz" && !selfTransport && (handoverProtocol?.handoverPhotos || []).length > 0 && (
         <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
       )}
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
-        Motohodiny
-      </div>
+      <FormStep n={3} title="Motohodiny" />
       {showForm ? (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <Field label="Počet MTH (stav počítadla) *">
-              <input type="text" inputMode="decimal" value={noMth ? "" : mth} disabled={noMth} onChange={(e) => { setMth(e.target.value); setMthConfirmed(false); }} style={{ width: 140 }} />
-            </Field>
-            <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center", marginBottom: 12 }}>
-              <input type="checkbox" checked={noMth} onChange={(e) => { setNoMth(e.target.checked); setMthConfirmed(false); }} /> Stroj nemá počítadlo MTH
-            </label>
-          </div>
-          {lastMth && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Posledný stav: {lastMth.noMth ? "bez počítadla" : `${fmtMth(lastMth.value)} MTH`} ({lastMth.date ? fmtDate(String(lastMth.date).slice(0, 10)) : "—"}{lastMth.by ? `, ${lastMth.by}` : ""})</div>}
+          <Field label="Počet MTH (stav počítadla) *">
+            <input type="text" inputMode="decimal" value={noMth ? "" : mth} disabled={noMth} onChange={(e) => { setMth(e.target.value); setMthConfirmed(false); }} style={{ width: 180, maxWidth: "100%" }} />
+            {lastMth && <div className="fhint">Posledný stav: {lastMth.noMth ? "bez počítadla" : `${fmtMth(lastMth.value)} MTH`} ({lastMth.date ? fmtDate(String(lastMth.date).slice(0, 10)) : "—"}{lastMth.by ? `, ${lastMth.by}` : ""})</div>}
+          </Field>
+          <label className="fck">
+            <input type="checkbox" checked={noMth} onChange={(e) => { setNoMth(e.target.checked); setMthConfirmed(false); }} /> <span>Stroj nemá počítadlo MTH</span>
+          </label>
           {mthSuspicious && (
-            <label style={{ fontSize: 12, color: "var(--danger)", display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+            <label className="fck fnote fnote-r" style={{ fontWeight: 600 }}>
               <input type="checkbox" checked={mthConfirmed} onChange={(e) => setMthConfirmed(e.target.checked)} />
-              {mthNum < lastMth.value ? `Menej ako posledný stav (${fmtMth(lastMth.value)} MTH)` : `O ${fmtMth(mthNum - lastMth.value)} MTH viac ako posledný stav`} — áno, {fmtMth(mthNum)} MTH je správne
+              <span>{mthNum < lastMth.value ? `Menej ako posledný stav (${fmtMth(lastMth.value)} MTH)` : `O ${fmtMth(mthNum - lastMth.value)} MTH viac ako posledný stav`} — áno, {fmtMth(mthNum)} MTH je správne</span>
             </label>
           )}
         </div>
       ) : (
-        <div style={{ fontSize: 13, marginBottom: 10 }}>{assignment.noMth ? "Stroj nemá počítadlo MTH" : assignment.mth != null ? `${fmtMth(assignment.mth)} MTH` : "— MTH nevyplnené —"}</div>
+        <div style={{ fontSize: 14, marginBottom: 10 }}>{assignment.noMth ? "Stroj nemá počítadlo MTH" : assignment.mth != null ? `${fmtMth(assignment.mth)} MTH` : "— MTH nevyplnené —"}</div>
       )}
 
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>
-        Odpracovaný čas a diely
-      </div>
+      <FormStep n={4} title="Odpracovaný čas a diely" />
       {showForm ? (
         <>
           <Field label="Odpracované hodiny *">
@@ -17667,24 +17661,24 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
               inputMode="decimal"
               value={workHours}
               onChange={(e) => setWorkHours(e.target.value)}
-              style={{ width: 120 }}
+              style={{ width: 140 }}
             />
           </Field>
           {usedParts.map((p) => (
-            <div key={p.id} style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <input placeholder="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} style={{ flex: "2 1 140px" }} />
-              <input placeholder="P/N" value={p.partNumber} onChange={(e) => updatePartRow(p.id, { partNumber: e.target.value })} style={{ flex: "1 1 90px" }} />
-              <input type="number" inputMode="numeric" min="1" placeholder="ks" value={p.qty} onChange={(e) => updatePartRow(p.id, { qty: e.target.value })} style={{ width: 60 }} />
-              <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)", padding: "3px 8px" }} onClick={() => removePartRow(p.id)}>✕</button>
+            <div key={p.id} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input placeholder="Diel" aria-label="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} style={{ flex: "2 1 160px" }} />
+              <input placeholder="P/N" aria-label="P/N" value={p.partNumber} onChange={(e) => updatePartRow(p.id, { partNumber: e.target.value })} style={{ flex: "1 1 100px" }} />
+              <input type="number" inputMode="numeric" min="1" placeholder="ks" aria-label="Počet kusov" value={p.qty} onChange={(e) => updatePartRow(p.id, { qty: e.target.value })} style={{ width: 70 }} />
+              <button type="button" className="btn btn-outline" aria-label="Odstrániť diel" style={{ minWidth: 44, minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => removePartRow(p.id)}>✕</button>
             </div>
           ))}
-          <button type="button" className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 10 }} onClick={addPartRow}>+ Pridať použitý diel</button>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 44, marginBottom: 10, borderColor: "var(--line-strong)" }} onClick={addPartRow}>+ Pridať použitý diel</button>
         </>
       ) : (
-        <div style={{ fontSize: 13, marginBottom: 10 }}>
+        <div style={{ fontSize: 14, marginBottom: 10 }}>
           {assignment.workHours != null ? `${assignment.workHours} h` : "— hodiny nevyplnené —"}
           {(assignment.usedParts || []).length > 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
               Diely: {assignment.usedParts.map((p) => `${p.name}${p.partNumber ? ` (${p.partNumber})` : ""} ×${p.qty}`).join(", ")}
             </div>
           )}
@@ -17693,53 +17687,51 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
 
       {hasProblem && canEdit && (
         assignment.damageId ? (
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+          <div className="fhint" style={{ marginBottom: 10 }}>
             Z tejto kontroly už bola nahlásená servisná zákazka.
           </div>
-        ) : (
+        ) : !showForm && (
           <div style={{ marginBottom: 10 }}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ color: "var(--danger)" }}
-              disabled={showForm && !canSaveForm}
-              onClick={() => setConfirmReportDamage(true)}
-            >
-              ⚠ {showForm ? "Uložiť a nahlásiť do servisu" : "Nahlásiť servisný stav"}
+            <button type="button" className="btn btn-danger-outline" onClick={() => setConfirmReportDamage(true)}>
+              ⚠ Nahlásiť servisný stav
             </button>
-            {showForm && !canSaveForm && (
-              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Najprv dokončite kontrolu (všetky body, MTH, hodiny{photosNeeded > 0 ? ` a fotky — chýba ${photosNeeded}` : ""}) — uloží sa spolu s nahlásením.</div>
-            )}
           </div>
         )
       )}
 
       {hardLocked && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
+        <div className="fhint" style={{ marginTop: 10 }}>
           {phase === "vratenie" ? "Uplynuli 2 pracovné dni od vrátenia — kontrolu už nie je možné upravovať." : "Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať."}
         </div>
       )}
       {!hardLocked && !canEdit && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
+        <div className="fhint" style={{ marginTop: 10 }}>
           Upraviť môže len pridelený checker alebo administrátor.
         </div>
       )}
       {!hardLocked && canEdit && !showForm && !waitingForReturnProtocol && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-          <button className="btn btn-ghost" onClick={() => setEditing(true)}>✏️ Upraviť kontrolu</button>
+          <button className="btn btn-outline" onClick={() => setEditing(true)}>✏️ Upraviť kontrolu</button>
         </div>
       )}
       {showForm && (
-        <div style={{ marginTop: 14 }}>
-          {!checklistComplete && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte všetky body checklistu (V poriadku/Problém).</div>}
-          {!hoursValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte odpracované hodiny.</div>}
-          {!mthValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>{mthSuspicious ? "Potvrďte počet MTH (je nižší alebo oveľa vyšší ako posledný stav)." : "Vyplňte počet MTH alebo zaškrtnite, že stroj nemá počítadlo."}</div>}
-          {!partsValid && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Vyplňte názov každého pridaného dielu (alebo ho odstráňte).</div>}
-          {photosNeeded > 0 && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
-          </div>
-        </div>
+        <FormFoot
+          cancel={false}
+          missing={[
+            !checklistComplete && "všetky body checklistu",
+            photosNeeded > 0 && `fotky (${photosNeeded})`,
+            !mthValid && (mthSuspicious ? "potvrdenie MTH" : "MTH"),
+            !hoursValid && "hodiny",
+            !partsValid && "názov dielu",
+          ].filter(Boolean)}
+          left={hasProblem && canEdit && !assignment.damageId && (
+            <button type="button" className="btn btn-danger-outline" disabled={!canSaveForm} onClick={() => setConfirmReportDamage(true)}>
+              <span className="hd-full">⚠ Uložiť a nahlásiť do servisu</span><span className="hd-short">⚠ + servis</span>
+            </button>
+          )}
+        >
+          <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
+        </FormFoot>
       )}
       </>)}
     </Modal>
@@ -17804,10 +17796,9 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
                 Zmenu termínu nie je možné schváliť — {blocker} Zamietnite ju s dôvodom alebo najprv upravte druhú zákazku.
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+            <FormFoot confirm>
               <button className="btn btn-accent" disabled={!!blocker} onClick={() => onConfirm(pickupDate || null)}>Schváliť</button>
-            </div>
+            </FormFoot>
           </>
         );
       })()}
@@ -17869,37 +17860,52 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
       eyebrow="Požičovňová zákazka"
       title={
         <>
-          {job.machineDisplayName || machine?.type || ""}
-          {(job.machineDisplayName || machine?.type) && machine?.code ? " · " : ""}
-          {machine?.code && <span style={{ color: "var(--accent)" }}>{machine.code}</span>}
-          {" "}
+          {machine?.code || job.machineDisplayName || machine?.type || ""}
+          {machine?.code && (job.machineDisplayName || machine?.type) && <span className="side-title-sub">{job.machineDisplayName || machine?.type}</span>}
           <StatusBadge status={st} />
         </>
       }
       onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
-      wide
+      side
       headerExtra={
+        <div className="side-summary">
+          <div><span>Zákazník</span><b>{job.customer || "—"}</b></div>
+          <div><span>Obdobie</span><b className="tnum" style={!job.endDate && job.status !== "completed" ? { color: "var(--danger)" } : undefined}>{fmtDate(job.startDate)} – {job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}</b></div>
+          <div><span>Depo</span><b>{job.fromDepo || "—"} → {job.returnDepo || job.fromDepo || "—"}</b></div>
+          <div><span>Šofér</span><b>{job.selfPickup ? "Vlastná doprava" : job.driverId ? driverById[job.driverId]?.name || "—" : "— neurčený —"}</b></div>
+        </div>
+      }
+      footer={
         <>
-          {onReportTransportIssue && can(user, "transport_issue_report") && (
-            <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
-              <span className="hd-full">🚨 Problém s prepravou</span><span className="hd-short">🚨 Problém</span>
-            </button>
-          )}
           {machine && onReportDamage && can(user, "job_report_damage") && (
-            <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>
-              <span className="hd-full">Nahlásiť poškodenie</span><span className="hd-short">⚠ Poškodenie</span>
-            </button>
+            <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>Nahlásiť poškodenie</button>
           )}
-          {machine && onOpenMachineCard && (
-            <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
-              Karta stroja
-            </button>
+          {/* Problém s prepravou ostáva viditeľný (rozhodnutie 6. 10.), nie schovaný v ⋯. */}
+          {onReportTransportIssue && can(user, "transport_issue_report") && (
+            <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>🚨 Problém s prepravou</button>
           )}
+          <KebabMenu up label="⋯" actions={[
+            onEmailDriver && { label: "✉ Email šoférovi", onClick: onEmailDriver },
+            machine && onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) },
+          ]} />
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {can(user, "job_edit") && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
+            {/* Zrušiť ukončenie len admin / vedúci dispečer a len kým stroj nie je vrátený. */}
+            {job.status === "completed" && onUncomplete && !handoverProtocol?.returnDone && (
+              <button className="btn btn-ghost" style={{ color: "var(--warn)" }} onClick={onUncomplete} title="Vráti zákazku späť medzi aktívne — napr. keď sa na poslednú chvíľu niečo zmení">
+                ↺ Zrušiť ukončenie
+              </button>
+            )}
+            {job.status !== "completed" && can(user, "job_complete") && (
+              <button className="btn btn-accent" onClick={onComplete}>Ukončiť zákazku…</button>
+            )}
+          </div>
         </>
       }
     >
       <BinderLayout
+        horizontal
         tabs={[
           { id: "kontroly", label: "Kontroly", title: "Kontroly stroja (checklisty)" },
           { id: "protokol", label: "Protokol", title: "Protokol o odovzdaní a prevzatí" },
@@ -18077,104 +18083,65 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           </span>
         </div>
       ))}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Zákazník" value={job.customer} />
-        <CardField label="Kontaktná osoba" value={job.customerContactName} />
-        <CardField
-          label="Telefón zákazníka"
-          value={job.customerPhone ? <a href={`tel:${job.customerPhone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerPhone}</a> : null}
-        />
-        <CardField
-          label="Email zákazníka"
-          value={job.customerEmail ? <a href={`mailto:${job.customerEmail}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{job.customerEmail}</a> : null}
-        />
-        <CardField label="Odkiaľ (depo)" value={job.fromDepo} />
-        <CardField label="Kam" value={job.toLocation} />
-        <CardField label="Začiatok" value={fmtDate(job.startDate)} />
-        <CardField label="Koniec" value={job.endDate ? fmtDate(job.endDate) : "— bez určeného konca —"} danger={!job.endDate && job.status !== "completed"} />
+      <dl className="side-dl">
+        <dt>Kontaktná osoba</dt><dd>{job.customerContactName || "—"}</dd>
+        <dt>Telefón zákazníka</dt><dd className="tnum">{job.customerPhone ? <a href={`tel:${job.customerPhone}`}>{job.customerPhone}</a> : "—"}</dd>
+        <dt>Email zákazníka</dt><dd>{job.customerEmail ? <a href={`mailto:${job.customerEmail}`}>{job.customerEmail}</a> : "—"}</dd>
+        <dt>Kam</dt><dd>{job.toLocation || "—"}</dd>
         {(() => {
           // Šofér sa dá prideliť/zmeniť priamo tu na karte (bez Upraviť alebo Prepráv),
           // kým daná fáza (prevzatie/vrátenie) neprebehla.
           const canAssign = can(user, "transport_assign_driver") && drivers;
-          const driverSelect = (value, onChange, id) => (
-            <select id={id} value={value || ""} onChange={(e) => onChange(e.target.value || null)} style={{ width: "100%", fontSize: 13 }}>
+          const driverSelect = (value, onChange, id, label) => (
+            <select id={id} aria-label={label} value={value || ""} onChange={(e) => onChange(e.target.value || null)}>
               <option value="">— neurčený —</option>
               {driverOptionsGrouped(drivers)}
             </select>
           );
           return (
             <>
-              <CardField
-                label="Šofér (vývoz)"
-                value={
-                  job.selfPickup ? "Vlastná doprava — osobný odber v depe"
-                  : canAssign && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized ? driverSelect(job.driverId, (id) => onAssignDriver(job.id, id), "job-driver-vyvoz")
-                  : job.driverId ? driverById[job.driverId]?.name : "— neurčený —"
-                }
-              />
-              <CardField
-                label="Šofér (zvoz)"
-                value={
-                  job.selfReturn ? "Vlastná doprava — vráti sám do depa"
-                  : canAssign && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized ? driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id), "job-driver-zvoz")
-                  : job.returnDriverId ? driverById[job.returnDriverId]?.name : "— neurčený —"
-                }
-              />
+              <dt>Šofér (vývoz)</dt>
+              <dd>
+                {job.selfPickup ? "Vlastná doprava — osobný odber v depe"
+                  : canAssign && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized ? driverSelect(job.driverId, (id) => onAssignDriver(job.id, id), "job-driver-vyvoz", "Šofér (vývoz)")
+                  : job.driverId ? driverById[job.driverId]?.name || "—" : "— neurčený —"}
+              </dd>
+              <dt>Šofér (zvoz)</dt>
+              <dd>
+                {job.selfReturn ? "Vlastná doprava — vráti sám do depa"
+                  : canAssign && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized ? driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id), "job-driver-zvoz", "Šofér (zvoz)")
+                  : job.returnDriverId ? driverById[job.returnDriverId]?.name || "—" : "— neurčený —"}
+              </dd>
             </>
           );
         })()}
-        <CardField label="Obchodník" value={job.obchodnik} dotColor={salespersonColor(job.obchodnik, salespeople)} />
-        <CardField label="Číslo zmluvy" value={job.cisloZmluvy} />
+        <dt>Obchodník</dt>
+        <dd>{job.obchodnik ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{salespersonColor(job.obchodnik, salespeople) && <span style={{ width: 9, height: 9, borderRadius: 3, background: salespersonColor(job.obchodnik, salespeople), flexShrink: 0 }} />}{job.obchodnik}</span> : "—"}</dd>
+        <dt>Číslo zmluvy</dt><dd>{job.cisloZmluvy || "—"}</dd>
         {dispatchers && (() => {
           // Dispečer zákazky — dostáva upozornenia k nej; počas zástupu koná zastupujúci.
           const d = dispatchers.find((x) => x.id === job.dispatcherId);
           const acting = actingDispatcher ? actingDispatcher(job.dispatcherId, undefined, job.fromDepo) : d;
           const subNote = d && acting && acting.id !== d.id ? ` (zastupuje ${acting.name})` : d && !acting ? " (dovolenka — bez zástupu)" : "";
           return (
-            <CardField
-              label="Dispečer zákazky"
-              value={
-                onSetDispatcher && can(user, "job_edit") && job.status !== "completed" ? (
+            <>
+              <dt>Dispečer zákazky</dt>
+              <dd>
+                {onSetDispatcher && can(user, "job_edit") && job.status !== "completed" ? (
                   <>
-                    <select value={job.dispatcherId || ""} onChange={(e) => onSetDispatcher(job.id, e.target.value || null)} style={{ width: "100%", fontSize: 13 }}>
+                    <select aria-label="Dispečer zákazky" value={job.dispatcherId || ""} onChange={(e) => onSetDispatcher(job.id, e.target.value || null)}>
                       <option value="">— podľa depa —</option>
                       {dispatchers.map((x) => <option key={x.id} value={x.id}>{x.name}{!x.linkedUserId ? " (bez účtu)" : _inactiveUserIds.has(x.linkedUserId) ? " (neaktívny účet)" : ""}</option>)}
                     </select>
-                    {subNote && <div style={{ fontSize: 11, color: "var(--warn)", marginTop: 2 }}>{subNote.trim()}</div>}
+                    {subNote && <div style={{ fontSize: 13, color: "var(--warn)", marginTop: 2 }}>{subNote.trim()}</div>}
                   </>
-                ) : d ? `${d.name}${subNote}` : "— podľa depa —"
-              }
-            />
+                ) : d ? `${d.name}${subNote}` : "— podľa depa —"}
+              </dd>
+            </>
           );
         })()}
-      </div>
-      {job.notes && (
-        <div style={{ fontSize: 13, marginBottom: 14 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 2 }}>Poznámka</div>
-          {job.notes}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {can(user, "job_edit") && <button className="btn btn-ghost" onClick={onEdit}>Upraviť zákazku</button>}
-        {job.status !== "completed" && can(user, "job_complete") && (
-          <button className="btn btn-accent" onClick={onComplete}>Ukončiť zákazku</button>
-        )}
-        {/* Zrušiť ukončenie len admin / vedúci dispečer a len kým stroj nie je vrátený. */}
-        {job.status === "completed" && onUncomplete && !handoverProtocol?.returnDone && (
-          <button
-            className="btn btn-ghost"
-            style={{ color: "var(--warn)" }}
-            onClick={onUncomplete}
-            title="Vráti zákazku späť medzi aktívne — napr. keď sa na poslednú chvíľu niečo zmení"
-          >
-            ↺ Zrušiť ukončenie
-          </button>
-        )}
-
-        {onEmailDriver && (
-          <button className="btn btn-ghost" onClick={onEmailDriver}>✉ Email šoférovi</button>
-        )}
-      </div>
+        {job.notes && <><dt>Poznámka</dt><dd>{job.notes}</dd></>}
+      </dl>
       </>} />
     </Modal>
   );
@@ -18237,16 +18204,17 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
   const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict && !dateOrderInvalid;
 
   return (
-    <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+    <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} xwide>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
         Nič to nezaväzuje ani nezablokuje stroj — len upozorní dispečera a vedúceho požičovne, že sa
         o tento stroj rokuje. Ak obchod vyjde, premenia ju priamo na skutočnú zákazku.
       </div>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="job-form-cols">
+        <fieldset>
+          <legend>REZERVÁCIA</legend>
         <Field label="Stroj *">
           <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!prefillMachineId} />
         </Field>
-        <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
@@ -18286,15 +18254,18 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
               : undefined
           }
         />
-        <div style={{ gridColumn: "1 / -1" }}>
-          <BlacklistWarning match={blacklistMatch} />
-        </div>
+        <BlacklistWarning match={blacklistMatch} />
         <Field label="Obchodník *">
           <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
             <option value="">— vybrať obchodníka —</option>
             {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
         </Field>
+        </fieldset>
+        <fieldset>
+          <legend>TERMÍN A MIESTO</legend>
+        <Field label="Kam *"><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
+        <div className="fgrid2">
         <Field label="Predpokladaný začiatok *">
           <input
             type="date"
@@ -18311,27 +18282,32 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
             onChange={(e) => setExpectedEnd(e.target.value)}
             style={{ width: "100%", borderColor: conflict || dateOrderInvalid ? "var(--danger)" : undefined, outline: conflict || dateOrderInvalid ? "2px solid var(--danger)" : undefined }}
           />
+          {!dateOrderInvalid && <div className="fhint">Prázdne, ak koniec ešte nie je známy.</div>}
           {dateOrderInvalid && (
-            <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>Koniec nemôže byť pred začiatkom.</div>
+            <div className="fhint" style={{ color: "var(--danger-text)" }}>Koniec nemôže byť pred začiatkom.</div>
           )}
         </Field>
-      </div>
+        </div>
       {conflict && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div className="fnote fnote-r">
           ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má zákazku" : "má inú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
         </div>
       )}
+        </fieldset>
+      </div>
+      <div style={{ height: 14 }} />
       <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, margin: "0 0 12px" }}>
+      <label className="fck">
         <input type="checkbox" checked={requestedAsJob} onChange={(e) => setRequestedAsJob(e.target.checked)} />
-        Ide o istotu, nie len o vyjednávanie — žiadam rovno o vytvorenie zákazky
+        <span>Ide o istotu, nie len o vyjednávanie — žiadam rovno o vytvorenie zákazky</span>
       </label>
       {customer.trim() && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", margin: "0 0 12px" }}>
+        <label className="fck">
           <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
-          Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
+          <span>Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov</span>
         </label>
       )}
+      <FormFoot missing={[!machineId && "stroj", !customer.trim() && "zákazník", !obchodnik && "obchodník", !toLocation.trim() && "kam", !expectedStart && "začiatok"].filter(Boolean)}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -18353,6 +18329,7 @@ function AddReservationModal({ machines, jobs, reservations, salespeople, custom
       >
         {existing ? "Uložiť zmeny" : "Vytvoriť rezerváciu"}
       </button>
+      </FormFoot>
     </Modal>
 
   );
@@ -18369,103 +18346,88 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
   // inak by sa dala premeniť znova a vznikla by druhá zákazka.
   const canActDirectly = can(user, "reservation_convert") && !isConverted; // dispečer/vedúci požičovne
   const isPending = r.status === "pending";
+  const canRequest = !canActDirectly && !isConverted && can(user, "reservation_add");
+  const dot = salespersonColor(r.obchodnik, salespeople);
   return (
     <Modal
       eyebrow={r.requestedAsJob ? "Žiadosť o zákazku" : isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"}
-      title={<span style={{ color: "var(--accent)" }}>{machine?.code || "—"}</span>}
+      title={
+        <>
+          {machine?.code || "—"}
+          {machine?.type && <span className="side-title-sub">{machine.type}</span>}
+          {isPending ? <span className="spill spill-wait">Čaká na schválenie</span> : isConverted ? <span className="spill spill-done">Premenená na zákazku</span> : null}
+        </>
+      }
       onClose={onClose}
-      wide
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Zákazník</span><b>{r.customer || "—"}</b></div>
+          <div><span>Obdobie</span><b className="tnum">{fmtDate(r.expectedStart)} – {r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"}</b></div>
+          <div><span>Obchodník</span><b style={{ display: "flex", alignItems: "center", gap: 6 }}>{dot && <span style={{ width: 9, height: 9, borderRadius: 3, background: dot, flexShrink: 0 }} />}{r.obchodnik || "—"}</b></div>
+          <div><span>Vytvoril</span><b>{r.createdBy || "—"}</b></div>
+        </div>
+      }
+      footer={(canActDirectly || canRequest) && (
+        <>
+          {canActDirectly && can(user, "reservation_delete") && (
+            <KebabMenu up label="⋯" actions={[{ label: "Zmazať rezerváciu", danger: true, onClick: onDelete }]} />
+          )}
+          {canRequest && (
+            <>
+              <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onRequestDelete}>
+                📣 Nahlásiť na zmazanie
+              </button>
+              {onRequestReminder && (
+                <button className="btn btn-ghost" onClick={onRequestReminder}>
+                  🔔 Pripomenúť dispečerovi
+                </button>
+              )}
+            </>
+          )}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {canActDirectly && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
+            {canActDirectly && isPending && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onApprove}>✓ Schváliť</button>}
+            {canActDirectly && <button className="btn btn-accent" onClick={onConvert}>Premeniť na zákazku</button>}
+            {canRequest && <button className="btn btn-accent" onClick={onRequestConvert}>📣 Nahlásiť ako zákazku</button>}
+          </div>
+        </>
+      )}
     >
       {r.requestedAsJob && (
-        <div style={{ background: "var(--accent-light)", color: "var(--accent)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div style={{ background: "var(--accent-light)", color: "var(--accent)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
           ✅ Obchodník žiada rovno o zákazku, nie len rezerváciu — netreba čakať, stačí premeniť.
         </div>
       )}
       {isPending && (
-        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
           ⏳ Čaká na schválenie — v kalendári je zobrazená bledšie, kým ju dispečer alebo vedúci požičovne neschváli.
         </div>
       )}
       {isConverted && (
-        <div style={{ background: "var(--ok-bg)", color: "var(--ok)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ background: "var(--ok-bg)", color: "var(--ok)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>✓ Rezervácia už bola premenená na zákazku.</span>
           {r.convertedJobId && onOpenConvertedJob && (
-            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => onOpenConvertedJob(r.convertedJobId)}>Otvoriť zákazku</button>
+            <button className="btn btn-ghost" onClick={() => onOpenConvertedJob(r.convertedJobId)}>Otvoriť zákazku</button>
           )}
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Zákazník" value={r.customer} />
-        <CardField label="Kam" value={r.toLocation} />
-        <CardField label="Obchodník" value={r.obchodnik} dotColor={salespersonColor(r.obchodnik, salespeople)} />
-        <CardField label="Vytvoril" value={r.createdBy} />
-        <CardField label="Predpokladaný začiatok" value={fmtDate(r.expectedStart)} />
-        <CardField label="Predpokladaný koniec" value={r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"} />
-      </div>
-      {r.notes && (
-        <>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Poznámka</div>
-          <div style={{ fontSize: 13, marginBottom: 14 }}>{r.notes}</div>
-        </>
-      )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {canActDirectly && (
-          <button className="btn btn-ghost" onClick={onEdit}>
-            Upraviť
-          </button>
-        )}
-        {canActDirectly && isPending && (
-          <button className="btn btn-accent" onClick={onApprove}>
-            ✓ Schváliť
-          </button>
-        )}
-        {canActDirectly && (
-          <button className="btn btn-accent" onClick={onConvert}>
-            Premeniť na zákazku
-          </button>
-        )}
-        {canActDirectly && can(user, "reservation_delete") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onDelete}>
-            Zmazať rezerváciu
-          </button>
-        )}
-        {!canActDirectly && !isConverted && can(user, "reservation_add") && (
-          <>
-            <button className="btn btn-accent" onClick={onRequestConvert}>
-              📣 Nahlásiť ako zákazku
-            </button>
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onRequestDelete}>
-              📣 Nahlásiť na zmazanie
-            </button>
-            {onRequestReminder && (
-              <button className="btn btn-ghost" onClick={onRequestReminder}>
-                🔔 Pripomenúť dispečerovi
-              </button>
-            )}
-          </>
-        )}
-      </div>
+      <dl className="side-dl">
+        <dt>Zákazník</dt><dd>{r.customer || "—"}</dd>
+        <dt>Kam</dt><dd>{r.toLocation || "—"}</dd>
+        <dt>Predpokladaný začiatok</dt><dd className="tnum">{fmtDate(r.expectedStart)}</dd>
+        <dt>Predpokladaný koniec</dt><dd className="tnum">{r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"}</dd>
+        {r.notes && <><dt>Poznámka</dt><dd style={{ whiteSpace: "pre-wrap" }}>{r.notes}</dd></>}
+      </dl>
     </Modal>
   );
 }
 
 function TransportModeToggle({ selfMode, onChange, disabled }) {
   return (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div className="seg" role="radiogroup" style={{ display: "flex", width: "100%" }}>
       {[[false, "Mateco doprava"], [true, "Vlastná doprava"]].map(([val, label]) => (
-        <button
-          key={label}
-          type="button"
-          className="btn"
-          disabled={disabled}
-          onClick={() => onChange(val)}
-          style={{
-            flex: 1, fontSize: 12,
-            background: selfMode === val ? "var(--accent)" : "transparent",
-            color: selfMode === val ? "#fff" : "var(--text)",
-            border: "1px solid " + (selfMode === val ? "var(--accent)" : "var(--border)"),
-          }}
-        >
+        <button key={label} type="button" role="radio" aria-checked={selfMode === val} className={selfMode === val ? "on" : ""} disabled={disabled} onClick={() => onChange(val)}>
           {label}
         </button>
       ))}
@@ -18608,14 +18570,15 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   const canSave = machineId && fromDepo.trim() && (selfPickup || toLocation.trim()) && customer.trim() && obchodnik && startDate && (!endRequired || endDate) && !conflict && !pendingPrep && !dateOrderInvalid;
 
   return (
-    <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} wide>
+    <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} xwide>
       {otherLock && (
         <div style={{ background: "var(--warning-bg, #fff3cd)", color: "var(--warning, #856404)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
           ⚠️ Túto zákazku práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
         </div>
       )}
-      {(
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="job-form-cols">
+        <fieldset>
+          <legend>ZÁKAZKA</legend>
           <Field label="Stroj *">
             {/* R1: stroj už odišiel — výmena = ukončiť zákazku a založiť novú (protokol, kontroly a ERP patria k stroju). */}
             <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!isDeparted || vyvozLocked} />
@@ -18623,19 +18586,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{existing?.status === "completed" ? "Zákazka je ukončená — stroj sa už nemení." : "Stroj už odišiel — pri výmene ukončite zákazku a založte novú na nový stroj."}</div>
             )}
           </Field>
-          <Field label="Obchodník *">
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {obchodnik && (
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
-              )}
-              <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
-                <option value="">— vybrať obchodníka —</option>
-                {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-              </select>
-            </div>
-          </Field>
           {machine?.objekt === "Externý stroj" && (
-            <div style={{ gridColumn: "1 / -1" }}><Field label="Názov stroja pre túto zákazku">
+            <div><Field label="Názov stroja pre túto zákazku">
               <input
                 value={machineDisplayName}
                 onChange={(e) => setMachineDisplayName(e.target.value)}
@@ -18698,9 +18650,21 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               </div>
             )}
           </div>}
+          <Field label="Obchodník *">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {obchodnik && (
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: salespersonColor(obchodnik, salespeople), flexShrink: 0 }} />
+              )}
+              <select value={obchodnik} onChange={(e) => setObchodnik(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— vybrať obchodníka —</option>
+                {salespeople.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+          </Field>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
           <Field label="Začiatok *">
             <input
-              type="date"
+              type="date" lang="sk"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               style={{ width: "100%", borderColor: conflict ? "var(--danger)" : undefined, outline: conflict ? "2px solid var(--danger)" : undefined }}
@@ -18708,7 +18672,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
           </Field>
           <Field label="Koniec">
             <input
-              type="date"
+              type="date" lang="sk"
               value={endDate}
               min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
@@ -18720,18 +18684,15 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: endRequired && !endDate ? "var(--danger)" : "var(--text-dim)", marginTop: 4 }}>{endRequired ? "Ukončená zákazka musí mať koniec." : "Nechajte prázdne, ak koniec zákazky ešte nie je známy."}</div>
             )}
           </Field>
+          </div>
           <Field label="Číslo zmluvy"><input value={cisloZmluvy} onChange={(e) => setCisloZmluvy(e.target.value)} style={{ width: "100%" }} /></Field>
-          <div style={{ gridColumn: "1 / -1" }}>
+          <div>
             <Field label="Poznámka"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
           </div>
-        </div>
-      )}
-
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "18px 0 8px", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-        Preprava
-      </div>
-      {(
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        </fieldset>
+        <fieldset>
+          <legend>PREPRAVA</legend>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
           <Field label="Odkiaľ (depo) *">
             <select value={fromDepo} onChange={(e) => setFromDepo(e.target.value)} disabled={vyvozLocked} style={{ width: "100%" }}>
               <option value="">— vybrať depo —</option>
@@ -18739,14 +18700,14 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
             </select>
           </Field>
           <Field label={selfPickup ? "Kam (nepovinné)" : "Kam *"}><input value={toLocation} onChange={(e) => setToLocation(e.target.value)} style={{ width: "100%" }} /></Field>
+          </div>
+          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <div>
           <Field label="Doprava pri vývoze">
             <TransportModeToggle selfMode={selfPickup} onChange={setSelfPickup} disabled={vyvozLocked} />
           </Field>
-          <Field label="Doprava pri zvoze">
-            <TransportModeToggle selfMode={selfReturn} onChange={setSelfReturn} disabled={zvozLocked} />
-          </Field>
           {selfPickup ? (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>Zákazník si stroj vyzdvihne v depe — kontrolu aj odovzdanie robí checker depa.</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Zákazník si stroj vyzdvihne v depe — kontrolu aj odovzdanie robí checker depa.</div>
           ) : (
             <Field label="Šofér (vývoz)">
               <select value={driverId} onChange={(e) => setDriverId(e.target.value)} disabled={vyvozLocked} style={{ width: "100%" }}>
@@ -18755,8 +18716,17 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               </select>
             </Field>
           )}
+          <Field label={selfPickup ? "Dátum vyzdvihnutia v depe" : "Dátum vývozu"}>
+            <input type="date" lang="sk" value={departureDate} onChange={(e) => { setDepartureDate(e.target.value); setDepartureLinked(e.target.value === startDate); }} disabled={vyvozLocked} style={{ width: "100%" }} />
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? (existing?.status === "completed" ? "Zákazka je ukončená — vývoz sa už nemení." : "Vývoz už prebehol — nemení sa.") : "Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz)."}</div>
+          </Field>
+            </div>
+            <div>
+          <Field label="Doprava pri zvoze">
+            <TransportModeToggle selfMode={selfReturn} onChange={setSelfReturn} disabled={zvozLocked} />
+          </Field>
           {selfReturn ? (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>Zákazník stroj vráti do depa sám — protokol aj kontrolu robí checker depa.</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>Zákazník stroj vráti do depa sám — protokol aj kontrolu robí checker depa.</div>
           ) : (
             <Field label="Šofér (zvoz)">
               <select value={returnDriverId} onChange={(e) => setReturnDriverId(e.target.value)} disabled={zvozLocked} style={{ width: "100%" }}>
@@ -18765,12 +18735,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               </select>
             </Field>
           )}
-          <Field label={selfPickup ? "Dátum vyzdvihnutia v depe" : "Dátum vývozu"}>
-            <input type="date" value={departureDate} onChange={(e) => { setDepartureDate(e.target.value); setDepartureLinked(e.target.value === startDate); }} disabled={vyvozLocked} style={{ width: "100%" }} />
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{vyvozLocked ? (existing?.status === "completed" ? "Zákazka je ukončená — vývoz sa už nemení." : "Vývoz už prebehol — nemení sa.") : "Predvyplnené podľa začiatku — zmeňte, ak sa stroj vezie iný deň (napr. prednávoz)."}</div>
-          </Field>
           <Field label={selfReturn ? "Dátum vrátenia do depa" : "Dátum zvozu"}>
-            <input type="date" value={pickupDate} min={endDate || undefined} onChange={(e) => { setPickupDate(e.target.value); setPickupLinked(e.target.value === endDate); }} disabled={zvozLocked} style={{ width: "100%" }} />
+            <input type="date" lang="sk" value={pickupDate} min={endDate || undefined} onChange={(e) => { setPickupDate(e.target.value); setPickupLinked(e.target.value === endDate); }} disabled={zvozLocked} style={{ width: "100%" }} />
             {zvozLocked ? (
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Stroj je vrátený — zvoz sa už nemení.</div>
             ) : endDate && pickupDate && pickupDate < endDate ? (
@@ -18779,7 +18745,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Predvyplnené podľa konca — dá sa zmeniť aj neskôr priamo v Prepravách.</div>
             )}
           </Field>
-          {returnDepoEditable && <div />}
+            </div>
+          </div>
           {returnDepoEditable && (
             <Field label="Depo návratu">
               <select value={returnDepo} onChange={(e) => setReturnDepo(e.target.value)} style={{ width: "100%" }}>
@@ -18788,8 +18755,8 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Kam sa stroj vráti — podľa neho sa určí checker kontroly po vrátení.</div>
             </Field>
           )}
-        </div>
-      )}
+        </fieldset>
+      </div>
 
       {conflict && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
@@ -18812,10 +18779,13 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
           Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
         </label>
       )}
+      <div className="job-form-foot">
       {missingFields.length > 0 && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>Na uloženie chýba: {missingFields.join(", ")}.</div>
+        <span className="miss-pill">Na uloženie chýba: {missingFields.join(", ")}.</span>
       )}
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap", alignItems: "center" }}>
+        {/* Zrušiť = to isté ako × v hlavičke okna (vrátane otázky pri rozpísaných údajoch). */}
+        <button type="button" className="btn btn-outline ff-cancel" onClick={(e) => e.currentTarget.closest(".modal-panel")?.querySelector(".modal-close-x")?.click()}>Zrušiť</button>
         <button
           className="btn btn-accent"
           disabled={!canSave}
@@ -18862,6 +18832,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
           )
         )}
       </div>
+      </div>
     </Modal>
   );
 }
@@ -18877,7 +18848,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
 function BlacklistWarning({ match }) {
   if (!match) return null;
   return (
-    <div style={{ background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: 6, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
+    <div className="fnote fnote-r">
       ⚠ Tento zákazník je na BLACKLISTE{match.dovod ? ` — dôvod: ${match.dovod}` : ""}{match.aktualnyStav ? ` (stav: ${match.aktualnyStav})` : ""}.
     </div>
   );
@@ -18897,21 +18868,27 @@ function NewContactInlineForm({ onSave, onCancel }) {
   const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
   if (saved) {
-    return <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>✓ Kontakt "{name}" pridaný k zákazníkovi.</div>;
+    return <div className="fnote fnote-g">✓ Kontakt "{name}" pridaný k zákazníkovi.</div>;
   }
   return (
-    <div className="panel" style={{ padding: 10, marginBottom: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-        <input placeholder="Meno *" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Funkcia" value={role} onChange={(e) => setRole(e.target.value)} />
-        <input placeholder="Telefón" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+    <div
+      className="fnote fnote-i"
+      style={{ padding: 14 }}
+      // Enter v poli kontaktu uloží kontakt (nie celý formulár okna).
+      onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); e.currentTarget.querySelector(".btn-black:not(:disabled)")?.click(); } }}
+    >
+      <div className="fld-l" style={{ marginBottom: 10 }}>Nová kontaktná osoba</div>
+      <div className="fgrid2">
+        <Field label="Meno *"><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Funkcia"><input value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Telefón"><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></Field>
+        <Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-outline" onClick={onCancel}>Zrušiť</button>
         <button
           type="button"
-          className="btn btn-accent"
+          className="btn btn-black"
           disabled={!name.trim()}
           onClick={() => {
             onSave({ name: name.trim(), role, phone, email });
@@ -19042,50 +19019,66 @@ function ImportCustomersModal({ onClose, onImport }) {
 
   return (
     <Modal title="Import zákazníkov z ERP (CSV)" onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 6, fontSize: 14 }}>
         Naimportuje sa len názov firmy a číslo odberateľa. Kontaktné údaje (email, telefón) sa dopĺňajú
         postupne priamo v platforme pri zakladaní zákaziek — existujúcich zákazníkov to neprepíše.
       </div>
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV súbor (exportovaný z ERP)">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
 
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <Field label="Stĺpec = Názov firmy *">
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
+            <Field label="Názov firmy *">
               <select value={mapFirma} onChange={(e) => setMapFirma(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = IČO">
+            <Field label="IČO">
               <select value={mapIco} onChange={(e) => setMapIco(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Číslo odberateľa">
+            <Field label="Číslo odberateľa">
               <select value={mapCislo} onChange={(e) => setMapCislo(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
           </div>
-          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-            Importovať {rows.length} zákazníkov
-          </button>
         </>
       )}
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať {rows.length} zákazníkov
+        </button>
+      </FormFoot>
     </Modal>
+  );
+}
+
+// Výber CSV súboru pre importy — obrysové tlačidlo s názvom súboru a počtom riadkov vedľa.
+function CsvFilePick({ onChange, fileName, count }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <label className="btn btn-outline" style={{ minHeight: 44, fontSize: 14, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+        Vybrať CSV súbor…
+        <input type="file" accept=".csv" onChange={onChange} style={{ display: "none" }} />
+      </label>
+      {fileName && <span className="tnum" style={{ fontSize: 14 }}>{fileName} · {count} riadkov</span>}
+    </div>
   );
 }
 
 // Spoločné pole na výber jedného stĺpca z nahraného CSV/Excelu pre mapovanie.
 function ImportFieldSelect({ label, required, value, onChange, headers }) {
   return (
-    <Field label={`Stĺpec = ${label}${required ? " *" : ""}`}>
+    <Field label={`${label}${required ? " *" : ""}`}>
       <select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%" }}>
         <option value="">—</option>
         {headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -19210,18 +19203,19 @@ function DamageImportModal({ machines, technicians, today, onClose, onImport }) 
 
   return (
     <Modal title="Import poškodení strojov požičovne z Excelu" onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 6, fontSize: 14 }}>
         Určené na presun aktívnych (nevyriešených) hlásení zo staršej evidencie. Sériové číslo sa musí presne
         spárovať s existujúcim strojom v platforme — inak sa riadok preskočí. Zákazník/miesto sa prevezmú
         z aktuálnej zákazky stroja, pokiaľ ich v súbore nevyplníte vlastné.
       </div>
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV/Excel súbor (uložený ako .csv)">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
             <ImportFieldSelect label="Sériové číslo stroja" required value={mapSerial} onChange={setMapSerial} headers={headers} />
             <ImportFieldSelect label="Popis poruchy / zákazky" required value={mapPopis} onChange={setMapPopis} headers={headers} />
             <ImportFieldSelect label="Dátum nahlásenia" value={mapDate} onChange={setMapDate} headers={headers} />
@@ -19232,22 +19226,24 @@ function DamageImportModal({ machines, technicians, today, onClose, onImport }) 
             <ImportFieldSelect label="Poznámka dispečera" value={mapNote} onChange={setMapNote} headers={headers} />
           </div>
           {notFoundMachines.length > 0 && (
-            <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>
-              Nenájdené sériové čísla ({notFoundMachines.length}): {notFoundMachines.slice(0, 20).join(", ")}
+            <div className="fnote fnote-r">
+              ⚠ Nenájdené sériové čísla ({notFoundMachines.length}): {notFoundMachines.slice(0, 20).join(", ")}
               {notFoundMachines.length > 20 ? "…" : ""}
             </div>
           )}
           {notFoundTechs.length > 0 && (
-            <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", marginBottom: 10 }}>
-              Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
+            <div className="fnote fnote-y">
+              ⚠ Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
               {notFoundTechs.length > 20 ? "…" : ""}
             </div>
           )}
-          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-            Importovať poškodenia
-          </button>
         </>
       )}
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať poškodenia
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19355,18 +19351,19 @@ function ExternalServiceImportModal({ technicians, today, onClose, onImport }) {
 
   return (
     <Modal title="Import externých servisných zákaziek z Excelu" onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 6, fontSize: 14 }}>
         Určené na presun aktívnych (nevyriešených) externých zákaziek zo staršej evidencie. Stĺpec "Depo" sa
         priradí len ak presne sedí s jedným z diep (Bratislava, Nitra, Zvolen, Žilina, Prešov, Externé) —
         inak zostane zákazka nepriradená a depo sa doplní ručne.
       </div>
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV/Excel súbor (uložený ako .csv)">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
             <ImportFieldSelect label="Zákazník" required value={mapCustomer} onChange={setMapCustomer} headers={headers} />
             <ImportFieldSelect label="Popis poruchy / zákazky" required value={mapPopis} onChange={setMapPopis} headers={headers} />
             <ImportFieldSelect label="Sériové číslo (zákazníkovho stroja)" value={mapSerial} onChange={setMapSerial} headers={headers} />
@@ -19379,16 +19376,18 @@ function ExternalServiceImportModal({ technicians, today, onClose, onImport }) {
             <ImportFieldSelect label="Poznámka dispečera" value={mapNote} onChange={setMapNote} headers={headers} />
           </div>
           {notFoundTechs.length > 0 && (
-            <div style={{ fontSize: 12, color: "var(--warn, #b07e00)", marginBottom: 10 }}>
-              Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
+            <div className="fnote fnote-y">
+              ⚠ Nenájdení technici — zákazka sa vytvorí nepridelená ({notFoundTechs.length}): {notFoundTechs.slice(0, 20).join(", ")}
               {notFoundTechs.length > 20 ? "…" : ""}
             </div>
           )}
-          <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-            Importovať externé zákazky
-          </button>
         </>
       )}
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať externé zákazky
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19464,75 +19463,76 @@ function ImportModal({ onClose, onImport }) {
 
   return (
     <Modal title="Import strojov z CSV" onClose={onClose} wide>
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV súbor (exportovaný z Excelu)">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
 
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <Field label="Stĺpec = Sériové číslo *">
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
+            <Field label="Sériové číslo *">
               <select value={mapCode} onChange={(e) => setMapCode(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Objekt (Požičovňový stroj / Externý stroj / Príslušenstvo)">
+            <Field label="Objekt (Požičovňový stroj / Externý stroj / Príslušenstvo)">
               <select value={mapObjekt} onChange={(e) => setMapObjekt(e.target.value)} style={{ width: "100%" }}>
                 <option value="">— chýba, všetko sa zoberie ako Požičovňový stroj —</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Model / Názov">
+            <Field label="Model / Názov">
               <select value={mapType} onChange={(e) => setMapType(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Depo / lokalita">
+            <Field label="Depo / lokalita">
               <select value={mapDepo} onChange={(e) => setMapDepo(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum najbližšej revízie ZZ">
+            <Field label="Dátum najbližšej revízie ZZ">
               <select value={mapRevizia} onChange={(e) => setMapRevizia(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Sledovať revíziu ZZ (Áno/Nie)">
+            <Field label="Sledovať revíziu ZZ (Áno/Nie)">
               <select value={mapTrackZZ} onChange={(e) => setMapTrackZZ(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum najbližšej revízie EZ">
+            <Field label="Dátum najbližšej revízie EZ">
               <select value={mapReviziaEZ} onChange={(e) => setMapReviziaEZ(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Sledovať revíziu EZ (Áno/Nie)">
+            <Field label="Sledovať revíziu EZ (Áno/Nie)">
               <select value={mapTrackEZ} onChange={(e) => setMapTrackEZ(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum najbližšej úradnej skúšky">
+            <Field label="Dátum najbližšej úradnej skúšky">
               <select value={mapUradnaSkuska} onChange={(e) => setMapUradnaSkuska(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Sledovať úradnú skúšku (Áno/Nie)">
+            <Field label="Sledovať úradnú skúšku (Áno/Nie)">
               <select value={mapTrackSkuska} onChange={(e) => setMapTrackSkuska(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Archivovaný (Áno/Nie)">
+            <Field label="Archivovaný (Áno/Nie)">
               <select value={mapArchived} onChange={(e) => setMapArchived(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -19540,7 +19540,8 @@ function ImportModal({ onClose, onImport }) {
             </Field>
           </div>
 
-          <div className="panel" style={{ maxHeight: 200, overflow: "auto", marginBottom: 14 }}>
+          <FormStep n={3} title="Náhľad" right={<span className="fhint" style={{ marginTop: 0 }}>prvých 5 riadkov</span>} />
+          <div className="panel" style={{ maxHeight: 200, overflow: "auto", marginBottom: 14, boxShadow: "none" }}>
             <table>
               <thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead>
               <tbody>
@@ -19553,9 +19554,11 @@ function ImportModal({ onClose, onImport }) {
         </>
       )}
 
-      <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-        Importovať {rows.length > 0 ? `(${rows.length} strojov)` : ""}
-      </button>
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať {rows.length > 0 ? `(${rows.length} strojov)` : ""}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19645,59 +19648,60 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
 
   return (
     <Modal title="Import zákaziek z CSV" onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 6, fontSize: 14 }}>
         Použite súbor po ručnej kontrole (napr. "zákazky na kontrolu"). Stroj sa spáruje podľa kódu — musí presne sedieť s kódom v platforme.
       </div>
       {user?.role === "admin" && (
-        <div style={{ fontSize: 11, color: "var(--text-dim)", background: "var(--panel-2)", padding: "6px 10px", borderRadius: 6, marginBottom: 12 }}>
+        <div className="fnote fnote-i" style={{ marginTop: 10 }}>
           Poznámka (vidíš len ty ako admin): najprv importuj Zákazníkov (záložka Zákazníci), potom až zákazky — inak sa nespárovaní zákazníci založia automaticky bez IČO.
         </div>
       )}
+      <FormStep n={1} title="Súbor" />
       <Field label="Vyberte CSV súbor">
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <CsvFilePick onChange={handleFile} fileName={fileName} count={rows.length} />
       </Field>
-      {fileName && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Súbor: {fileName} · {rows.length} riadkov</div>}
 
       {headers.length > 0 && (
         <>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <Field label="Stĺpec = Sériové číslo *">
+          <FormStep n={2} title="Priradenie stĺpcov" right={<span className="fhint" style={{ marginTop: 0 }}>Vľavo pole v platforme, v zozname stĺpec zo súboru.</span>} />
+          <div className="fgrid2">
+            <Field label="Sériové číslo *">
               <select value={mapMachineCode} onChange={(e) => setMapMachineCode(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Zákazník">
+            <Field label="Zákazník">
               <select value={mapCustomer} onChange={(e) => setMapCustomer(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = IČO">
+            <Field label="IČO">
               <select value={mapIco} onChange={(e) => setMapIco(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Kam / miesto">
+            <Field label="Kam / miesto">
               <select value={mapToLocation} onChange={(e) => setMapToLocation(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum od *">
+            <Field label="Dátum od *">
               <select value={mapStart} onChange={(e) => setMapStart(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Dátum do">
+            <Field label="Dátum do">
               <select value={mapEnd} onChange={(e) => setMapEnd(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </Field>
-            <Field label="Stĺpec = Obchodník">
+            <Field label="Obchodník">
               <select value={mapObchodnik} onChange={(e) => setMapObchodnik(e.target.value)} style={{ width: "100%" }}>
                 <option value="">—</option>
                 {headers.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -19705,7 +19709,8 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
             </Field>
           </div>
 
-          <div className="panel" style={{ maxHeight: 200, overflow: "auto", marginBottom: 14 }}>
+          <FormStep n={3} title="Náhľad" right={<span className="fhint" style={{ marginTop: 0 }}>prvých 5 riadkov</span>} />
+          <div className="panel" style={{ maxHeight: 200, overflow: "auto", marginBottom: 14, boxShadow: "none" }}>
             <table>
               <thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead>
               <tbody>
@@ -19719,15 +19724,17 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
       )}
 
       {notFound.length > 0 && (
-        <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>
-          {notFound.length} riadkov sa nespárovalo so strojom (kód sa nenašiel): {notFound.slice(0, 6).join(", ")}
+        <div className="fnote fnote-r">
+          ⚠ {notFound.length} riadkov sa nespárovalo so strojom (kód sa nenašiel): {notFound.slice(0, 6).join(", ")}
           {notFound.length > 6 ? "…" : ""}
         </div>
       )}
 
-      <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-        Importovať zákazky
-      </button>
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
+          Importovať zákazky
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19781,8 +19788,7 @@ function GanttDragConfirmModal({ pending, conflictFor, onConfirm, onCancel }) {
         </div>
       )}
       {isJob && dragError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{dragError}</div>}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
+      <FormFoot confirm>
         <button
           className="btn btn-accent"
           disabled={isJob && !!dragError}
@@ -19799,7 +19805,7 @@ function GanttDragConfirmModal({ pending, conflictFor, onConfirm, onCancel }) {
         >
           Potvrdiť
         </button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19813,33 +19819,39 @@ function TransportNoteModal({ machine, date, drivers, onClose, onSave }) {
   const [driverId, setDriverId] = useState("");
   return (
     <Modal title="Nová poznámka: Prevoz" onClose={onClose}>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-        {machine?.code} · {fmtDate(date)} · súčasné depo {machine?.depo || "—"}
+      <div className="fsum">
+        <div><span>Stroj</span><b className="tnum">{machine?.code || "—"}</b></div>
+        <div><span>Dátum</span><span className="tnum">{fmtDate(date)}</span></div>
       </div>
-      <Field label="Cieľové depo">
-        <select value={targetDepo} onChange={(e) => setTargetDepo(e.target.value)} style={{ width: "100%" }}>
-          <option value="">— vybrať depo —</option>
-          {DEPO_OPTIONS.filter((d) => d !== machine?.depo).map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-      </Field>
+      <div className="fgrid2">
+        <Field label="Súčasné depo">
+          <div style={{ fontSize: 15, minHeight: 44, display: "flex", alignItems: "center" }}>{machine?.depo || "—"}</div>
+        </Field>
+        <Field label="Cieľové depo *">
+          <select value={targetDepo} onChange={(e) => setTargetDepo(e.target.value)} style={{ width: "100%" }}>
+            <option value="">— vybrať depo —</option>
+            {DEPO_OPTIONS.filter((d) => d !== machine?.depo).map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
       <Field label="Poznámka">
         <input value={note} onChange={(e) => setNote(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <Field label="Šofér (voliteľné — pošle mu upozornenie)">
+      <Field label="Šofér">
         <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
           <option value="">— nepriradiť —</option>
           {driverOptionsGrouped(drivers || [], "bez účtu — prevoz nepotvrdí v platforme")}
         </select>
+        <div className="fhint">Voliteľné — pošle mu upozornenie.</div>
       </Field>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "10px 0" }}>
+      <div className="fnote fnote-i">
         Toto stroj ešte nepresunie — len si to poznačí. Depo sa reálne zmení až po samostatnom potvrdení.
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+      <FormFoot missing={!targetDepo ? ["cieľové depo"] : []}>
         <button className="btn btn-accent" disabled={!targetDepo} onClick={() => onSave(targetDepo, note, driverId || null)}>Uložiť poznámku</button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -19851,48 +19863,72 @@ function TransportNoteDetailModal({ note, machine, driver, onClose, onConfirm, o
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <>
-    <Modal title="🚚 Prevoz stroja" onClose={onClose}>
-      <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{machine?.code}</strong> · {fmtDate(note.date)}</div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
-        Súčasné depo: {machine?.depo || "—"} → Cieľové depo: <strong>{note.targetDepo}</strong>
-      </div>
-      {driver && (
-        <div style={{ fontSize: 13, marginBottom: 10 }}>
-          🚚 Šofér: <strong>{driver.name}</strong>{" "}
-          {note.driverDone ? (
-            <span style={{ color: "var(--ok)" }}>— ✓ nahlásil prevezené{note.driverDoneAt ? `, ${fmtDate(note.driverDoneAt)}` : ""}</span>
-          ) : (
-            <span style={{ color: "var(--text-dim)" }}>— ešte nenahlásil prevezené</span>
+    <Modal
+      eyebrow="🚚 Prevoz stroja"
+      title={<>{machine?.code || "—"}{machine?.type && <span className="side-title-sub">{machine.type}</span>}{note.confirmed && <span className="spill spill-done">✓ Prevoz potvrdený</span>}</>}
+      onClose={onClose}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Súčasné depo</span><b>{machine?.depo || "—"}</b></div>
+          <div><span>Cieľové depo</span><b>{note.targetDepo || "—"}</b></div>
+          <div><span>Dátum</span><b className="tnum">{fmtDate(note.date)}</b></div>
+          <div><span>Šofér</span><b>{driver?.name || "—"}</b></div>
+        </div>
+      }
+      footer={
+        <>
+          {!note.confirmed && !confirming && (
+            <button className="btn btn-ghost" style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => setConfirmingDelete(true)}>Zmazať poznámku</button>
           )}
-        </div>
-      )}
-      {note.note && <div style={{ fontSize: 13, marginBottom: 10 }}>📝 {note.note}</div>}
-      {note.confirmed ? (
-        <div style={{ fontSize: 13, color: "var(--ok)", marginBottom: 4 }}>
-          ✓ Prevoz potvrdený{note.confirmedBy ? ` — ${note.confirmedBy}` : ""}{note.confirmedAt ? `, ${fmtDate(note.confirmedAt)}` : ""}
-        </div>
-      ) : confirming ? (
-        <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 4, fontWeight: 600 }}>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
+            {!note.confirmed && !confirming && (
+              <button className="btn btn-accent" onClick={() => setConfirming(true)}>Potvrdiť prevezenie</button>
+            )}
+            {!note.confirmed && confirming && (
+              <>
+                <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Späť</button>
+                <button className="btn btn-accent" style={{ background: "var(--accent-fill)", borderColor: "var(--accent-fill)" }} onClick={onConfirm}>
+                  Áno, presunúť stroj
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      }
+    >
+      {confirming && !note.confirmed && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 14, fontWeight: 600, marginTop: 8 }}>
           Naozaj presunúť stroj {machine?.code} do depa {note.targetDepo}? Toto reálne zmení depo stroja.
         </div>
-      ) : null}
-      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zavrieť</button>
-        {!note.confirmed && !confirming && (
+      )}
+      <dl className="side-dl">
+        <dt>Stroj</dt><dd><b>{machine?.code}</b>{machine?.type ? ` · ${machine.type}` : ""}</dd>
+        <dt>Dátum</dt><dd className="tnum">{fmtDate(note.date)}</dd>
+        <dt>Súčasné depo</dt><dd>{machine?.depo || "—"}</dd>
+        <dt>Cieľové depo</dt><dd><b>{note.targetDepo}</b></dd>
+        {driver && (
           <>
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => setConfirmingDelete(true)}>Zmazať poznámku</button>
-            <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={() => setConfirming(true)}>Potvrdiť prevezenie</button>
+            <dt>Šofér</dt>
+            <dd>
+              <b>{driver.name}</b>{" "}
+              {note.driverDone ? (
+                <span style={{ color: "var(--ok)" }}>— ✓ nahlásil prevezené{note.driverDoneAt ? `, ${fmtDate(note.driverDoneAt)}` : ""}</span>
+              ) : (
+                <span style={{ color: "var(--text-dim)" }}>— ešte nenahlásil prevezené</span>
+              )}
+            </dd>
           </>
         )}
-        {!note.confirmed && confirming && (
+        {note.note && <><dt>Poznámka</dt><dd style={{ whiteSpace: "pre-wrap" }}>{note.note}</dd></>}
+        {note.confirmed && (
           <>
-            <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Späť</button>
-            <button className="btn btn-accent" style={{ marginLeft: "auto", background: "var(--danger)", borderColor: "var(--danger)" }} onClick={onConfirm}>
-              Áno, presunúť stroj
-            </button>
+            <dt>Potvrdené</dt>
+            <dd style={{ color: "var(--ok)" }}>✓ Prevoz potvrdený{note.confirmedBy ? ` — ${note.confirmedBy}` : ""}{note.confirmedAt ? `, ${fmtDate(note.confirmedAt)}` : ""}</dd>
           </>
         )}
-      </div>
+      </dl>
     </Modal>
     {confirmingDelete && (
       <ConfirmDeleteModal label="túto poznámku o prevoze" onClose={() => setConfirmingDelete(false)} onConfirm={onDelete} />
@@ -20144,7 +20180,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
   // kvôli tabuľkám), "prebublať" von a posunúť celú stránku vrátane
   // hlavičky/tlačidiel nad kalendárom, nielen samotný Gantt.
   return (
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
+    <div ref={scrollContainerRef} className="gantt-scroll" onScroll={handleCalendarScroll} style={{ overflow: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
       {/* POZOR: translateZ(0)/transform na TOMTO obale (rodič sticky prvkov)
           bola zlá cesta — mobilný Safari má známu chybu, že position:sticky
           prestane fungovať úplne, keď má nadradený prvok "transform" (aj
@@ -20779,72 +20815,6 @@ const CalendarGrid = React.memo(function CalendarGrid({
   );
 });
 
-function MachineDayList({ machines, jobs, reservations, today, onOpenCard, onOpenJob, onOpenReservation }) {
-  const days = useMemo(() => {
-    const list = [];
-    let d = today;
-    for (let i = 0; i < 5; i++) { list.push(d); d = addDaysISO(d, 1); }
-    return list;
-  }, [today]);
-
-  function occupancyFor(m, iso) {
-    const job = jobs.find((j) => j.machineId === m.id && j.status !== "completed" && j.startDate <= iso && (!j.endDate || j.endDate >= iso));
-    if (job) return { type: "job", item: job };
-    const res = (reservations || []).find((r) => r.machineId === m.id && r.status === "approved" && r.expectedStart <= iso && (!r.expectedEnd || r.expectedEnd >= iso));
-    if (res) return { type: "reservation", item: res };
-    return null;
-  }
-
-  if (machines.length === 0) {
-    return (
-      <div style={{ textAlign: "center", color: "var(--text-dim)", padding: 30 }}>
-        Žiadne stroje nezodpovedajú filtru.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {machines.map((m) => (
-        <div key={m.id} className="panel" style={{ overflow: "hidden" }}>
-          <div
-            onClick={() => onOpenCard(m)}
-            style={{ background: "#1a1a1a", color: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-          >
-            <span className="label-font" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em" }}>{m.code}</span>
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>{m.type}</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,.7)" }}>{m.depo}</span>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${days.length}, 1fr)`, overflowX: "auto" }}>
-            {days.map((iso, i) => {
-              const occ = occupancyFor(m, iso);
-              const dow = new Date(iso + "T00:00:00").getDay();
-              return (
-                <div key={iso} style={{ padding: 12, borderRight: i < days.length - 1 ? "1px solid var(--border)" : "none", minWidth: 120 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-                    {DOW_NAMES_FULL[dow]} — {fmtDate(iso)}
-                  </div>
-                  {!occ ? (
-                    <div style={{ fontSize: 12, color: "var(--ok)" }}>Voľné</div>
-                  ) : occ.type === "job" ? (
-                    <div onClick={() => onOpenJob(occ.item)} style={{ fontSize: 12, cursor: "pointer", borderLeft: "2px solid var(--accent)", paddingLeft: 8 }}>
-                      <div style={{ fontWeight: 600, color: "var(--accent)" }}>{occ.item.customer || "— bez zákazníka —"}</div>
-                    </div>
-                  ) : (
-                    <div onClick={() => onOpenReservation(occ.item)} style={{ fontSize: 12, cursor: "pointer", borderLeft: "2px solid var(--info)", paddingLeft: 8, color: "var(--text-dim)" }}>
-                      Rezervácia — {occ.item.customer || "—"}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, drivers, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation, departedJobIds, transportNotes, onAddTransportNote, onConfirmTransportNote, onDeleteTransportNote, onOpenDamage, technicians }) {
   const [breakdownChoice, setBreakdownChoice] = useState(null); // { machineId, date, damage }
   const technicianNameById = useMemo(() => Object.fromEntries((technicians || []).map((t) => [t.id, t.name])), [technicians]);
@@ -20897,11 +20867,6 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   useEffect(() => {
     localStorage.setItem("mateco_calendar_compact", compactMode ? "1" : "0");
   }, [compactMode]);
-  // Alternatíva ku Gantt mriežke — zoznam kariet (stroj + najbližších 5 dní),
-  // rovnaký vzor ako "Prehľad najbližších 5 dní" v Pláne servisu. Vodorovná
-  // mriežka je na mobile aj tak nutne stiesnená (viac stroj­ov = viac dní
-  // naraz), toto je pre rýchly pohľad "čo je voľné/obsadené" bez scrollovania.
-  const [viewMode, setViewMode] = useState("gantt"); // gantt | zoznam
   const depoOptions = DEPO_OPTIONS;
   // Skutočná šírka bloku zákazky/rezervácie sa nedá spoľahlivo odhadnúť ani
   // vypočítať vopred v CSS/JS (stĺpce sa naťahujú podľa voľného miesta v okne,
@@ -21139,7 +21104,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [viewMode]); // po návrate zo Zoznamu je kontajner nový — zmerať a sledovať ten
+  }, []);
 
   // Virtualizácia — vykresľuje sa len to, čo je NAOZAJ vo výreze obrazovky
   // (plus malá rezerva navyše, "overscan", nech nie je vidno prázdno pri
@@ -21259,7 +21224,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     }, 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset, viewMode]); // aj po návrate zo Zoznamu — Gantt sa vytvorí nanovo bez posunu
+  }, [monthOffset]);
 
   // Normálny/Kompaktný + zoradenie — na webe stále v 3. stĺpci vpravo, na
   // mobile (viď @media) sa namiesto toho schovajú za ozubené koliesko vedľa
@@ -21267,133 +21232,54 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   // len ktoré z dvoch miest appka na danú šírku obrazovky cez CSS ukáže).
   const settingsControls = (
     <>
-      <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
-        <button
-          onClick={() => setViewMode("gantt")}
-          style={{
-            fontSize: 11,
-            padding: "3px 10px",
-            borderRadius: 4,
-            border: "none",
-            cursor: "pointer",
-            background: viewMode === "gantt" ? "var(--panel)" : "transparent",
-            color: viewMode === "gantt" ? "var(--text)" : "var(--text-dim)",
-            fontWeight: viewMode === "gantt" ? 600 : 400,
-          }}
-        >
-          Gantt
-        </button>
-        <button
-          onClick={() => setViewMode("zoznam")}
-          style={{
-            fontSize: 11,
-            padding: "3px 10px",
-            borderRadius: 4,
-            border: "none",
-            cursor: "pointer",
-            background: viewMode === "zoznam" ? "var(--panel)" : "transparent",
-            color: viewMode === "zoznam" ? "var(--text)" : "var(--text-dim)",
-            fontWeight: viewMode === "zoznam" ? 600 : 400,
-          }}
-        >
-          Zoznam
-        </button>
-      </div>
-      <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 6, padding: 2, border: "1px solid var(--border)" }}>
-        <button
-          onClick={() => setCompactMode(false)}
-          style={{
-            fontSize: 11,
-            padding: "3px 10px",
-            borderRadius: 4,
-            border: "none",
-            cursor: "pointer",
-            background: !compactMode ? "var(--panel)" : "transparent",
-            color: !compactMode ? "var(--text)" : "var(--text-dim)",
-            fontWeight: !compactMode ? 600 : 400,
-          }}
-        >
-          Normálny
-        </button>
-        <button
-          onClick={() => setCompactMode(true)}
-          style={{
-            fontSize: 11,
-            padding: "3px 10px",
-            borderRadius: 4,
-            border: "none",
-            cursor: "pointer",
-            background: compactMode ? "var(--panel)" : "transparent",
-            color: compactMode ? "var(--text)" : "var(--text-dim)",
-            fontWeight: compactMode ? 600 : 400,
-          }}
-        >
-          Kompaktný
-        </button>
+      <div className="seg" role="group" aria-label="Hustota riadkov">
+        <button type="button" className={!compactMode ? "on" : ""} aria-pressed={!compactMode} onClick={() => setCompactMode(false)}>Normálny</button>
+        <button type="button" className={compactMode ? "on" : ""} aria-pressed={compactMode} onClick={() => setCompactMode(true)}>Kompaktný</button>
       </div>
       <select
         value={sortMode}
         onChange={(e) => setSortMode(e.target.value)}
         title="Zoradiť stroje podľa"
-        style={{ fontSize: 11, padding: "4px 6px", borderRadius: 5, color: "var(--text-dim)", border: "1px solid var(--border)", background: "transparent" }}
+        aria-label="Zoradiť stroje podľa"
+        style={{ height: 40, fontSize: 14, padding: "0 8px", borderRadius: 8, color: "var(--text)", border: "1px solid var(--control-line)", background: "var(--panel)" }}
       >
         <option value="code">↕ Sériové číslo</option>
         <option value="category">↕ Kategória a výška</option>
       </select>
     </>
   );
+  const navBtn = { minWidth: 40, minHeight: 40, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" };
 
   return (
     <>
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: availH ? `${availH}px` : undefined }}>
-      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 8, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {depoOptions.map((d) => (
-            <button
-              key={d}
-              className="btn"
-              title={d}
-              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-              style={{
-                padding: "5px 9px",
-                fontSize: 11,
-                fontWeight: 700,
-                background: depoFilter === d ? "var(--accent)" : "transparent",
-                color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-              }}
-            >
-              {DEPO_SHORT_LABELS[d] || d}
-            </button>
-          ))}
-          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+      {/* Lišta v jednom riadku (v1.0.793): depá, hľadanie, mesiac v strede, hustota + zoradenie. Nadpis „Kalendár“ je zvýraznený v menu. */}
+      <div className="quick-filters cal-bar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 12, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flex: "0 1 auto", minWidth: 0 }}>
+          <div className="seg" role="group" aria-label="Depo">
+            <button type="button" className={!depoFilter ? "on" : ""} aria-pressed={!depoFilter} onClick={() => setDepoFilter(null)}>Všetky</button>
+            {depoOptions.map((d) => (
+              <button key={d} type="button" title={d} className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
+                {DEPO_SHORT_LABELS[d] || d}
+              </button>
+            ))}
+          </div>
+          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
           <GearPopover className="gantt-mobile-settings">{settingsControls}</GearPopover>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, whiteSpace: "nowrap" }}>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", margin: "0 auto" }}>
+          <button type="button" aria-label="Predošlý mesiac" style={navBtn} onClick={() => setMonthOffset((o) => o - 1)}>‹</button>
+          <span style={{ fontSize: 16, fontWeight: 700, minWidth: 120, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
+          <button type="button" aria-label="Ďalší mesiac" style={navBtn} onClick={() => setMonthOffset((o) => o + 1)}>›</button>
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
+            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--line-strong)", marginLeft: 4 }} onClick={goToToday}>Dnes</button>
           )}
         </div>
-        <div className="gantt-desktop-settings" style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+        <div className="gantt-desktop-settings" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {settingsControls}
         </div>
       </div>
 
-      {viewMode === "zoznam" && (
-        <MachineDayList
-          machines={relevantMachines}
-          jobs={jobs}
-          reservations={reservations}
-          today={today}
-          onOpenCard={onOpenCard}
-          onOpenJob={onOpenJob}
-          onOpenReservation={onOpenReservation}
-        />
-      )}
-      {viewMode === "gantt" && (
       <>
       <div className="panel" style={{ padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {relevantMachines.length === 0 && (
@@ -21460,7 +21346,6 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         ))}
       </div>
       </>
-      )}
     </div>
     {breakdownChoice && (
       <Modal title={breakdownChoice.damage.prepCheck ? "⚠ Príprava do požičovne" : "⚠ Porucha"} onClose={() => setBreakdownChoice(null)}>
@@ -21489,14 +21374,14 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     )}
     {cellChoice && (
       <Modal title="Čo chceš vytvoriť?" onClose={() => setCellChoice(null)}>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
-          {machines.find((m) => m.id === cellChoice.machineId)?.code} · {fmtDate(cellChoice.date)}
+        <div className="tnum" style={{ fontSize: 15, marginBottom: 14 }}>
+          <b>{machines.find((m) => m.id === cellChoice.machineId)?.code}</b> · {fmtDate(cellChoice.date)}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn btn-accent" style={{ flex: 1 }} onClick={() => { const c = cellChoice; setCellChoice(null); onAddJob(c.machineId, c.date); }}>
+          <button className="btn btn-accent" style={{ flex: 1, minHeight: 48, fontSize: 15 }} onClick={() => { const c = cellChoice; setCellChoice(null); onAddJob(c.machineId, c.date); }}>
             Zákazka
           </button>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { const c = cellChoice; setCellChoice(null); setNewTransport(c); }}>
+          <button className="btn btn-outline" style={{ flex: 1, minHeight: 48, fontSize: 15 }} onClick={() => { const c = cellChoice; setCellChoice(null); setNewTransport(c); }}>
             🚚 Prevoz
           </button>
         </div>
@@ -21535,7 +21420,6 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const m = machine;
   const [expandedSection, setExpandedSection, forgetBinder] = useBinderTab("machine:" + m.id); // null | "servis" | "prenajom" | "revizieEz"
   const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol z "Ostatné protokoly", ktorý sa práve prideľuje ku zákazke
   // Sledovaná revízia/skúška bez zapísaného dátumu je reálne rovnako po termíne
   // ako keby mala dávno uplynutý dátum (nikdy sa nevykonala) — nie neutrálny stav.
@@ -21601,63 +21485,70 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
     <Modal
       eyebrow="Stroj"
       title={
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span>
-            <span style={{ color: "var(--accent)" }}>{m.code}</span>
-            {m.type ? ` · ${m.type}` : ""}
-            {m.archived ? " (archivovaný)" : ""}
-          </span>
-          {!m.currentJob && !m.archived && (
-            <span className="badge badge-ok" style={{ fontSize: 11 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-              Voľný stroj
-            </span>
-          )}
-        </span>
+        <>
+          {m.code}
+          {m.type && <span className="side-title-sub">{m.type}</span>}
+          {m.archived ? <span className="spill">Archivovaný</span> : !m.currentJob ? <span className="spill spill-done">Voľný stroj</span> : <span className="spill spill-active">Na zákazke</span>}
+        </>
       }
       onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
-      headerExtra={can(user, "machine_report_damage") ? (
-        <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>
-          <span className="hd-full">Nahlásiť poškodenie</span><span className="hd-short">⚠ Poškodenie</span>
-        </button>
-      ) : null}
-      wide
-    >
-      <div className="binder">
-        <div className="binder-tabs">
-          {binderTabs.map((t) => (
-            <button key={t.id} className={`binder-tab${expandedSection === t.id ? " active" : ""}`} onClick={() => setExpandedSection(expandedSection === t.id ? null : t.id)} title={t.title}>
-              {t.label}{t.count != null ? ` (${t.count})` : ""}
-            </button>
-          ))}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Depo</span><b>{m.depo || "—"}</b></div>
+          <div><span>Aktuálna zákazka</span><b>{m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"}</b></div>
+          <div><span>Servisný stav</span><b style={m.hasOpenDamage ? { color: "var(--danger)" } : undefined}>{m.hasOpenDamage ? "⚠ V servisnom stave" : (m.servisStav || "Bez problémov")}</b></div>
+          <div><span>Revízia ZZ</span><b className="tnum" style={reviziaOverdue ? { color: "var(--danger)" } : undefined}>{notTracked ? "Nesledované" : m.revizia ? `${reviziaOverdue ? "⚠ " : ""}${fmtDate(m.revizia)}` : "⚠ chýba dátum"}</b></div>
         </div>
-        <div className="binder-body">
-      {!expandedSection && (<>
+      }
+      footer={
+        <>
+          {can(user, "machine_report_damage") && (
+            <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>Nahlásiť poškodenie</button>
+          )}
+          <KebabMenu up label="⋯" actions={[
+            m.currentJob && can(user, "job_edit") && { label: "Upraviť zákazku", onClick: onEditJob },
+            m.currentJob && can(user, "job_complete") && { label: "Ukončiť zákazku", onClick: onCompleteJob },
+            can(user, "machine_edit") && { label: "Upraviť údaje", onClick: onEditMachine },
+            can(user, "machine_track_toggle") && { label: notTracked ? "Sledovať revíziu ZZ" : "Nesledovať revíziu ZZ", onClick: onToggleTrackRevisions },
+            can(user, "machine_track_toggle") && { label: notTrackedEZ ? "Sledovať revíziu EZ" : "Nesledovať revíziu EZ", onClick: onToggleTrackRevisionsEZ },
+            can(user, "machine_track_toggle") && { label: skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky", onClick: onToggleTrackUradnaSkuska },
+            can(user, "machine_archive") && { label: m.archived ? "Vrátiť z archívu" : "Archivovať", onClick: () => (m.archived ? onUnarchive() : onArchive()) },
+            can(user, "machine_delete") && { label: "Zmazať stroj", danger: true, onClick: () => onDelete(m.id) },
+          ]} />
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {can(user, "reservation_add") && (
+              <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onAddReservation}>Nezáväzná rezervácia</button>
+            )}
+            {can(user, "job_add") && (
+              <button className="btn btn-accent" onClick={onAddJob}>+ Zákazka</button>
+            )}
+          </div>
+        </>
+      }
+    >
+      <BinderLayout
+        horizontal
+        tabs={binderTabs}
+        active={expandedSection}
+        setActive={setExpandedSection}
+        main={<>
       <NextStepBar items={nextSteps} />
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Model" value={m.type} />
-        <CardField label="Sériové číslo" value={m.code} />
-        <CardField label="Servisný stav" value={m.hasOpenDamage ? "V servisnom stave" : (m.servisStav || "Bez problémov")} danger={m.hasOpenDamage} />
-        {(() => { const lm = lastMachineMth(assignments, m.id); return lm ? <CardField label="Motohodiny (posledná kontrola)" value={`${lm.noMth ? "bez počítadla" : `${fmtMth(lm.value)} MTH`} · ${lm.date ? fmtDate(String(lm.date).slice(0, 10)) : "—"}${lm.by ? ` · ${lm.by}` : ""}`} /> : null; })()}
-        <CardField
-          label="Platnosť revízie ZZ"
-          value={notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : "chýba dátum — po termíne")}
-          danger={reviziaOverdue}
-        />
-        <CardField
-          label="Platnosť revízie EZ"
-          value={notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : "chýba dátum — po termíne")}
-          danger={reviziaEZOverdue}
-        />
-        <CardField
-          label="Dátum najbližšej úradnej skúšky"
-          value={skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : "chýba dátum — po termíne")}
-          danger={skuskaOverdue}
-        />
-        <CardField label="Depo" value={m.depo} />
-        <CardField label="Aktuálna zákazka" value={m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"} />
-      </div>
+      <dl className="side-dl" style={{ marginBottom: 16 }}>
+        <dt>Model</dt><dd>{m.type || "—"}</dd>
+        <dt>Sériové číslo</dt><dd><b>{m.code}</b></dd>
+        <dt>Servisný stav</dt><dd className={m.hasOpenDamage ? "warn" : undefined}>{m.hasOpenDamage ? "⚠ V servisnom stave" : (m.servisStav || "Bez problémov")}</dd>
+        {(() => { const lm = lastMachineMth(assignments, m.id); return lm ? <><dt>Motohodiny (posledná kontrola)</dt><dd className="tnum">{`${lm.noMth ? "bez počítadla" : `${fmtMth(lm.value)} MTH`} · ${lm.date ? fmtDate(String(lm.date).slice(0, 10)) : "—"}${lm.by ? ` · ${lm.by}` : ""}`}</dd></> : null; })()}
+        <dt>Platnosť revízie ZZ</dt>
+        <dd className={`tnum${reviziaOverdue ? " warn" : ""}`}>{reviziaOverdue ? "⚠ " : ""}{notTracked ? "Nesledované" : (m.revizia ? (reviziaOverdue ? `${fmtDate(m.revizia)} — po termíne` : fmtDate(m.revizia)) : "chýba dátum — po termíne")}</dd>
+        <dt>Platnosť revízie EZ</dt>
+        <dd className={`tnum${reviziaEZOverdue ? " warn" : ""}`}>{reviziaEZOverdue ? "⚠ " : ""}{notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : "chýba dátum — po termíne")}</dd>
+        <dt>Dátum najbližšej úradnej skúšky</dt>
+        <dd className={`tnum${skuskaOverdue ? " warn" : ""}`}>{skuskaOverdue ? "⚠ " : ""}{skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : "chýba dátum — po termíne")}</dd>
+        <dt>Depo</dt><dd>{m.depo || "—"}</dd>
+        <dt>Aktuálna zákazka</dt><dd>{m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"}</dd>
+      </dl>
       {modelParams.length > 0 && (
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
@@ -21673,95 +21564,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           </div>
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "relative" }}>
-          {can(user, "job_add") && (
-            <button className="btn btn-ghost" onClick={onAddJob}>
-              + Zákazka
-            </button>
-          )}
-          {can(user, "reservation_add") && (
-            <button className="btn btn-ghost" onClick={onAddReservation}>
-              Nezáväzná rezervácia
-            </button>
-          )}
-          {m.currentJob && can(user, "job_edit") && (
-            <button className="btn btn-ghost" onClick={onEditJob}>
-              Upraviť zákazku
-            </button>
-          )}
-          {m.currentJob && can(user, "job_complete") && (
-            <button className="btn btn-ghost" onClick={onCompleteJob}>
-              Ukončiť zákazku
-            </button>
-          )}
-          {(can(user, "machine_edit") ||
-            can(user, "machine_track_toggle") ||
-            can(user, "machine_archive") ||
-            can(user, "machine_delete")) && (
-            <button className="btn btn-ghost" onClick={() => setShowActionsMenu((v) => !v)}>
-              Akcie ▾
-            </button>
-          )}
-          {showActionsMenu && (
-            <div
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                marginTop: 4,
-                background: "var(--panel)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                boxShadow: "0 4px 16px rgba(0,0,0,.10)",
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 200,
-                zIndex: 20,
-                overflow: "hidden",
-              }}
-            >
-              {can(user, "machine_edit") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onEditMachine(); }}>
-                  Upraviť údaje
-                </button>
-              )}
-              {can(user, "machine_track_toggle") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackRevisions(); }}>
-                  {notTracked ? "Sledovať revíziu ZZ" : "Nesledovať revíziu ZZ"}
-                </button>
-              )}
-              {can(user, "machine_track_toggle") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackRevisionsEZ(); }}>
-                  {notTrackedEZ ? "Sledovať revíziu EZ" : "Nesledovať revíziu EZ"}
-                </button>
-              )}
-              {can(user, "machine_track_toggle") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); onToggleTrackUradnaSkuska(); }}>
-                  {skuskaNotTracked ? "Sledovať úradné skúšky" : "Nesledovať úradné skúšky"}
-                </button>
-              )}
-              {can(user, "machine_archive") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0 }} onClick={() => { setShowActionsMenu(false); m.archived ? onUnarchive() : onArchive(); }}>
-                  {m.archived ? "Vrátiť z archívu" : "Archivovať"}
-                </button>
-              )}
-              {can(user, "machine_delete") && (
-                <button className="btn btn-ghost" style={{ justifyContent: "flex-start", borderRadius: 0, color: "var(--danger)" }} onClick={() => { setShowActionsMenu(false); onDelete(m.id); }}>
-                  Zmazať stroj
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-      </>)}
-      {expandedSection && (
-        <div className="binder-panel">
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{binderTabs.find((t) => t.id === expandedSection)?.title}</div>
-            <button className="btn btn-ghost" onClick={() => setExpandedSection(null)}>← Späť na stroj</button>
-          </div>
+      </>}
+        panel={<>
       {expandedSection === "revizieEz" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <a href={DOCUMENT_SUBTABS.poziciovna[2].url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
@@ -21901,10 +21705,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
             })}
         </div>
       )}
-        </div>
-      )}
-        </div>
-      </div>
+      </>} />
     </Modal>
     {assignProtocolTarget && (
       <Modal eyebrow="Prideliť protokol ku zákazke" title={<span style={{ color: "var(--accent)" }}>{m.code}</span>} onClose={() => setAssignProtocolTarget(null)}>
@@ -21970,26 +21771,6 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, on
 
   return (
     <Modal title="Nahlásiť poškodenie stroja" onClose={onClose}>
-      {onUnknownSerial && (
-        <button
-          className="btn btn-ghost"
-          style={{ width: "100%", marginBottom: 8, color: "var(--danger)" }}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onUnknownSerial}
-        >
-          Nepoznám sériové číslo →
-        </button>
-      )}
-      {onChooseExternal && (
-        <button
-          className="btn btn-ghost"
-          style={{ width: "100%", marginBottom: 14, border: "1px solid var(--border)" }}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onChooseExternal}
-        >
-          🌍 Ide o cudzí stroj (externá zákazka) →
-        </button>
-      )}
       <Field label="Sériové číslo alebo model stroja *">
         <div style={{ position: "relative" }}>
           <input
@@ -22006,40 +21787,53 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, on
             autoFocus
           />
           {showList && (
-            <div
-              className="panel"
-              style={{
-                position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50,
-                maxHeight: 220, overflowY: "auto", padding: 4,
-              }}
-            >
+            <div className="flist" style={{ marginTop: 8, marginBottom: 0, maxHeight: 290, overflowY: "auto" }}>
               {filtered.length === 0 ? (
-                <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
+                <div style={{ padding: "12px 14px", fontSize: 14, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
               ) : (
                 filtered.slice(0, 50).map((m) => (
-                  <div
+                  <button
+                    type="button"
                     key={m.id}
                     onClick={() => {
                       setSelectedId(m.id);
                       setText(m.code || "");
                       setShowList(false);
                     }}
-                    style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
                     onMouseDown={(e) => e.preventDefault()} // nech onClick prebehne pred stratou focusu z inputu
                   >
-                    <strong>{m.code}</strong>
-                    <span style={{ color: "var(--text-dim)" }}>{m.type}{m.depo ? ` · ${m.depo}` : ""}</span>
-                  </div>
+                    <strong className="tnum">{m.code}</strong>
+                    <small>{m.type}{m.depo ? ` · ${m.depo}` : ""}</small>
+                  </button>
                 ))
               )}
             </div>
           )}
         </div>
       </Field>
-      {text && !selected && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 14 }}>Vyber stroj zo zoznamu.</div>}
-      <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
-        Pokračovať
-      </button>
+      {text && !selected && <div className="fhint" style={{ color: "var(--danger-text)", marginTop: -6, marginBottom: 14 }}>Vyber stroj zo zoznamu.</div>}
+      {(onUnknownSerial || onChooseExternal) && (
+        <>
+          <div className="flegend" style={{ fontSize: 14, color: "var(--text-dim)" }}>Iné možnosti</div>
+          <div className="flist">
+            {onUnknownSerial && (
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onUnknownSerial}>
+                Nepoznám sériové číslo <span aria-hidden="true">→</span>
+              </button>
+            )}
+            {onChooseExternal && (
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onChooseExternal}>
+                🌍 Ide o cudzí stroj (externá zákazka) <span aria-hidden="true">→</span>
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
+          Pokračovať
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -22054,23 +21848,26 @@ function UnknownSerialDamageModal({ onClose, onSave }) {
   const canSave = popis.trim().length > 0;
 
   return (
-    <Modal title="Nahlásenie bez sériového čísla" onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+    <Modal title="Nahlásenie bez sériového čísla" onClose={onClose} wide>
+      <div className="fnote fnote-i">
         Vytvorí sa záznam bez priradeného stroja — dispečer ho neskôr doplní podľa sériového čísla, až potom sa dá
         prideliť technikovi.
       </div>
       <Field label="Popis poruchy *">
         <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={3} style={{ width: "100%" }} autoFocus />
       </Field>
-      <Field label="Zákazník (ak ho volajúci povedal)">
-        <input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} />
-      </Field>
-      <Field label="Miesto (ak ho volajúci povedal)">
-        <input value={location} onChange={(e) => setLocation(e.target.value)} style={{ width: "100%" }} />
-      </Field>
+      <div className="fgrid2">
+        <Field label="Zákazník (ak ho volajúci povedal)">
+          <input value={customer} onChange={(e) => setCustomer(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+        <Field label="Miesto (ak ho volajúci povedal)">
+          <input value={location} onChange={(e) => setLocation(e.target.value)} style={{ width: "100%" }} />
+        </Field>
+      </div>
       <Field label="Telefón na volajúceho">
         <input value={callerPhone} onChange={(e) => setCallerPhone(e.target.value)} style={{ width: "100%" }} />
       </Field>
+      <FormFoot missing={!canSave ? ["popis"] : []}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -22078,6 +21875,7 @@ function UnknownSerialDamageModal({ onClose, onSave }) {
       >
         Nahlásiť
       </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -22109,7 +21907,7 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
 
   return (
     <Modal title="Doplniť sériové číslo" onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+      <div className="fnote fnote-i">
         Popis poruchy: „{damage.popis}“{damage.customer ? ` · zadaný zákazník: ${damage.customer}` : ""}
         {damage.location ? ` · zadané miesto: ${damage.location}` : ""}
       </div>
@@ -22145,13 +21943,15 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
         </div>
       </Field>
       {mismatches.length > 0 && (
-        <div style={{ fontSize: 12.5, color: "#7a5200", background: "#fff7e6", border: "1px solid #f0b429", borderRadius: 6, padding: "8px 10px", marginBottom: 14 }}>
+        <div className="fnote fnote-y">
           ⚠ {mismatches.join(" ")} Over si, že ide o správny stroj.
         </div>
       )}
-      <button className="btn btn-accent" disabled={!selected} onClick={() => onAttach(selected)}>
-        Priradiť stroj
-      </button>
+      <FormFoot>
+        <button className="btn btn-accent" disabled={!selected} onClick={() => onAttach(selected)}>
+          Priradiť stroj
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -22166,29 +21966,31 @@ function DamageReportModal({ machine, today, onClose, onSave }) {
   const existing = machine.hasOpenDamage ? machine.openDamage : null;
 
   return (
-    <Modal eyebrow="Nahlásiť poškodenie" title={<span style={{ color: "var(--accent)" }}>{machine.code}</span>} onClose={onClose} wide>
+    <Modal eyebrow="Nahlásiť poškodenie" title={machine.code} onClose={onClose} wide>
+      <div className="fsum">
+        <div><span>Model</span>{model}</div>
+        <div><span>Sériové číslo</span><b className="tnum">{machine.code}</b></div>
+        <div><span>Nahlásené</span><span className="tnum">{fmtDate(today)}</span></div>
+        <div><span>Aktuálna zákazka</span>{zakazka}</div>
+      </div>
       {existing && (
-        <div style={{ fontSize: 13, color: "var(--danger)", background: "var(--danger-bg)", padding: "10px 14px", borderRadius: 6, marginBottom: 14 }}>
+        <div className="fnote fnote-r">
           ⚠ Tento stroj už má nedokončené nahlásené poškodenie z {fmtDate(existing.dateReported)}
           {existing.technicianId ? " (pridelené technikovi)" : " (zatiaľ nepridelené)"}: „{existing.popis}“.
           Pred ďalším nahlásením skontrolujte históriu v karte stroja, či nejde o to isté.
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Model" value={model} />
-        <CardField label="Sériové číslo" value={machine.code} />
-        <CardField label="Dátum nahlásenia" value={fmtDate(today)} />
-        <CardField label="Aktuálna zákazka" value={zakazka} />
-      </div>
       <Field label="Kontakt na zákazníka">
         <input value={kontakt} onChange={(e) => setKontakt(e.target.value)} placeholder="telefón / e-mail…" style={{ width: "100%" }} />
       </Field>
       <Field label="Popis poškodenia *">
         <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={4} placeholder="Čo presne je poškodené / nefunkčné…" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!popis.trim()} onClick={() => onSave(popis.trim(), kontakt.trim())}>
-        {existing ? "Nahlásiť aj napriek tomu" : "Nahlásiť"}
-      </button>
+      <FormFoot missing={!popis.trim() ? ["popis"] : []}>
+        <button className="btn btn-accent" disabled={!popis.trim()} onClick={() => onSave(popis.trim(), kontakt.trim())}>
+          {existing ? "Nahlásiť aj napriek tomu" : "Nahlásiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -22238,22 +22040,62 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
     ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && !p.damageId && !p.assignmentId)
     : (protocolLogs || []).filter((p) => !p.machineId && !p.damageId && !p.assignmentId);
 
+  const stavText = isSimple ? (d.resolved ? "Vyriešené" : (techIds.length ? "Pridelené" : "Nové")) : damageLabel(d);
+  const stavProblem = !isSimple && damageDisplayStav(d) === "zavazna_porucha";
+  const showAttach = !isSimple && !d.machineId && !isExterna && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign");
+  const showAssign = !isSimple && (!!d.machineId || isExterna) && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign");
+  const showComplete = !isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status");
+  const showEdit = isExterna && can(user, "external_add");
+  // Jedno hlavné (červené) tlačidlo: doplniť SČ › prideliť nepridelené › ukončiť/upraviť stav.
+  const primary = showAttach ? "attach" : showAssign && !techIds.length ? "assign" : showComplete ? "complete" : showAssign ? "assign" : null;
+  const btnCls = (k) => (primary === k ? "btn btn-accent" : "btn btn-ghost");
   return (
     <Modal
       eyebrow={kindLabel}
-      title={<span style={{ color: "var(--accent)" }}>{d.code || "Detail"}</span>}
+      title={<>{d.code || "Detail"}{d.model && <span className="side-title-sub">{d.model}</span>}<span className={`spill ${d.resolved ? "spill-done" : stavProblem ? "spill-problem" : techIds.length ? "spill-active" : "spill-wait"}`}>{stavProblem ? "⚠ " : ""}{stavText}</span></>}
       onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
-      wide
+      side
       headerExtra={
-        machine && onOpenMachineCard ? (
-          <button className="btn btn-ghost" onClick={() => onOpenMachineCard(machine)}>
-            Karta stroja
-          </button>
-        ) : null
+        <div className="side-summary">
+          <div><span>Nahlásené</span><b className="tnum">{fmtDate(d.dateReported)}</b></div>
+          <div><span>{isExterna ? "Miesto" : isSimple ? "Aktuálne depo" : "Aktuálne miesto"}</span><b>{(isExterna ? d.location : liveLocation || d.location) || "—"}</b></div>
+          <div><span>Pridelený technik</span><b>{techNames}</b></div>
+          <div><span>Dátum pridelenia</span><b className="tnum">{d.assignedDate ? fmtDate(d.assignedDate) : "—"}</b></div>
+        </div>
       }
+      footer={(showAttach || showAssign || showComplete || showEdit || (machine && onOpenMachineCard)) && (
+        <>
+          {machine && onOpenMachineCard && (
+            <KebabMenu up label="⋯" actions={[{ label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }]} />
+          )}
+          <div className="side-foot-btns" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {showEdit && (
+              <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={() => onEdit(d)}>
+                Upraviť zákazku
+              </button>
+            )}
+            {showAttach && (
+              <button className={btnCls("attach")} onClick={() => onAttachMachine(d)}>
+                Doplniť sériové číslo →
+              </button>
+            )}
+            {showAssign && (
+              <button className={btnCls("assign")} style={primary === "assign" ? undefined : { borderColor: "var(--text)" }} onClick={() => onAssign(d)}>
+                {techIds.length ? "Zmeniť pridelenie (napr. na iný deň) →" : "Prideliť technikovi →"}
+              </button>
+            )}
+            {showComplete && (
+              <button className={btnCls("complete")} style={primary === "complete" ? undefined : { borderColor: "var(--text)" }} onClick={() => onComplete(d)}>
+                {d.resolved ? "Upraviť stav zákazky →" : "Ukončiť zákazku →"}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     >
       <BinderLayout
+        horizontal
         tabs={[{ id: "protokoly", label: "Protokoly", count: (protocolLogs || []).filter((p) => p.damageId === d.id).length, title: "Servisné protokoly" }]}
         active={binderTab}
         setActive={setBinderTab}
@@ -22323,55 +22165,52 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           {(protocolLogs || []).filter((p) => p.damageId === d.id).length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Zatiaľ žiadny vypísaný protokol.</div>}
         </>}
         main={<>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+      <dl className="side-dl">
         {isExterna ? (
           <>
-            <CardField label="Zákazník" value={d.customer} />
-            <CardField label="Miesto" value={d.location} />
-            <CardField label="Model" value={d.model} />
-            <CardField label="Sériové číslo" value={d.serialNumber} />
-            <CardField label="Rieši depo" value={d.assignedDepo} />
+            <dt>Zákazník</dt><dd>{d.customer || "—"}</dd>
+            <dt>Miesto</dt><dd>{d.location || "—"}</dd>
+            <dt>Model</dt><dd>{d.model || "—"}</dd>
+            <dt>Sériové číslo</dt><dd>{d.serialNumber || "—"}</dd>
+            <dt>Rieši depo</dt><dd>{d.assignedDepo || "—"}</dd>
           </>
         ) : isRevizia ? (
           <>
-            <CardField label="Model" value={d.model} />
-            <CardField label="Aktuálne depo" value={liveLocation || d.location} />
+            <dt>Model</dt><dd>{d.model || "—"}</dd>
+            <dt>Aktuálne depo</dt><dd>{liveLocation || d.location || "—"}</dd>
             {d.revizeType === "ZZ+EZ" ? (
               <>
-                <CardField label="Platnosť revízie ZZ" value={d.revizia ? fmtDate(d.revizia) : "chýba"} danger={d.overdue} />
-                <CardField label="Platnosť revízie EZ" value={d.reviziaEZ ? fmtDate(d.reviziaEZ) : "chýba"} danger={d.overdue} />
+                <dt>Platnosť revízie ZZ</dt><dd className={`tnum${d.overdue ? " warn" : ""}`}>{d.overdue ? "⚠ " : ""}{d.revizia ? fmtDate(d.revizia) : "chýba"}</dd>
+                <dt>Platnosť revízie EZ</dt><dd className={`tnum${d.overdue ? " warn" : ""}`}>{d.overdue ? "⚠ " : ""}{d.reviziaEZ ? fmtDate(d.reviziaEZ) : "chýba"}</dd>
               </>
             ) : (
-              <CardField
-                label={`Platnosť revízie ${d.revizeType || "ZZ"}`}
-                value={(d.revizeType === "EZ" ? d.reviziaEZ : d.revizia) ? fmtDate(d.revizeType === "EZ" ? d.reviziaEZ : d.revizia) : "chýba"}
-                danger={d.overdue}
-              />
+              <>
+                <dt>{`Platnosť revízie ${d.revizeType || "ZZ"}`}</dt>
+                <dd className={`tnum${d.overdue ? " warn" : ""}`}>{d.overdue ? "⚠ " : ""}{(d.revizeType === "EZ" ? d.reviziaEZ : d.revizia) ? fmtDate(d.revizeType === "EZ" ? d.reviziaEZ : d.revizia) : "chýba"}</dd>
+              </>
             )}
           </>
         ) : isUradnaSkuska ? (
           <>
-            <CardField label="Model" value={d.model} />
-            <CardField label="Aktuálne depo" value={liveLocation || d.location} />
-            <CardField label="Dátum úradnej skúšky" value={fmtDate(d.uradnaSkuskaDate)} danger={d.overdue} />
+            <dt>Model</dt><dd>{d.model || "—"}</dd>
+            <dt>Aktuálne depo</dt><dd>{liveLocation || d.location || "—"}</dd>
+            <dt>Dátum úradnej skúšky</dt><dd className={`tnum${d.overdue ? " warn" : ""}`}>{d.overdue ? "⚠ " : ""}{fmtDate(d.uradnaSkuskaDate) || "—"}</dd>
           </>
         ) : (
           <>
-            <CardField label="Zákazník" value={d.customer} />
-            <CardField label="Aktuálne miesto" value={liveLocation || d.location} />
-            <CardField label="Model" value={d.model} />
+            <dt>Zákazník</dt><dd>{d.customer || "—"}</dd>
+            <dt>Aktuálne miesto</dt><dd>{liveLocation || d.location || "—"}</dd>
+            <dt>Model</dt><dd>{d.model || "—"}</dd>
           </>
         )}
-        <CardField label="Nahlásené dňa" value={`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`} />
-        {locationChanged && (
-          <CardField label="Miesto pri nahlásení" value={d.location} />
-        )}
-        <CardField label="Pridelený technik" value={techNames} />
-        <CardField label="Dátum pridelenia" value={d.assignedDate ? fmtDate(d.assignedDate) : null} />
-        <CardField label="Stav" value={isSimple ? (d.resolved ? "Vyriešené" : (techIds.length ? "Pridelené" : "Nové")) : damageLabel(d)} danger={!isSimple && damageDisplayStav(d) === "zavazna_porucha"} />
-      </div>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>{isSimple ? "Poznámka" : "Popis poruchy / zákazky"}</div>
-      <div style={{ fontSize: 13, marginBottom: 14, whiteSpace: "pre-wrap" }}>{d.popis || "—"}</div>
+        <dt>Nahlásené dňa</dt><dd className="tnum">{`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`}</dd>
+        {locationChanged && <><dt>Miesto pri nahlásení</dt><dd>{d.location}</dd></>}
+        <dt>Pridelený technik</dt><dd>{techNames}</dd>
+        <dt>Dátum pridelenia</dt><dd className="tnum">{d.assignedDate ? fmtDate(d.assignedDate) : "—"}</dd>
+        <dt>Stav</dt><dd className={stavProblem ? "warn" : undefined}>{stavProblem ? "⚠ " : ""}{stavText}</dd>
+        <dt>{isSimple ? "Poznámka" : "Popis poruchy / zákazky"}</dt><dd style={{ whiteSpace: "pre-wrap" }}>{d.popis || "—"}</dd>
+      </dl>
+      <div style={{ height: 14 }} />
       {d.resolved && isSimple && (
         <div style={{ fontSize: 12, color: "var(--ok)", marginBottom: 14 }}>
           Vykonané dňa {d.vykonanaDatum ? fmtDate(d.vykonanaDatum) : "—"}
@@ -22458,28 +22297,6 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           )}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        {!isSimple && !d.machineId && !isExterna && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign") && (
-          <button className="btn btn-accent" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
-            Doplniť sériové číslo →
-          </button>
-        )}
-        {!isSimple && (!!d.machineId || isExterna) && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && (
-          <button className="btn btn-ghost" onClick={() => onAssign(d)}>
-            {techIds.length ? "Zmeniť pridelenie (napr. na iný deň) →" : "Prideliť technikovi →"}
-          </button>
-        )}
-        {!isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status") && (
-          <button className="btn btn-accent" onClick={() => onComplete(d)}>
-            {d.resolved ? "Upraviť stav zákazky →" : "Ukončiť zákazku →"}
-          </button>
-        )}
-      </div>
-      {isExterna && can(user, "external_add") && (
-        <button className="btn btn-accent" onClick={() => onEdit(d)}>
-          Upraviť zákazku
-        </button>
-      )}
       </>} />
     </Modal>
   );
@@ -22543,35 +22360,27 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
   }
 
   return (
-    <Modal title={`Zhrnutie — ${title} (${filtered.length})`} onClose={onClose} xwide>
-      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        <button
-          className="btn"
-          onClick={() => setDepoFilter("")}
-          style={{ padding: "5px 10px", fontSize: 11, background: !depoFilter ? "var(--accent)" : "transparent", color: !depoFilter ? "#fff" : "var(--text-dim)", border: "1px solid " + (!depoFilter ? "var(--accent)" : "var(--border)") }}
-        >
+    <Modal eyebrow="Zhrnutie" title={<>{title} <span className="tnum" style={{ color: "var(--text-dim)", fontWeight: 500 }}>({filtered.length})</span></>} onClose={onClose} xwide>
+      <div className="seg" role="group" aria-label="Depo" style={{ marginBottom: 14 }}>
+        <button type="button" className={!depoFilter ? "on" : ""} aria-pressed={!depoFilter} onClick={() => setDepoFilter("")}>
           Všetky depa
         </button>
         {depoOptions.map((dep) => (
-          <button
-            key={dep}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(dep)}
-            style={{ padding: "5px 10px", fontSize: 11, background: depoFilter === dep ? "var(--accent)" : "transparent", color: depoFilter === dep ? "#fff" : "var(--text-dim)", border: "1px solid " + (depoFilter === dep ? "var(--accent)" : "var(--border)") }}
-          >
+          <button key={dep} type="button" className={`depo-chip-btn${depoFilter === dep ? " on" : ""}`} aria-pressed={depoFilter === dep} onClick={() => setDepoFilter(dep)}>
             <span className="depo-chip-full">{dep}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[dep] || dep}</span>
           </button>
         ))}
       </div>
-      <div style={{ overflowX: "auto", maxHeight: "65vh" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <div style={{ overflowX: "auto", maxHeight: "65vh", border: "1px solid var(--border)", borderRadius: 8 }}>
+        <table className="ftable tnum" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               {columns.map((c) => (
                 <th
                   key={c.key}
                   onClick={() => toggleSort(c.key)}
-                  style={{ textAlign: "left", padding: "6px 8px", borderBottom: "2px solid var(--border)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", position: "sticky", top: 0, background: "var(--panel)" }}
+                  aria-sort={sortKey === c.key ? (sortDir === "asc" ? "ascending" : "descending") : undefined}
+                  style={{ textAlign: "left", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", position: "sticky", top: 0, zIndex: 1 }}
                 >
                   {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                 </th>
@@ -22584,12 +22393,12 @@ function DamagesSummaryModal({ title, damages, machineById, isExterna, onClose, 
             )}
             {filtered.map((r) => (
               <tr key={r.id} onClick={() => onOpenDetail(r.raw)} style={{ cursor: "pointer", borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "6px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>{r.stroj}</td>
-                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.dateReported ? fmtDate(r.dateReported) : "—"}</td>
-                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.depo}</td>
-                <td style={{ padding: "6px 8px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.popis}>{r.popis}</td>
-                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.servisDisplay}</td>
-                <td style={{ padding: "6px 8px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.poznamka}>{r.poznamka || "—"}</td>
+                <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{r.stroj}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{r.dateReported ? fmtDate(r.dateReported) : "—"}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{r.depo}</td>
+                <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.popis}>{r.popis}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{r.servisSort ? r.servisDisplay : <span className="spill spill-wait">{r.servisDisplay}</span>}</td>
+                <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.poznamka}>{r.poznamka || "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -22633,13 +22442,14 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
   const completeLabel = variant === "revizia" ? "Revízia vykonaná" : variant === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Upraviť stav zákazky";
   const permGroup = d.type === "externa" ? "external" : variant === "revizia" ? "revision" : variant === "uradnaSkuska" ? "uradnaskuska" : "damage";
   const perm = PERM_GROUP[permGroup];
+  const pill = (cls) => `spill ${{ "badge-danger": "spill-problem", "badge-info": "spill-active", "badge-ok": "spill-done", "badge-warn": "spill-wait" }[cls] || ""}`;
+  const canEditStav = !isSimple && can(user, perm.status);
   return (
     <div
       ref={cardRef}
       className="panel"
       style={{
-        padding: 14,
-        borderLeft: `3px solid ${barColor}`,
+        padding: "14px 18px",
         borderRadius: 12,
         opacity: isDone ? 0.7 : 1,
         outline: highlighted ? "2px solid var(--accent)" : "none",
@@ -22659,29 +22469,24 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
           )}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-            <span
-              className="mono"
-              style={{
-                fontWeight: 600,
-                fontSize: 15,
-                color: onOpenDetail ? "var(--accent)" : "inherit",
-                textDecoration: onOpenDetail ? "underline" : "none",
-                cursor: onOpenDetail ? "pointer" : "default",
-              }}
-              onClick={onOpenDetail ? () => onOpenDetail(d) : undefined}
-            >
-              {d.code || "Bez sériového čísla"}
-            </span>
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{d.model}</span>
+            {onOpenDetail ? (
+              <button type="button" className="tnum" onClick={() => onOpenDetail(d)} title="Otvoriť detail"
+                style={{ color: "var(--text)", background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer" }}>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>{d.code || "Bez sériového čísla"}</span>
+              </button>
+            ) : (
+              <span className="tnum" style={{ fontWeight: 700, fontSize: 16 }}>{d.code || "Bez sériového čísla"}</span>
+            )}
+            <span style={{ fontSize: 14, color: "var(--text-dim)" }}>{d.model}</span>
             {missingSerial && (
               <span className="badge badge-danger" style={{ fontSize: 10 }}>
                 ⚠ Chýba sériové číslo
               </span>
             )}
+            {variant === "uradnaSkuska" && <span className="spill" title="Úradná skúška">ÚS</span>}
             {variant === "revizia" && (
               <span
-                className={`badge ${d.revizeType === "EZ" ? "badge-info" : d.revizeType === "ZZ+EZ" ? "badge-danger" : "badge-warn"}`}
-                style={{ fontSize: 10 }}
+                className="spill"
                 title={
                   d.revizeType === "EZ"
                     ? "Revízia elektrického zariadenia"
@@ -22695,25 +22500,29 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
             )}
             {isSimple ? (
               d.resolved ? (
-                <span className="badge badge-ok">Vykonaná</span>
+                <span className={pill("badge-ok")}>Vykonaná</span>
               ) : assignedTech ? (
-                <span className="badge badge-info">Pridelené — {assignedTechNames} · {fmtDate(d.assignedDate)}</span>
+                <span className={pill("badge-info")}>Pridelené — {assignedTechNames} · {fmtDate(d.assignedDate)}</span>
               ) : (
-                <span className="badge badge-danger">Nové</span>
+                <span className={pill("badge-warn")}>Nové</span>
               )
             ) : (
-              <span className={`badge ${damageBadgeCls(d)}`}>
+              <span className={pill(damageBadgeCls(d))}>
                 {damageLabel(d)}{damageDisplayStav(d) === "pridelene" ? ` — ${assignedTechNames} · ${fmtDate(d.assignedDate)}` : ""}
               </span>
             )}
           </div>
           {locationLabel && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 2 }}>{locationLabel}</div>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 2 }}>{locationLabel}</div>
           )}
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
+          <div className="tnum" style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>
             Nahlásené {fmtDate(d.dateReported)}{(d.currentJobLabel || d.customer) ? ` · ${d.currentJobLabel || d.customer}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
           </div>
-          <div style={{ fontSize: 13 }}>{d.popis}</div>
+          {isSimple && d.overdue && !d.resolved && d.popis ? (
+            <div className="spill spill-problem" style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "6px 10px", marginTop: 2 }}>⚠ {d.popis}</div>
+          ) : (
+            <div style={{ fontSize: 14 }}>{d.popis}</div>
+          )}
           {!isSimple && d.poznamkaDispecera && (
             <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 4, display: "flex", gap: 4 }}>
               <span>📝</span>
@@ -22749,60 +22558,63 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
           )}
         </div>
           </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           {missingSerial ? (
             onAttachMachine && can(user, perm.assign) && (
-              <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px", background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => onAttachMachine(d)}>
+              <button className="btn btn-accent" style={{ fontSize: 14, minHeight: 40 }} onClick={() => onAttachMachine(d)}>
                 Doplniť sériové číslo →
               </button>
             )
           ) : (
             !isDone && can(user, perm.assign) && (
-              <button className="btn btn-accent" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onAssign(d)}>
+              <button className={assignedTech ? "btn btn-outline" : "btn btn-accent"} style={{ fontSize: 14, minHeight: 40, fontWeight: 600, ...(assignedTech ? { borderColor: "var(--line-strong)" } : {}) }} onClick={() => onAssign(d)}>
                 {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
               </button>
             )
           )}
           {onUndoPartial && variant === "revizia" && !d.resolved && (d.vykonanaDatumZZ || d.vykonanaDatumEZ) && can(user, perm.status) && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onUndoPartial(d)} title="Omylom označená časť ZZ/EZ — vráti pôvodný dátum na stroji">
+            <button className="btn btn-ghost" style={{ fontSize: 14, minHeight: 40 }} onClick={() => onUndoPartial(d)} title="Omylom označená časť ZZ/EZ — vráti pôvodný dátum na stroji">
               ↺ Zrušiť čiastočné ({d.vykonanaDatumZZ ? "ZZ" : "EZ"})
             </button>
           )}
           {can(user, perm.status) && (isSimple
             ? (d.resolved
                 ? (onResolve ? (
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onResolve(d.id, false)}>
+                  <button className="btn btn-ghost" style={{ fontSize: 14, minHeight: 40 }} onClick={() => onResolve(d.id, false)}>
                     Otvoriť znova
                   </button>
                 ) : null)
                 : (
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onComplete(d)}>
+                  <button className="btn btn-ghost" style={{ fontSize: 14, minHeight: 40 }} onClick={() => onComplete(d)}>
                     {completeLabel}
                   </button>
                 ))
-            : (
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onComplete(d)}>
-                {completeLabel}
-              </button>
-            ))}
-          {onProtocol && can(user, "protocol_write") && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onProtocol(d)}>
+            : null)}
+          {onProtocol && can(user, "protocol_write") && !isSimple && (
+            <button className="btn btn-ghost" style={{ fontSize: 14, minHeight: 40 }} onClick={() => onProtocol(d)}>
               Vypísať protokol
             </button>
           )}
           {/* Meranie VTZ EZ má zmysel len pri revízii s EZ časťou a pri stroji z flotily
-              (na externej zákazke vznikalo meranie bez stroja). */}
-          {onProtocol && can(user, "protocol_write") && d.machineId && isEzRevision(d) && (
+              (na externej zákazke vznikalo meranie bez stroja). Pri revízii/úradnej skúške je v ⋯. */}
+          {onProtocol && can(user, "protocol_write") && d.machineId && isEzRevision(d) && !isSimple && (
             <button
               className="btn btn-ghost"
-              style={{ fontSize: 11, padding: "5px 10px" }}
+              style={{ fontSize: 14, minHeight: 40 }}
               onClick={() => openEzMeasurement({ id: d.machineId, code: d.code, type: d.model })}
             >
               Záznam z merania VTZ EZ
             </button>
           )}
           <KebabMenu
+            name="Ďalšie akcie"
+            btnClass="btn btn-outline"
+            btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }}
+            label="⋯"
             actions={[
+              isSimple && onProtocol && can(user, "protocol_write") && { label: "Vypísať protokol", onClick: () => onProtocol(d) },
+              isSimple && onProtocol && can(user, "protocol_write") && d.machineId && isEzRevision(d) && { label: "Záznam z merania VTZ EZ", onClick: () => openEzMeasurement({ id: d.machineId, code: d.code, type: d.model }) },
+              canEditStav && { label: completeLabel, onClick: () => onComplete(d) },
               onDelete && perm.del && can(user, perm.del) && { label: "Zmazať", onClick: () => onDelete(d.id), danger: true },
             ]}
           />
@@ -22908,9 +22720,9 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
                 style={{
                   padding: "5px 10px",
                   fontSize: 11,
-                  background: depoFilter === d ? "var(--accent)" : "transparent",
+                  background: depoFilter === d ? "var(--accent-fill)" : "transparent",
                   color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                  border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+                  border: "1px solid " + (depoFilter === d ? "var(--accent-fill)" : "var(--border)"),
                 }}
               >
                 <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
@@ -22935,20 +22747,9 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
           </button>
         )}
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="seg" role="group" aria-label="Stav" style={{ marginBottom: 14 }}>
         {filterButtons.map((f) => (
-          <button
-            key={f.id}
-            className="btn"
-            onClick={() => toggleFilter(f.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: activeFilters.has(f.id) ? "var(--accent)" : "transparent",
-              color: activeFilters.has(f.id) ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (activeFilters.has(f.id) ? "var(--accent)" : "var(--border)"),
-            }}
-          >
+          <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
             {f.label}
           </button>
         ))}
@@ -23138,93 +22939,39 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-          <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {depoOptions.map((d) => (
-                <button
-                  key={d}
-                  className="btn depo-chip-btn"
-                  onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-                  style={{
-                    padding: "5px 10px",
-                    fontSize: 11,
-                    background: depoFilter === d ? "var(--accent)" : "transparent",
-                    color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                    border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-                  }}
-                >
-                  <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              Filter podľa depa, ktoré má zákazku na starosti (odkiaľ pôjde technik).
-            </div>
-          </FilterPopover>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {onOpenSummary && (
-            <button className="btn btn-ghost" onClick={onOpenSummary}>
-              📋 Zhrnutie
-            </button>
-          )}
-          {can(user, "external_clear_all") && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-              Vymazať všetky externé zákazky
-            </button>
-          )}
-          {onImport && can(user, "external_import_csv") && (
-            <button className="btn btn-ghost" onClick={onImport}>
-              Import CSV
-            </button>
-          )}
-        </div>
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+        <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Depo</div>
+          <div className="seg" role="group" aria-label="Depo" style={{ marginBottom: 8 }}>
+            {depoOptions.map((d) => (
+              <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)} style={{ padding: "0 9px" }}>
+                {DEPO_SHORT_LABELS[d] || d}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+            Filter podľa depa, ktoré má zákazku na starosti (odkiaľ pôjde technik).
+          </div>
+        </FilterPopover>
+        <div style={{ flex: 1 }} />
+        {onOpenSummary && (
+          <button className="btn btn-outline" onClick={onOpenSummary}>
+            📋 Zhrnutie
+          </button>
+        )}
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+          onImport && can(user, "external_import_csv") && { label: "Import CSV", onClick: onImport },
+          can(user, "external_clear_all") && { label: "Vymazať všetky externé zákazky", danger: true, onClick: onClearAll },
+        ]} />
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="seg seg-2x2" role="group" aria-label="Stav" style={{ marginBottom: 14 }}>
         {filterButtons.map((f) => {
           const isActive = f.bucket ? bucketView === f.id : !bucketView && activeFilters.has(f.id);
           return (
-            <button
-              key={f.id}
-              className="btn"
-              onClick={() => toggleFilter(f.id)}
-              style={{
-                position: "relative",
-                padding: "6px 12px",
-                fontSize: 12,
-                background: isActive ? "var(--accent)" : "transparent",
-                color: isActive ? "#fff" : "var(--text-dim)",
-                border: "1px solid " + (isActive ? "var(--accent)" : "var(--border)"),
-              }}
-            >
+            <button key={f.id} type="button" className={isActive ? "on" : ""} aria-pressed={isActive} onClick={() => toggleFilter(f.id)}>
               {f.label}
-              {!!f.badge && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: -7,
-                    right: -7,
-                    background: "var(--danger)",
-                    color: "#fff",
-                    borderRadius: "50%",
-                    minWidth: 18,
-                    height: 18,
-                    padding: "0 4px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    lineHeight: 1,
-                  }}
-                >
-                  {f.badge}
-                </span>
-              )}
+              {!!f.badge && <span className="seg-n">{f.badge}</span>}
             </button>
           );
         })}
@@ -23271,37 +23018,24 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
 
       {onAssignProtocol && (
         <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-            Ostatné externé protokoly <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>— vypísané bez založenej zákazky ({unassignedProtocols.length})</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <SearchInput placeholder="Hľadať firmu, model, sériové číslo…" value={unassignedSearch} onChange={setUnassignedSearch} style={{ minWidth: 260 }} />
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className="btn"
-                onClick={() => setShowInvoiced(false)}
-                style={{ padding: "6px 12px", fontSize: 12, background: !showInvoiced ? "var(--accent)" : "transparent", color: !showInvoiced ? "#fff" : "var(--text-dim)", border: "1px solid " + (!showInvoiced ? "var(--accent)" : "var(--border)") }}
-              >
-                Nevyfakturované
-              </button>
-              <button
-                className="btn"
-                onClick={() => setShowInvoiced(true)}
-                style={{ padding: "6px 12px", fontSize: 12, background: showInvoiced ? "var(--accent)" : "transparent", color: showInvoiced ? "#fff" : "var(--text-dim)", border: "1px solid " + (showInvoiced ? "var(--accent)" : "var(--border)") }}
-              >
-                Vyfakturované (história)
-              </button>
+          <h2 className="today-sec" style={{ marginBottom: 2 }}>Ostatné externé protokoly · {unassignedProtocols.length}</h2>
+          <p className="page-intro" style={{ marginBottom: 10 }}>Vypísané bez založenej zákazky</p>
+          <div className="tbar" style={{ justifyContent: "space-between" }}>
+            <SearchInput placeholder="Hľadať firmu, model, sériové číslo…" value={unassignedSearch} onChange={setUnassignedSearch} style={{ minWidth: 280 }} />
+            <div className="seg" role="group" aria-label="Fakturácia">
+              <button type="button" className={!showInvoiced ? "on" : ""} aria-pressed={!showInvoiced} onClick={() => setShowInvoiced(false)}>Nevyfakturované</button>
+              <button type="button" className={showInvoiced ? "on" : ""} aria-pressed={showInvoiced} onClick={() => setShowInvoiced(true)}>Vyfakturované (história)</button>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {unassignedFiltered.length === 0 && (
-              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", boxShadow: "none", borderRadius: 12 }}>
                 {showInvoiced ? "Žiadne vyfakturované nepriradené protokoly." : "Žiadne nevyfakturované nepriradené protokoly."}
               </div>
             )}
             {unassignedFiltered.map((p) => (
               <div key={p.id} className="panel" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 90, fontSize: 12, color: "var(--text-dim)" }}>{p.createdAt ? fmtDate(p.createdAt) : "—"}</div>
+                <div className="tnum" style={{ minWidth: 90, fontSize: 14, color: "var(--text-dim)" }}>{p.createdAt ? fmtDate(p.createdAt) : "—"}</div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div
                     style={{ fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
@@ -23326,7 +23060,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                       <input type="checkbox" checked={!!p.invoiced} onChange={() => onToggleProtocolInvoiced(p.id)} />
                       Vyfakturované
                     </label>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => setAssignPickerFor(p)}>
+                    <button className="btn btn-outline" onClick={() => setAssignPickerFor(p)}>
                       Priradiť k zákazke
                     </button>
                   </>
@@ -23379,24 +23113,28 @@ function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign })
     );
   });
   return (
-    <Modal title="Priradiť protokol k externej zákazke" onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-        Protokol: {protocol.clientName || "— bez zákazníka —"} · {[protocol.machineModel, protocol.machineSerial].filter(Boolean).join(" · ") || "—"} · {protocol.createdAt ? fmtDate(protocol.createdAt) : "—"}
+    <Modal eyebrow="Priradiť protokol" title="K externej zákazke" onClose={onClose} wide>
+      <div className="fsum">
+        <div><span>Protokol — zákazník</span>{protocol.clientName || "— bez zákazníka —"}</div>
+        <div><span>Stroj</span><span className="tnum">{[protocol.machineModel, protocol.machineSerial].filter(Boolean).join(" · ") || "—"}</span></div>
+        <div><span>Dátum</span><span className="tnum">{protocol.createdAt ? fmtDate(protocol.createdAt) : "—"}</span></div>
       </div>
       <SearchInput placeholder="Hľadať zákazníka, model, sériové číslo…" value={q} onChange={setQ} style={{ width: "100%", marginBottom: 10 }} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "50vh", overflowY: "auto" }}>
+      <div className="flist" style={{ maxHeight: "50vh", overflowY: "auto" }}>
         {filtered.length === 0 && (
-          <div style={{ padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>Žiadna zhoda.</div>
+          <div style={{ padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Žiadna zhoda.</div>
         )}
         {filtered.map((d) => (
           <button
             key={d.id}
-            className="btn btn-ghost"
-            style={{ textAlign: "left", padding: "8px 10px", display: "block" }}
+            style={{ padding: "10px 14px", minHeight: 56 }}
             onClick={() => onAssign(d.id)}
           >
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{d.customer || "— bez zákazníka —"}{d.resolved ? " · vyriešené" : ""}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[d.model, d.serialNumber].filter(Boolean).join(" · ") || "—"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</div>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: 600 }}>{d.customer || "— bez zákazníka —"}</span>
+              <small className="tnum">{[d.model, d.serialNumber].filter(Boolean).join(" · ") || "—"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</small>
+            </span>
+            {d.resolved ? <span className="spill spill-done">vyriešené</span> : <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>›</span>}
           </button>
         ))}
       </div>
@@ -23423,11 +23161,11 @@ function ReportExternalServiceModal({ existing, customers, blacklist, onSaveCust
   const canSave = customer.trim() && location.trim() && model.trim() && serialNumber.trim() && assignedDepo && popis.trim();
 
   return (
-    <Modal title={existing ? "Upraviť externú servisnú zákazku" : "Nahlásiť externú servisnú zákazku"} onClose={onClose} wide>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
+    <Modal eyebrow="Externá servisná zákazka" title={existing ? "Upraviť externú servisnú zákazku" : "Nahlásiť externú servisnú zákazku"} onClose={onClose} wide form>
+      <div className="fintro">
         Pre stroje, ktoré nie sú v našej databáze (zákazník má vlastný stroj, servisujeme ho na mieste a pod.).
       </div>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="fgrid2">
         <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
@@ -23484,28 +23222,30 @@ function ReportExternalServiceModal({ existing, customers, blacklist, onSaveCust
         <textarea value={popis} onChange={(e) => setPopis(e.target.value)} rows={3} placeholder="Čo treba urobiť…" style={{ width: "100%" }} />
       </Field>
       {!existing && customer.trim() && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+        <label className="fck">
           <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
-          Uložiť tohto zákazníka v databáze zákazníkov
+          <span>Uložiť tohto zákazníka v databáze zákazníkov</span>
         </label>
       )}
-      <button
-        className="btn btn-accent"
-        disabled={!canSave}
-        onClick={() => {
-          if (!existing && saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim(), contacts: pendingContacts });
-          onSave({
-            customer: customer.trim(),
-            location: location.trim(),
-            model: model.trim(),
-            serialNumber: serialNumber.trim(),
-            assignedDepo,
-            popis: popis.trim(),
-          });
-        }}
-      >
-        {existing ? "Uložiť zmeny" : "Nahlásiť"}
-      </button>
+      <FormFoot missing={[!customer.trim() && "zákazník", !location.trim() && "miesto", !model.trim() && "model", !serialNumber.trim() && "sériové číslo", !assignedDepo && "depo", !popis.trim() && "popis"].filter(Boolean)}>
+        <button
+          className="btn btn-accent"
+          disabled={!canSave}
+          onClick={() => {
+            if (!existing && saveCustomer && customer.trim()) onSaveCustomer?.({ firma: customer.trim(), contacts: pendingContacts });
+            onSave({
+              customer: customer.trim(),
+              location: location.trim(),
+              model: model.trim(),
+              serialNumber: serialNumber.trim(),
+              assignedDepo,
+              popis: popis.trim(),
+            });
+          }}
+        >
+          {existing ? "Uložiť zmeny" : "Nahlásiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -23587,21 +23327,22 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
   const canSave = selectedMachine && date && photoUrl && !uploading;
 
   return (
-    <Modal title="Záznam z merania VTZ EZ" onClose={onClose}>
+    <Modal title="Záznam z merania VTZ EZ" onClose={onClose} wide>
+      <FormStep n={1} title="Stroj a meranie" />
       {!machine && (
         <Field label="Typ plošiny a sériové číslo *">
           <div style={{ position: "relative" }}>
             <input
               value={text}
               onChange={(e) => { setText(e.target.value); setSelectedId(""); setShowList(true); }}
-              onFocus={() => setShowList(true)}
+              onClick={() => setShowList(true)}
               onBlur={() => setShowList(false)}
               placeholder="Píš sériové číslo alebo model..."
               style={{ width: "100%" }}
               autoFocus
             />
             {showList && (
-              <div className="panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+              <div className="panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 50, maxHeight: 264, overflowY: "auto", padding: 4 }}>
                 {filtered.length === 0 ? (
                   <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nezodpovedá hľadaniu.</div>
                 ) : (
@@ -23609,7 +23350,7 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
                     <div
                       key={m.id}
                       onClick={() => { setSelectedId(m.id); setText(m.code || ""); setShowList(false); }}
-                      style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
+                      style={{ padding: "0 10px", minHeight: 44, alignItems: "center", fontSize: 15, cursor: "pointer", borderRadius: 6, display: "flex", justifyContent: "space-between", gap: 8 }}
                       onMouseDown={(e) => e.preventDefault()}
                     >
                       <strong>{m.code}</strong>
@@ -23623,46 +23364,55 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
         </Field>
       )}
       {selectedMachine && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-          {selectedMachine.code}{selectedMachine.type ? ` · ${selectedMachine.type}` : ""}
+        <div style={{ fontSize: 15, marginTop: -6, marginBottom: 14 }}>
+          <b className="tnum">{selectedMachine.code}</b>{selectedMachine.type ? ` · ${selectedMachine.type}` : ""}
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="fgrid2">
         <Field label="Dátum merania *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Motohodiny"><input inputMode="decimal" value={motohodiny} onChange={(e) => setMotohodiny(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
 
-      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Nabíjačka</div>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+      <FormStep n={2} title="Nabíjačka" />
+      <label className="fck">
         <input type="checkbox" checked={skipNabijacka} onChange={(e) => setSkipNabijacka(e.target.checked)} />
-        Stroj nemá nabíjačku — vynechať
+        <span>Stroj nemá nabíjačku — vynechať</span>
       </label>
-      {!skipNabijacka && EZ_NABIJACKA_FIELDS.map(([key, label]) => (
-        <Field key={key} label={label}>
-          <input inputMode="decimal" value={nabijacka[key] || ""} onChange={(e) => setNabijacka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
-        </Field>
-      ))}
+      {!skipNabijacka && (
+        <div className="fgrid2">
+          {EZ_NABIJACKA_FIELDS.map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input inputMode="decimal" value={nabijacka[key] || ""} onChange={(e) => setNabijacka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
+            </Field>
+          ))}
+        </div>
+      )}
 
-      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Zásuvka</div>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+      <FormStep n={3} title="Zásuvka" />
+      <label className="fck">
         <input type="checkbox" checked={skipZasuvka} onChange={(e) => setSkipZasuvka(e.target.checked)} />
-        Stroj nemá zásuvku — vynechať
+        <span>Stroj nemá zásuvku — vynechať</span>
       </label>
-      {!skipZasuvka && EZ_ZASUVKA_FIELDS.map(([key, label]) => (
-        <Field key={key} label={label}>
-          <input inputMode="decimal" value={zasuvka[key] || ""} onChange={(e) => setZasuvka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
-        </Field>
-      ))}
+      {!skipZasuvka && (
+        <div className="fgrid2">
+          {EZ_ZASUVKA_FIELDS.map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input inputMode="decimal" value={zasuvka[key] || ""} onChange={(e) => setZasuvka((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: "100%" }} />
+            </Field>
+          ))}
+        </div>
+      )}
 
-      <div style={{ marginTop: 16, marginBottom: 6, fontWeight: 700, fontSize: 13 }}>Prílohy</div>
+      <FormStep n={4} title="Prílohy" />
       <Field label="Foto výrobného štítku *">
         <PhotoPickButtons onFiles={(files) => handlePhotoFile(files?.[0])} />
         {uploading && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>Nahrávam fotku…</div>}
-        {photoUrl && !uploading && <img src={photoUrl} alt="Výrobný štítok" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 4, marginTop: 6, border: "1px solid var(--border)" }} />}
+        {photoUrl && !uploading && <div className="fphotos" style={{ marginTop: 8 }}><div className="fphoto"><img src={photoUrl} alt="Výrobný štítok" onClick={() => openPhotoLightbox(photoUrl)} /></div></div>}
         {uploadError && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>{uploadError}</div>}
       </Field>
       <Field label="Poznámka technika"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ width: "100%" }} /></Field>
 
+      <FormFoot missing={[!selectedMachine && "stroj", !date && "dátum", !photoUrl && "foto výrobného štítku"].filter(Boolean)}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -23684,6 +23434,7 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
       >
         Uložiť záznam
       </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -23723,16 +23474,15 @@ function EzMeasurementDetail({ meas }) {
 function EzProcessConfirmModal({ meas, onCancel, onConfirm }) {
   return (
     <Modal eyebrow="Revízie EZ" title="Označiť meranie ako spracované?" onClose={onCancel}>
-      <div style={{ fontSize: 13, marginBottom: 6 }}>
+      <div style={{ fontSize: 15, marginBottom: 6 }}>
         Stroj <strong>{meas.machineCode || "—"}</strong> · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
       </div>
       <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 18 }}>
         Meranie sa presunie do histórie spracovaných. Potvrďte len ak je revízia EZ naozaj spracovaná.
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
+      <FormFoot confirm>
         <button className="btn btn-accent" onClick={onConfirm}>Áno, spracované</button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -23759,13 +23509,11 @@ function EzAssignModal({ meas, ezTechs, onClose, onSave }) {
           </Field>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+      <FormFoot left={meas.assignedTechnicianId && (
+        <button className="btn btn-danger-outline" onClick={() => onSave(null, null)}>Zrušiť pridelenie</button>
+      )}>
         <button className="btn btn-accent" disabled={!technicianId || !date} onClick={() => onSave(technicianId, date)}>Prideliť</button>
-        {meas.assignedTechnicianId && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onSave(null, null)}>Zrušiť pridelenie</button>
-        )}
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -23778,20 +23526,20 @@ function EzDayModal({ items, technicianName, date, myEmployee, user, onProcess, 
   return (
     <>
       <Modal eyebrow={`Revízie EZ · ${fmtDate(date)}`} title={technicianName || "Merania EZ"} onClose={onClose} wide>
-        {items.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Na tento deň nie sú pridelené žiadne merania.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.length === 0 && <div className="fnote fnote-i">Na tento deň nie sú pridelené žiadne merania.</div>}
+        <div className={items.length ? "flist" : undefined}>
           {items.map((meas) => (
-            <div key={meas.id} className="panel" style={{ padding: 10, opacity: meas.processed ? 0.7 : 1 }}>
+            <div key={meas.id} className="frow" style={{ display: "block", opacity: meas.processed ? 0.7 : 1 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 13 }}>
-                  <strong>{meas.machineCode || "—"}</strong>{" "}
-                  <span style={{ color: "var(--text-dim)" }}>
+                <div style={{ fontSize: 15 }}>
+                  <strong className="tnum">{meas.machineCode || "—"}</strong>{" "}
+                  <span className="tnum" style={{ color: "var(--text-dim)", fontSize: 14 }}>
                     · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
                     {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
                   </span>
                 </div>
                 {!meas.processed && canProcessEz(meas, myEmployee, user) && (
-                  <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setConfirmId(meas.id)}>
+                  <button className="btn btn-outline" onClick={() => setConfirmId(meas.id)}>
                     Spracované
                   </button>
                 )}
@@ -23835,71 +23583,67 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, zadal, technika…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        {!showHistory && [["all", "Všetky"], ["unassigned", "Nepridelené"], ["mine", "Moje"]].map(([id, label]) => (
-          <button
-            key={id}
-            className="btn"
-            onClick={() => setAssignFilter(id)}
-            style={{
-              fontSize: 12,
-              background: assignFilter === id ? "var(--accent)" : "transparent",
-              color: assignFilter === id ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (assignFilter === id ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať sériové číslo, zadal, technika…" value={search} onChange={setSearch} style={{ minWidth: 280 }} />
+        {!showHistory && (
+          <div className="seg" role="group" aria-label="Pridelenie">
+            {[["all", "Všetky"], ["unassigned", "Nepridelené"], ["mine", "Moje"]].map(([id, label]) => (
+              <button key={id} type="button" className={assignFilter === id ? "on" : ""} aria-pressed={assignFilter === id} onClick={() => setAssignFilter(id)}>{label}</button>
+            ))}
+          </div>
+        )}
         <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost" onClick={() => { setShowHistory((v) => !v); setExpandedId(null); }}>
+        <button className="btn btn-outline" onClick={() => { setShowHistory((v) => !v); setExpandedId(null); }}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
         </button>
       </div>
       {rows.length === 0 ? (
-        <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)", boxShadow: "none", borderRadius: 12 }}>
           {showHistory ? "Žiadne spracované záznamy." : "Žiadne nespracované merania VTZ EZ."}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
+          <thead><tr><th>Stroj</th><th>Meranie</th><th>Zadal</th><th>Pridelené</th><th><span className="sr-only">Akcie</span></th></tr></thead>
+          <tbody>
           {rows.map((meas) => {
             const lateAssigned = !meas.processed && meas.assignedDate && meas.assignedDate < today;
             return (
-              <div key={meas.id} className="panel" style={{ padding: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 13 }}>
-                    <strong>{meas.machineCode || "—"}</strong>{" "}
-                    <span style={{ color: "var(--text-dim)" }}>
-                      · {fmtDate(meas.date)} · zadal {meas.createdBy || "—"}
-                      {meas.processed && <> · spracoval {meas.processedBy || "—"}</>}
-                    </span>
-                    {meas.assignedTechnicianId && (
-                      <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: lateAssigned ? "var(--danger)" : "var(--accent)" }}>
-                        → {meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)}{lateAssigned ? " (po termíne)" : ""}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setExpandedId(expandedId === meas.id ? null : meas.id)}>
-                      {expandedId === meas.id ? "Skryť" : "Detail"}
+              <React.Fragment key={meas.id}>
+              <tr className={lateAssigned ? "row-problem" : ""}>
+                <td className="td-plain"><strong className="tnum">{meas.machineCode || "—"}</strong></td>
+                <td data-label="Meranie" className="tnum">{fmtDate(meas.date)}</td>
+                <td data-label="Zadal">
+                  {meas.createdBy || "—"}
+                  {meas.processed && <div className="cell-sub">spracoval {meas.processedBy || "—"}</div>}
+                </td>
+                <td data-label="Pridelené">
+                  {!meas.assignedTechnicianId ? <span style={{ color: "var(--text-dim)" }}>nepridelené</span>
+                    : lateAssigned ? <span className="spill spill-problem tnum">⚠ {meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)} (po termíne)</span>
+                    : <span className="tnum">{meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)}</span>}
+                </td>
+                <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {!showHistory && canProcessEz(meas, myEmployee, user) && (
+                    <button className="btn btn-outline" onClick={() => setConfirmId(meas.id)}>
+                      Spracované
                     </button>
-                    {!showHistory && canAssign && (
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setAssigning(meas)}>
-                        {meas.assignedTechnicianId ? "Preradiť" : "Prideliť"}
-                      </button>
-                    )}
-                    {!showHistory && canProcessEz(meas, myEmployee, user) && (
-                      <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setConfirmId(meas.id)}>
-                        Spracované
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {expandedId === meas.id && <EzMeasurementDetail meas={meas} />}
-              </div>
+                  )}{" "}
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} aria-expanded={expandedId === meas.id} onClick={() => setExpandedId(expandedId === meas.id ? null : meas.id)}>
+                    {expandedId === meas.id ? "Skryť" : "Detail"}
+                  </button>{" "}
+                  <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+                    !showHistory && canAssign && { label: meas.assignedTechnicianId ? "Preradiť" : "Prideliť", onClick: () => setAssigning(meas) },
+                  ]} />
+                </td>
+              </tr>
+              {expandedId === meas.id && (
+                <tr><td colSpan={5} className="td-plain" style={{ paddingTop: 0, fontSize: 14 }}><EzMeasurementDetail meas={meas} /></td></tr>
+              )}
+              </React.Fragment>
             );
           })}
+          </tbody>
+        </table>
         </div>
       )}
       {assigning && (
@@ -23996,62 +23740,36 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        {filterButtons.map((f) => (
-          <button
-            key={f.id}
-            className="btn"
-            onClick={() => toggleFilter(f.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: activeFilters.has(f.id) ? "var(--accent)" : "transparent",
-              color: activeFilters.has(f.id) ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (activeFilters.has(f.id) ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+      <div className="tbar" style={{ marginBottom: 14 }}>
+        <div className="seg" role="group" aria-label="Stav">
+          {filterButtons.map((f) => (
+            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="seg" role="group" aria-label="Depo">
+          {depoOptions.map((d) => (
+            <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
+              <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
+            </button>
+          ))}
+        </div>
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <div style={{ flex: 1 }} />
-        {onDedupe && (
-          <button className="btn btn-ghost" onClick={onDedupe} title="Ak ten istý stroj má viac otvorených tiketov revízie alebo úradnej skúšky, ponechá jeden (pridelený, inak najstarší)">
-            Upratať duplicitné tikety
-          </button>
-        )}
-        {can(user, "revision_clear_all") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-            Vymazať všetky revízie
-          </button>
-        )}
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+          onDedupe && { label: "Upratať duplicitné tikety", onClick: onDedupe },
+          can(user, "revision_clear_all") && { label: "Vymazať všetky revízie", danger: true, onClick: onClearAll },
+        ]} />
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
-          <div className="label-font" style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10, fontWeight: 700 }}>
-            Revízie po splatnosti — {overdue.length}
-          </div>
+          <h2 className={`today-sec${overdue.length ? " red" : ""}`} style={{ marginTop: 0 }}>
+            {overdue.length > 0 && "⚠ "}Revízie po splatnosti · {overdue.length}
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {overdue.length === 0 && (
-              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 14, boxShadow: "none", borderRadius: 12 }}>
                 Žiadne stroje po termíne revízie.
               </div>
             )}
@@ -24075,12 +23793,12 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
           </div>
         </div>
         <div>
-          <div className="label-font" style={{ fontSize: 13, color: "var(--warn)", marginBottom: 10, fontWeight: 700 }}>
-            Revízie do 30 dní — {soon.length}
-          </div>
+          <h2 className="today-sec" style={{ marginTop: 0 }}>
+            Revízie do 30 dní · {soon.length}
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {soon.length === 0 && (
-              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 14, boxShadow: "none", borderRadius: 12 }}>
                 Žiadne blížiace sa revízie.
               </div>
             )}
@@ -24149,23 +23867,23 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
   }
   return (
     <>
-      <table className="table-cards">
+      {!showHistory && onMarkAll && visible.length > 1 && (
+        <div className="tbar" style={{ justifyContent: "flex-end" }}>
+          <button className="btn btn-accent" onClick={() => onMarkAll(visible.map((a) => a.id))}>
+            Spracovať všetky ({visible.length} ks, {totalHours.toLocaleString("sk-SK")} h)
+          </button>
+        </div>
+      )}
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+      <table className="table-cards jobs-table">
         <thead>
           <tr>
-            <th>Model</th>
-            <th>Sériové číslo</th>
+            <th>Stroj</th>
             <th>Technik</th>
             <th>Hodiny</th>
             {withParts && <th>Diely</th>}
             {showHistory && <th>Objednávka/výkaz</th>}
-            <th>Náhľad</th>
-            <th>
-              {!showHistory && onMarkAll && visible.length > 1 && (
-                <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => onMarkAll(visible.map((a) => a.id))}>
-                  Spracovať všetky ({visible.length} ks, {totalHours.toLocaleString("sk-SK")} h)
-                </button>
-              )}
-            </th>
+            <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
@@ -24175,27 +23893,24 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             const diff = erpChecklistDiff(a);
             return (
               <tr key={a.id}>
-                <td data-label="Model" style={{ fontWeight: 600 }}>{m?.type || "—"}</td>
-                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{m?.code || "—"}</td>
+                <td className="td-plain"><strong className="tnum">{m?.code || "—"}</strong><div className="cell-sub">{m?.type || "—"}</div></td>
                 <td data-label="Technik">{t?.name || "—"}</td>
-                <td data-label="Hodiny">{a.workHours} h{a.mth != null ? <span style={{ color: "var(--text-dim)" }}> · {fmtMth(a.mth)} MTH</span> : ""}</td>
+                <td data-label="Hodiny" className="tnum">{a.workHours} h{a.mth != null ? <span style={{ color: "var(--text-dim)" }}> · {fmtMth(a.mth)} MTH</span> : ""}</td>
                 {withParts && (
                   <td data-label="Diely">
                     {(a.usedParts || []).map((p) => `${p.name}${p.partNumber ? " (" + p.partNumber + ")" : ""} × ${p.qty}`).join(", ") || "—"}
                   </td>
                 )}
                 {showHistory && <td data-label="Objednávka/výkaz">{a.erpOrderNumber || "—"}</td>}
-                <td data-label="Náhľad">
-                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>
-                </td>
-                <td className="td-actions">
+                <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {diff && !showHistory && (
-                    <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 4 }}>Zmenené po spracovaní: {diff.join("; ")}</div>
+                    <div style={{ fontSize: 13, color: "var(--warn)", marginBottom: 4, whiteSpace: "normal" }}>Zmenené po spracovaní: {diff.join("; ")}</div>
                   )}
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableChecklist(a, m, t?.name)}>Náhľad</button>{" "}
                   {showHistory ? (
-                    <button className="btn btn-ghost" onClick={() => onRevert(a.id)}>Vrátiť</button>
+                    <button className="btn btn-outline" onClick={() => onRevert(a.id)}>Vrátiť</button>
                   ) : (
-                    <button className="btn btn-accent" onClick={() => onMark(a.id)}>Spracované</button>
+                    <button className="btn btn-outline" onClick={() => onMark(a.id)}>Spracované</button>
                   )}
                 </td>
               </tr>
@@ -24203,8 +23918,9 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
           })}
         </tbody>
       </table>
+      </div>
       {!showHistory && (
-        <div style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
+        <div className="tnum" style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 14 }}>
           Súčet hodín: {totalHours.toLocaleString("sk-SK")} h
         </div>
       )}
@@ -24232,38 +23948,24 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
     );
   }
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-      {rows.map(([techId, s]) => (
-        <button
-          key={techId}
-          className="btn btn-ghost"
-          style={{ position: "relative", padding: "14px 22px", textAlign: "left", minWidth: 160 }}
-          onClick={() => onSelect(techId)}
-        >
-          <div style={{ fontWeight: 700, fontSize: 13 }}>{technicianById[techId]?.name || "— neznámy —"}</div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{s.hours.toLocaleString("sk-SK")} h</div>
-          <span
-            style={{
-              position: "absolute",
-              top: -8,
-              right: -8,
-              background: "var(--accent)",
-              color: "#fff",
-              borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 700,
-              minWidth: 20,
-              height: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 5px",
-            }}
-          >
-            {s.count}
-          </span>
-        </button>
-      ))}
+    <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+      <table className="table-cards jobs-table">
+        <thead>
+          <tr><th>Technik</th><th>{showHistory ? "Spracované kontroly" : "Nespracované kontroly"}</th><th>Hodiny spolu</th><th><span className="sr-only">Akcie</span></th></tr>
+        </thead>
+        <tbody>
+          {rows.map(([techId, s]) => (
+            <tr key={techId} style={{ cursor: "pointer" }} onClick={() => onSelect(techId)}>
+              <td className="td-plain" style={{ fontWeight: 600 }}>{technicianById[techId]?.name || "— neznámy —"}</td>
+              <td data-label="Kontroly" className="tnum">{s.count}</td>
+              <td data-label="Hodiny spolu" className="tnum">{s.hours.toLocaleString("sk-SK")} h</td>
+              <td className="td-actions" style={{ textAlign: "right" }}>
+                <button type="button" className="btn btn-outline" onClick={(e) => { e.stopPropagation(); onSelect(techId); }}>Otvoriť</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -24280,11 +23982,11 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
   }
   return (
     <>
-      <table className="table-cards">
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12, overflowX: "auto" }}>
+      <table className="table-cards jobs-table">
         <thead>
           <tr>
-            <th>Model</th>
-            <th>Sériové číslo</th>
+            <th>Stroj</th>
             <th>Zákazník</th>
             <th>Technik</th>
             <th>Práca</th>
@@ -24293,8 +23995,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
             <th>Km</th>
             <th>Čas na ceste</th>
             {showHistory && <th>Objednávka/výkaz</th>}
-            <th>Náhľad</th>
-            <th></th>
+            <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
@@ -24302,8 +24003,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
             const diff = erpProtocolDiff(p);
             return (
               <tr key={p.id}>
-                <td data-label="Model" style={{ fontWeight: 600 }}>{p.machineModel || "—"}</td>
-                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{p.machineSerial || "—"}</td>
+                <td className="td-plain"><strong className="tnum">{p.machineSerial || "—"}</strong><div className="cell-sub">{p.machineModel || "—"}</div></td>
                 <td data-label="Zákazník">{p.clientName || "—"}</td>
                 <td data-label="Technik">{p.technicianName || "—"}</td>
                 <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + w.hours + "h)" : ""}`).join(", ") || "—"}</td>
@@ -24312,17 +24012,15 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
                 <td data-label="Km">{p.travelKm || "—"}</td>
                 <td data-label="Čas na ceste">{p.travelHours ? p.travelHours + " h" : "—"}</td>
                 {showHistory && <td data-label="Objednávka/výkaz">{p.erpOrderNumber || "—"}</td>}
-                <td data-label="Náhľad">
-                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Náhľad</button>
-                </td>
-                <td className="td-actions">
+                <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {diff && !showHistory && (
-                    <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 4 }}>Zmenené po spracovaní: {diff.join("; ")}</div>
+                    <div style={{ fontSize: 13, color: "var(--warn)", marginBottom: 4, whiteSpace: "normal" }}>Zmenené po spracovaní: {diff.join("; ")}</div>
                   )}
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Náhľad</button>{" "}
                   {showHistory ? (
-                    <button className="btn btn-ghost" onClick={() => onRevert(p.id)}>Vrátiť</button>
+                    <button className="btn btn-outline" onClick={() => onRevert(p.id)}>Vrátiť</button>
                   ) : (
-                    <button className="btn btn-accent" onClick={() => onMark(p.id)}>Spracované</button>
+                    <button className="btn btn-outline" onClick={() => onMark(p.id)}>Spracované</button>
                   )}
                 </td>
               </tr>
@@ -24330,8 +24028,9 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
           })}
         </tbody>
       </table>
+      </div>
       {!showHistory && (
-        <div style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
+        <div className="tnum" style={{ marginTop: 10, textAlign: "right", fontWeight: 700, fontSize: 14 }}>
           Súčet hodín: {totalHours.toLocaleString("sk-SK")} h
         </div>
       )}
@@ -24365,10 +24064,9 @@ function ErpOrderNumberModal({
           onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); if (value.trim()) onConfirm(value.trim()); } }}
         />
       </Field>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Zrušiť</button>
+      <FormFoot confirm>
         <button className="btn btn-accent" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>{confirmLabel}</button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -24393,25 +24091,16 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            className="btn"
-            onClick={() => { setTab(t.id); setSelectedTechId(null); }}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: tab === t.id ? "var(--accent)" : "transparent",
-              color: tab === t.id ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (tab === t.id ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="tbar">
+        <div className="seg" role="group" aria-label="Druh podkladu">
+          {tabs.map((t) => (
+            <button key={t.id} type="button" className={tab === t.id ? "on" : ""} aria-pressed={tab === t.id} onClick={() => { setTab(t.id); setSelectedTechId(null); }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost" onClick={() => setShowHistory((v) => !v)}>
+        <button className="btn btn-outline" onClick={() => setShowHistory((v) => !v)}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
         </button>
       </div>
@@ -24419,8 +24108,8 @@ function ErpChecklistsView({ assignments, protocolLogs, machineById, technicianB
         selectedTechId ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setSelectedTechId(null)}>← Späť na technikov</button>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{technicianById[selectedTechId]?.name || "— neznámy —"}</div>
+              <button className="btn btn-outline" onClick={() => setSelectedTechId(null)}>← Späť na technikov</button>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{technicianById[selectedTechId]?.name || "— neznámy —"}</div>
             </div>
             <ErpChecklistTable
               items={hromadne.filter((a) => (a.technicianId || "—") === selectedTechId)}
@@ -24475,6 +24164,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
   const [vacErr, setVacErr] = useState("");
   const [vacSubs, setVacSubs] = useState({}); // {depo: id zástupu} — dá sa vybrať už pri zadaní dovolenky vopred
   const [vacEdit, setVacEdit] = useState(null); // plánovaná dovolenka, ktorej sa menia zástupy
+  const [vacPick, setVacPick] = useState(false); // okno otvorené cez "+ Dovolenka" — dispečer sa vyberá v okne
   const sorted = [...dispatchers].sort((a, b) => a.name.localeCompare(b.name));
   const short = (d) => DEPO_SHORT_LABELS[d] || d;
   const dm = (iso) => fmtDate(iso).slice(0, 6);
@@ -24504,13 +24194,14 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
   async function saveVacation() {
     if (vacEdit) {
       for (const d of dsp.ownedDepos(vacFor.id)) if ((vacSubs[d] || null) !== dsp.subIdOf(vacEdit, d)) await setSub(vacEdit, d, vacSubs[d] || null);
-      return setVacFor(null);
+      return closeVac();
     }
+    if (!vacFor) return setVacErr("Vyberte dispečera.");
     if (!vacFrom || !vacTo || vacFrom > vacTo) return setVacErr("Dátum Do musí byť rovnaký alebo neskorší ako Od.");
     if (vacTo < today) return setVacErr("Dovolenka už skončila.");
     if (dsp.vacations.some((v) => v.dispatcherId === vacFor.id && v.startDate <= vacTo && v.endDate >= vacFrom)) return setVacErr("V tomto termíne už má dovolenku zadanú.");
     onPersist((cur) => [...cur, { id: uid(), dispatcherId: vacFor.id, startDate: vacFrom, endDate: vacTo, subs: Object.fromEntries(Object.entries(vacSubs).filter(([d, id]) => id && vacRemembered.includes(d))), createdBy }], "Dovolenka bola uložená.");
-    setVacFor(null);
+    closeVac();
   }
   function endVacation(v, row, active) {
     if (!window.confirm(active ? `Ukončiť dovolenku (${row.name})? Depá sa vrátia hneď a zástupy sa zrušia.` : `Zrušiť plánovanú dovolenku (${row.name}, ${dm(v.startDate)}–${dm(v.endDate)})?`)) return;
@@ -24518,106 +24209,155 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
   }
   const vacRemembered = vacFor ? dsp.ownedDepos(vacFor.id) : [];
 
+  const closeVac = () => { setVacFor(null); setVacPick(false); };
+  // Výber v stĺpci "Dnes rieši" volá ten istý toggle ako pôvodné zaškrtávanie (vrátane potvrdení a zástupu počas dovolenky).
+  function pickActing(depo, id) {
+    const a = dsp.actingForDepo(depo, today);
+    if (!id) return a && toggle(a, depo);
+    const row = dispatchers.find((x) => x.id === id);
+    if (row) toggle(row, depo);
+  }
+  const contact = (p) => p ? (
+    <>
+      {p.phone ? <a href={`tel:${p.phone}`} className="tnum" style={{ color: "var(--text)", textDecoration: "none", whiteSpace: "nowrap" }}>{p.phone}</a> : null}
+      {p.phone && p.email ? " · " : null}
+      {p.email ? <a href={`mailto:${p.email}`} style={{ color: "var(--text)", textDecoration: "none" }}>{p.email}</a> : null}
+      {!p.phone && !p.email ? "—" : null}
+    </>
+  ) : <span style={{ color: "var(--text-dim)" }}>—</span>;
+  const vacRows = sorted.flatMap((row) => {
+    const act = dsp.vacation(row.id, today);
+    const planned = dsp.vacations.filter((v) => v.dispatcherId === row.id && v.startDate > today).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+    return [...(act ? [{ row, v: act, active: true }] : []), ...planned.map((v) => ({ row, v, active: false }))];
+  });
+  const thS = { padding: "12px", fontWeight: 600, textAlign: "left", position: "static" };
+  const secH = { margin: 0, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: ".06em", textTransform: "uppercase" };
+
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {uncovered.length > 0 && (
-        <div role="alert" style={{ background: "var(--accent-light)", border: "1px solid var(--danger)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>
-          {uncovered.length === 1 ? `Depo ${uncovered[0]} nemá` : `Depá ${uncovered.join(", ")} nemajú`} dispečera{canManage ? " — zakliknite ho v tabuľke niekomu" : ""}. Kým nikto, upozornenia idú vedúcemu dispečerovi a vedúcemu požičovne.
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-bg)", border: "1px solid #F0C5C8", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--danger-text)" }}>
+          <span aria-hidden="true">⚠</span>
+          <span>{uncovered.length === 1 ? `Depo ${uncovered[0]} nemá` : `Depá ${uncovered.join(", ")} nemajú`} dispečera{canManage ? " — vyberte ho v stĺpci Dnes rieši" : ""}. Kým nikto, upozornenia idú vedúcemu dispečerovi a vedúcemu požičovne.</span>
         </div>
       )}
-      <div className="panel" style={{ padding: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>Dispečeri požičovne</div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 12 }}>
-                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Meno</th>
-                {TODAY_DEPOS.map((d) => <th key={d} title={d} style={{ position: "static", padding: 8, width: 64, textAlign: "center", color: uncovered.includes(d) ? "var(--danger)" : undefined }}>{short(d)}</th>)}
-                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Dovolenka</th>
-                <th style={{ textAlign: "left", padding: 8, position: "static" }}>Kontakt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 && <tr><td colSpan={TODAY_DEPOS.length + 3} style={{ padding: 8, color: "var(--text-dim)" }}>Žiadny dispečer — rolu nastavuje vedúci v Administratíve → Zamestnanci.</td></tr>}
-              {sorted.map((row) => {
-                const rowVac = dsp.vacation(row.id, today);
-                const planned = dsp.vacations.filter((v) => v.dispatcherId === row.id && v.startDate > today).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
-                return (
-                  <tr key={row.id} style={{ borderBottom: "1px solid var(--border)", color: rowVac ? "var(--text-dim)" : undefined }}>
-                    <td style={{ padding: 8, fontWeight: 600 }}>
-                      {row.name}
-                      {row.alsoVeduciDispecer && <span className="badge" style={{ marginLeft: 6, background: "var(--accent-light)", color: "var(--accent)" }}>vedúci dispečer</span>}
-                    </td>
-                    {TODAY_DEPOS.map((depo) => {
-                      if (rowVac) return <td key={depo} style={{ textAlign: "center" }}>—</td>;
-                      const o = dsp.owner(depo);
-                      const v = o && o.id !== row.id && dsp.vacation(o.id, today);
-                      const checked = v ? dsp.actingForDepo(depo, today)?.id === row.id : o?.id === row.id;
-                      return (
-                        <td key={depo} style={{ textAlign: "center", padding: 4, background: v && checked ? "var(--warn-bg, #fdf6ea)" : uncovered.includes(depo) ? "var(--accent-light)" : undefined }}>
-                          <input type="checkbox" checked={checked} disabled={!canManage} onChange={() => toggle(row, depo)}
-                            aria-label={`${row.name} — ${depo}${v ? " (zástup počas dovolenky)" : ""}`}
-                            style={{ width: 20, height: 20, margin: 0, accentColor: v ? "#b86a00" : "var(--accent)", cursor: canManage ? "pointer" : "default" }} />
-                          {v && checked && <div style={{ fontSize: 10, fontWeight: 700, color: "var(--warn)" }}>do {dm(v.endDate)}</div>}
-                        </td>
-                      );
+      <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 760 }}>
+          <thead>
+            <tr style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, letterSpacing: ".05em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+              <th style={{ ...thS, paddingLeft: 20 }}>Depo</th><th style={thS}>Dnes rieši</th><th style={thS}>Kontakt</th><th style={thS}>Dovolenky</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TODAY_DEPOS.map((depo) => {
+              const a = dsp.actingForDepo(depo, today);
+              const o = dsp.owner(depo);
+              const ov = o && dsp.vacation(o.id, today);
+              const oPlanned = o ? dsp.vacations.filter((v) => v.dispatcherId === o.id && v.startDate > today).sort((x, y) => (x.startDate < y.startDate ? -1 : 1)) : [];
+              const opts = sorted.filter((x) => x.id === a?.id || (!dsp.vacation(x.id, today) && x.id !== (ov ? o.id : null)));
+              return (
+                <tr key={depo} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "14px 20px", fontWeight: 700 }}>{depo}</td>
+                  <td style={{ padding: "10px 12px" }}>
+                    {canManage ? (
+                      <select value={a?.id || ""} aria-label={`Dnes rieši — ${depo}${ov ? " (zástup počas dovolenky)" : ""}`} onChange={(e) => pickActing(depo, e.target.value)}
+                        style={{ height: 38, padding: "0 10px", borderRadius: 8, font: "inherit", fontSize: 14, fontWeight: 600, background: "var(--panel)", cursor: "pointer", maxWidth: 260,
+                          border: a ? "1px solid var(--control-line)" : "1px dashed var(--danger)", color: a ? "var(--text)" : "var(--danger-text)" }}>
+                        <option value="">{a ? "— nikto —" : "+ Priradiť dispečera"}</option>
+                        {opts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                      </select>
+                    ) : (
+                      <span style={{ fontWeight: 600, color: a ? undefined : "var(--danger-text)" }}>{a ? a.name : "nikto"}</span>
+                    )}
+                    {ov && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>{a ? `zástup za ${o.name} do ${dm(ov.endDate)}` : `${o.name} má dovolenku do ${dm(ov.endDate)}`}</div>}
+                  </td>
+                  <td style={{ padding: "14px 12px" }}>{contact(a)}</td>
+                  <td style={{ padding: "14px 12px", color: ov || oPlanned.length ? undefined : "var(--text-dim)" }}>
+                    {ov ? <span className="badge badge-warn">dovolenka do {dm(ov.endDate)}</span> : null}
+                    {oPlanned.map((v) => {
+                      const s = dispatchers.find((x) => x.id === dsp.subIdOf(v, depo));
+                      return <div key={v.id} className="tnum">plánovaná {dm(v.startDate)}–{dm(v.endDate)} · zástup: {s?.name || "—"}</div>;
                     })}
-                    <td style={{ padding: 8, fontSize: 12 }}>
-                      {rowVac && (
-                        <div style={{ marginBottom: 4 }}>
-                          <span className="badge badge-warn">dovolenka do {dm(rowVac.endDate)}</span>
-                          {dsp.ownedDepos(row.id).length > 0 && <div style={{ fontSize: 11, marginTop: 2 }}>po návrate: {dsp.ownedDepos(row.id).map(short).join(", ")}</div>}
-                          {canManage && <button className="btn btn-ghost" aria-label={`Ukončiť dovolenku — ${row.name}`} style={{ fontSize: 11, padding: "2px 8px", marginTop: 2 }} onClick={() => endVacation(rowVac, row, true)}>Ukončiť</button>}
-                        </div>
-                      )}
-                      {planned.map((v) => (
-                        <div key={v.id} style={{ marginBottom: 4 }}>
-                          plánovaná {dm(v.startDate)}–{dm(v.endDate)}
-                          {dsp.ownedDepos(row.id).length > 0 && <div style={{ fontSize: 11 }}>zástup: {dsp.ownedDepos(row.id).map((d) => `${short(d)} ${dispatchers.find((x) => x.id === dsp.subIdOf(v, d))?.name.split(" ")[0] || "—"}`).join(", ")}</div>}
-                          {canManage && dsp.ownedDepos(row.id).length > 0 && <button className="btn btn-ghost" aria-label={`Zástupy počas dovolenky — ${row.name}`} style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => openVacation(row, v)}>Zástupy</button>}
-                          {canManage && <button className="btn btn-ghost" aria-label={`Zrušiť plánovanú dovolenku — ${row.name}`} style={{ fontSize: 11, padding: "2px 8px", marginLeft: 4, color: "var(--danger)" }} onClick={() => endVacation(v, row, false)}>Zrušiť</button>}
-                        </div>
-                      ))}
-                      {canManage && !rowVac && <button className="btn btn-ghost" aria-label={`Dovolenka — ${row.name}`} style={{ fontSize: 12 }} onClick={() => openVacation(row)}>Dovolenka</button>}
-                    </td>
-                    <td style={{ padding: 8, fontSize: 12 }}>
-                      {row.phone ? <a href={`tel:${row.phone}`} style={{ color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {row.phone}</a> : "—"}
-                      {row.email && <div><a href={`mailto:${row.email}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{row.email}</a></div>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ fontSize: 12 }}>
-                <td style={{ padding: 8, color: "var(--text-dim)" }}>Dnes rieši</td>
-                {TODAY_DEPOS.map((d) => {
-                  const a = dsp.actingForDepo(d, today);
-                  const o = dsp.owner(d);
-                  return <td key={d} style={{ padding: 4, textAlign: "center", fontWeight: 600, color: !a ? "var(--danger)" : a.id !== o?.id ? "var(--warn)" : undefined }}>{a ? a.name.split(" ")[0] : "nikto"}</td>;
-                })}
-                <td colSpan={2} />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>
-          {canManage
-            ? "Jedno depo rieši jeden dispečer. Dovolenka: depá sa dispečerovi na ten čas odškrtnú, zástup sa vyberie pri dovolenke alebo zaklikne v tabuľke (oranžové) a po dovolenke sa depá vrátia samé."
-            : "Depá a dovolenky nastavuje vedúci dispečer alebo vedúci požičovne."}
-        </div>
+                    {!ov && !oPlanned.length && "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      {vacFor && (
-        <Modal title={`Dovolenka — ${vacFor.name}`} onClose={() => setVacFor(null)}>
-          <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 16, alignItems: "start" }}>
+        <section className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 20px", borderBottom: "1px solid var(--border)" }}>
+            <h2 style={secH}>Dovolenky a zástupy</h2>
+            {canManage && sorted.length > 0 && <button className="btn btn-outline" style={{ minHeight: 40, fontWeight: 600 }} onClick={() => { openVacation(null); setVacPick(true); }}>+ Dovolenka</button>}
+          </div>
+          {vacRows.length === 0 && <div style={{ padding: "14px 20px", color: "var(--text-dim)", fontSize: 14 }}>Žiadna aktívna ani plánovaná dovolenka.</div>}
+          {vacRows.map(({ row, v, active }) => {
+            const owned = dsp.ownedDepos(row.id);
+            return (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <strong>{row.name}</strong> <span className="tnum">· {dm(v.startDate)}–{dm(v.endDate)}</span>
+                  {active && <span className="badge badge-warn" style={{ marginLeft: 8 }}>prebieha</span>}
+                  {owned.length > 0 && (
+                    <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
+                      {active ? `po návrate: ${owned.map(short).join(", ")}` : owned.map((d) => `${d} → zástup ${dispatchers.find((x) => x.id === dsp.subIdOf(v, d))?.name || "—"}`).join(", ")}
+                    </div>
+                  )}
+                </div>
+                {canManage && !active && owned.length > 0 && <button className="btn btn-outline" aria-label={`Zástupy počas dovolenky — ${row.name}`} style={{ borderColor: "var(--line-strong)" }} onClick={() => openVacation(row, v)}>Zástupy</button>}
+                {canManage && (active
+                  ? <button className="btn btn-outline" aria-label={`Ukončiť dovolenku — ${row.name}`} onClick={() => endVacation(v, row, true)}>Ukončiť</button>
+                  : <button className="btn btn-outline" aria-label={`Zrušiť plánovanú dovolenku — ${row.name}`} style={{ borderColor: "var(--danger)", color: "var(--danger-text)" }} onClick={() => endVacation(v, row, false)}>Zrušiť</button>)}
+              </div>
+            );
+          })}
+        </section>
+        <section className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}><h2 style={secH}>Dispečeri</h2></div>
+          {sorted.length === 0 && <div style={{ padding: "14px 20px", color: "var(--text-dim)", fontSize: 14 }}>Žiadny dispečer — rolu nastavuje vedúci v Administratíve → Zamestnanci.</div>}
+          {sorted.map((row) => {
+            const rowVac = dsp.vacation(row.id, today);
+            return (
+              <div key={row.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", borderTop: "1px solid var(--border)", flexWrap: "wrap", fontSize: 14 }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <strong>{row.name}</strong>
+                  {row.alsoVeduciDispecer && <span className="badge" style={{ marginLeft: 6, background: "var(--panel-2)", color: "var(--text)" }}>vedúci dispečer</span>}
+                  {rowVac && <span className="badge badge-warn" style={{ marginLeft: 6 }}>dovolenka do {dm(rowVac.endDate)}</span>}
+                  <div style={{ color: "var(--text-dim)" }}>{dsp.ownedDepos(row.id).map(short).join(", ") || "bez depa"}</div>
+                </div>
+                <div>{contact(row)}</div>
+                {canManage && !rowVac && <button className="btn btn-outline" aria-label={`Dovolenka — ${row.name}`} style={{ borderColor: "var(--line-strong)" }} onClick={() => openVacation(row)}>Dovolenka</button>}
+              </div>
+            );
+          })}
+        </section>
+      </div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+        {canManage
+          ? "Jedno depo rieši jeden dispečer. Dovolenka: depá sa dispečerovi na ten čas odškrtnú, zástup sa vyberie pri dovolenke alebo v stĺpci Dnes rieši a po dovolenke sa depá vrátia samé."
+          : "Depá a dovolenky nastavuje vedúci dispečer alebo vedúci požičovne."}
+      </div>
+      {(vacFor || vacPick) && (
+        <Modal eyebrow="Dovolenka" title={vacFor ? vacFor.name : "Dispečer"} onClose={closeVac} wide>
+          {!vacEdit && (
+            <Field label="Dispečer">
+              <select value={vacFor?.id || ""} aria-label="Dispečer" onChange={(e) => { setVacFor(sorted.find((x) => x.id === e.target.value) || null); setVacSubs({}); setVacErr(""); }} style={{ width: "100%" }}>
+                <option value="">— vyberte dispečera —</option>
+                {sorted.filter((x) => x.id === vacFor?.id || !dsp.vacation(x.id, today)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </Field>
+          )}
+          <div className="fgrid2">
             <Field label="Od"><input type="date" value={vacFrom} disabled={!!vacEdit} onChange={(e) => { setVacFrom(e.target.value); setVacErr(""); }} style={{ width: "100%" }} /></Field>
             <Field label="Do (vrátane)"><input type="date" value={vacTo} disabled={!!vacEdit} onChange={(e) => { setVacTo(e.target.value); setVacErr(""); }} style={{ width: "100%" }} /></Field>
           </div>
-          <div style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
+          {vacFor && <div className="fnote fnote-i">
             {vacRemembered.length
-              ? <>Od začiatku dovolenky sa odškrtnú depá <strong>{vacRemembered.map(short).join(", ")}</strong>. Zástup vyberte tu alebo ho neskôr zakliknite v tabuľke; depo bez zástupu platforma ukáže ako bez dispečera. Po dovolenke sa depá vrátia samé.</>
+              ? <>Od začiatku dovolenky sa odškrtnú depá <strong>{vacRemembered.map(short).join(", ")}</strong>. Zástup vyberte tu alebo ho neskôr v stĺpci Dnes rieši; depo bez zástupu platforma ukáže ako bez dispečera. Po dovolenke sa depá vrátia samé.</>
               : "Nemá zakliknuté žiadne depo."}
-          </div>
+          </div>}
           {vacRemembered.map((d) => (
             <Field key={d} label={`Zástup — ${d}`}>
               <select value={vacSubs[d] || ""} aria-label={`Zástup — ${d}`} onChange={(e) => setVacSubs((cur) => ({ ...cur, [d]: e.target.value }))} style={{ width: "100%" }}>
@@ -24626,11 +24366,10 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
               </select>
             </Field>
           ))}
-          {vacErr && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>{vacErr}</div>}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => setVacFor(null)}>Zrušiť</button>
+          {vacErr && <div className="fnote fnote-r">⚠ {vacErr}</div>}
+          <FormFoot>
             <button className="btn btn-accent" onClick={saveVacation}>{vacEdit ? "Uložiť zástupy" : "Uložiť dovolenku"}</button>
-          </div>
+          </FormFoot>
         </Modal>
       )}
     </div>
@@ -24658,71 +24397,67 @@ function ErpPozicovnaView({ handoverProtocols, jobs, machineById, onMark, onReve
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 280 }} />
+      <h1 className="page-h1" style={{ marginBottom: 14 }}>ERP podklady</h1>
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 340 }} />
         <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost" onClick={() => setShowHistory((v) => !v)}>
+        <button className="btn btn-outline" onClick={() => setShowHistory((v) => !v)}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
         </button>
+        {!showHistory && rows.length > 1 && (
+          <button className="btn btn-accent" onClick={() => setMarkPrompt({ ids: rows.map((r) => r.h.id) })}>
+            Spracovať všetky ({rows.length} ks)
+          </button>
+        )}
       </div>
       {rows.length === 0 ? (
-        <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)", boxShadow: "none", borderRadius: 12 }}>
           {showHistory ? "Žiadne spracované záznamy." : "Žiadne nespracované ukončené prenájmy."}
         </div>
       ) : (
-        <table className="table-cards">
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table">
           <thead>
             <tr>
-              <th>Model</th>
-              <th>Sériové číslo</th>
+              <th>Stroj</th>
               <th>Zákazník</th>
               <th>Číslo zmluvy</th>
               <th>Vrátené</th>
               {showHistory && <th>Faktúra</th>}
-              <th>Protokol</th>
-              <th>
-                {!showHistory && rows.length > 1 && (
-                  <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => setMarkPrompt({ ids: rows.map((r) => r.h.id) })}>
-                    Spracovať všetky ({rows.length} ks)
-                  </button>
-                )}
-              </th>
+              <th><span className="sr-only">Akcie</span></th>
             </tr>
           </thead>
           <tbody>
             {rows.map(({ h, job, machine }) => (
               <tr key={h.id}>
-                <td data-label="Model" style={{ fontWeight: 600 }}>{machine?.type || "—"}</td>
-                <td data-label="Sériové číslo" className="mono" style={{ fontWeight: 600 }}>{machine?.code || "—"}</td>
+                <td className="td-plain">
+                  <strong className="tnum">{machine?.code || "—"}</strong>
+                  <div className="cell-sub">{machine?.type || "—"}</div>
+                </td>
                 <td data-label="Zákazník">
                   {job?.customer || "—"}
                   {(job?.selfPickup || job?.selfReturn) && (
-                    <span className="badge badge-warn" style={{ marginLeft: 6, fontSize: 10 }} title="Zákazník si stroj vyzdvihol/vrátil sám — bez fakturácie dopravy v danom smere">
+                    <span className="spill spill-wait" style={{ marginLeft: 6 }} title="Zákazník si stroj vyzdvihol/vrátil sám — bez fakturácie dopravy v danom smere">
                       Vlastná doprava{job.selfPickup && job.selfReturn ? "" : job.selfPickup ? " (odber)" : " (vrátenie)"}
                     </span>
                   )}
                 </td>
-                <td data-label="Číslo zmluvy">{job?.cisloZmluvy || "—"}</td>
-                <td data-label="Vrátené">{h.returnDate ? fmtDate(h.returnDate) : "—"}</td>
-                {showHistory && <td data-label="Faktúra">{h.erpOrderNumber || "—"}</td>}
-                <td data-label="Protokol">
-                  {job ? (
-                    <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => onOpenProtocol(job)}>Náhľad</button>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="td-actions">
+                <td data-label="Číslo zmluvy" className="tnum">{job?.cisloZmluvy || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                <td data-label="Vrátené" className="tnum">{h.returnDate ? fmtDate(h.returnDate) : "—"}</td>
+                {showHistory && <td data-label="Faktúra" className="tnum">{h.erpOrderNumber || "—"}</td>}
+                <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {job && <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => onOpenProtocol(job)}>Náhľad</button>}{" "}
                   {showHistory ? (
-                    <button className="btn btn-ghost" onClick={() => onRevert(h.id)}>Vrátiť</button>
+                    <button className="btn btn-outline" onClick={() => onRevert(h.id)}>Vrátiť</button>
                   ) : (
-                    <button className="btn btn-accent" onClick={() => setMarkPrompt({ ids: [h.id] })}>Spracované</button>
+                    <button className="btn btn-outline" onClick={() => setMarkPrompt({ ids: [h.id] })}>Spracované</button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {markPrompt && (
         <ErpOrderNumberModal
@@ -24812,57 +24547,35 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        {filterButtons.map((f) => (
-          <button
-            key={f.id}
-            className="btn"
-            onClick={() => toggleFilter(f.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              background: activeFilters.has(f.id) ? "var(--accent)" : "transparent",
-              color: activeFilters.has(f.id) ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (activeFilters.has(f.id) ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div className="quick-filters" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {depoOptions.map((d) => (
-          <button
-            key={d}
-            className="btn depo-chip-btn"
-            onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-            style={{
-              padding: "5px 10px",
-              fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
-              color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-          </button>
-        ))}
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 200, marginLeft: 4 }} />
+      <div className="tbar" style={{ marginBottom: 14 }}>
+        <div className="seg" role="group" aria-label="Stav">
+          {filterButtons.map((f) => (
+            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="seg" role="group" aria-label="Depo">
+          {depoOptions.map((d) => (
+            <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
+              <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
+            </button>
+          ))}
+        </div>
+        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <div style={{ flex: 1 }} />
-        {can(user, "uradnaskuska_clear_all") && (
-          <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={onClearAll}>
-            Vymazať všetky úradné skúšky
-          </button>
-        )}
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+          can(user, "uradnaskuska_clear_all") && { label: "Vymazať všetky úradné skúšky", danger: true, onClick: onClearAll },
+        ]} />
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
-          <div className="label-font" style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10, fontWeight: 700 }}>
-            Úradné skúšky po termíne — {overdue.length}
-          </div>
+          <h2 className={`today-sec${overdue.length ? " red" : ""}`} style={{ marginTop: 0 }}>
+            {overdue.length > 0 && "⚠ "}Úradné skúšky po termíne · {overdue.length}
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {overdue.length === 0 && (
-              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 14, boxShadow: "none", borderRadius: 12 }}>
                 Žiadne stroje po termíne úradnej skúšky.
               </div>
             )}
@@ -24885,12 +24598,12 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
           </div>
         </div>
         <div>
-          <div className="label-font" style={{ fontSize: 13, color: "var(--warn)", marginBottom: 10, fontWeight: 700 }}>
-            Úradné skúšky tento rok ({currentYear}) — {thisYear.length}
-          </div>
+          <h2 className="today-sec" style={{ marginTop: 0 }}>
+            Úradné skúšky tento rok ({currentYear}) · {thisYear.length}
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {thisYear.length === 0 && (
-              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 14, boxShadow: "none", borderRadius: 12 }}>
                 Žiadne úradné skúšky v tomto roku.
               </div>
             )}
@@ -24957,7 +24670,7 @@ function DamageAssignModal({ damage, technicians, user, assignments, today, onCl
   }
 
   return (
-    <Modal eyebrow="Prideliť" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose} onBack={onBack}>
+    <Modal eyebrow="Prideliť" title={damage.code} onClose={onClose} onBack={onBack}>
       <Field label="Technici * (dá sa vybrať viac)">
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
           {assignableTechnicians.filter((t) => !t.archived).map((t) => {
@@ -25026,25 +24739,27 @@ function BulkAssignModal({ damages, technicians, assignments, today, user, onClo
   }
 
   return (
-    <Modal eyebrow="Hromadne prideliť" title={`${damages.length} ${damages.length === 1 ? "položka" : damages.length < 5 ? "položky" : "položiek"}`} onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12 }}>
+    <Modal eyebrow="Hromadne prideliť" title={`${damages.length} ${damages.length === 1 ? "položka" : damages.length < 5 ? "položky" : "položiek"}`} onClose={onClose} form>
+      <div className="fintro tnum">
         {damages.map((d) => d.code).filter(Boolean).join(", ")}
       </div>
+      <Field label="Deň *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
       <Field label="Technici * (dá sa vybrať viac)">
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
+        <div className="ckl" style={{ maxHeight: 280, overflowY: "auto", marginBottom: 0 }}>
           {technicians.filter((t) => !t.archived && (!allowedDepos || allowedDepos.includes(t.depo))).map((t) => (
-            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} />
-              {t.skratka ? `${t.skratka} — ${t.name}` : t.name}
-              {absenceOn(t.id) && <span style={{ fontSize: 11, color: "var(--danger)", fontWeight: 700 }}>— ⚠ {absenceOn(t.id)} {fmtDate(date)}</span>}
+            <label key={t.id} className={`cki${absenceOn(t.id) ? " prob" : ""}`} style={{ cursor: "pointer", minHeight: 48, fontSize: 15 }}>
+              <input type="checkbox" checked={technicianIds.includes(t.id)} onChange={() => toggle(t.id)} style={{ width: 20, height: 20, accentColor: "var(--text)", margin: 0 }} />
+              <span style={{ flex: 1 }}>{t.skratka ? `${t.skratka} — ${t.name}` : t.name}</span>
+              {absenceOn(t.id) && <span className="spill spill-problem">⚠ {absenceOn(t.id)} {fmtDate(date)}</span>}
             </label>
           ))}
         </div>
       </Field>
-      <Field label="Deň *"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} /></Field>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
-        Prideliť na {damages.length} {damages.length === 1 ? "položku" : damages.length < 5 ? "položky" : "položiek"}
-      </button>
+      <FormFoot missing={[!technicianIds.length && "technik", !date && "deň"].filter(Boolean)}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
+          Prideliť na {damages.length} {damages.length === 1 ? "položku" : damages.length < 5 ? "položky" : "položiek"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -25064,9 +24779,9 @@ function MissingProtocolBanner({ damage, protocolLogs, onAssignProtocol }) {
   if (hasProtocol || !onAssignProtocol) return null;
   return (
     <>
-      <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14, fontWeight: 600 }}>
-        ⚠️ Zákazka nemá priradený servisný protokol.{" "}
-        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginLeft: 4 }} onClick={() => setShowPicker((v) => !v)}>
+      <div className="fnote fnote-r" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ flex: 1, minWidth: 200 }}>⚠ Zákazka nemá priradený servisný protokol.</span>
+        <button className="btn btn-outline" style={{ minHeight: 40, fontWeight: 600 }} onClick={() => setShowPicker((v) => !v)}>
           📋 Prideliť protokol{availableProtocols.length ? ` (${availableProtocols.length})` : ""}
         </button>
       </div>
@@ -25108,22 +24823,24 @@ function CompleteRevisionModal({ damage, today, protocolLogs, onAssignProtocol, 
   const [doneEZ, setDoneEZ] = useState(true);
   const canSave = date && (!isMerged || doneZZ || doneEZ);
   return (
-    <Modal eyebrow="Revízia vykonaná" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+    <Modal eyebrow="Revízia vykonaná" title={damage.code} onClose={onClose}>
+      <div style={{ fontSize: 15, marginTop: -8, marginBottom: 14 }}>{damage.popis}</div>
       <MissingProtocolBanner damage={damage} protocolLogs={protocolLogs} onAssignProtocol={onAssignProtocol} />
       {isMerged && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, border: "1px solid var(--border)", borderRadius: 6, padding: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Čo bolo reálne vykonané?</div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-            <input type="checkbox" checked={doneZZ} onChange={(e) => setDoneZZ(e.target.checked)} />
-            Revízia ZZ
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-            <input type="checkbox" checked={doneEZ} onChange={(e) => setDoneEZ(e.target.checked)} />
-            Revízia EZ
-          </label>
+        <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Čo bolo reálne vykonané?</div>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <label className="fck" style={{ margin: 0 }}>
+              <input type="checkbox" checked={doneZZ} onChange={(e) => setDoneZZ(e.target.checked)} />
+              <span>Revízia ZZ</span>
+            </label>
+            <label className="fck" style={{ margin: 0 }}>
+              <input type="checkbox" checked={doneEZ} onChange={(e) => setDoneEZ(e.target.checked)} />
+              <span>Revízia EZ</span>
+            </label>
+          </div>
           {!doneZZ || !doneEZ ? (
-            <div style={{ fontSize: 11, color: "var(--warn)" }}>
+            <div className="fhint" style={{ color: "#6B4A00" }}>
               {!doneZZ && !doneEZ
                 ? "Zaškrtni aspoň jednu, inak nie je čo uložiť."
                 : `Nezaškrtnutá časť (${!doneZZ ? "ZZ" : "EZ"}) ostane naďalej otvorená v Revíziách.`}
@@ -25134,12 +24851,14 @@ function CompleteRevisionModal({ damage, today, protocolLogs, onAssignProtocol, 
       <Field label="Dátum vykonania revízie *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-        Ďalšia revízia sa na karte stroja automaticky nastaví na {fmtDate(addYearsISO(date, 1))} (rok od vykonania).
+      <div className="fnote fnote-i">
+        Ďalšia revízia sa na karte stroja automaticky nastaví na <b className="tnum">{fmtDate(addYearsISO(date, 1))}</b> (rok od vykonania).
       </div>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(date, { zz: doneZZ, ez: doneEZ })}>
-        Uložiť
-      </button>
+      <FormFoot missing={!date ? ["dátum"] : []}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(date, { zz: doneZZ, ez: doneEZ })}>
+          Uložiť
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -25148,18 +24867,20 @@ function CompleteUradnaSkuskaModal({ damage, today, protocolLogs, onAssignProtoc
   const [date, setDate] = useState(today);
   const nextYear = date ? Number(date.slice(0, 4)) + 10 : null;
   return (
-    <Modal eyebrow="Úradná skúška vykonaná" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+    <Modal eyebrow="Úradná skúška vykonaná" title={damage.code} onClose={onClose}>
+      <div style={{ fontSize: 15, marginTop: -8, marginBottom: 14 }}>{damage.popis}</div>
       <MissingProtocolBanner damage={damage} protocolLogs={protocolLogs} onAssignProtocol={onAssignProtocol} />
       <Field label="Dátum vykonania úradnej skúšky *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-        Ďalšia úradná skúška sa na karte stroja automaticky nastaví na rok {nextYear} (+10 rokov, podľa legislatívy).
+      <div className="fnote fnote-i">
+        Ďalšia úradná skúška sa na karte stroja automaticky nastaví na rok <b className="tnum">{nextYear}</b> (+10 rokov, podľa legislatívy).
       </div>
-      <button className="btn btn-accent" disabled={!date} onClick={() => onSave(date)}>
-        Uložiť
-      </button>
+      <FormFoot missing={!date ? ["dátum"] : []}>
+        <button className="btn btn-accent" disabled={!date} onClick={() => onSave(date)}>
+          Uložiť
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -25204,18 +24925,22 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
   }, [damage.id]);
   const otherLock = findOtherLock(recordLocks, "damages", damage.id, currentUser?.id);
   return (
-    <Modal eyebrow="Upraviť stav zákazky" title={<span style={{ color: "var(--accent)" }}>{damage.code}</span>} onClose={onClose}>
+    <Modal eyebrow="Upraviť stav zákazky" title={damage.code} onClose={onClose} wide>
       {otherLock && (
-        <div style={{ background: "var(--warning-bg, #fff3cd)", color: "var(--warning, #856404)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div className="fnote fnote-y" style={{ fontWeight: 600 }}>
           ⚠️ Toto poškodenie práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
         </div>
       )}
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>{damage.popis}</div>
+      <div style={{ fontSize: 15, marginTop: -8, marginBottom: 14 }}>{damage.popis}</div>
       <MissingProtocolBanner damage={damage} protocolLogs={protocolLogs} onAssignProtocol={onAssignProtocol} />
       <Field label="Stav *">
-        <select value={stav} onChange={(e) => setStav(e.target.value)} style={{ width: "100%" }}>
-          {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
+        <div className="seg" role="radiogroup" aria-label="Stav" style={{ display: "flex", flexWrap: "wrap" }}>
+          {options.map((o) => (
+            <button key={o.id} type="button" role="radio" aria-checked={stav === o.id} className={stav === o.id ? "on" : ""} style={{ minHeight: 44, flex: "1 1 45%", whiteSpace: "normal", lineHeight: 1.15 }} onClick={() => setStav(o.id)}>
+              {o.id === "zavazna_porucha" ? "⚠ " : ""}{o.label}
+            </button>
+          ))}
+        </div>
       </Field>
       <Field label="Dátum *">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "100%" }} />
@@ -25223,9 +24948,11 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
       <Field label={latestProtocol ? "Čo sa zistilo / vykonalo (predvyplnené z protokolu)" : "Čo sa zistilo / vykonalo *"}>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Popis zásahu…" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim(), damage._rev || 0)}>
-        {latestProtocol && !damage.resolved && stav === "opravene" ? "Uzavrieť podľa protokolu" : "Uložiť"}
-      </button>
+      <FormFoot missing={[!date && "dátum", !comment.trim() && !latestProtocol && "čo sa zistilo / vykonalo"].filter(Boolean)}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(stav, date, comment.trim(), damage._rev || 0)}>
+          {latestProtocol && !damage.resolved && stav === "opravene" ? "Uzavrieť podľa protokolu" : "Uložiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -25244,43 +24971,43 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
     // len zo záložky Poškodenia/Externé, kde sú práva nastavené správne.
     const stavLabel = techIds.length ? "Pridelené" : "Nové";
     return (
-      <Modal eyebrow="Servisný záznam" title={<span style={{ color: "var(--accent)" }}>{d.code}</span>} onClose={onClose} onBack={onBack}>
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-          <CardField label="Nahlásené" value={`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`} />
-          <CardField label="Stav" value={stavLabel} danger={!techIds.length} />
-          <CardField label="Pridelené komu" value={techNames || "— zatiaľ nikomu —"} />
-          <CardField label="Na kedy" value={d.assignedDate ? fmtDate(d.assignedDate) : null} />
+      <Modal eyebrow="Servisný záznam" title={d.code} onClose={onClose} onBack={onBack}>
+        <div className="fsum">
+          <div><span>Nahlásené</span>{`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`}</div>
+          <div style={!techIds.length ? { background: "var(--danger-bg)", color: "var(--danger-text)", fontWeight: 600 } : undefined}><span>Stav</span>{!techIds.length ? "⚠ " : ""}{stavLabel}</div>
+          <div><span>Pridelené komu</span>{techNames || "— zatiaľ nikomu —"}</div>
+          <div><span>Na kedy</span>{d.assignedDate ? fmtDate(d.assignedDate) : "—"}</div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Popis</div>
-        <div style={{ fontSize: 13 }}>{d.popis}</div>
+        <div className="fld-l" style={{ color: "var(--text-dim)", fontWeight: 600 }}>Popis</div>
+        <div style={{ fontSize: 14 }}>{d.popis}</div>
       </Modal>
     );
   }
 
   const doneDate = d.opravaDatum || d.vykonanaDatum;
   return (
-    <Modal eyebrow="Servisný záznam" title={<span style={{ color: "var(--accent)" }}>{d.code}</span>} onClose={onClose} onBack={onBack}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Nahlásené" value={`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`} />
-        <CardField label={isSimple ? "Dátum vykonania" : "Dátum opravy"} value={doneDate ? fmtDate(doneDate) : null} />
+    <Modal eyebrow="Servisný záznam" title={d.code} onClose={onClose} onBack={onBack}>
+      <div className="fsum">
+        <div><span>Nahlásené</span>{`${fmtDate(d.dateReported)}${d.reportedBy ? ` · ${d.reportedBy}` : ""}`}</div>
+        <div><span>{isSimple ? "Dátum vykonania" : "Dátum opravy"}</span>{doneDate ? fmtDate(doneDate) : "—"}</div>
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Pôvodný popis</div>
-      <div style={{ fontSize: 13, marginBottom: 14 }}>{d.popis}</div>
+      <div className="fld-l" style={{ color: "var(--text-dim)", fontWeight: 600 }}>Pôvodný popis</div>
+      <div style={{ fontSize: 14, marginBottom: 14 }}>{d.popis}</div>
       {!isSimple && (
         <>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Čo sa opravilo</div>
-          <div style={{ fontSize: 13 }}>{d.opravaKomentar || "— bez komentára —"}</div>
+          <div className="fld-l" style={{ color: "var(--text-dim)", fontWeight: 600 }}>Čo sa opravilo</div>
+          <div style={{ fontSize: 14 }}>{d.opravaKomentar || "— bez komentára —"}</div>
         </>
       )}
       {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
         <div key={p.id} style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
+          <div className="flegend" style={{ fontSize: 14 }}>
             Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
+            <button className="btn btn-outline" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
+              <button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
           </div>
         </div>
@@ -25383,9 +25110,9 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
             style={{
               padding: "5px 10px",
               fontSize: 11,
-              background: depoFilter === d ? "var(--accent)" : "transparent",
+              background: depoFilter === d ? "var(--accent-fill)" : "transparent",
               color: depoFilter === d ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
+              border: "1px solid " + (depoFilter === d ? "var(--accent-fill)" : "var(--border)"),
             }}
           >
             <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
@@ -25469,35 +25196,47 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
     .slice(0, 8);
 
   return (
-    <Modal eyebrow="Technik" title={`${t.name}${t.archived ? " (archivovaný)" : ""}`} onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <CardField label="Skratka (ERP)" value={t.skratka} />
-        <CardField label="ŠPZ servisného auta" value={vehicleSpz} />
-        <CardField label="Depo" value={t.depo} />
-        <CardField label="Telefón" value={t.phone} />
-        <CardField label="Email" value={t.email} />
-      </div>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
-        Nadchádzajúce zákazky
-      </div>
+    <Modal
+      eyebrow="Technik"
+      title={<>{t.name}{t.depo && <span className="side-title-sub">{t.depo}</span>}{t.archived && <span className="spill">Archivovaný</span>}</>}
+      onClose={onClose}
+      side
+      headerExtra={
+        <div className="side-summary">
+          <div><span>Depo</span><b>{t.depo || "—"}</b></div>
+          <div><span>Skratka (ERP)</span><b>{t.skratka || "—"}</b></div>
+          <div><span>ŠPZ servisného auta</span><b>{vehicleSpz || "—"}</b></div>
+          <div><span>Telefón</span><b className="tnum">{t.phone || "—"}</b></div>
+        </div>
+      }
+    >
+      <dl className="side-dl">
+        <dt>Skratka (ERP)</dt><dd>{t.skratka || "—"}</dd>
+        <dt>ŠPZ servisného auta</dt><dd>{vehicleSpz || "—"}</dd>
+        <dt>Depo</dt><dd>{t.depo || "—"}</dd>
+        <dt>Telefón</dt><dd className="tnum">{t.phone ? <a href={`tel:${t.phone}`}>{t.phone}</a> : "—"}</dd>
+        <dt>Email</dt><dd>{t.email ? <a href={`mailto:${t.email}`}>{t.email}</a> : "—"}</dd>
+      </dl>
+      <div className="side-sec">Nadchádzajúce zákazky</div>
       {upcoming.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>Zatiaľ nič naplánované.</div>
+        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 14 }}>Zatiaľ nič naplánované.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+        <dl className="side-dl">
           {upcoming.map((a) => {
             const machine = a.machineId ? machineById[a.machineId] : null;
             return (
-              <div key={a.id} style={{ fontSize: 12, paddingLeft: 8, borderLeft: "2px solid var(--border)" }}>
-                <span className="mono" style={{ fontWeight: 600 }}>{fmtDate(a.date)}</span>
-                {" · "}
-                <span style={{ fontWeight: 600 }}>{a.kind === "kontrolaStroja" ? `Kontrola stroja${machine?.code ? " — " + machine.code : ""}` : (machine?.code || a.stroj || "— stroj neurčený —")}</span>
-                <span style={{ color: "var(--text-dim)" }}>{a.kind === "kontrolaStroja" && machine?.type ? " · " + machine.type : (machineCurrentLocation(machine) || a.umiestnenie) ? " · " + (machineCurrentLocation(machine) || a.umiestnenie) : ""}{a.firma ? " · " + a.firma : ""}</span>
-              </div>
+              <React.Fragment key={a.id}>
+                <dt className="tnum">{fmtDate(a.date)}</dt>
+                <dd>
+                  <b>{a.kind === "kontrolaStroja" ? `Kontrola stroja${machine?.code ? " — " + machine.code : ""}` : (machine?.code || a.stroj || "— stroj neurčený —")}</b>
+                  <span style={{ color: "var(--text-dim)" }}>{a.kind === "kontrolaStroja" && machine?.type ? " · " + machine.type : (machineCurrentLocation(machine) || a.umiestnenie) ? " · " + (machineCurrentLocation(machine) || a.umiestnenie) : ""}{a.firma ? " · " + a.firma : ""}</span>
+                </dd>
+              </React.Fragment>
             );
           })}
-        </div>
+        </dl>
       )}
-      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 14 }}>
         Úprava údajov a archivácia sa robí v Administratíve → Zamestnanci.
       </div>
     </Modal>
@@ -25705,63 +25444,40 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
 
   return (
     <div>
-      {can(user, "plan_quick_events") && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Rýchle udalosti:</span>
-          {QUICK_KINDS.map((k) => (
-            <button
-              key={k.id}
-              className="btn"
-              onClick={() => setQuickMode(quickMode === k.id ? null : k.id)}
-              style={{
-                padding: "5px 10px",
-                fontSize: 11,
-                background: quickMode === k.id ? k.color : "transparent",
-                color: quickMode === k.id ? "#fff" : k.color,
-                border: "1px solid " + k.color,
-              }}
-            >
-              {k.label}
-            </button>
-          ))}
-          {quickMode && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              — kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
+      <div className="quick-filters" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", marginBottom: 14, gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="seg" role="group" aria-label="Depo">
+            <button type="button" className={!depoFilter ? "on" : ""} aria-pressed={!depoFilter} onClick={() => setDepoFilter(null)}>Všetky</button>
+            {depoOptions.map((d) => (
+              <button key={d} type="button" title={d} className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
+                {DEPO_SHORT_LABELS[d] || d}
+              </button>
+            ))}
+          </div>
+          {can(user, "plan_quick_events") && (
+            <KebabMenu
+              label="+ Udalosť ▾"
+              name="Rýchle udalosti"
+              btnClass="btn btn-outline"
+              btnStyle={{ minHeight: 40, fontWeight: 600 }}
+              actions={QUICK_KINDS.map((k) => ({ label: (quickMode === k.id ? "✓ " : "") + k.label, onClick: () => setQuickMode(quickMode === k.id ? null : k.id) }))}
+            />
+          )}
+          {can(user, "plan_quick_events") && quickMode && (
+            <span className="fchip on" style={{ cursor: "default" }}>
+              Kliknite na bunky technikov, kam chcete "{QUICK_KINDS.find((k) => k.id === quickMode)?.label}" pridať
+              <button type="button" className="fchip-x" aria-label="Zrušiť rýchlu udalosť" onClick={() => setQuickMode(null)}>✕</button>
             </span>
           )}
         </div>
-      )}
-      {/* Názov mesiaca je na úrovni výberu depa (nie vlastný riadok vyššie) a
-          vycentrovaný na stred CELÉHO ganttu (1fr auto 1fr) — depo chipy
-          vľavo, mesiac presne v strede bez ohľadu na šírku chipov. */}
-      <div className="quick-filters" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 14, gap: 10 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {depoOptions.map((d) => (
-            <button
-              key={d}
-              className="btn depo-chip-btn"
-              onClick={() => setDepoFilter(depoFilter === d ? null : d)}
-              style={{
-                padding: "5px 10px",
-                fontSize: 11,
-                background: depoFilter === d ? "var(--accent)" : "transparent",
-                color: depoFilter === d ? "#fff" : "var(--text-dim)",
-                border: "1px solid " + (depoFilter === d ? "var(--accent)" : "var(--border)"),
-              }}
-            >
-              <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o - 1)}>←</button>
-          <span className="label-font" style={{ fontSize: 15, minWidth: 160, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
-          <button className="btn btn-ghost" style={{ padding: "5px 10px" }} onClick={() => setMonthOffset((o) => o + 1)}>→</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <button type="button" aria-label="Predošlý mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => setMonthOffset((o) => o - 1)}>‹</button>
+          <span style={{ fontSize: 16, fontWeight: 700, minWidth: 140, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
+          <button type="button" aria-label="Ďalší mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => setMonthOffset((o) => o + 1)}>›</button>
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-            <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 11 }} onClick={goToToday}>Dnes</button>
+            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--line-strong)" }} onClick={goToToday}>Dnes</button>
           )}
         </div>
-        <div />
       </div>
       <div className="panel" style={{ padding: 16 }}>
         {/* WebkitOverflowScrolling: pri rýchlom švihnutí prstom na mobile (najmä
@@ -25774,7 +25490,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
         neho má tiež overflow-x:auto kvôli tabuľkám), "prebublať" von — posunie
         sa celá stránka vrátane hlavičky/tlačidiel nad kalendárom, nielen
         samotný Gantt. Toto to zastaví presne na hranici Gantt kontajnera. */}
-    <div ref={scrollContainerRef} onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
+    <div ref={scrollContainerRef} className="gantt-scroll" onScroll={handleCalendarScroll} style={{ overflow: "auto", maxHeight: "65vh", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain", userSelect: "none", WebkitUserSelect: "none" }}>
           <div style={{ width: "100%", minWidth: "max-content" }}>
             <div
               style={{
@@ -25929,7 +25645,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                             return (
                               <div key={a.id} className="gantt-cell" onClick={() => setChecksDay({ technician: t, date: iso, ids: a.__checks.map((x) => x.id) })}
                                 title={`Kontroly stroja (${done}/${a.__checks.length} hotové): ${a.__checks.map((x) => machineById[x.machineId]?.code || "—").join(", ")}`}
-                                style={{ height: 22, borderRadius: 4, background: "#8b5cf6", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap", cursor: "pointer", padding: "0 4px",
+                                style={{ height: 22, borderRadius: 4, background: "#6d28d9", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap", cursor: "pointer", padding: "0 4px",
                                   opacity: done === a.__checks.length ? 0.5 : 1, outline: late ? "2px solid var(--danger)" : undefined }}>
                                 🔍 {a.__checks.length} · {done}✓
                               </div>
@@ -25944,7 +25660,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const ezAllDone = isEz && ezOpen.length === 0;
                           const ezLate = isEz && !ezAllDone && a.date < today;
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
-                          const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#8b5cf6") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
+                          const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#6d28d9") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
                           const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.skipped ? "⊘ " : a.resolved ? "✓ " : ""}${a.self ? "🏢 " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = isEz
                             ? `Spracovanie meraní EZ (${ezOpen.length} z ${a.ezItems.length} čaká)${ezLate ? " — po termíne" : ""}: ${a.ezItems.map((x) => x.machineCode || "—").join(", ")}`
@@ -26103,17 +25819,17 @@ function CheckerVacationModal({ technician, depos, clickedDate, kind, technician
   const [moveTasksTo, setMoveTasksTo] = useState("");
 
   return (
-    <Modal eyebrow={label} title={technician.name} onClose={onClose}>
+    <Modal eyebrow={label} title={technician.name} onClose={onClose} wide>
       {isChecker && (
-        <div style={{ fontSize: 13, marginBottom: 14 }}>
+        <div className="fnote fnote-i">
           {technician.name} zabezpečuje checking pre depo <strong>{depos.join(", ")}</strong>. Na toto obdobie treba zvoliť náhradného checkera — platforma ho po tomto termíne automaticky vráti späť (aj keby išlo o náhradu za náhradu).
         </div>
       )}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="fgrid2">
         <Field label={`${label} od *`}><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label={`${label} do *`}><input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
-      {dateError && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>{dateError}</div>}
+      {dateError && <div className="fnote fnote-r">⚠ {dateError}</div>}
       {isChecker && (
         <Field label="Náhradný checker *">
           <select value={substituteId} onChange={(e) => setSubstituteId(e.target.value)} style={{ width: "100%" }}>
@@ -26125,10 +25841,11 @@ function CheckerVacationModal({ technician, depos, clickedDate, kind, technician
         </Field>
       )}
       {tasksInRange.length > 0 && (
-        <div style={{ background: "var(--warning-bg, #fff3cd)", borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>V tomto termíne má {technician.name} pridelený servis ({tasksInRange.length}):</div>
-          {tasksInRange.slice(0, 6).map((a) => <div key={a.id}>{fmtDate(a.date)} — {a.stroj || a.poznamka || "úloha"}{a.firma ? ` · ${a.firma}` : ""}</div>)}
+        <div className="fnote fnote-y">
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>V tomto termíne má {technician.name} pridelený servis ({tasksInRange.length}):</div>
+          {tasksInRange.slice(0, 6).map((a) => <div key={a.id} className="tnum">{fmtDate(a.date)} — {a.stroj || a.poznamka || "úloha"}{a.firma ? ` · ${a.firma}` : ""}</div>)}
           {tasksInRange.length > 6 && <div>…a ďalšie</div>}
+          <div style={{ height: 10 }} />
           <Field label="Presunúť tieto úlohy na (voliteľné)">
             <select value={moveTasksTo} onChange={(e) => setMoveTasksTo(e.target.value)} style={{ width: "100%" }}>
               <option value="">— nechať, preplánujem ručne —</option>
@@ -26139,9 +25856,11 @@ function CheckerVacationModal({ technician, depos, clickedDate, kind, technician
           </Field>
         </div>
       )}
+      <FormFoot missing={[!startDate && "od", !endDate && "do", isChecker && !substituteId && "náhradný checker"].filter(Boolean)}>
       <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave({ startDate, endDate, substituteId: isChecker ? substituteId : null, moveTasksTo: tasksInRange.length ? moveTasksTo || null : null })}>
         {isChecker ? "Uložiť a nastaviť náhradu" : "Uložiť"}
       </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -26149,7 +25868,7 @@ function CheckerVacationModal({ technician, depos, clickedDate, kind, technician
 function QuickEventNoteModal({ onClose, onSave }) {
   const [text, setText] = useState("");
   return (
-    <Modal title="Nová udalosť" onClose={onClose}>
+    <Modal eyebrow="Plán servisu" title="Nová udalosť" onClose={onClose}>
       <Field label="Text udalosti *">
         <input
           value={text}
@@ -26160,9 +25879,11 @@ function QuickEventNoteModal({ onClose, onSave }) {
           onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); if (text.trim()) onSave(text.trim()); } }}
         />
       </Field>
-      <button className="btn btn-accent" disabled={!text.trim()} onClick={() => onSave(text.trim())}>
-        Pridať
-      </button>
+      <FormFoot missing={!text.trim() ? ["text udalosti"] : []}>
+        <button className="btn btn-accent" disabled={!text.trim()} onClick={() => onSave(text.trim())}>
+          Pridať
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -26207,79 +25928,70 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
   }
 
   return (
-    <Modal eyebrow={fmtDate(slot.date)} title={technician?.name || "Technik"} onClose={onClose} wide>
+    <Modal eyebrow={fmtDate(slot.date)} title={technician?.name || "Technik"} onClose={onClose} wide form={editingId !== null}>
       {dayAssignments.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+        <div className="flist">
           {dayAssignments.map((a) => {
             const machine = a.machineId ? machineById[a.machineId] : null;
             const linkedDamage = a.damageId ? (damages || []).find((d) => d.id === a.damageId) : null;
             if (editingId === a.id) return null;
             return (
-              <div key={a.id} className="panel" style={{ padding: 12, display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+              <div key={a.id} className="frow">
                 <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>
-                    {machine?.code || a.stroj || "— stroj neurčený —"}{machine?.type ? ` · ${machine.type}` : ""}
+                  <div style={{ fontSize: 15 }}>
+                    <strong className="tnum">{machine?.code || a.stroj || "— stroj neurčený —"}</strong>{machine?.type ? ` · ${machine.type}` : ""}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{machineCurrentLocation(machine) || a.umiestnenie || "—"}{a.firma ? " · " + a.firma : ""}</div>
-                  {a.poznamka && <div style={{ fontSize: 12, marginTop: 4 }}>{a.poznamka}</div>}
+                  <div className="cell-sub">{machineCurrentLocation(machine) || a.umiestnenie || "—"}{a.firma ? " · " + a.firma : ""}</div>
+                  {a.poznamka && <div style={{ fontSize: 14, marginTop: 4 }}>{a.poznamka}</div>}
                   {(protocolLogs || []).filter((p) => p.assignmentId === a.id || (a.damageId && p.damageId === a.damageId)).map((p) => (
                     <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                       <button
                         onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--accent)", border: "none", background: "none", cursor: "pointer", padding: 0 }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--text)", textDecoration: "underline", border: "none", background: "none", cursor: "pointer", padding: 0 }}
                       >
                         Protokol ({fmtDate(p.createdAt)})
                       </button>
                       {p.imageUrl && (
-                        <button onClick={() => openPhotoLightbox(p.imageUrl)} title="Zobraziť pôvodný snapshot" style={{ fontSize: 11, color: "var(--accent)", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
+                        <button onClick={() => openPhotoLightbox(p.imageUrl)} title="Zobraziť pôvodný snapshot" style={{ fontSize: 14, color: "var(--text)", textDecoration: "underline", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
                           Snapshot
                         </button>
                       )}
                     </span>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
-                  {!a.kind && linkedDamage && !linkedDamage.resolved && techEditable && can(user, "plan_assign") && (
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--accent)" }} onClick={() => onReschedule(linkedDamage)}>
-                      Preplánovať
-                    </button>
-                  )}
-                  {!a.kind && techEditable && can(user, "plan_assign") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(a.id)}>Upraviť</button>}
-                  {/* Dovolenka/PN sa nepresúvajú dátumom (zástup checkera by ostal
-                      na starom dni) — zmaže sa a zadá nanovo, zástup sa upraví sám. */}
-                  {QUICK_KINDS.includes(a.kind) && a.kind !== "dovolenka" && a.kind !== "pn" && techEditable && can(user, "plan_quick_events") && reschedulingId !== a.id && (
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => { setReschedulingId(a.id); setRescheduleDate(a.date); }}>
-                      Preplánovať
-                    </button>
-                  )}
+                <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
                   {a.kind && reschedulingId === a.id && (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <input
                         type="date"
+                        aria-label="Nový dátum"
                         value={rescheduleDate}
                         onChange={(e) => setRescheduleDate(e.target.value)}
-                        style={{ fontSize: 12, padding: "3px 6px" }}
+                        // Enter = Presunúť (hlavné červené tlačidlo okna ostáva len jedno)
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.parentElement.querySelector(".btn-black:not(:disabled)")?.click(); } }}
                       />
                       <button
-                        className="btn btn-accent"
-                        style={{ fontSize: 11, padding: "4px 8px" }}
+                        className="btn btn-black"
                         disabled={!rescheduleDate}
                         onClick={() => { onSave({ date: rescheduleDate }, a.id); setReschedulingId(null); if (rescheduleDate !== slot.date) onClose(); }}
                       >
                         Presunúť
                       </button>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setReschedulingId(null)}>
+                      <button className="btn btn-outline" onClick={() => setReschedulingId(null)}>
                         Zrušiť
                       </button>
                     </div>
                   )}
-                  {!a.kind && can(user, "protocol_write") && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
-                  {!a.kind && machine && isEzRevision(linkedDamage) && can(user, "protocol_write") && (
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => openEzMeasurement(machine)}>
-                      Meranie VTZ EZ
-                    </button>
-                  )}
-                  {techEditable && a.kind !== "kontrolaStroja" && ((!a.kind && can(user, "plan_assign")) || (QUICK_KINDS.includes(a.kind) && can(user, "plan_quick_events"))) && <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }} onClick={() => onDelete(a.id)}>Zmazať</button>}
+                  {!a.kind && can(user, "protocol_write") && <button className="btn btn-outline" onClick={() => openProtocol(protocolParamsFor(a, machine))}>Protokol</button>}
+                  {!a.kind && techEditable && can(user, "plan_assign") && <button className="btn btn-outline" onClick={() => setEditingId(a.id)}>Upraviť</button>}
+                  {/* Dovolenka/PN sa nepresúvajú dátumom (zástup checkera by ostal
+                      na starom dni) — zmaže sa a zadá nanovo, zástup sa upraví sám. */}
+                  <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, padding: "0 12px", borderColor: "var(--line-strong)" }} actions={[
+                    !a.kind && linkedDamage && !linkedDamage.resolved && techEditable && can(user, "plan_assign") && { label: "Preplánovať", onClick: () => onReschedule(linkedDamage) },
+                    QUICK_KINDS.includes(a.kind) && a.kind !== "dovolenka" && a.kind !== "pn" && techEditable && can(user, "plan_quick_events") && reschedulingId !== a.id && { label: "Preplánovať", onClick: () => { setReschedulingId(a.id); setRescheduleDate(a.date); } },
+                    !a.kind && machine && isEzRevision(linkedDamage) && can(user, "protocol_write") && { label: "Meranie VTZ EZ", onClick: () => openEzMeasurement(machine) },
+                    techEditable && a.kind !== "kontrolaStroja" && ((!a.kind && can(user, "plan_assign")) || (QUICK_KINDS.includes(a.kind) && can(user, "plan_quick_events"))) && { label: "Zmazať", danger: true, onClick: () => onDelete(a.id) },
+                  ]} />
                 </div>
               </div>
             );
@@ -26288,11 +26000,12 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
       )}
 
       {editingId === null && can(user, "plan_assign") && (
-        <button className="btn btn-accent" onClick={() => setEditingId("new")}>+ Pridať ďalšiu zákazku</button>
+        <button className="btn btn-outline" onClick={() => setEditingId("new")}>+ Pridať ďalšiu zákazku</button>
       )}
 
       {editingId !== null && (
-        <div style={{ borderTop: dayAssignments.length > 0 ? "1px solid var(--border)" : "none", paddingTop: dayAssignments.length > 0 ? 14 : 0 }}>
+        <div>
+          {dayAssignments.length > 0 && <div className="flegend">{editingId === "new" ? "PRIDAŤ ZÁKAZKU" : "UPRAVIŤ ZÁKAZKU"}</div>}
           <AssignJobForm
             key={editingId}
             existing={editingId === "new" ? null : dayAssignments.find((a) => a.id === editingId)}
@@ -26327,8 +26040,8 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
   return (
     <div>
       {linkedToTicket ? (
-        <div style={{ fontSize: 13, marginBottom: 12 }}>
-          Stroj: <strong>{machines.find((m) => m.id === machineId)?.code || existing?.stroj || "—"}</strong> <span style={{ color: "var(--text-dim)" }}>(naviazaný na tiket)</span>
+        <div className="fnote fnote-i">
+          Stroj: <strong className="tnum">{machines.find((m) => m.id === machineId)?.code || existing?.stroj || "—"}</strong> <span style={{ color: "var(--text-dim)" }}>(naviazaný na tiket)</span>
         </div>
       ) : (<>
       <Field label="Stroj (vybrať zo zoznamu) *">
@@ -26339,7 +26052,7 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
           placeholder="Vybrať stroj…"
         />
       </Field>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="fgrid2">
         <Field label="…alebo externý stroj — model *">
           <input value={externyModel} onChange={(e) => { setExternyModel(e.target.value); setMachineId(""); }} placeholder="napr. Genie GS-1932" style={{ width: "100%" }} />
         </Field>
@@ -26348,14 +26061,15 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
         </Field>
       </div>
       </>)}
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="fgrid2">
         <Field label="Umiestnenie *"><input value={umiestnenie} onChange={(e) => setUmiestnenie(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label={linkedToTicket ? "Firma" : "Firma *"}><input value={firma} onChange={(e) => setFirma(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
       <Field label="Poznámka (čo tam je, aké diely vziať…)">
         <textarea value={poznamka} onChange={(e) => setPoznamka(e.target.value)} rows={3} style={{ width: "100%" }} />
       </Field>
-      <div style={{ display: "flex", gap: 8 }}>
+      <FormFoot cancel={false} missing={[!linkedToTicket && !hasMachine && "stroj", !umiestnenie.trim() && "umiestnenie", !linkedToTicket && !firma.trim() && "firma"].filter(Boolean)}>
+        <button type="button" className="btn btn-outline" onClick={onCancel}>Zrušiť</button>
         <button
           className="btn btn-accent"
           disabled={!canSave}
@@ -26376,8 +26090,7 @@ function AssignJobForm({ existing, machines, onCancel, onSave }) {
         >
           Uložiť
         </button>
-        <button className="btn btn-ghost" onClick={onCancel}>Zrušiť</button>
-      </div>
+      </FormFoot>
     </div>
   );
 }
@@ -26422,9 +26135,14 @@ function SetNewPasswordScreen({ onDone }) {
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="panel" style={{ padding: 32, width: 360, maxWidth: "90vw" }}>
-        <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
+    <div className="auth-page">
+      <div className="panel auth-card">
+        <div className="auth-head">
+          <span className="header-logo-pill" style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "4px 12px" }}>
+            <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 22, display: "block" }} />
+          </span>
+        </div>
+        <div className="auth-body">
         {done ? (
           <>
             <div style={{ fontSize: 14, marginBottom: 20 }}>Heslo bolo úspešne zmenené. Môžete pokračovať do platformy.</div>
@@ -26434,7 +26152,7 @@ function SetNewPasswordScreen({ onDone }) {
           </>
         ) : (
           <>
-            <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>Nastavte si nové heslo</div>
+            <h1 className="auth-title">Nastavte si nové heslo</h1>
             <Field label="Nové heslo">
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} autoFocus />
             </Field>
@@ -26447,6 +26165,7 @@ function SetNewPasswordScreen({ onDone }) {
             </button>
           </>
         )}
+        </div>
       </div>
     </div>
   );
@@ -26487,12 +26206,17 @@ function LoginScreen({ onLogin, onSignUp }) {
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="panel" style={{ padding: 32, width: 360, maxWidth: "90vw" }}>
-        <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 4, textTransform: "lowercase" }}>mateco</div>
-        <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20 }}>
-          {mode === "login" ? "Interná platforma — prihlásenie" : "Vytvorenie nového účtu"}
+    <div className="auth-page">
+      <div className="panel auth-card">
+        <div className="auth-head">
+          <span className="header-logo-pill" style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "4px 12px" }}>
+            <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 22, display: "block" }} />
+          </span>
         </div>
+        <div className="auth-body">
+        <h1 className="auth-title">
+          {mode === "login" ? "Interná platforma — prihlásenie" : "Vytvorenie nového účtu"}
+        </h1>
 
         <Field label="Email">
           <input
@@ -26531,17 +26255,18 @@ function LoginScreen({ onLogin, onSignUp }) {
           {busy ? "Chvíľu strpenia…" : mode === "login" ? "Prihlásiť sa" : "Vytvoriť účet"}
         </button>
         <button
-          className="btn btn-ghost"
+          className="btn btn-outline"
           style={{ width: "100%" }}
           onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
         >
           {mode === "login" ? "Nemám ešte účet — zaregistrovať sa" : "Mám už účet — prihlásiť sa"}
         </button>
         {mode === "signup" && (
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 12 }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: 12 }}>
             Po zaregistrovaní vám administrátor pridelí rolu (čo môžete v platforme robiť). Kým sa tak nestane, uvidíte platformu len na čítanie.
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -26630,21 +26355,11 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
 
   const periodPicker = (
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
-      {[["week", "Tento týždeň"], ["month", "Tento mesiac"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
-        <button
-          key={id}
-          className="btn"
-          onClick={() => setPeriod(id)}
-          style={{
-            fontSize: 12,
-            background: period === id ? "var(--accent)" : "transparent",
-            color: period === id ? "#fff" : "var(--text)",
-            border: "1px solid " + (period === id ? "var(--accent)" : "var(--border)"),
-          }}
-        >
-          {label}
-        </button>
-      ))}
+      <div className="seg" role="group" aria-label="Obdobie">
+        {[["week", "Tento týždeň"], ["month", "Tento mesiac"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
+          <button key={id} type="button" className={period === id ? "on" : ""} aria-pressed={period === id} onClick={() => setPeriod(id)}>{label}</button>
+        ))}
+      </div>
       {period === "custom" && (
         <>
           <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
@@ -26652,7 +26367,7 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
           <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
         </>
       )}
-      <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 4 }}>
+      <span className="tnum" style={{ fontSize: 14, color: "var(--text-dim)", marginLeft: 4 }}>
         {fmtDate(start)} – {fmtDate(end)}
       </span>
     </div>
@@ -26660,28 +26375,10 @@ function StatistikyView({ user, machines, machineModels, technicians, jobs, rese
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", borderRadius: 8, padding: 3, marginBottom: 20, width: "fit-content" }}>
-        <button
-          className="label-font"
-          onClick={() => setDomain("poziciovna")}
-          style={{ padding: "7px 16px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: domain === "poziciovna" ? "#1a1a1a" : "transparent", color: domain === "poziciovna" ? "#fff" : "var(--text-dim)" }}
-        >
-          POŽIČOVŇA
-        </button>
-        <button
-          className="label-font"
-          onClick={() => setDomain("servis")}
-          style={{ padding: "7px 16px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: domain === "servis" ? "#1a1a1a" : "transparent", color: domain === "servis" ? "#fff" : "var(--text-dim)" }}
-        >
-          SERVIS
-        </button>
-        <button
-          className="label-font"
-          onClick={() => setDomain("diely")}
-          style={{ padding: "7px 16px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: domain === "diely" ? "#1a1a1a" : "transparent", color: domain === "diely" ? "#fff" : "var(--text-dim)" }}
-        >
-          DIELY
-        </button>
+      <div className="utabs" role="tablist" aria-label="Oblasť" style={{ marginTop: 0, marginBottom: 16 }}>
+        {[["poziciovna", "Požičovňa"], ["servis", "Servis"], ["diely", "Diely"]].map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={domain === id} className={`utab${domain === id ? " active" : ""}`} onClick={() => setDomain(id)}>{label}</button>
+        ))}
       </div>
 
       {periodPicker}
@@ -26926,6 +26623,12 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
 
   return (
     <div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+        <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct} %`} />
+        <StatCard label="Vyvezené / vrátené" value={`${js.out} / ${js.back}`} />
+        <StatCard label={`Stroje, ktoré stoja (${idleMin}+ dní)`} value={idleRows.length} color={idleRows.length > 0 ? "var(--danger-text)" : undefined} />
+        <StatCard label="Prepravy za obdobie" value={tSum("sum")} />
+      </div>
       <StatSection title="Utilizácia a rezervácie" hint={`${utilizationPct} % · ${periodReservations.length} rezervácií`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
@@ -27184,6 +26887,12 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
 
   return (
     <div>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
+        <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
+        <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
+        <StatCard label="Revízie po termíne" value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger-text)" : undefined} />
+      </div>
       <StatSection title="Protokoly" hint={`${periodProtocols.length} za obdobie`}>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
@@ -27439,39 +27148,39 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
           </select>
         </Field>
       ) : (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Depo: <strong>{depo || "— podľa vášho profilu —"}</strong></div>
+        <div style={{ fontSize: 15, marginBottom: 12 }}>Depo: <strong>{depo || "— podľa vášho profilu —"}</strong></div>
       )}
 
-      <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+      <div className="fhint" style={{ marginBottom: 10 }}>
         Vypíš toľko riadkov, koľko dielov potrebuješ — Počet kusov, Číslo dielu, Popis dielu a Určenie sú povinné, zvyšok voliteľný. Prázdne riadky sa preskočia.
       </div>
 
-      <div style={{ overflowX: "auto", marginBottom: 10 }}>
-        <table className="table-cards" style={{ borderCollapse: "collapse", width: "100%" }}>
+      <div style={{ overflowX: "auto", marginBottom: 10, border: "1px solid var(--border)", borderRadius: 10 }}>
+        <table className="table-cards ftable" style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Počet ks *</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo dielu *</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Popis dielu *</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Určenie *</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Dodávateľ</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Číslo položky</th>
-              <th style={{ textAlign: "left", fontSize: 11, color: "var(--text-dim)", padding: "4px 6px" }}>Poznámka</th>
+              <th>Počet ks *</th>
+              <th>Číslo dielu *</th>
+              <th>Popis dielu *</th>
+              <th>Určenie *</th>
+              <th>Dodávateľ</th>
+              <th>Číslo položky</th>
+              <th>Poznámka</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td data-label="Počet ks *" style={{ padding: "3px 6px" }}><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: 65, fontSize: 12 }} /></td>
-                <td data-label="Číslo dielu *" style={{ padding: "3px 6px" }}><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td data-label="Popis dielu *" style={{ padding: "3px 6px" }}><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: 160, fontSize: 12 }} /></td>
-                <td data-label="Určenie *" style={{ padding: "3px 6px" }}>
+                <td data-label="Počet ks *"><input type="number" value={r.pocetKusov} onChange={(e) => updateRow(r.key, "pocetKusov", e.target.value)} style={{ width: "100%", minWidth: 65 }} /></td>
+                <td data-label="Číslo dielu *"><input value={r.cisloDielu} onChange={(e) => updateRow(r.key, "cisloDielu", e.target.value)} style={{ width: "100%", minWidth: 100 }} /></td>
+                <td data-label="Popis dielu *"><input value={r.popisDielu} onChange={(e) => updateRow(r.key, "popisDielu", e.target.value)} style={{ width: "100%", minWidth: 160 }} /></td>
+                <td data-label="Určenie *">
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <select
                       value={r.urcenieTyp}
                       onChange={(e) => { updateRow(r.key, "urcenieTyp", e.target.value); updateRow(r.key, "urcenieStrojId", ""); updateRow(r.key, "urcenieStrojText", ""); updateRow(r.key, "urcenieExternaText", ""); }}
-                      style={{ fontSize: 12, width: 140 }}
+                      style={{ width: "100%", minWidth: 150 }}
                     >
                       <option value="">— vybrať —</option>
                       <option value="stroj">Konkrétny stroj</option>
@@ -27490,7 +27199,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                             updateRow(r.key, "urcenieStrojText", text);
                             updateRow(r.key, "urcenieStrojId", match ? match.id : "");
                           }}
-                          style={{ fontSize: 12, width: 140, borderColor: r.urcenieStrojText && !r.urcenieStrojId ? "var(--danger)" : undefined }}
+                          style={{ width: "100%", minWidth: 150, borderColor: r.urcenieStrojText && !r.urcenieStrojId ? "var(--danger)" : undefined }}
                         />
                         <datalist id={`machine-datalist-${r.key}`}>
                           {machineOptions.map((m) => (
@@ -27498,7 +27207,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                           ))}
                         </datalist>
                         {r.urcenieStrojText && !r.urcenieStrojId && (
-                          <span style={{ fontSize: 10, color: "var(--danger)" }}>Vyber stroj zo zoznamu</span>
+                          <span className="fhint" style={{ color: "var(--danger-text)", marginTop: 0 }}>Vyber stroj zo zoznamu</span>
                         )}
                       </>
                     )}
@@ -27507,16 +27216,16 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                         value={r.urcenieExternaText}
                         placeholder="Ktorá externá zákazka? *"
                         onChange={(e) => updateRow(r.key, "urcenieExternaText", e.target.value)}
-                        style={{ fontSize: 12, width: 140, borderColor: !r.urcenieExternaText.trim() ? "var(--danger)" : undefined }}
+                        style={{ width: "100%", minWidth: 150, borderColor: !r.urcenieExternaText.trim() ? "var(--danger)" : undefined }}
                       />
                     )}
                   </div>
                 </td>
-                <td data-label="Dodávateľ" style={{ padding: "3px 6px" }}><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td data-label="Číslo položky" style={{ padding: "3px 6px" }}><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: 100, fontSize: 12 }} /></td>
-                <td data-label="Poznámka" style={{ padding: "3px 6px" }}><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: 130, fontSize: 12 }} /></td>
-                <td className="td-actions" style={{ padding: "3px 6px" }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Odstrániť riadok" onClick={() => removeRow(r.key)}>✕</button>
+                <td data-label="Dodávateľ"><input value={r.dodavatel} onChange={(e) => updateRow(r.key, "dodavatel", e.target.value)} style={{ width: "100%", minWidth: 100 }} /></td>
+                <td data-label="Číslo položky"><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: "100%", minWidth: 100 }} /></td>
+                <td data-label="Poznámka"><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: "100%", minWidth: 130 }} /></td>
+                <td className="td-actions">
+                  <button className="btn btn-outline" style={{ minWidth: 40, minHeight: 40, padding: 0, borderColor: "var(--line-strong)", color: "var(--text-dim)" }} title="Odstrániť riadok" aria-label="Odstrániť riadok" onClick={() => removeRow(r.key)}>✕</button>
                 </td>
               </tr>
             ))}
@@ -27524,18 +27233,19 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
         </table>
       </div>
 
-      <button className="btn btn-ghost" style={{ fontSize: 12, marginBottom: 14 }} onClick={addRow}>+ Pridať riadok</button>
-
-      {!canManage && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 14 }}>
-          Požiadavka pôjde na schválenie vedúcemu/dispečerovi servisu.
-        </div>
-      )}
-      <div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+        <button className="btn btn-outline" style={{ minHeight: 44 }} onClick={addRow}>+ Pridať riadok</button>
+        {!canManage && (
+          <span className="fhint" style={{ marginTop: 0 }}>
+            Požiadavka pôjde na schválenie vedúcemu/dispečerovi servisu.
+          </span>
+        )}
+      </div>
+      <FormFoot missing={[!depo.trim() && "depo", filledRows.length === 0 && "aspoň jeden vyplnený riadok"].filter(Boolean)}>
         <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
           Odoslať {filledRows.length > 0 ? `(${filledRows.length} ${filledRows.length === 1 ? "položku" : filledRows.length < 5 ? "položky" : "položiek"})` : ""}
         </button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -27550,115 +27260,115 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+      <h1 className="page-h1">Modely strojov</h1>
+      <p className="page-intro">
         Kategória a parametre sa nastavujú raz na model — platia potom pre všetky stroje s týmto modelom naraz.
         Kategória sa používa na zoradenie v gantte (najprv podľa kategórie, potom podľa výšky zdvihu).
-      </div>
+      </p>
       {missingCount > 0 && (
-        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
+        <div className="miss-pill" style={{ marginBottom: 14 }}>
           {missingCount} {missingCount === 1 ? "model nemá" : "modelov nemá"} zatiaľ doplnenú kategóriu.
         </div>
       )}
-      <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ width: "100%", marginBottom: 10 }} />
-      <div className="panel table-wrap" style={{ padding: 0 }}>
-        <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="tbar">
+        <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+      </div>
+      <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table models-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Kategória</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Pracovná výška</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stranový dosah</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Šírka</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Nosnosť</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Podpery</th>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Hmotnosť</th>
-              <th></th>
+              <th>Model</th>
+              <th>Kategória</th>
+              <th>Pracovná výška</th>
+              <th>Stranový dosah</th>
+              <th>Šírka</th>
+              <th>Nosnosť</th>
+              <th>Podpery</th>
+              <th>Hmotnosť</th>
+              <th><span className="sr-only">Akcie</span></th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne modely nezodpovedajú hľadaniu.</td>
+                <td className="td-plain" colSpan={9} style={{ color: "var(--text-dim)" }}>Žiadne modely nezodpovedajú hľadaniu.</td>
               </tr>
             ) : (
               sorted.map((mm) => (
-                <tr key={mm.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "6px 12px", fontSize: 13, fontWeight: 600 }} data-label="Model">{mm.name}</td>
-                  <td style={{ padding: "6px 12px" }} data-label="Kategória">
+                <tr key={mm.id}>
+                  <td className="td-plain tnum" style={{ fontWeight: 700 }}>{mm.name}</td>
+                  <td data-label="Kategória">
                     <select
                       value={mm.category || ""}
                       onChange={(e) => onUpdate(mm.id, { category: e.target.value })}
-                      style={{ fontSize: 12, background: mm.category ? "transparent" : "var(--warn-bg)" }}
+                      style={{ background: mm.category ? undefined : "var(--warn-bg)" }}
                     >
                       <option value="">— vybrať —</option>
                       {MACHINE_CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Pracovná výška">
-                    <input
+                  <td data-label="Pracovná výška">
+                    <span className="unit-in"><input
                       type="number"
                       key={"liftHeight" + (mm.liftHeight ?? "")}
                       defaultValue={mm.liftHeight || ""}
                       onBlur={(e) => { if (e.target.value !== String(mm.liftHeight || "")) onUpdate(mm.id, { liftHeight: e.target.value }); }}
-                      placeholder="m"
-                      style={{ width: 70, fontSize: 12 }}
-                    />
+                      aria-label="m"
+                      className="tnum"
+                      /><i>m</i></span>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Stranový dosah">
-                    <input
+                  <td data-label="Stranový dosah">
+                    <span className="unit-in"><input
                       type="number"
                       key={"outreach" + (mm.outreach ?? "")}
                       defaultValue={mm.outreach || ""}
                       onBlur={(e) => { if (e.target.value !== String(mm.outreach || "")) onUpdate(mm.id, { outreach: e.target.value }); }}
-                      placeholder="m"
-                      style={{ width: 70, fontSize: 12 }}
-                    />
+                      aria-label="m"
+                      className="tnum"
+                      /><i>m</i></span>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Šírka">
-                    <input
+                  <td data-label="Šírka">
+                    <span className="unit-in"><input
                       type="number"
                       key={"width" + (mm.width ?? "")}
                       defaultValue={mm.width || ""}
                       onBlur={(e) => { if (e.target.value !== String(mm.width || "")) onUpdate(mm.id, { width: e.target.value }); }}
-                      placeholder="m"
-                      style={{ width: 70, fontSize: 12 }}
-                    />
+                      aria-label="m"
+                      className="tnum"
+                      /><i>m</i></span>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Nosnosť">
-                    <input
+                  <td data-label="Nosnosť">
+                    <span className="unit-in"><input
                       type="number"
                       key={"capacity" + (mm.capacity ?? "")}
                       defaultValue={mm.capacity || ""}
                       onBlur={(e) => { if (e.target.value !== String(mm.capacity || "")) onUpdate(mm.id, { capacity: e.target.value }); }}
-                      placeholder="kg"
-                      style={{ width: 70, fontSize: 12 }}
-                    />
+                      aria-label="kg"
+                      className="tnum"
+                      /><i>kg</i></span>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Podpery">
+                  <td data-label="Podpery">
                     <select
                       value={mm.outriggers === true ? "ano" : mm.outriggers === false ? "nie" : ""}
                       onChange={(e) => onUpdate(mm.id, { outriggers: e.target.value === "ano" ? true : e.target.value === "nie" ? false : null })}
-                      style={{ fontSize: 12 }}
                     >
                       <option value="">—</option>
                       <option value="ano">Áno</option>
                       <option value="nie">Nie</option>
                     </select>
                   </td>
-                  <td style={{ padding: "6px 12px" }} data-label="Hmotnosť">
-                    <input
+                  <td data-label="Hmotnosť">
+                    <span className="unit-in"><input
                       type="number"
                       key={"weight" + (mm.weight ?? "")}
                       defaultValue={mm.weight || ""}
                       onBlur={(e) => { if (e.target.value !== String(mm.weight || "")) onUpdate(mm.id, { weight: e.target.value }); }}
-                      placeholder="kg"
-                      style={{ width: 70, fontSize: 12 }}
-                    />
+                      aria-label="kg"
+                      className="tnum"
+                      /><i>kg</i></span>
                   </td>
-                  <td style={{ padding: "6px 12px" }} className="td-actions">
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)" }} onClick={() => onDelete(mm.id)}>
-                      Zmazať
-                    </button>
+                  <td className="td-actions" style={{ textAlign: "right" }}>
+                    <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Zmazať", danger: true, onClick: () => onDelete(mm.id) }]} />
                   </td>
                 </tr>
               ))
@@ -27677,9 +27387,11 @@ function RejectSparePartModal({ onClose, onConfirm }) {
       <Field label="Dôvod (technik ho uvidí) *">
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="napr. už to máme skladom" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
-        Zamietnuť
-      </button>
+      <FormFoot confirm missing={!reason.trim() ? ["dôvod"] : []}>
+        <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+          Zamietnuť
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -27691,9 +27403,11 @@ function RejectReservationModal({ onClose, onConfirm }) {
       <Field label="Dôvod (obchodník ho uvidí) *">
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="napr. stroj potrebný inde, zákazník zrušil" style={{ width: "100%" }} />
       </Field>
-      <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
-        Zmazať a odoslať dôvod
-      </button>
+      <FormFoot confirm missing={!reason.trim() ? ["dôvod"] : []}>
+        <button className="btn btn-accent" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+          Zmazať a odoslať dôvod
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -27702,19 +27416,22 @@ function ReportTransportIssueModal({ job, machine, onClose, onConfirm }) {
   const [note, setNote] = useState("");
   const [isDamage, setIsDamage] = useState(false);
   return (
-    <Modal eyebrow="Problém s prepravou" title={<span style={{ color: "var(--accent)" }}>{machine?.code || job.customer || ""}</span>} onClose={onClose} elevated>
+    <Modal eyebrow="⚠ Problém s prepravou" title={machine?.code || job.customer || ""} onClose={onClose} elevated form>
+      {machine && job.customer && <div className="fintro">{job.customer}</div>}
       <Field label="Čo sa deje (dispečer to uvidí hneď) *">
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný, porucha stroja" style={{ width: "100%" }} />
       </Field>
       {machine && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
+        <label className={`fck${isDamage ? " fnote fnote-r" : ""}`}>
           <input type="checkbox" checked={isDamage} onChange={(e) => setIsDamage(e.target.checked)} />
-          Ide o poruchu stroja — rovno založiť aj poškodenie do servisu, nech sa stroj ide opraviť
+          <span>Ide o poruchu stroja<small>rovno založiť aj poškodenie do servisu, nech sa stroj ide opraviť</small></span>
         </label>
       )}
-      <button className="btn btn-accent" disabled={!note.trim()} onClick={() => onConfirm(note.trim(), isDamage)}>
-        Odoslať dispečerovi
-      </button>
+      <FormFoot missing={!note.trim() ? ["čo sa deje"] : []}>
+        <button className="btn btn-accent" disabled={!note.trim()} onClick={() => onConfirm(note.trim(), isDamage)}>
+          Odoslať dispečerovi
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -27728,7 +27445,7 @@ function ColumnFilterButton({ label, options, selected, onChange }) {
     <span style={{ position: "relative", display: "inline-block", marginLeft: 4 }}>
       <button
         className="btn btn-ghost"
-        style={{ padding: "1px 5px", fontSize: 10, opacity: allSelected ? 0.5 : 1 }}
+        style={{ padding: "1px 5px", fontSize: 10, opacity: allSelected ? 0.7 : 1 }}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         title={`Filter: ${label}`}
       >
@@ -27813,11 +27530,12 @@ function dispatchResolver(dispatchers, records) {
   };
   return { map, vacations, vacation, owner, ownedDepos, subIdOf, actingForDepo };
 }
-const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {p}</a> : null);
+const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--text)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {p}</a> : null);
 const mapsUrl = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
 // Kto je dnes kde — dispečer požičovne a checker pre každé depo (aj so zástupmi).
-function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, today, compact }) {
+function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, today, compact, myDepo, hideMobile }) {
+  const [expanded, setExpanded] = useState(false);
   const byId = Object.fromEntries((employees || []).map((e) => [e.id, e]));
   const rows = TODAY_DEPOS.map((depo) => {
     const o = dsp.owner(depo);
@@ -27830,6 +27548,20 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
   }).filter((r) => r.disp.length || r.checker);
   // Bez údajov (napr. externý šofér nemá prístup ku kartám dispečerov) sa panel neukáže vôbec.
   if (rows.length === 0) return null;
+  // Zbalené: jeden riadok pre moje depo (inak prvé), ostatné depá po kliknutí. Na mobile šoféra je to v záložke Telefón.
+  const mine = rows.find((r) => r.depo === myDepo) || rows[0];
+  const inline = (label, p, note) => p && (
+    <span style={{ whiteSpace: "nowrap" }}>{label}: <strong>{p.name}</strong>{note ? ` (${note})` : ""} {p.phone && <a href={`tel:${p.phone}`} style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{p.phone}</a>}</span>
+  );
+  const line = (
+    <div className={hideMobile ? "who-hide-mobile" : undefined} style={{ display: "flex", gap: "6px 18px", alignItems: "center", flexWrap: "wrap", fontSize: 14, color: "var(--text)", marginBottom: expanded ? 8 : 14 }}>
+      <span style={{ fontWeight: 600 }}>{mine.depo}</span>
+      {inline("Dispečer", mine.disp[0]?.person, mine.disp[0]?.note)}
+      {inline("Checker", mine.checker, mine.checkerNote)}
+      <button type="button" className="btn btn-ghost" style={{ border: "none", padding: "0 4px", color: "var(--text-dim)" }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Ostatné depá ▾" : "Ostatné depá ▸"}</button>
+    </div>
+  );
+  if (!expanded) return line;
   const person = (p, note) => (
     <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
       <span style={{ fontWeight: 600 }}>{p.name}</span>
@@ -27838,8 +27570,9 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
     </div>
   );
   return (
-    <div className="panel" style={{ padding: compact ? 10 : 14, marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>Kto je dnes kde</div>
+    <>{line}
+    <div className={`panel${hideMobile ? " who-hide-mobile" : ""}`} style={{ padding: compact ? 10 : 14, marginBottom: 14 }}>
+      <div className="today-sec" style={{ margin: "0 0 8px" }}>Kto je dnes kde</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 10 }}>
         {rows.map((r) => (
           <div key={r.depo} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
@@ -27852,26 +27585,61 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
         ))}
       </div>
     </div>
+    </>
   );
 }
 
-function TodayCard({ tag, tagColor, tagBg, title, sub, accent, actions, children }) {
+// Karta úlohy na „Dnes“ — všetky akcie obrysové; plné červené tlačidlo má len veľká karta (TodayHero) navrchu.
+function TodayCard({ tag, tagColor, tagBg, title, sub, problem, actions, children }) {
   return (
-    <div className="panel" style={{ padding: 12, marginBottom: 10, borderLeft: accent ? `4px solid ${accent}` : undefined }}>
-      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: tagBg, color: tagColor }}>{tag}</span>
-      <div style={{ fontWeight: 700, fontSize: 15, margin: "6px 0 2px" }}>{title}</div>
+    <div className={`panel${problem ? " today-problem" : ""}`} style={{ padding: 12, marginBottom: 10 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: tagBg, color: tagColor }}>{problem ? "⚠ " : ""}{tag}</span>
+      <div className={problem ? "today-problem-title" : undefined} style={{ fontWeight: 700, fontSize: 15, margin: "6px 0 2px" }}>{title}</div>
       {sub && <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{sub}</div>}
       {children}
       {actions?.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
           {actions.filter(Boolean).map((a, i) => (
             a.href
-              ? <a key={i} className={`btn ${i === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>{a.label}</a>
-              : <button key={i} className={`btn ${i === 0 ? "btn-accent" : "btn-ghost"}`} onClick={a.onClick}>{a.label}</button>
+              ? <a key={i} className="btn btn-ghost" href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>{a.label}</a>
+              : <button key={i} className="btn btn-ghost" onClick={a.onClick}>{a.label}</button>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// Prvá úloha dňa na mobile: veľké ID, 56px hlavná akcia, 52px Navigovať, ostatné akcie obrysové.
+function TodayHero({ tag, head, headSmall, sub, problem, actions, children }) {
+  const [main, ...rest] = (actions || []).filter(Boolean);
+  const nav = rest.find((a) => a.label === "Navigovať");
+  const more = rest.filter((a) => a !== nav);
+  const btn = (a, cls) => (a.href
+    ? <a key={a.label} className={`btn ${cls}`} href={a.href} target="_blank" rel="noreferrer">{a.label}</a>
+    : <button key={a.label} type="button" className={`btn ${cls}`} onClick={a.onClick}>{a.label}</button>);
+  return (
+    <section aria-label="Ďalšia úloha" className={`today-hero${problem ? " today-problem" : ""}`}>
+      <div className={`today-hero-tag${problem ? " today-problem-title" : ""}`}>{problem ? "⚠ " : "Ďalšia · "}{tag}</div>
+      <div className="today-hero-id">{head} {headSmall && <small>{headSmall}</small>}</div>
+      {sub && <div className="today-hero-sub">{sub}</div>}
+      {children}
+      {main && btn(main, "btn-accent today-main")}
+      {nav && btn(nav, "btn-ghost today-nav")}
+      {more.length > 0 && <div className="today-hero-more">{more.map((a) => btn(a, "btn-ghost"))}</div>}
+    </section>
+  );
+}
+// Kompaktný 64px riadok; ťuk rozbalí plnú kartu so všetkými akciami.
+function TodayCompactRow({ id, title, sub, problem, defaultOpen, children }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  if (open) return children;
+  return (
+    <button type="button" id={id} className={`today-row${problem ? " today-problem" : ""}`} onClick={() => setOpen(true)}>
+      {problem && <span aria-hidden="true" style={{ color: "var(--danger)", fontSize: 18 }}>⚠</span>}
+      <span style={{ flex: 1, minWidth: 0 }}><strong className={problem ? "today-problem-title" : undefined}>{title}</strong>{sub && <span className="today-row-sub">{sub}</span>}</span>
+      <span aria-hidden="true" style={{ fontSize: 22, color: "var(--text-dim)" }}>›</span>
+    </button>
   );
 }
 
@@ -27901,20 +27669,23 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
     </div>
   );
   const waitingParts = phMineWaiting(partHandovers, myEmployee, tomorrow).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-  const partCards = waitingParts.map((p) => (
-    <TodayCard key={p.id} tag={`VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`} {...TODAY_TAG.part}
-      title={`${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`}
-      sub={`${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`}
-      actions={[{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }]} />
-  ));
+  const partItems = waitingParts.map((p) => {
+    const title = `${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`;
+    const sub = `${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`;
+    return { key: p.id, tag: `VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`, ...TODAY_TAG.part, title, sub, head: p.customer, heroSub: sub, rowTitle: `Výdaj dielov · ${p.customer}`,
+      actions: [{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }] };
+  });
+  const asCard = (it) => <TodayCard key={it.key} tag={it.tag} tagColor={it.tagColor} tagBg={it.tagBg} title={it.title} sub={it.sub} problem={it.problem} actions={it.actions} />;
+  const asRow = (it) => <TodayCompactRow key={it.key} title={it.rowTitle || it.title} sub={it.rowSub ?? it.sub} problem={it.problem}>{asCard(it)}</TodayCompactRow>;
+  const partCards = partItems.map(asCard);
 
   if (isDriver) {
     return (
       <div style={{ maxWidth: 1100 }}>
         {header}
-        {transportsPanel}
-        {partCards.length > 0 && <><div className="today-sec">Výdaj dielov ({partCards.length})</div>{partCards}</>}
         {whoPanel}
+        {transportsPanel}
+        {partCards.length > 0 && <><div className="today-sec">Výdaj dielov · {partCards.length}</div>{partCards}</>}
       </div>
     );
   }
@@ -27925,35 +27696,35 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   // Bez spodnej hranice — neurobená úloha ostáva v „Mešká“, kým ju technik nevybaví (rozhodnutie 7. 10.).
   const mine = (assignments || []).filter((a) => myId && a.technicianId === myId && a.date && a.date <= tomorrow);
   const open = (a) => (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind ? !hasServiceProtocol(a) : false);
-  const servisCard = (a, late) => {
+  const servisItem = (a, late) => {
     const d = a.damageId ? damageById[a.damageId] : null;
     const m = machineById[a.machineId || d?.machineId];
     const place = a.umiestnenie || d?.location || "";
-    return (
-      <TodayCard key={a.id} tag={late ? `SERVIS · ${fmtDate(a.date)}` : "SERVIS"} {...(late ? TODAY_TAG.late : TODAY_TAG.srv)} accent={late ? "var(--danger)" : undefined}
-        title={`${a.firma || d?.customer || m?.code || a.stroj || "Servis"}${d?.popis ? ` — ${d.popis}` : a.poznamka ? ` — ${a.poznamka}` : ""}`}
-        sub={[m ? `${m.code}${m.type ? ` (${m.type})` : ""}` : a.stroj, place].filter(Boolean).join(" · ")}
-        actions={[
-          { label: "Vypísať protokol", onClick: () => onProtocol(a) },
-          place && { label: "Navigovať", href: mapsUrl(place) },
-          (d?.contactPhone || d?.telefon) && { label: "Zavolať", href: `tel:${d.contactPhone || d.telefon}` },
-          d && { label: "Detail", onClick: () => onOpenDamage(d) },
-        ]} />
-    );
+    const what = `${a.firma || d?.customer || m?.code || a.stroj || "Servis"}${d?.popis ? ` — ${d.popis}` : a.poznamka ? ` — ${a.poznamka}` : ""}`;
+    return { key: a.id, tag: late ? `SERVIS · ${fmtDate(a.date)}` : "SERVIS", ...(late ? TODAY_TAG.late : TODAY_TAG.srv), problem: late,
+      title: what, sub: [m ? `${m.code}${m.type ? ` (${m.type})` : ""}` : a.stroj, place].filter(Boolean).join(" · "),
+      head: m?.code || a.stroj || "Servis", headSmall: m?.type, heroSub: [what, place].filter(Boolean).join(" · "),
+      rowTitle: `Servis · ${m?.code || a.stroj || "—"}`, rowSub: [d?.popis || a.poznamka || a.firma || d?.customer, place, late ? `od ${fmtDate(a.date)}` : ""].filter(Boolean).join(" · "),
+      actions: [
+        { label: "Vypísať protokol", onClick: () => onProtocol(a) },
+        place && { label: "Navigovať", href: mapsUrl(place) },
+        (d?.contactPhone || d?.telefon) && { label: "Zavolať", href: `tel:${d.contactPhone || d.telefon}` },
+        d && { label: "Detail", onClick: () => onOpenDamage(d) },
+      ] };
   };
-  const checkCard = (a, late) => {
+  const checkItem = (a, late) => {
     const j = jobById[a.jobId];
     const m = machineById[a.machineId || j?.machineId];
     const phase = a.phase === "vratenie" ? "PO VRÁTENÍ" : "PRED VÝVOZOM";
     const dep = j ? j.departureDate || j.startDate : null;
-    return (
-      <TodayCard key={a.id} tag={`KONTROLA ${phase}${late ? ` · ${fmtDate(a.date)}` : ""}`} {...(late ? TODAY_TAG.late : TODAY_TAG.chk)} accent={late ? "var(--danger)" : undefined}
-        title={`${m ? `${m.code}${m.type ? ` · ${m.type}` : ""}` : "Kontrola stroja"}${a.self ? " · osobný odber/vrátenie v depe" : ""}`}
-        sub={[j?.customer, a.phase === "vratenie" ? "" : dep ? `${a.self ? "vyzdvihnutie" : "vývoz"} ${fmtDate(dep)}` : ""].filter(Boolean).join(" · ")}
-        actions={[{ label: "Skontrolovať", onClick: () => onInspection(a) }]} />
-    );
+    const sub = [j?.customer, a.phase === "vratenie" ? "" : dep ? `${a.self ? "vyzdvihnutie" : "vývoz"} ${fmtDate(dep)}` : ""].filter(Boolean).join(" · ");
+    return { key: a.id, tag: `KONTROLA ${phase}${late ? ` · ${fmtDate(a.date)}` : ""}`, ...(late ? TODAY_TAG.late : TODAY_TAG.chk), problem: late,
+      title: `${m ? `${m.code}${m.type ? ` · ${m.type}` : ""}` : "Kontrola stroja"}${a.self ? " · osobný odber/vrátenie v depe" : ""}`, sub,
+      head: m?.code || "Kontrola stroja", headSmall: m?.type, heroSub: [a.self ? "osobný odber/vrátenie v depe" : "", sub].filter(Boolean).join(" · "),
+      rowTitle: `Kontrola ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"} · ${m?.code || "—"}`, rowSub: [sub, late ? `od ${fmtDate(a.date)}` : ""].filter(Boolean).join(" · "),
+      actions: [{ label: "Skontrolovať", onClick: () => onInspection(a) }] };
   };
-  const cardFor = (a, late) => (a.kind === "kontrolaStroja" ? checkCard(a, late) : servisCard(a, late));
+  const itemFor = (a, late) => (a.kind === "kontrolaStroja" ? checkItem(a, late) : servisItem(a, late));
   const late = mine.filter((a) => a.date < today && (a.kind === "kontrolaStroja" || !a.kind) && open(a)).sort((a, b) => a.date.localeCompare(b.date));
   const todays = mine.filter((a) => a.date === today && (a.kind === "kontrolaStroja" || !a.kind) && open(a));
   const doneToday = mine.filter((a) => a.date === today && (a.kind === "kontrolaStroja" || !a.kind) && !open(a)).length;
@@ -27962,27 +27733,36 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const ez = (ezMeasurements || []).filter((m) => myId && m.assignedTechnicianId === myId && !m.processed && m.assignedDate && m.assignedDate <= today);
   const duty = (weeklyDuty || []).some((w) => myId && w.technicianId === myId && w.weekStart && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
   const total = late.length + todays.length + waitingParts.length + (ez.length ? 1 : 0);
+  const ezTitle = `${ez.length} ${ez.length === 1 ? "meranie" : ez.length < 5 ? "merania" : "meraní"} na spracovanie`;
+  const allItems = [
+    ...late.map((a) => itemFor(a, true)),
+    ...todays.map((a) => itemFor(a, false)),
+    ez.length > 0 && { key: "ez", tag: "EZ MERANIA", ...TODAY_TAG.srv, title: ezTitle, sub: ez.slice(0, 4).map((m) => m.machineCode || "—").join(", "),
+      head: ezTitle, rowTitle: `EZ merania · ${ez.length}`, actions: [{ label: "Otvoriť", onClick: () => onEzDay(ez[0].assignedDate) }] },
+    ...partItems,
+  ].filter(Boolean);
+  const [hero, ...restItems] = allItems;
+  const lateRest = restItems.filter((it) => it.problem);
+  const todayRest = restItems.filter((it) => !it.problem);
   return (
     <div style={{ maxWidth: 820 }}>
       {header}
-      <div className="panel" style={{ padding: "10px 12px", marginBottom: 12, fontSize: 13.5, background: "var(--panel-2)" }}>
+      {whoPanel}
+      <div className="panel" style={{ padding: "10px 12px", marginBottom: 12, fontSize: 14, background: "var(--panel-2)", boxShadow: "none" }}>
         {total === 0 ? "Na dnes nemáte nič otvorené. 👍" : `Máte ${total} ${total === 1 ? "úlohu" : total < 5 ? "úlohy" : "úloh"}${late.length ? `, ${late.length} mešká` : ""}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}
+        {total === 0 && tomorrowList.length > 0 && <button type="button" className="btn btn-ghost" style={{ border: "none", padding: "0 6px", fontSize: 14 }} onClick={() => document.getElementById("today-zajtra")?.scrollIntoView({ behavior: "smooth" })}>Zajtra: {tomorrowList.length} ›</button>}
         {duty && <span className="badge badge-warn" style={{ marginLeft: 8 }}>Tento týždeň máte službu na telefóne</span>}
         {infos.map((a) => <span key={a.id} className="badge" style={{ marginLeft: 8 }}>{a.kind === "udalost" ? a.poznamka || "Udalosť" : { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" }[a.kind] || a.kind}</span>)}
       </div>
-      {late.length > 0 && <><div className="today-sec red">Mešká ({late.length})</div>{late.map((a) => cardFor(a, true))}</>}
-      <div className="today-sec">Dnes ({todays.length + waitingParts.length + (ez.length ? 1 : 0)})</div>
-      {todays.map((a) => cardFor(a, false))}
-      {ez.length > 0 && (
-        <TodayCard tag="EZ MERANIA" {...TODAY_TAG.srv} title={`${ez.length} ${ez.length === 1 ? "meranie" : ez.length < 5 ? "merania" : "meraní"} na spracovanie`}
-          sub={ez.slice(0, 4).map((m) => m.machineCode || "—").join(", ")} actions={[{ label: "Otvoriť", onClick: () => onEzDay(ez[0].assignedDate) }]} />
-      )}
-      {partCards}
-      {todays.length + waitingParts.length + ez.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Na dnes nič ďalšie.</div>}
+      {hero && <TodayHero tag={hero.tag} head={hero.head} headSmall={hero.headSmall} sub={hero.heroSub} problem={hero.problem} actions={hero.actions} />}
+      {lateRest.length > 0 && <><div className="today-sec red">⚠ Mešká · {lateRest.length}</div>{lateRest.map(asRow)}</>}
+      {hero && <div className="today-sec">Ďalej dnes · {todayRest.length}</div>}
+      {todayRest.map(asRow)}
+      {hero && todayRest.length === 0 && <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 10 }}>Na dnes nič ďalšie.</div>}
       {tomorrowList.length > 0 && (
         <>
-          <div className="today-sec">Zajtra ({tomorrowList.length})</div>
-          <div className="panel" style={{ padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
+          <div className="today-sec" id="today-zajtra">Zajtra · {tomorrowList.length}</div>
+          <div className="panel" style={{ padding: "8px 12px", marginBottom: 14, fontSize: 14 }}>
             {tomorrowList.map((a) => {
               const d = a.damageId ? damageById[a.damageId] : null;
               const m = machineById[a.machineId || d?.machineId || jobById[a.jobId]?.machineId];
@@ -27992,7 +27772,6 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
         </>
       )}
       {role === "veduci_technik_ba" && <LeadTechTodayPanel {...{ today, tomorrow, assignments, employees, depoCheckers, checkerSubstitutions, weeklyDuty, hasServiceProtocol, onGo }} />}
-      {whoPanel}
     </div>
   );
 }
@@ -28028,9 +27807,9 @@ function LeadTechTodayPanel({ today, tomorrow, assignments, employees, depoCheck
         const late = mineA.filter((a) => a.date < today && a.date >= monthAgo && work(a) && isOpen(a)).length;
         const away = mineA.find((a) => a.date === today && ["dovolenka", "pn"].includes(a.kind));
         const duty = (weeklyDuty || []).some((w) => w.technicianId === t.id && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
-        return { key: t.id, tag: DEPO_SHORT_LABELS[t.depo] || t.depo || "—", tone: "dim", title: t.name,
+        return { key: t.id, tag: DEPO_SHORT_LABELS[t.depo] || t.depo || "—", tone: "dim", title: t.name, load: away ? null : day.length,
           sub: away ? (away.kind === "pn" ? "PN / doktor" : "dovolenka") : [plural(day.length, "úloha", "úlohy", "úloh"), day.length ? `${day.filter((a) => !isOpen(a)).length} hotové` : "", late ? `${late} mešká` : "", duty ? "služba na telefóne" : ""].filter(Boolean).join(" · "),
-          actions: [{ label: "Plán", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: today }) }] };
+          actions: [{ label: "Plán ›", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: today }) }] };
       })} />
     </>
   );
@@ -28071,11 +27850,25 @@ function useBinderTab(key) {
   return [tab, setTab, () => { for (const k in _binderMem) delete _binderMem[k]; }];
 }
 // „Šanón“ na kartách: záložky na ľavom okraji, klik vysunie obsah cez kartu, hlavička karty ostáva.
-function BinderLayout({ tabs, active, setActive, main, panel }) {
+function BinderLayout({ tabs, active, setActive, main, panel, horizontal }) {
   const ref = useRef(null);
   const [minH, setMinH] = useState(0);
   const list = tabs.filter(Boolean);
   const cur = list.find((t) => t.id === active);
+  // horizontal: rovnaké záložky šanónu, len ako podčiarknuté záložky hore (bočný panel zákazky)
+  if (horizontal) return (
+    <>
+      <div className="utabs" role="tablist">
+        {[{ id: null, label: "Prehľad" }, ...list].map((t) => (
+          <button key={t.id || "main"} type="button" role="tab" aria-selected={(active || null) === t.id} className={`utab${(active || null) === t.id ? " active" : ""}`} title={t.title}
+            onClick={() => { if ((active || null) !== t.id) setActive(t.id); }}>
+            {t.label}{t.count != null ? ` (${t.count})` : ""}
+          </button>
+        ))}
+      </div>
+      <div style={{ paddingTop: 12 }}>{cur ? panel : main}</div>
+    </>
+  );
   return (
     <div className="binder">
       <div className="binder-tabs">
@@ -28106,7 +27899,7 @@ function NextStepBar({ items }) {
   if (!list.length) return null;
   return (
     <div style={{ border: "1px solid var(--border)", borderLeft: "4px solid var(--accent)", borderRadius: 8, padding: "8px 12px", marginBottom: 14, background: "var(--panel-2)" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent)", marginBottom: 4 }}>Teraz treba</div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent-dark)", marginBottom: 4 }}>Teraz treba</div>
       {list.map((it, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
           <div style={{ flex: "1 1 220px", fontSize: 13.5, color: it.tone === "red" ? "var(--danger)" : "var(--text)" }}>{it.text}</div>
@@ -28132,13 +27925,16 @@ function TodayTiles({ tiles }) {
   const list = tiles.filter((t) => t.n > 0 || t.always);
   if (!list.length) return null;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10, marginBottom: 6 }}>
-      {list.map((t) => (
-        <div key={t.label} className="panel" onClick={t.onClick} style={{ padding: "12px 14px", cursor: t.onClick ? "pointer" : "default", borderLeft: `3px solid ${TONE[t.tone]}` }}>
-          <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, color: TONE[t.tone] }}>{t.n}</div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>{t.label}</div>
-        </div>
-      ))}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, marginBottom: 6 }}>
+      {list.map((t) => {
+        const Tag = t.onClick ? "button" : "div";
+        return (
+          <Tag key={t.label} type={t.onClick ? "button" : undefined} className="panel today-tile" onClick={t.onClick}>
+            <span className={`today-tile-n${t.tone === "red" && t.n > 0 ? " problem" : ""}`}>{t.n}</span>
+            <span style={{ fontSize: 14 }}>{t.label}</span>
+          </Tag>
+        );
+      })}
     </div>
   );
 }
@@ -28146,25 +27942,32 @@ function TodayTiles({ tiles }) {
 function TodayList({ title, rows, empty }) {
   return (
     <div>
-      <div className="today-sec">{title}{rows.length ? ` (${rows.length})` : ""}</div>
-      <div className="panel" style={{ padding: 0 }}>
-        {rows.length === 0 && <div style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-dim)" }}>{empty}</div>}
-        {rows.map((r, i) => (
-          <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderTop: i ? "1px solid var(--border)" : "none", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
-            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
-              {r.sub && <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.sub}</div>}
+      <div className="today-sec">{title}{rows.length ? ` · ${rows.length}` : ""}</div>
+      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+        {rows.length === 0 && <div style={{ padding: "12px 14px", fontSize: 14, color: "var(--text-dim)" }}>{empty}</div>}
+        {rows.map((r, i) => {
+          const problem = r.tone === "red"; // po termíne / porucha / nepridelené — podfarbenie + ⚠
+          // Plné červené tlačidlo len prvý riadok zoznamu, a len ak je to problém; ostatné obrysové.
+          const primary = i === 0 && problem;
+          return (
+            <div key={r.key} className={problem ? "today-problem" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderTop: i ? "1px solid var(--border)" : "none", flexWrap: "wrap" }}>
+              {problem && <span aria-hidden="true" style={{ color: "var(--danger)", fontSize: 16 }}>⚠</span>}
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: problem ? "var(--panel)" : TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
+              <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <div className={problem ? "today-problem-title" : undefined} style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
+                {r.sub && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{r.sub}</div>}
+              </div>
+              {r.load != null && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
+              <div style={{ display: "flex", gap: 6 }}>
+                {(r.actions || []).filter(Boolean).map((a, k) => (
+                  a.href
+                    ? <a key={k} className={`btn ${primary && k === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} style={{ textDecoration: "none" }}>{a.label}</a>
+                    : <button key={k} className={`btn ${primary && k === 0 ? "btn-accent" : "btn-ghost"}`} onClick={a.onClick}>{a.label}</button>
+                ))}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {(r.actions || []).filter(Boolean).map((a, k) => (
-                a.href
-                  ? <a key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} href={a.href} style={{ textDecoration: "none" }}>{a.label}</a>
-                  : <button key={k} className={`btn ${k === 0 ? "btn-accent" : "btn-ghost"}`} onClick={a.onClick}>{a.label}</button>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -28230,7 +28033,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
     resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
     side = (
-      <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "red" : "info",
+      <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "dim" : "info",
         title: `${mcode(t.j.machineId)} ${t.type === "vyvoz" ? "→" : "←"} ${t.j.customer || "—"}`, sub: driverById[t.driverId]?.name || "bez šoféra",
         actions: [{ label: "Detail", onClick: () => onOpenJob(t.j) }] }))} />
     );
@@ -28267,10 +28070,10 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     tiles.push(
       { n: unassigned.length + portalProblems.length, label: "Nepridelené tikety", tone: "red", onClick: () => onGo({ module: "servis", view: "poskodenia" }) },
       { n: toCheck.length, label: "Výdaje dielov na kontrolu", tone: "red", onClick: () => onGo({ module: "servis", view: "vydaj" }) },
-      { n: lateChecks.length, label: "Kontroly stroja po termíne", tone: "warn", onClick: () => onGo({ module: "servis", view: "plan" }) },
+      { n: lateChecks.length, label: "Kontroly stroja po termíne", tone: "red", onClick: () => onGo({ module: "servis", view: "plan" }) },
       { n: partReq.length, label: "Požiadavky na diely", tone: "warn", onClick: () => onGo({ module: "servis", view: "diely" }) },
       { n: ez.length, label: "EZ merania na spracovanie", tone: "info", onClick: () => onGo({ module: "servis", view: "ez_merania" }) },
-      { n: revLate.length, label: "Revízie po termíne", tone: "warn", onClick: () => onGo({ module: "servis", view: "revizie" }) },
+      { n: revLate.length, label: "Revízie po termíne", tone: "red", onClick: () => onGo({ module: "servis", view: "revizie" }) },
       { n: revSoon.length, label: "Revízie do 30 dní", tone: "info", onClick: () => onGo({ module: "servis", view: "revizie" }) },
       { n: skusky.length, label: "Úradné skúšky", tone: "info", onClick: () => onGo({ module: "servis", view: "uradne_skusky" }) },
       { n: noSub.length, label: "Checker bez zástupu", tone: "warn" },
@@ -28315,9 +28118,9 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
           const late = mineA.filter((a) => a.date < today && a.date >= monthAgo && work(a) && isOpen(a)).length;
           const away = mineA.find((a) => a.date === today && ["dovolenka", "pn"].includes(a.kind));
           const duty = (weeklyDuty || []).some((w) => w.technicianId === t.id && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
-          return { key: t.id, tag: DEPO_SHORT_LABELS[t.depo] || t.depo || "—", tone: "dim", title: t.name,
+          return { key: t.id, tag: DEPO_SHORT_LABELS[t.depo] || t.depo || "—", tone: "dim", title: t.name, load: away ? null : day.length,
             sub: away ? (away.kind === "pn" ? "PN / doktor" : "dovolenka") : [plural(day.length, "úloha", "úlohy", "úloh"), day.length ? `${day.filter((a) => !isOpen(a)).length} hotové` : "", late ? `${late} mešká` : "", duty ? "služba na telefóne" : ""].filter(Boolean).join(" · "),
-            actions: [{ label: "Plán", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: today }) }] };
+            actions: [{ label: "Plán ›", onClick: () => onGo({ module: "servis", view: "plan", plannerDate: today }) }] };
         })} />
       );
     }
@@ -28373,6 +28176,7 @@ function TodayOffice(props) {
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""} · {roleLabel(role)}{mineNote}</div>
       </div>
+      {whoPanel}
       <TodayTiles tiles={tiles} />
       {fakPoz ? (<>{rows.length > 0 && <div style={{ marginBottom: 16 }}><TodayList title="Na vybavenie" rows={rows} empty="" /></div>}{erpPozPanel}</>) : (
         <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: side ? "minmax(0, 1.4fr) minmax(0, 1fr)" : "1fr", gap: 16, alignItems: "start" }}>
@@ -28380,7 +28184,6 @@ function TodayOffice(props) {
           {side}
         </div>
       )}
-      <div style={{ marginTop: 16 }}>{whoPanel}</div>
     </div>
   );
 }
@@ -28511,8 +28314,8 @@ function DriverReportModal({ drivers, selfOnly, selfId, issuedBy, onClose }) {
   }, [selfOnly, driverId, from, to]);
   const rows = rep?.rows || [];
   return (
-    <Modal title="Výkaz prepráv externého šoféra" onClose={onClose} wide>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: selfOnly ? "1fr 1fr" : "2fr 1fr 1fr", gap: 10 }}>
+    <Modal eyebrow="Výkaz" title="Výkaz prepráv externého šoféra" onClose={onClose} wide>
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: selfOnly ? "1fr 1fr" : "2fr 1fr 1fr", gap: "0 12px" }}>
         {!selfOnly && (
           <Field label="Šofér">
             <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: "100%" }}>
@@ -28524,39 +28327,39 @@ function DriverReportModal({ drivers, selfOnly, selfId, issuedBy, onClose }) {
         <Field label="Od"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: "100%" }} /></Field>
         <Field label="Do"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: "100%" }} /></Field>
       </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+      <div className="seg" role="group" aria-label="Obdobie" style={{ marginBottom: 14, flexWrap: "wrap" }}>
         {presets.map(([label, f, t]) => (
-          <button key={label} aria-pressed={from === f && to === t} className={from === f && to === t ? "btn btn-accent" : "btn btn-ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => { setFrom(f); setTo(t); }}>{label}</button>
+          <button key={label} type="button" aria-pressed={from === f && to === t} className={from === f && to === t ? "on" : ""} onClick={() => { setFrom(f); setTo(t); }}>{label}</button>
         ))}
       </div>
-      {err && <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 10 }}>{err}</div>}
+      {err && <div className="fnote fnote-r">⚠ {err}</div>}
       {rep && (
         <>
-          <div style={{ fontSize: 13, marginBottom: 8 }}>
+          <div className="tnum" style={{ fontSize: 15, marginBottom: 8 }}>
             <strong>{rows.length}</strong> {rows.length === 1 ? "vykonaná preprava" : rows.length >= 2 && rows.length <= 4 ? "vykonané prepravy" : "vykonaných prepráv"} — {DR_TYPES.map((t) => `${t.toLowerCase()}y ${rows.filter((r) => r.type === t).length}`).join(" · ")}
           </div>
           <div style={{ overflow: "auto", maxHeight: 320, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead><tr>{["Dátum", "Typ", "Zmluva", "Zákazník", "Stroj", "Trasa"].map((h) => <th key={h} style={{ position: "static", padding: 6 }}>{h}</th>)}</tr></thead>
+            <table className="ftable tnum" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr>{["Dátum", "Typ", "Zmluva", "Zákazník", "Stroj", "Trasa"].map((h) => <th key={h} style={{ position: "sticky", top: 0, zIndex: 1 }}>{h}</th>)}</tr></thead>
               <tbody>
-                {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 8, color: "var(--text-dim)" }}>Za toto obdobie žiadne vykonané prepravy.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={6} style={{ color: "var(--text-dim)" }}>Za toto obdobie žiadne vykonané prepravy.</td></tr>}
                 {rows.map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: 6, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td><td style={{ padding: 6 }}>{r.type}</td><td style={{ padding: 6 }}>{r.contract || "—"}</td>
-                    <td style={{ padding: 6 }}>{r.customer || (r.type === "Prevoz" ? "presun medzi depami" : "—")}</td>
-                    <td style={{ padding: 6 }}>{[r.machineType, r.machineCode].filter(Boolean).join(" · ")}</td><td style={{ padding: 6 }}>{r.from || "—"} → {r.to || "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td><td>{r.type}</td><td>{r.contract || "—"}</td>
+                    <td>{r.customer || (r.type === "Prevoz" ? "presun medzi depami" : "—")}</td>
+                    <td>{[r.machineType, r.machineCode].filter(Boolean).join(" · ")}</td><td>{r.from || "—"} → {r.to || "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 12 }}>Rátajú sa len vykonané prepravy: podpísaný protokol vývozu / zvozu a prevoz označený ako prevezený, podľa dátumu vykonania.</div>
+          <div className="fhint" style={{ marginBottom: 12 }}>Rátajú sa len vykonané prepravy: podpísaný protokol vývozu / zvozu a prevoz označený ako prevezený, podľa dátumu vykonania.</div>
         </>
       )}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-ghost" disabled={!rep} onClick={() => downloadDriverReportCsv(rep, from, to)}>Stiahnuť Excel</button>
+      <FormFoot cancel={false}>
+        <button className="btn btn-outline" disabled={!rep} onClick={() => downloadDriverReportCsv(rep, from, to)}>Stiahnuť Excel</button>
         <button className="btn btn-accent" disabled={!rep} onClick={() => openPrintableDriverReport(rep, from, to, issuedBy)}>PDF / tlač</button>
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -28749,17 +28552,43 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
   }
   const r = shown;
   return (
-    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : r.customer || "Výdaj dielov"} onClose={onClose} wide>
+    <Modal
+      eyebrow="Výdaj dielov"
+      title={isNew ? "Nový výdaj dielov" : r.customer || "Výdaj dielov"}
+      onClose={onClose}
+      side
+      headerExtra={!isNew && (
+        <div className="side-summary">
+          <div><span>Spôsob</span><b>{r.method === "delivery" ? `Doručenie${r.deliveryAddress ? ` – ${r.deliveryAddress}` : ""}` : `Osobný odber${r.depo ? ` – depo ${r.depo}` : ""}`}</b></div>
+          <div><span>Dátum</span><b className="tnum">{r.date ? fmtDate(r.date) : "—"}</b></div>
+          <div><span>Kontakt</span><b>{[r.contactName, r.contactPhone].filter(Boolean).join(" · ") || "—"}</b></div>
+          <div><span>Položky</span><b className="tnum">{(r.items || []).length}</b></div>
+        </div>
+      )}
+      footer={
+        <>
+          {!canSave && (
+            <span style={{ fontSize: 13, color: "var(--text-dim)", flex: "1 1 220px" }}>
+              Chýba: {[changedSinceOpen && "kontrola zmenených dielov so zákazníkom", !dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
+            </span>
+          )}
+          <button className="btn btn-accent" style={{ marginLeft: "auto" }} disabled={!canSave} onClick={save}>Odovzdať a podpísať</button>
+        </>
+      }
+    >
       {isNew ? (
         <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices={false} />
       ) : (
-        <div style={{ fontSize: 13, marginBottom: 12 }}>
-          <div><b>{r.customer}</b>{r.contactName ? ` · ${r.contactName}` : ""}{r.contactPhone ? ` · ${r.contactPhone}` : ""}</div>
-          <div style={{ color: "var(--text-dim)" }}>{r.method === "delivery" ? `Doručenie${r.deliveryAddress ? ` – ${r.deliveryAddress}` : ""}` : `Osobný odber${r.depo ? ` – depo ${r.depo}` : ""}`}{r.date ? ` · ${fmtDate(r.date)}` : ""}{r.machineText ? ` · stroj ${r.machineText}` : ""}</div>
-          {r.note && <div style={{ marginTop: 4 }}>📝 {r.note}</div>}
-          <table style={{ width: "100%", marginTop: 8, borderCollapse: "collapse" }}>
-            <thead><tr style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "left" }}><th>Názov</th><th>PN</th><th style={{ textAlign: "right" }}>Počet</th></tr></thead>
-            <tbody>{(r.items || []).map((it, i) => <tr key={i} style={{ borderTop: "1px solid var(--border)" }}><td>{it.name}</td><td>{it.pn}</td><td style={{ textAlign: "right" }}>{it.qty} ks</td></tr>)}</tbody>
+        <div style={{ fontSize: 14, marginBottom: 12 }}>
+          <dl className="side-dl">
+            <dt>Odberateľ</dt><dd><b>{r.customer}</b></dd>
+            {r.contactName && <><dt>Kontakt</dt><dd>{r.contactName}{r.contactPhone ? <> · <a href={`tel:${r.contactPhone}`} className="tnum">{r.contactPhone}</a></> : ""}</dd></>}
+            {r.machineText && <><dt>Stroj</dt><dd>{r.machineText}</dd></>}
+            {r.note && <><dt>Poznámka</dt><dd style={{ whiteSpace: "pre-wrap" }}>{r.note}</dd></>}
+          </dl>
+          <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 14 }}>
+            <thead><tr style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "left" }}><th style={{ padding: "6px 0" }}>Názov</th><th>PN</th><th style={{ textAlign: "right" }}>Počet</th></tr></thead>
+            <tbody>{(r.items || []).map((it, i) => <tr key={i} style={{ borderTop: "1px solid var(--border)" }}><td style={{ padding: "8px 0" }}>{it.name}</td><td>{it.pn}</td><td className="tnum" style={{ textAlign: "right" }}>{it.qty} ks</td></tr>)}</tbody>
           </table>
         </div>
       )}
@@ -28791,12 +28620,6 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         {customerAbsent ? <div /> : <SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} />}
         <SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} />
       </div>
-      {!canSave && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-          Chýba: {[changedSinceOpen && "kontrola zmenených dielov so zákazníkom", !dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
-        </div>
-      )}
-      <button className="btn btn-accent" disabled={!canSave} onClick={save}>Odovzdať a podpísať</button>
     </Modal>
   );
 }
@@ -28806,18 +28629,24 @@ function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover
   const waiting = phMineWaiting(partHandovers, myEmployee).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   return (
     <Modal eyebrow="Výdaj dielov" title="Odovzdanie dielov zákazníkovi" onClose={onClose}>
-      <button className="btn btn-accent" style={{ marginBottom: 14 }} onClick={onNew}>+ Vypísať nový výdaj</button>
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Pridelené mne na odovzdanie ({waiting.length})</div>
-      {waiting.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nemáte pridelený žiadny výdaj.</div>}
-      {waiting.map((p) => (
-        <div key={p.id} className="panel" style={{ padding: 10, marginBottom: 8, display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 13, minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>{p.customer}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[p.date ? fmtDate(p.date) : "", p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber", phItemsSummary(p.items)].filter(Boolean).join(" · ")}</div>
-          </div>
-          <button className="btn btn-accent" onClick={() => onHandover(p)}>Odovzdať</button>
+      <FormStep title={`Pridelené mne na odovzdanie`} right={<span className="spill tnum">{waiting.length}</span>} />
+      {waiting.length === 0 && <div className="fnote fnote-i">Nemáte pridelený žiadny výdaj.</div>}
+      {waiting.length > 0 && (
+        <div className="flist">
+          {waiting.map((p) => (
+            <div key={p.id} className="frow">
+              <div style={{ fontSize: 15, minWidth: 0, flex: "1 1 180px" }}>
+                <div style={{ fontWeight: 600 }}>{p.customer}</div>
+                <div className="cell-sub tnum">{[p.date ? fmtDate(p.date) : "", p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber", phItemsSummary(p.items)].filter(Boolean).join(" · ")}</div>
+              </div>
+              <button className="btn btn-black" onClick={() => onHandover(p)}>Odovzdať</button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
+      <FormFoot confirm>
+        <button className="btn btn-accent" onClick={onNew}>+ Vypísať nový výdaj</button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -28834,20 +28663,20 @@ function PartHandoverEditModal({ rec, customers, machines, employees, onClose, o
     onClose();
   }
   return (
-    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide>
-      {signed && <div style={{ fontSize: 12, background: "var(--warning-bg, #fff3cd)", padding: "8px 12px", borderRadius: 6, marginBottom: 12 }}>Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
+    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide form>
+      {signed && <div className="fnote fnote-y">Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
       {!signed && (
-        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
+        <div className="fgrid2">
           <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
           <Field label="Odovzdá"><PhAssigneeSelect value={draft.assigneeId} employees={employees} onChange={(id) => setDraft({ ...draft, assigneeId: id, assigneeName: (employees || []).find((e) => e.id === id)?.name || null, _assigneeTouched: true })} /></Field>
         </div>
       )}
       <PartHandoverFields value={draft} onChange={setDraft} customers={customers} machines={machines} withPrices />
       <Field label="Poznámka (na dodací list)"><textarea value={draft.note || ""} onChange={(e) => setDraft({ ...draft, note: e.target.value })} rows={2} style={{ width: "100%" }} /></Field>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className={rec?.status === "check" ? "btn btn-ghost" : "btn btn-accent"} disabled={!valid} onClick={() => save(false)}>{isNew ? "Uložiť výdaj" : "Uložiť"}</button>
+      <FormFoot missing={[!(draft.customer || "").trim() && "odberateľ", !phItemsValid(draft.items) && "diely", !signed && !phPlaceOk(draft) && "miesto odovzdania"].filter(Boolean)}>
+        <button className={rec?.status === "check" ? "btn btn-outline" : "btn btn-accent"} disabled={!valid} onClick={() => save(false)}>{isNew ? "Uložiť výdaj" : "Uložiť"}</button>
         {rec?.status === "check" && <button className="btn btn-accent" disabled={!valid} onClick={() => save(true)}>Uložiť a označiť ako skontrolované</button>}
-      </div>
+      </FormFoot>
     </Modal>
   );
 }
@@ -28867,62 +28696,82 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
   const bd = (p) => billDraft[p.id] || { dlNumber: p.dlNumber || "", erpDoc: p.erpDoc || "" };
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        {Object.entries(PH_STATUS).map(([s, label]) => (
-          <button key={s} className="btn" onClick={() => setTab(s)}
-            style={{ padding: "5px 10px", fontSize: 12, background: tab === s ? "var(--accent)" : "transparent", color: tab === s ? "#fff" : "var(--text-dim)", border: "1px solid " + (tab === s ? "var(--accent)" : "var(--border)") }}>
-            {label} ({counts[s]})
-          </button>
-        ))}
+      <div className="tbar">
+        <div className="seg" role="group" aria-label="Stav výdaja">
+          {Object.entries(PH_STATUS).map(([s, label]) => (
+            <button key={s} type="button" className={tab === s ? "on" : ""} aria-pressed={tab === s} onClick={() => setTab(s)}>
+              {label}<span className="seg-n">{counts[s]}</span>
+            </button>
+          ))}
+        </div>
         <div style={{ flex: 1 }} />
         {phCanManage(user) && <button className="btn btn-accent" onClick={onNew}>+ Zadať výdaj</button>}
       </div>
-      {list.length === 0 && <div className="panel" style={{ padding: 20, color: "var(--text-dim)" }}>Žiadne výdaje v stave „{PH_STATUS[tab]}“.</div>}
+      {list.length === 0 && <div className="panel" style={{ padding: 30, color: "var(--text-dim)", textAlign: "center", boxShadow: "none", borderRadius: 12 }}>Žiadne výdaje v stave „{PH_STATUS[tab]}“.</div>}
+      {list.length > 0 && (
+      <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+      <table className="table-cards jobs-table">
+        <thead><tr><th>Zákazník</th><th>Diely</th><th>Odovzdal</th><th><span className="sr-only">Akcie</span></th></tr></thead>
+        <tbody>
       {list.map((p) => (
-        <div key={p.id} className="panel" style={{ padding: 12, marginBottom: 8, outline: p.id === focusId ? "2px solid var(--accent)" : "none" }}>
-          <div style={{ display: "flex", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>
-                {p.customer}
-                {p.source === "field" && <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "var(--warning-bg, #fff3cd)" }}>Vypísané v teréne</span>}
-                {p.dlNumber && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--text-dim)" }}>DL {p.dlNumber}</span>}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                {p.handedAt ? `odovzdal ${p.handedBy || "—"} ${new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : `${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber"}`}
-                {p.status === "waiting" ? (!p.assigneeId ? " · nepridelené" : phAssignable(employees).some((e) => e.id === p.assigneeId) ? ` · odovzdá ${p.assigneeName || "—"}` : ` · ⚠ ${p.assigneeName || "odovzdávajúci"} už nemôže odovzdať — prideľte znova`) : ""}
-                {p.createdBy ? ` · vypracoval ${p.createdBy}` : ""}{p.correctedAt ? " · opravené" : ""}{p.sentAt ? " · poslané zákazníkovi" : ""}
-              </div>
-              <div style={{ fontSize: 13, marginTop: 4 }}>{phItemsSummary(p.items)}</div>
-              {p.handoverNote && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 2 }}>Pri odovzdaní: {p.handoverNote}</div>}
+        <React.Fragment key={p.id}>
+        <tr style={{ outline: p.id === focusId ? "2px solid var(--accent)" : "none", outlineOffset: -2 }}>
+          <td className="td-plain">
+            <strong>{p.customer}</strong>
+            {p.source === "field" && <span className="spill spill-wait" style={{ marginLeft: 8 }}>Vypísané v teréne</span>}
+            {p.dlNumber && <div className="cell-sub tnum">DL {p.dlNumber}</div>}
+          </td>
+          <td className="td-plain">
+            {phItemsSummary(p.items)}
+            {p.handoverNote && <div style={{ marginTop: 4 }}><span className="spill spill-problem" style={{ whiteSpace: "normal" }}>⚠ Pri odovzdaní: {p.handoverNote}</span></div>}
+          </td>
+          <td className="td-plain">
+            {p.handedAt ? <>{p.handedBy || "—"}<div className="cell-sub tnum">{new Date(p.handedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</div></> : <span className="tnum">{`${p.date ? fmtDate(p.date) : ""} · ${p.method === "delivery" ? "doručenie" : p.depo ? `depo ${p.depo}` : "osobný odber"}`}</span>}
+            <div className="cell-sub">
+              {p.status === "waiting" ? (!p.assigneeId ? "nepridelené" : phAssignable(employees).some((e) => e.id === p.assigneeId) ? `odovzdá ${p.assigneeName || "—"}` : <span className="spill spill-problem" style={{ whiteSpace: "normal" }}>⚠ {p.assigneeName || "odovzdávajúci"} už nemôže odovzdať — prideľte znova</span>) : null}
+              {[p.createdBy ? `vypracoval ${p.createdBy}` : "", p.correctedAt ? "opravené" : "", p.sentAt ? "poslané zákazníkovi" : ""].filter(Boolean).join(" · ")}
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-start" }}>
-              {p.status !== "waiting" && <button className="btn btn-ghost" onClick={() => onPrint(p)}>Dodací list</button>}
-              {p.status === "waiting" && phCanManage(user) && <button className={p.assigneeId ? "btn btn-ghost" : "btn btn-accent"} onClick={() => setAssigning(p)}>{p.assigneeId ? "Zmeniť odovzdávajúceho" : "+ Prideliť odovzdávajúceho"}</button>}
-              {p.status === "waiting" && (phCanManage(user) || (myEmployee && p.assigneeId === myEmployee.id)) && <button className="btn btn-ghost" onClick={() => onHandover(p)}>Odovzdať</button>}
+          </td>
+          <td className="td-actions" style={{ textAlign: "right" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+              {p.status === "waiting" && phCanManage(user) && <button className="btn btn-outline" onClick={() => setAssigning(p)}>{p.assigneeId ? "Zmeniť odovzdávajúceho" : "+ Prideliť odovzdávajúceho"}</button>}
+              {p.status === "waiting" && (phCanManage(user) || (myEmployee && p.assigneeId === myEmployee.id)) && <button className="btn btn-outline" onClick={() => onHandover(p)}>Odovzdať</button>}
               {phCanManage(user) && (p.status === "waiting" || p.status === "check" || p.status === "billing") && (
-                <button className={p.status === "check" ? "btn btn-accent" : "btn btn-ghost"} onClick={() => onEdit(p)}>{p.status === "check" ? "Skontrolovať" : "Upraviť"}</button>
+                <button className="btn btn-outline" onClick={() => onEdit(p)}>{p.status === "check" ? "Skontrolovať" : "Upraviť"}</button>
               )}
+              {p.status !== "waiting" && <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => onPrint(p)}>Dodací list</button>}
               {phCanManage(user) && p.status === "billing" && <button className="btn btn-ghost" onClick={() => onSendMail(p)}>✉️ Poslať zákazníkovi</button>}
-              {phCanManage(user) && p.status !== "done" && <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onDelete(p)}>Zmazať</button>}
+              <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+                phCanManage(user) && p.status !== "done" && { label: "Zmazať", danger: true, onClick: () => onDelete(p) },
+              ]} />
             </div>
-          </div>
+          </td>
+        </tr>
           {phCanBill(user) && (p.status === "billing" || p.status === "done") && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-              <label style={{ fontSize: 12 }}>Číslo dodacieho listu (ERP)<br />
+            <tr>
+            <td colSpan={4} className="td-plain" style={{ paddingTop: 0 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <label style={{ fontSize: 13 }}>Číslo dodacieho listu (ERP)<br />
                 <input value={bd(p).dlNumber} disabled={p.status === "done"} onChange={(e) => setBillDraft({ ...billDraft, [p.id]: { ...bd(p), dlNumber: e.target.value } })} />
               </label>
-              <label style={{ fontSize: 12 }}>Číslo dokladu / faktúry<br />
+              <label style={{ fontSize: 13 }}>Číslo dokladu / faktúry<br />
                 <input value={bd(p).erpDoc} disabled={p.status === "done"} onChange={(e) => setBillDraft({ ...billDraft, [p.id]: { ...bd(p), erpDoc: e.target.value } })} />
               </label>
               {p.status === "billing" ? (
-                <button className="btn btn-accent" disabled={!bd(p).dlNumber.trim()} onClick={() => onBill(p, { ...bd(p), done: true })}>Spracované</button>
+                <button className="btn btn-outline" disabled={!bd(p).dlNumber.trim()} onClick={() => onBill(p, { ...bd(p), done: true })}>Spracované</button>
               ) : (
-                <button className="btn btn-ghost" onClick={() => onBill(p, { done: false })}>Vrátiť na fakturáciu</button>
+                <button className="btn btn-outline" onClick={() => onBill(p, { done: false })}>Vrátiť na fakturáciu</button>
               )}
             </div>
+            </td>
+            </tr>
           )}
-        </div>
+        </React.Fragment>
       ))}
+        </tbody>
+      </table>
+      </div>
+      )}
       {assigning && (
         <Modal eyebrow="Výdaj dielov" title="Prideliť odovzdávajúceho" onClose={() => setAssigning(null)}>
           <div style={{ fontSize: 13, marginBottom: 10 }}>{assigning.customer} · {phItemsSummary(assigning.items)}</div>
@@ -28979,6 +28828,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const [uncheckedPendingIds, setUncheckedPendingIds] = useState(() => new Set()); // pri hromadnom schválení — odškrtnuté id sa vynechajú
   const [confirmMessage, setConfirmMessage] = useState(null); // krátky zatvárateľný pás po odoslaní požiadavky
   const [searchQuery, setSearchQuery] = useState(""); // vyhľadávanie histórie naprieč všetkými depami a celým časom
+  const [showImport, setShowImport] = useState(false);
 
   // Prišli sme sem kliknutím na notifikáciu o konkrétnom diele — prepneme
   // rovno na jeho depo, nech ho vedúci/dispečer nemusí ručne hľadať.
@@ -29038,59 +28888,61 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         .sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""))
     : [];
 
+  // Kopírovanie stĺpca — malá sivá ikona priamo pri názve stĺpca.
+  const CP_BTN = { minHeight: 0, padding: "0 4px", fontSize: 13, border: "none", background: "transparent", color: "var(--text-dim)", fontWeight: 400 };
   function renderGroupTable(groupRows, groupLabel, groupColor, showDodavatelFilter) {
     return (
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: groupColor }}>
-            {groupLabel} ({groupRows.length})
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 8px" }}>
+          <h2 className="today-sec" style={{ margin: 0 }}>
+            <span style={{ color: groupColor }}>●</span> {groupLabel} · {groupRows.length}
+          </h2>
           {groupRows.length > 0 && (
             <button
-              className="btn btn-ghost"
-              style={{ fontSize: 10, padding: "2px 8px" }}
+              className="btn btn-outline"
+              style={{ minHeight: 32, fontSize: 13, padding: "2px 10px" }}
               onClick={() => exportSparePartsCSV(groupRows, `nahradne-diely-${depo}-${groupLabel.toLowerCase().replace(/\s+/g, "-")}.csv`)}
             >
               ⬇ Export do Excelu
             </button>
           )}
         </div>
-        <div className="panel table-wrap" style={{ padding: 0 }}>
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
+          <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {columns.map((c) => (
-                  <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                  <th key={c.key} style={{ whiteSpace: "nowrap" }}>
                     {c.label}
                     {c.key === "dodavatel" && showDodavatelFilter && (
                       <ColumnFilterButton label="Dodávateľ" options={dodavatelOptions} selected={selectedDodavatelia} onChange={setDodavatelFilter} />
                     )}
                     {" "}
-                    <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
+                    <button className="btn" style={CP_BTN} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
                   </th>
                 ))}
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+                <th style={{ whiteSpace: "nowrap" }}>
                   Určenie {" "}
-                  <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title="Kopírovať stĺpec Určenie" onClick={() => copyColumn(groupRows.map((p) => ({ urcenieText: urcenieLabel(p.urcenie) })), "urcenieText", "Určenie")}>⧉</button>
+                  <button className="btn" style={CP_BTN} title="Kopírovať stĺpec Určenie" onClick={() => copyColumn(groupRows.map((p) => ({ urcenieText: urcenieLabel(p.urcenie) })), "urcenieText", "Určenie")}>⧉</button>
                 </th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav objednania</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+                <th style={{ whiteSpace: "nowrap" }}>Stav objednania</th>
+                <th style={{ whiteSpace: "nowrap" }}>Dátum objednania</th>
+                <th style={{ whiteSpace: "nowrap" }}>
                   Nákupná objednávka {" "}
-                  <button className="btn btn-ghost" style={{ padding: "1px 5px", fontSize: 10 }} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(groupRows, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
+                  <button className="btn" style={CP_BTN} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(groupRows, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
                 </th>
                 {canManage && <th></th>}
               </tr>
             </thead>
             <tbody>
               {groupRows.length === 0 ? (
-                <tr><td colSpan={11} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
+                <tr><td className="td-plain" colSpan={11} style={{ color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
               ) : (
                 groupRows.map((p) => (
-                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <tr key={p.id}>
                     {columns.map((c) =>
                       canManage ? (
-                        <td key={c.key} style={{ padding: "4px 12px" }} data-label={c.label}>
+                        <td key={c.key} data-label={c.label}>
                           <input
                             type={c.key === "pocetKusov" ? "number" : "text"}
                             value={p[c.key] || ""}
@@ -29099,11 +28951,11 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                           />
                         </td>
                       ) : (
-                        <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>
+                        <td key={c.key} data-label={c.label}>{p[c.key] || "—"}</td>
                       )
                     )}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px" }} data-label="Stav objednania">
+                    <td style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td data-label="Stav objednania">
                       {canManage ? (
                         <select
                           value={p.stav}
@@ -29111,43 +28963,35 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                             const newStav = e.target.value;
                             onUpdate(p.id, newStav === SPAREPART_STAV.OBJEDNANE ? { stav: newStav, datumObjednania: today } : { stav: newStav });
                           }}
-                          style={{
-                            fontSize: 12, fontWeight: 600, border: "none", borderRadius: 5, padding: "3px 8px",
-                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : "var(--warn)",
-                            color: "#fff",
-                          }}
+                          className={`spill ${p.stav === SPAREPART_STAV.OBJEDNANE ? "spill-done" : "spill-wait"}`}
+                          style={{ border: "none", fontFamily: "inherit", cursor: "pointer" }}
                         >
                           <option value={SPAREPART_STAV.CAKA_NA_OBJEDNANIE}>Čaká na objednanie</option>
                           <option value={SPAREPART_STAV.OBJEDNANE}>Objednané</option>
                         </select>
                       ) : (
-                        <span
-                          style={{
-                            fontSize: 12, fontWeight: 600, borderRadius: 5, padding: "3px 8px", color: "#fff",
-                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : "var(--warn)",
-                          }}
-                        >
+                        <span className={`spill ${p.stav === SPAREPART_STAV.OBJEDNANE ? "spill-done" : "spill-wait"}`}>
                           {p.stav}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: "6px 12px" }} data-label="Dátum objednania">
+                    <td data-label="Dátum objednania">
                       {canManage ? (
                         <input type="date" value={p.datumObjednania || ""} onChange={(e) => onUpdate(p.id, { datumObjednania: e.target.value })} style={{ fontSize: 12 }} />
                       ) : (
-                        <span style={{ fontSize: 13 }}>{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
+                        <span className="tnum">{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
                       )}
                     </td>
-                    <td style={{ padding: "6px 12px" }} data-label="Nákupná objednávka">
+                    <td data-label="Nákupná objednávka">
                       {canManage ? (
                         <input value={p.nakupnaObjednavka || ""} onChange={(e) => onUpdate(p.id, { nakupnaObjednavka: e.target.value })} style={{ fontSize: 12, width: 110 }} />
                       ) : (
-                        <span style={{ fontSize: 13 }}>{p.nakupnaObjednavka || "—"}</span>
+                        <span className="tnum">{p.nakupnaObjednavka || "—"}</span>
                       )}
                     </td>
                     {canManage && (
-                      <td style={{ padding: "6px 12px" }} className="td-actions">
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
+                      <td className="td-actions">
+                        <button className="btn btn-ghost" style={{ padding: "2px 8px", color: "var(--danger)" }} title="Vymazať riadok" aria-label="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
                       </td>
                     )}
                   </tr>
@@ -29162,39 +29006,34 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+      <div className="tbar">
         {canManage ? (
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div className="seg" role="group" aria-label="Depo">
             {depoOptions.map((d) => (
-              <button
-                key={d}
-                className="btn depo-chip-btn"
-                onClick={() => { setActiveDepo(d); setDodavatelFilter(null); }}
-                style={{
-                  fontSize: 12, padding: "5px 12px",
-                  background: activeDepo === d ? "var(--accent)" : "transparent",
-                  color: activeDepo === d ? "#fff" : "var(--text)",
-                  border: "1px solid " + (activeDepo === d ? "var(--accent)" : "var(--border)"),
-                }}
-              >
+              <button key={d} type="button" className={activeDepo === d ? "on" : ""} aria-pressed={activeDepo === d} onClick={() => { setActiveDepo(d); setDodavatelFilter(null); }}>
                 <span className="depo-chip-full">{d || "Bez depa"}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d || "Bez depa"}</span>
-                {(() => { const n = spareParts.filter((p) => (p.depo || "") === d && p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length; return n ? <span className="badge" style={{ marginLeft: 6, background: activeDepo === d ? "#fff" : "var(--accent-light)", color: "var(--accent)" }}>{n}</span> : null; })()}
+                {(() => { const n = spareParts.filter((p) => (p.depo || "") === d && p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).length; return n ? <span className="seg-n" title="Čaká na schválenie">{n}</span> : null; })()}
               </button>
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Depo: {myDepo || "— nemáte priradené depo —"}</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Depo: {myDepo || "— nemáte priradené depo —"}</div>
         )}
-        {(canManage || can(user, "sparepart_request")) && (
-          <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Nová požiadavka</button>
-        )}
+        <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+          {(canManage || can(user, "sparepart_request")) && (
+            <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Nová požiadavka</button>
+          )}
+          <KebabMenu label="⋯" name="Ďalšie akcie" actions={[
+            isAdminUser(user) && !q && { label: `Importovať históriu z Excelu (pre ${depo})`, onClick: () => setShowImport(true) },
+          ]} />
+        </div>
       </div>
 
       {confirmMessage && (
         <div
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-            background: "var(--ok)", color: "#fff", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13,
+            background: "var(--ok-fill)", color: "#fff", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13,
           }}
         >
           <span>✓ {confirmMessage}</span>
@@ -29202,62 +29041,73 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div className="tbar" style={{ marginBottom: 4 }}>
         <SearchInput placeholder="Hľadať v histórii podľa čísla alebo popisu dielu (naprieč všetkými depami a celým časom)…" value={searchQuery} onChange={setSearchQuery} style={{ flex: 1, maxWidth: 480 }} />
-        {q && <button className="btn btn-ghost" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
+        {q && <button className="btn btn-outline" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
+        {!q && (
+          <div className="seg" role="group" aria-label="Obdobie objednania">
+            {[["month", "tento mesiac"], ["all", "všetko"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
+              <button key={id} type="button" className={periodMode === id ? "on" : ""} aria-pressed={periodMode === id} onClick={() => setPeriodMode(id)}>
+                {id !== "custom" && <span className="who-hide-mobile">Objednané: </span>}{label}
+              </button>
+            ))}
+          </div>
+        )}
+        {!q && periodMode === "custom" && (
+          <>
+            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+            <span style={{ color: "var(--text-dim)" }}>—</span>
+            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+          </>
+        )}
       </div>
 
       {q ? (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)" }}>
-              Výsledky hľadania ({searchResults.length})
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 8px" }}>
+            <h2 className="today-sec" style={{ margin: 0 }}>
+              Výsledky hľadania · {searchResults.length}
+            </h2>
             {searchResults.length > 0 && (
-              <button className="btn btn-ghost" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => exportSparePartsCSV(searchResults, `nahradne-diely-hladanie-${q}.csv`)}>
+              <button className="btn btn-outline" style={{ minHeight: 32, fontSize: 13, padding: "2px 10px" }} onClick={() => exportSparePartsCSV(searchResults, `nahradne-diely-hladanie-${q}.csv`)}>
                 ⬇ Export do Excelu
               </button>
             )}
           </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
+            <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Depo</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Stav</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dátum objednania</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Nákupná objednávka</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dodávateľ</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet kusov</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Číslo dielu</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Popis dielu</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Depo</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Určenie</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Stav</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Dátum objednania</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Nákupná objednávka</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Dodávateľ</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Počet kusov</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Číslo dielu</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Popis dielu</th>
                 </tr>
               </thead>
               <tbody>
                 {searchResults.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
+                  <tr><td className="td-plain" colSpan={9} style={{ color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
                 ) : (
                   searchResults.map((p) => (
-                    <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Depo">{p.depo}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
-                      <td style={{ padding: "6px 12px" }} data-label="Stav">
-                        <span
-                          style={{
-                            fontSize: 12, fontWeight: 600, borderRadius: 5, padding: "3px 8px", color: "#fff",
-                            background: p.stav === SPAREPART_STAV.OBJEDNANE ? "var(--ok)" : p.stav === SPAREPART_STAV.ZAMIETNUTE ? "var(--danger)" : "var(--warn)",
-                          }}
-                        >
+                    <tr key={p.id}>
+                      <td data-label="Depo">{p.depo}</td>
+                      <td style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                      <td data-label="Stav">
+                        <span className={`spill ${p.stav === SPAREPART_STAV.OBJEDNANE ? "spill-done" : p.stav === SPAREPART_STAV.ZAMIETNUTE ? "spill-problem" : "spill-wait"}`}>
                           {p.stav}
                         </span>
                       </td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Dátum objednania">{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Nákupná objednávka">{p.nakupnaObjednavka || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Dodávateľ">{p.dodavatel || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Počet kusov">{p.pocetKusov || "—"}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Číslo dielu">{p.cisloDielu}</td>
-                      <td style={{ padding: "6px 12px", fontSize: 13 }} data-label="Popis dielu">{p.popisDielu}</td>
+                      <td data-label="Dátum objednania">{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</td>
+                      <td data-label="Nákupná objednávka">{p.nakupnaObjednavka || "—"}</td>
+                      <td data-label="Dodávateľ">{p.dodavatel || "—"}</td>
+                      <td data-label="Počet kusov">{p.pocetKusov || "—"}</td>
+                      <td data-label="Číslo dielu">{p.cisloDielu}</td>
+                      <td data-label="Popis dielu">{p.popisDielu}</td>
                     </tr>
                   ))
                 )}
@@ -29267,41 +29117,16 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       ) : (
       <>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {[["month", "Objednané: tento mesiac"], ["all", "Objednané: všetko"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
-          <button
-            key={id}
-            className="btn"
-            onClick={() => setPeriodMode(id)}
-            style={{
-              fontSize: 12, padding: "4px 10px",
-              background: periodMode === id ? "var(--accent)" : "transparent",
-              color: periodMode === id ? "#fff" : "var(--text-dim)",
-              border: "1px solid " + (periodMode === id ? "var(--accent)" : "var(--border)"),
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        {periodMode === "custom" && (
-          <>
-            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
-            <span style={{ color: "var(--text-dim)" }}>—</span>
-            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
-          </>
-        )}
-      </div>
-
       {pending.length > 0 && canManage && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--warn)" }}>
-              Čaká na schválenie ({pending.length})
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 8px", flexWrap: "wrap" }}>
+            <h2 className="today-sec" style={{ margin: 0 }}>
+              <span style={{ color: "var(--warn)" }}>●</span> Čaká na schválenie · {pending.length}
+            </h2>
             {pending.length > 1 && (
               <button
-                className="btn btn-accent"
-                style={{ fontSize: 11, padding: "3px 8px" }}
+                className="btn btn-outline"
+                style={{ minHeight: 32, fontSize: 13, padding: "2px 10px" }}
                 onClick={() => {
                   onApproveBulk(pending.filter((p) => !uncheckedPendingIds.has(p.id)).map((p) => p.id));
                   setUncheckedPendingIds(new Set());
@@ -29311,21 +29136,22 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </button>
             )}
           </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
+            <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {pending.length > 1 && <th></th>}
-                  {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
+                  {pending.length > 1 && <th><span className="sr-only">Vybrať</span></th>}
+                  <th className="m-only" />
+                  {columns.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap" }}>{c.label}</th>)}
+                  <th style={{ whiteSpace: "nowrap" }}>Určenie</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {pending.map((p) => (
-                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <tr key={p.id}>
                     {pending.length > 1 && (
-                      <td style={{ padding: "6px 12px" }} data-label="Vybrať">
+                      <td data-label="Vybrať">
                         <input
                           type="checkbox"
                           checked={!uncheckedPendingIds.has(p.id)}
@@ -29339,11 +29165,15 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                         />
                       </td>
                     )}
-                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>)}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px", display: "flex", gap: 6 }} className="td-actions">
-                      <button className="btn btn-accent" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onApprove(p.id)}>Schváliť</button>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--danger)" }} onClick={() => setRejectingId(p.id)}>Zamietnuť</button>
+                    <td className="td-plain m-only">
+                      <span style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 8 }}><b>{p.popisDielu || "—"}</b><span className="tnum">{p.pocetKusov || "—"} ks</span></span>
+                      <div className="cell-sub">{p.dodavatel || "—"} · diel <b style={{ color: "var(--text)" }}>{p.cisloDielu || "—"}</b>{p.urcenie ? ` · ${urcenieLabel(p.urcenie)}` : ""}</div>
+                    </td>
+                    {columns.map((c) => <td key={c.key} className="who-hide-mobile" data-label={c.label}>{c.key === "cisloDielu" && p[c.key] ? <b>{p[c.key]}</b> : p[c.key] || "—"}</td>)}
+                    <td className="who-hide-mobile" style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td style={{ whiteSpace: "nowrap" }} className="td-actions">
+                      <button className="btn btn-outline" onClick={() => onApprove(p.id)}>Schváliť</button>{" "}
+                      <button className="btn btn-ghost" style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => setRejectingId(p.id)}>Zamietnuť</button>
                     </td>
                   </tr>
                 ))}
@@ -29357,29 +29187,29 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
       {renderGroupTable(cakaNaObjednanie, "Čaká na objednanie", "var(--warn)", true)}
       {zamietnute.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--danger)", marginBottom: 8 }}>
-            Zamietnuté ({zamietnute.length})
-          </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <h2 className="today-sec red" style={{ margin: "16px 0 8px" }}>
+            Zamietnuté · {zamietnute.length}
+          </h2>
+          <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
+            <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {columns.map((c) => <th key={c.key} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{c.label}</th>)}
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Určenie</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dôvod</th>
+                  {columns.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap" }}>{c.label}</th>)}
+                  <th style={{ whiteSpace: "nowrap" }}>Určenie</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Dôvod</th>
                   {canManage && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {zamietnute.map((p) => (
-                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    {columns.map((c) => <td key={c.key} style={{ padding: "6px 12px", fontSize: 13 }} data-label={c.label}>{p[c.key] || "—"}</td>)}
-                    <td style={{ padding: "6px 12px", fontSize: 13, whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
-                    <td style={{ padding: "6px 12px", fontSize: 13, color: "var(--danger)" }} data-label="Dôvod">{p.rejectionReason}</td>
+                  <tr key={p.id}>
+                    {columns.map((c) => <td key={c.key} data-label={c.label}>{p[c.key] || "—"}</td>)}
+                    <td style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
+                    <td style={{ color: "var(--danger-text)" }} data-label="Dôvod">{p.rejectionReason}</td>
                     {canManage && (
-                      <td style={{ padding: "6px 12px", display: "flex", gap: 6 }} className="td-actions">
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => onRestore(p.id)}>Obnoviť</button>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", color: "var(--danger)" }} title="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
+                      <td style={{ whiteSpace: "nowrap" }} className="td-actions">
+                        <button className="btn btn-outline" onClick={() => onRestore(p.id)}>Obnoviť</button>{" "}
+                        <button className="btn btn-ghost" style={{ padding: "2px 8px", color: "var(--danger)" }} title="Vymazať riadok" aria-label="Vymazať riadok" onClick={() => onDelete(p.id)}>🗑</button>
                       </td>
                     )}
                   </tr>
@@ -29390,10 +29220,8 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       )}
 
-      {isAdminUser(user) && (
-        <div style={{ marginTop: 14 }}>
-          <SparePartsImportButton depo={depo} onImport={onImport} />
-        </div>
+      {isAdminUser(user) && showImport && (
+        <SparePartsImportButton depo={depo} onImport={onImport} onClose={() => setShowImport(false)} />
       )}
       </>
       )}
@@ -29428,8 +29256,10 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   );
 }
 
-function SparePartsImportButton({ depo, onImport }) {
-  const [show, setShow] = useState(false);
+// Import histórie dielov — okno sa otvára z ⋯ v Náhradných dieloch (onClose ho zavrie).
+function SparePartsImportButton({ depo, onImport, onClose }) {
+  const show = true;
+  const setShow = (v) => { if (!v) onClose(); };
   const [rows, setRows] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [mapDodavatel, setMapDodavatel] = useState("");
@@ -29478,7 +29308,6 @@ function SparePartsImportButton({ depo, onImport }) {
 
   return (
     <>
-      <button className="btn btn-ghost" onClick={() => setShow(true)}>Importovať históriu z Excelu (pre {depo})</button>
       {show && (
         <Modal title={`Import histórie náhradných dielov — ${depo}`} onClose={() => setShow(false)} wide>
           <Field label="Vyberte CSV súbor (exportovaný z Excelu, len pre toto depo)">
@@ -29523,24 +29352,36 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
+      <h1 className="page-h1">Checkeri podľa depa</h1>
+      <p className="page-intro">
         Kto skontroluje/pripraví stroj na danom depe pri vývoze aj zvoze — platforma to už nebude pýtať pri
         každej zákazke zvlášť. Zmeňte tu kedykoľvek (dovolenka, zmena osoby na tejto úlohe a pod.) —
         pri zadaní dovolenky checkerovi priamo v Pláne servisu platforma navyše sama ponúkne dočasnú náhradu.
-      </div>
-      <div style={{ maxWidth: 420 }}>
-        {DEPO_OPTIONS.map((depo) => (
-          <Field key={depo} label={depo}>
-            <select
-              value={values[depo] || ""}
-              onChange={(e) => setValues((v) => ({ ...v, [depo]: e.target.value || undefined }))}
-              style={{ width: "100%" }}
-            >
-              <option value="">— nenastavené —</option>
-              {technicians.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </Field>
-        ))}
+      </p>
+      <div style={{ maxWidth: 560 }}>
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12, marginBottom: 14 }}>
+          <table className="table-cards jobs-table dense">
+            <thead><tr><th>Depo</th><th>Checker</th></tr></thead>
+            <tbody>
+              {DEPO_OPTIONS.map((depo) => (
+                <tr key={depo}>
+                  <td className="td-plain" style={{ fontWeight: 600 }}>{depo}</td>
+                  <td className="td-plain">
+                    <select
+                      aria-label={`Checker — ${depo}`}
+                      value={values[depo] || ""}
+                      onChange={(e) => setValues((v) => ({ ...v, [depo]: e.target.value || undefined }))}
+                      style={{ width: "100%", height: 40, fontSize: 15, color: values[depo] ? undefined : "var(--text-dim)" }}
+                    >
+                      <option value="">— nenastavené —</option>
+                      {technicians.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <button
           className="btn btn-accent"
           style={{ marginBottom: 20 }}
@@ -29561,17 +29402,17 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
       </div>
       {checkerSubstitutions && checkerSubstitutions.length > 0 && (
         <>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <h2 className="today-sec">
             Aktívne/naplánované náhrady (dovolenka)
-          </div>
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
             {checkerSubstitutions.map((s) => (
-              <div key={s.id} className="panel" style={{ padding: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+              <div key={s.id} className="panel" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 14, boxShadow: "none" }}>
                 <span><strong>{s.depo}</strong>: {technicianName(s.originalTechnicianId)} → {technicianName(s.substituteTechnicianId)}</span>
-                <span style={{ color: "var(--text-dim)" }}>({fmtDate(s.startDate)} – {fmtDate(s.endDate)})</span>
+                <span className="tnum" style={{ color: "var(--text-dim)" }}>({fmtDate(s.startDate)} – {fmtDate(s.endDate)})</span>
                 <button
                   className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: "3px 7px", color: "var(--danger)", marginLeft: "auto" }}
+                  style={{ color: "var(--danger)", marginLeft: "auto" }}
                   onClick={() => onDeleteSubstitution(s.id)}
                 >
                   Zmazať
@@ -29630,7 +29471,7 @@ function PlatformTour({ role, modules, hasActions, hidden, onGo, onClose, bottom
     <div role="dialog" aria-label="Sprievodca platformou" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom, zIndex: 9000, width: "min(520px, calc(100vw - 24px))", background: "var(--panel)", border: "2px solid var(--accent)", borderRadius: 14, boxShadow: "0 10px 32px rgba(0,0,0,.28)", padding: "14px 16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent)" }}>Sprievodca · {i + 1} / {steps.length}</div>
-        <button type="button" aria-label="Zavrieť sprievodcu" onClick={() => onClose(hide)} style={{ border: 0, background: "none", fontSize: 22, lineHeight: 1, cursor: "pointer", color: "var(--text-dim)" }}>×</button>
+        <button type="button" aria-label="Zavrieť sprievodcu" onClick={() => onClose(hide)} style={{ border: 0, background: "none", fontSize: 22, lineHeight: 1, cursor: "pointer", color: "var(--text-dim)", minWidth: 44, minHeight: 44 }}>×</button>
       </div>
       <div style={{ fontSize: 17, fontWeight: 700, margin: "4px 0 6px" }}>{st.title}</div>
       <div style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 12 }}>{st.text}</div>
@@ -29666,26 +29507,32 @@ function PlatformStatusView() {
   };
   const ago = (t) => { if (!t) return "—"; const h = (Date.now() - new Date(t).getTime()) / 3600000; return h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
   const when = (t) => (t ? new Date(t).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
-  const head = { textAlign: "left", padding: 8, position: "static", fontSize: 12, color: "var(--text-dim)" };
-  const td = { padding: 8, fontSize: 13, borderTop: "1px solid var(--border)" };
+  const head = { textAlign: "left", padding: "10px 12px", position: "static", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 600, letterSpacing: ".05em", color: "var(--text-dim)", background: "var(--panel)" };
+  const td = { padding: "10px 12px", fontSize: 14, borderTop: "1px solid var(--border)" };
+  // Nevyhovujúci stav (nedostupné, chyba) — ⚠ s podfarbením, nech sa odlíši od „v poriadku“.
+  const bad = (t) => <div className="spill spill-problem" style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "8px 12px", fontSize: 14 }}>⚠ {t}</div>;
   const box = (title, children) => (
-    <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 10 }}>{title}</div>
-      {children}
-    </div>
+    <>
+      <h2 className="today-sec">{title}</h2>
+      <div className="panel" style={{ padding: 14, marginBottom: 14, boxShadow: "none", borderRadius: 12 }}>
+        {children}
+      </div>
+    </>
   );
-  if (err) return <div className="panel" style={{ padding: 14, color: "var(--danger)" }}>Stav sa nenačítal: {err} (spustený step89?) <button className="btn btn-ghost" onClick={load}>Skúsiť znova</button></div>;
-  if (!st) return <div style={{ color: "var(--text-dim)" }}>Načítava sa…</div>;
+  const H1 = <h1 className="page-h1" style={{ marginBottom: 14 }}>Stav platformy</h1>;
+  if (err) return <div>{H1}<div className="panel" style={{ padding: 14, boxShadow: "none" }}>{bad(`Stav sa nenačítal: ${err} (spustený step89?)`)} <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={load}>Skúsiť znova</button></div></div>;
+  if (!st) return <div>{H1}<div style={{ color: "var(--text-dim)" }}>Načítava sa…</div></div>;
   const clients = st.clients || [];
   const old = clients.filter((c) => c.version && c.version !== APP_VERSION);
   const queued = clients.filter((c) => c.queued > 0);
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Stav k {when(st.now)} · táto verzia {APP_VERSION}</span>
-        <button className="btn btn-ghost" onClick={load}>Obnoviť</button>
+      {H1}
+      <div className="tbar">
+        <span className="tnum" style={{ fontSize: 14, color: "var(--text-dim)" }}>Stav k {when(st.now)} · táto verzia {APP_VERSION}</span>
+        <button className="btn btn-outline" onClick={load}>Obnoviť</button>
       </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 6 }}>
         <StatCard label="Čakajúce zmeny bez signálu" value={queued.reduce((n, c) => n + c.queued, 0)} color={queued.length ? "var(--warn)" : undefined} />
         <StatCard label="Staršia verzia platformy" value={old.length} color={old.length ? "var(--warn)" : undefined} />
         <StatCard label="Kontroly stroja z minulých dní" value={st.oldInspections} color={st.oldInspections ? "var(--danger)" : undefined} />
@@ -29696,14 +29543,14 @@ function PlatformStatusView() {
           <thead><tr><th style={head}>Úloha</th><th style={head}>Kedy (UTC)</th><th style={head}>Posledný beh</th><th style={head}>Výsledok</th></tr></thead>
           <tbody>{st.cron.map((c) => (
             <tr key={c.name}>
-              <td style={td}>{c.name}{!c.active && <span className="badge badge-warn" style={{ marginLeft: 6 }}>vypnutá</span>}</td>
+              <td style={td}>{c.name}{!c.active && <span className="spill spill-wait" style={{ marginLeft: 6 }}>vypnutá</span>}</td>
               <td style={td}>{c.schedule}</td>
               <td style={td}>{when(c.start)}</td>
               <td style={{ ...td, color: c.status === "succeeded" ? "var(--ok)" : c.status ? "var(--danger)" : "var(--text-dim)" }}>{c.status === "succeeded" ? "OK" : c.status ? `${c.status}${c.message ? ` — ${c.message}` : ""}` : "ešte nebežala"}</td>
             </tr>
           ))}</tbody>
         </table></div>
-      ) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Plánovač úloh (pg_cron) nie je dostupný.</div>)}
+      ) : bad("Plánovač úloh (pg_cron) nie je dostupný."))}
       {box("Platforma u ľudí", (
         <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={head}>Meno</th><th style={head}>Rola</th><th style={head}>Verzia</th><th style={head}>Čaká na odoslanie</th><th style={head}>Naposledy online</th></tr></thead>
@@ -29725,20 +29572,20 @@ function PlatformStatusView() {
       ))}
       {box("Automatické zálohy (každú noc, 14 dní)", st.backups ? (st.backups.length ? (
         <div style={{ fontSize: 13 }}>
-          {(Date.now() - new Date(st.backups[0].at).getTime()) / 3600000 > 26 && <div style={{ color: "var(--danger)", fontWeight: 600, marginBottom: 6 }}>Posledná záloha je staršia ako deň — skontrolujte nočnú úlohu mateco-backup.</div>}
+          {(Date.now() - new Date(st.backups[0].at).getTime()) / 3600000 > 26 && <div style={{ marginBottom: 6 }}>{bad("Posledná záloha je staršia ako deň — skontrolujte nočnú úlohu mateco-backup.")}</div>}
           {st.backups.map((b) => (
             <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "4px 0", borderTop: "1px solid var(--border)" }}>
               <span>{fmtDate(b.id)} · {when(b.at)} · {Math.max(1, Math.round((b.size || 0) / 1024))} kB</span>
-              <button className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => downloadBackup(b.id)}>Stiahnuť</button>
+              <button className="btn btn-outline" style={{ minHeight: 34 }} onClick={() => downloadBackup(b.id)}>Stiahnuť</button>
             </div>
           ))}
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>Obnova: menu účtu → Import dát → vybrať stiahnutý súbor.</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 6 }}>Obnova: menu účtu → Import dát → vybrať stiahnutý súbor.</div>
         </div>
-      ) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Zatiaľ žiadna — prvá vznikne v noci.</div>) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nedostupné (spustený step91?).</div>)}
+      ) : <div style={{ fontSize: 14, color: "var(--text-dim)" }}>Zatiaľ žiadna — prvá vznikne v noci.</div>) : bad("Nedostupné (spustený step91?)."))}
       {box("Chyby push / webhookov (posledných ~6 h)", st.httpErrors ? (st.httpErrors.length ? (
-        <div style={{ fontSize: 12 }}>{st.httpErrors.map((h, i) => <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}><strong>{when(h.at)}</strong> · {h.status || "bez odpovede"} · {h.error || ""}</div>)}</div>
-      ) : <div style={{ fontSize: 13, color: "var(--ok)" }}>Bez chýb.</div>) : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nedostupné.</div>)}
-      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Kontroly z minulých dní ráno presúva databáza (cez víkend nie) — číslo nad 0 v pracovný deň po 6:00 znamená, že ranný presun neprebehol. Čakajúce zmeny u človeka sa ukážu, keď je online; „odmietnuté“ treba vyriešiť v dispečingu.</div>
+        <div style={{ fontSize: 14 }}>{st.httpErrors.map((h, i) => <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}><strong>{when(h.at)}</strong> · {h.status || "bez odpovede"} · {h.error || ""}</div>)}</div>
+      ) : <div style={{ fontSize: 14, color: "var(--ok)" }}>✓ Bez chýb.</div>) : bad("Nedostupné."))}
+      <div className="page-intro">Kontroly z minulých dní ráno presúva databáza (cez víkend nie) — číslo nad 0 v pracovný deň po 6:00 znamená, že ranný presun neprebehol. Čakajúce zmeny u človeka sa ukážu, keď je online; „odmietnuté“ treba vyriešiť v dispečingu.</div>
     </div>
   );
 }
@@ -29771,28 +29618,18 @@ function AuditLogView({ profiles }) {
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+      <h1 className="page-h1">Audit log</h1>
+      <p className="page-intro">
         Posledných {entries?.length || 0} zmien v citlivých tabuľkách (poškodenia/servis, zákazky, stroje, náhradné
         diely, protokoly o odovzdaní) — zaznamenáva sa priamo v databáze, nedá sa obísť z platformy.
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        <button
-          className="btn"
-          onClick={() => setTableFilter("")}
-          style={{ padding: "5px 10px", fontSize: 11, background: !tableFilter ? "var(--accent)" : "transparent", color: !tableFilter ? "#fff" : "var(--text-dim)", border: "1px solid " + (!tableFilter ? "var(--accent)" : "var(--border)") }}
-        >
-          Všetko
-        </button>
-        {Object.entries(AUDIT_TABLE_LABELS).map(([t, label]) => (
-          <button
-            key={t}
-            className="btn"
-            onClick={() => setTableFilter(tableFilter === t ? "" : t)}
-            style={{ padding: "5px 10px", fontSize: 11, background: tableFilter === t ? "var(--accent)" : "transparent", color: tableFilter === t ? "#fff" : "var(--text-dim)", border: "1px solid " + (tableFilter === t ? "var(--accent)" : "var(--border)") }}
-          >
-            {label}
-          </button>
-        ))}
+      </p>
+      <div className="tbar">
+        <div className="seg" role="group" aria-label="Tabuľka" style={{ flexWrap: "wrap" }}>
+          <button type="button" className={!tableFilter ? "on" : ""} aria-pressed={!tableFilter} onClick={() => setTableFilter("")}>Všetko</button>
+          {Object.entries(AUDIT_TABLE_LABELS).map(([t, label]) => (
+            <button key={t} type="button" className={tableFilter === t ? "on" : ""} aria-pressed={tableFilter === t} onClick={() => setTableFilter(tableFilter === t ? "" : t)}>{label}</button>
+          ))}
+        </div>
       </div>
       {error && (
         <div className="panel" style={{ padding: 20, color: "var(--danger)" }}>
@@ -29805,8 +29642,8 @@ function AuditLogView({ profiles }) {
         </div>
       )}
       {!error && entries !== null && (
-        <div className="panel">
-          <table className="table-cards">
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+          <table className="table-cards jobs-table dense">
             <thead>
               <tr>
                 <th>Kedy</th>
@@ -29818,7 +29655,7 @@ function AuditLogView({ profiles }) {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Žiadne zmeny v tomto filtri.</td></tr>
+                <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Žiadne zmeny v tomto filtri.</td></tr>
               )}
               {filtered.map((e) => {
                 const who = e.changed_by ? profileById[e.changed_by]?.name || "— neznámy účet —" : "— systém —";
@@ -29826,15 +29663,15 @@ function AuditLogView({ profiles }) {
                 const label = data?.code || data?.name || data?.customer || data?.cisloDielu || e.record_id;
                 return (
                   <tr key={e.id}>
-                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }} data-label="Kedy">{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
-                    <td data-label="Kto">{who}</td>
+                    <td className="tnum" style={{ whiteSpace: "nowrap" }} data-label="Kedy">{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
+                    <td data-label="Kto" style={e.changed_by ? undefined : { color: "var(--text-dim)" }}>{who}</td>
                     <td data-label="Tabuľka">{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
                     <td data-label="Akcia">
-                      <span className={`badge ${e.action === "delete" ? "badge-danger" : e.action === "insert" ? "badge-ok" : "badge-info"}`}>
+                      <span className={`spill ${e.action === "delete" ? "spill-problem" : e.action === "insert" ? "spill-done" : "spill-active"}`}>
                         {AUDIT_ACTION_LABELS[e.action] || e.action}
                       </span>
                     </td>
-                    <td className="mono" style={{ fontSize: 12 }} data-label="Záznam">{label}</td>
+                    <td className="tnum" style={{ fontWeight: 700 }} data-label="Záznam">{label}</td>
                   </tr>
                 );
               })}
@@ -29847,14 +29684,13 @@ function AuditLogView({ profiles }) {
 }
 
 function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, onResetPassword }) {
-  const [editingId, setEditingId] = useState(null);
-
   return (
-    <Modal title="Správa používateľov" onClose={onClose} wide>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+    <Modal title="Správa používateľov" onClose={onClose} xwide>
+      <div className="fhint" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
         Noví ľudia sa registrujú sami na prihlasovacej obrazovke — tu im len prideľte rolu, prípadne ich deaktivujte/zmažte.
       </div>
-      <table className="table-cards">
+      <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+      <table className="table-cards jobs-table">
         <thead>
           <tr>
             <th>Meno</th>
@@ -29870,8 +29706,8 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
           )}
           {profiles.map((p) => (
             <tr key={p.id}>
-              <td className="td-plain" style={{ fontWeight: 600 }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
-              <td className="mono" data-label="Email">{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
+              <td className="td-plain" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
+              <td data-label="Email" style={{ whiteSpace: "nowrap" }}>{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
               <td data-label="Rola">
                 {p.id === currentUser?.id ? (
                   <span
@@ -29880,24 +29716,22 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
                   >
                     {roleLabel(p.role)}
                   </span>
-                ) : editingId === p.id ? (
+                ) : (
                   <select
-                    autoFocus
-                    defaultValue={p.role}
-                    onChange={(e) => { onUpdate(p.id, { role: e.target.value }); setEditingId(null); }}
-                    onBlur={() => setEditingId(null)}
+                    value={p.role}
+                    aria-label={`Rola — ${p.name}`}
+                    onChange={(e) => onUpdate(p.id, { role: e.target.value })}
+                    style={{ minHeight: 40, minWidth: 190 }}
                   >
                     {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
-                ) : (
-                  <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditingId(p.id)}>
-                    {roleLabel(p.role)}
-                  </span>
                 )}
               </td>
-              <td data-label="Stav">{p.active === false ? <span className="badge badge-danger">Deaktivovaný</span> : <span className="badge badge-ok">Aktívny</span>}</td>
+              <td data-label="Stav">{p.active === false ? <span className="spill spill-problem">⚠ Deaktivovaný</span> : <span className="spill spill-done">Aktívny</span>}</td>
               <td className="td-actions" style={{ textAlign: "right" }}>
                 <KebabMenu
+                  label="⋯"
+                  name="Ďalšie akcie"
                   actions={[
                     (p.email || p.id === currentUser?.id) && { label: "Resetovať heslo", onClick: () => onResetPassword(p.email || currentUser.email) },
                     p.id !== currentUser?.id && { label: p.active === false ? "Aktivovať" : "Deaktivovať", onClick: () => onUpdate(p.id, { active: p.active === false ? true : false }) },
@@ -29909,6 +29743,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
           ))}
         </tbody>
       </table>
+      </div>
     </Modal>
   );
 }
@@ -29916,15 +29751,15 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
 function GlobalStyle() {
   return (
     <style>{`
-      *, *::before, *::after { box-sizing: border-box; }
       @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+      *, *::before, *::after { box-sizing: border-box; }
       :root {
         --bg: #f0f0f0;
         --panel: #ffffff;
         --panel-2: #f4f4f4;
         --border: #e0e0e0;
         --text: #1a1a1a;
-        --text-dim: #6b6b6b;
+        --text-dim: #5A5A5A;
         --accent: #E30613;
         --accent-dark: #B5040F;
         --accent-light: #fdf0f0;
@@ -29943,13 +29778,26 @@ function GlobalStyle() {
         --gantt-name-col: 150px;
         --gantt-day-col: 72px;
         --gantt-plan-day-col: 72px;
-        --danger: #A32D2D;
-        --danger-bg: #fcebeb;
+        --danger: #C4040F;
+        --danger-bg: #FDF1F1;
+        --danger-text: #8E0A12;
         --danger-row-bg: rgba(227,6,19,.13);
         --info: #185fa5;
         --info-bg: #e6f1fb;
         --gantt-cell-bg: #e8eaed;
         --gantt-cell-border: #c9ccd1;
+        /* v1.0.795 tmavý režim: plná červená pod bielym textom (hlavička, hlavné tlačidlo, odznaky),
+           silnejšia čiara ovládačov a farby štítkov stavu — svetlé hodnoty = schválený dizajn. */
+        --accent-fill: #E30613;
+        --ok-fill: #3b6d11; --warn-fill: #854f0b;
+        --accent-fill-hover: #B5040F;
+        --line-strong: #CFCFCF;
+        --s-neutral-bg: #EFEFEF; --s-neutral: #3A3A3A;
+        --s-active-bg: #E7EEF9; --s-active: #1F4E99;
+        --s-done-bg: #E6F4EA; --s-done: #1E6B34;
+        --s-wait-bg: #FFF4DB; --s-wait: #6B4A00;
+        --control-bg: #fff;
+        --control-line: #858585;
       }
       /* Predvolený 8px margin prehliadača na body nebol nikde resetovaný —
          cez tento okraj presvitalo biele pozadie body (appka naň nikdy
@@ -29958,24 +29806,51 @@ function GlobalStyle() {
          .dark trieda na body (nastavovaná v JS podľa darkMode) drží pozadie
          pod appkou správne aj pri "gumovom" overscrolle. */
       html, body { margin: 0; }
-      .today-sec { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 16px 0 8px; }
-      .today-sec.red { color: var(--danger); }
+      .today-sec { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin: 16px 0 8px; }
+      .today-sec.red { color: var(--danger-text); }
+      .panel.today-tile { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: var(--text); padding: 14px 18px; border-radius: 12px; box-shadow: none; }
+      button.today-tile { cursor: pointer; }
+      button.today-tile:hover { border-color: var(--text-dim); }
+      .today-tile-n { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+      .today-tile-n.problem { color: var(--danger-text); }
+      .today-problem { background: var(--danger-bg) !important; }
+      .today-problem-title { color: var(--danger-text); }
+      .today-load { flex: 0 0 120px; height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+      .today-load > span { display: block; height: 100%; background: var(--info); }
+      .today-hero { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+      .today-hero-tag { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
+      .today-hero-id { font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+      .today-hero-id small { font-size: 20px; font-weight: 500; color: var(--text-dim); }
+      .today-hero-sub { font-size: 17px; line-height: 1.35; }
+      .today-hero .btn { min-height: 48px; font-size: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .today-hero .btn.today-main { min-height: 56px; font-size: 18px; font-weight: 700; }
+      .today-hero .btn.today-nav { min-height: 52px; font-size: 17px; font-weight: 700; border: 2px solid var(--text); }
+      .today-hero-more { display: flex; gap: 8px; flex-wrap: wrap; }
+      .today-hero-more .btn { flex: 1 1 120px; }
+      .today-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 8px 16px; margin-bottom: 8px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; font: inherit; font-size: 15px; color: var(--text); text-align: left; cursor: pointer; }
+      .today-row-sub { display: block; font-size: 14px; color: var(--text-dim); }
+      .sync-strip { background: var(--s-wait-bg); color: var(--s-wait); font-size: 14px; font-weight: 600; padding: 8px 24px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .sync-strip .sync-more { font-weight: 400; font-size: 13px; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        .who-hide-mobile { display: none !important; }
+        .sync-strip { padding: 8px 16px; }
+      }
       .header-damage-btn { color: var(--danger) !important; border-color: var(--danger) !important; font-weight: 700; }
-      .header-damage-btn .hd-short { display: none; }
+      .header-damage-btn .hd-short, .job-form-foot .hd-short { display: none; }
       .binder { display: flex; margin-left: -20px; min-height: 200px; }
       .binder-tabs { flex: 0 0 34px; display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
       .binder-tab { writing-mode: vertical-rl; transform: rotate(180deg); padding: 14px 7px; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px;
         background: var(--panel-2); color: var(--text-dim); font: 600 12px/1 inherit; font-family: inherit; cursor: pointer; text-align: center; white-space: nowrap; }
       .binder-tab:hover { color: var(--text); }
-      .binder-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .binder-tab.active { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
       .binder-body { flex: 1; min-width: 0; padding-left: 14px; }
       .binder-panel { animation: binderIn .18s ease-out; }
       @keyframes binderIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         .binder { margin-left: -12px; }
         .binder-body { padding-left: 10px; }
-        .header-damage-btn .hd-full { display: none; }
-        .header-damage-btn .hd-short { display: inline; }
+        .header-damage-btn .hd-full, .job-form-foot .hd-full { display: none; }
+        .header-damage-btn .hd-short, .job-form-foot .hd-short { display: inline; }
       }
       body { background: #f0f0f0; }
       body.dark { background: #14171a; }
@@ -29985,24 +29860,36 @@ function GlobalStyle() {
         --panel-2: #262b30;
         --border: #343b42;
         --text: #e8e6e3;
-        --text-dim: #9099a1;
-        --accent: #ff4550;
-        --accent-dark: #ff6b74;
+        --text-dim: #a0a8b0;
+        --accent: #ff6b74;
+        --accent-dark: #ff8a90;
         --accent-light: rgba(227,6,19,.18);
-        --ok: #7cc576;
+        --ok: #8fd18a;
         --ok-bg: rgba(59,109,17,.28);
         --warn: #e0a858;
         --warn-bg: rgba(133,79,11,.3);
         --danger: #ff6b6b;
         --danger-bg: rgba(163,45,45,.3);
+        --danger-text: #ff9a9a;
         --danger-row-bg: rgba(255,90,90,.22);
-        --info: #6db1e8;
+        --info: #8cc4f0;
         --info-bg: rgba(24,95,165,.3);
         --gantt-cell-bg: #2c323a;
         --gantt-cell-border: #3f4750;
         --gantt-header-bg: #3a262a;
+        --accent-fill: #C8101C;
+        --ok-fill: #2f6a1f; --warn-fill: #8a5a0c;
+        --accent-fill-hover: #A50C16;
+        --line-strong: #737c85;
+        --s-neutral-bg: #30363c; --s-neutral: #dfe3e6;
+        --s-active-bg: #1c3350; --s-active: #a9c8f5;
+        --s-done-bg: #1b3a25; --s-done: #93d6a3;
+        --s-wait-bg: #3d3113; --s-wait: #f0c869;
+        --control-bg: var(--panel-2);
+        --control-line: var(--line-strong);
+        color-scheme: dark;
       }
-      .app-shell.dark input, .app-shell.dark select, .app-shell.dark textarea { background: var(--panel-2); }
+      .app-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea):not(:focus) { border-color: var(--control-line); }
       .app-shell { background: var(--bg); color: var(--text); min-height: 100vh; font-family: 'Barlow', sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
 
       .app-body-row { display: flex; flex: 1; min-height: 0; position: relative; }
@@ -30014,27 +29901,28 @@ function GlobalStyle() {
       .side-menu-wrap.collapsed .side-menu { width: 56px; }
       .side-menu-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px; }
       .side-menu-foot { flex-shrink: 0; padding: 6px 8px 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; }
-      .nav-sec { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); margin: 14px 10px 4px; }
+      .nav-sec { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin: 14px 10px 4px; }
       .nav-sec-line { height: 1px; background: var(--border); margin: 8px 4px; }
       .nav-it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: none; background: transparent; border-radius: 8px; font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer; text-align: left; position: relative; }
       .nav-it:hover { background: var(--panel-2); }
-      .nav-it.active { background: var(--accent-light); color: var(--accent); font-weight: 700; }
+      .nav-it.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 700; }
       .nav-it.nav-sub { padding-left: 38px; font-size: 12.5px; }
       .nav-it.nav-dim { color: var(--text-dim); font-size: 12px; }
       .nav-lbl { flex: 1; min-width: 0; }
-      .nav-b { margin-left: auto; background: var(--accent); color: #fff; border-radius: 10px; font-size: 10.5px; padding: 1px 7px; font-weight: 700; }
+      .nav-b { margin-left: auto; background: var(--text); color: var(--panel); border-radius: 10px; font-size: 10.5px; padding: 1px 7px; font-weight: 700; }
       .side-menu-wrap.collapsed .nav-it { justify-content: center; padding: 8px 0; }
+      .nav-b.nav-b-problem { background: var(--accent-fill); color: #fff; }
       .side-menu-wrap.collapsed .nav-b { position: absolute; top: 0; right: 2px; font-size: 9px; padding: 0 5px; }
       .header-new-wrap { position: relative; }
-      .header-new-btn { background: #fff; color: var(--accent); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+      .header-new-btn { background: #fff; color: var(--accent-fill); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
       .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
       .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
-      .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(255,255,255,.16); color: #fff; cursor: pointer; }
+      .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(0,0,0,.14); color: #fff; cursor: pointer; }
       /* Spodná lišta na mobile (zobrazí sa len v mobilnom @media cez .mobile-tech-actions). */
-      .mnav-t { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; font: inherit; font-size: 10.5px; color: var(--text-dim); position: relative; padding: 4px 0; cursor: pointer; min-width: 0; }
+      .mnav-t { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; font: inherit; font-size: 12px; color: var(--text-dim); position: relative; padding: 4px 0; cursor: pointer; min-width: 0; }
       .mnav-t.active { color: var(--accent); font-weight: 700; }
-      .mnav-b { position: absolute; top: 0; left: 56%; background: var(--accent); color: #fff; border-radius: 9px; font-size: 9.5px; padding: 0 5px; font-weight: 700; }
-      .mnav-plus { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+      .mnav-b { position: absolute; top: 0; left: 56%; background: var(--accent-fill); color: #fff; border-radius: 9px; font-size: 9.5px; padding: 0 5px; font-weight: 700; }
+      .mnav-plus { width: 50px; height: 50px; border-radius: 50%; background: var(--accent-fill); color: #fff; display: flex; align-items: center; justify-content: center; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
       .mnav-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-radius: 16px 16px 0 0; padding: 10px 14px calc(18px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; box-sizing: border-box; }
       .mnav-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 10px; }
       .mnav-sheet-title { font-weight: 700; margin: 2px 6px 6px; }
@@ -30060,7 +29948,7 @@ function GlobalStyle() {
         table.table-cards, table.table-cards tbody { display: block; width: 100%; }
         table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
         table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
-        table.table-cards td[data-label]::before { content: attr(data-label); font-size: 11px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
+        table.table-cards td[data-label]::before { content: attr(data-label); font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
         table.table-cards td.td-plain { display: block; text-align: left; }
         table.table-cards td.td-actions { justify-content: flex-end; }
         /* Vstupy/selecty v karte majú na desktope pevnú (úzku) šírku pre
@@ -30148,11 +30036,11 @@ function GlobalStyle() {
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
       .mobile-tech-actions { display: none; }
-      .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
+      .btn { min-height: 40px; padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
       /* Depo filter chipy — na desktope plný názov, na mobile skratka (BA/NR/ZV/ZA/PO/EXT), nech je to jednotné so ganttom. */
       .depo-chip-short { display: none; }
-      .btn-accent { background: var(--accent); color: #fff; }
-      .btn-accent:hover { background: var(--accent-dark); }
+      .btn-accent { background: var(--accent-fill); color: #fff; }
+      .btn-accent:hover { background: var(--accent-fill-hover); }
       .btn-accent:disabled { opacity: .4; cursor: not-allowed; }
       .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
       .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
@@ -30163,7 +30051,7 @@ function GlobalStyle() {
       .badge-info { background: var(--info-bg); color: var(--info); }
       /* Zdieľaný "počítací" odznak (aktívne filtre a pod.) — jeden radius/
          veľkosť namiesto toho, aby si ho každé miesto vyrábalo nanovo. */
-      .count-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 10px; border-radius: 10px; min-width: 16px; height: 16px; padding: 0 5px; font-weight: 700; line-height: 1; }
+      .count-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--accent-fill); color: #fff; font-size: 10px; border-radius: 10px; min-width: 16px; height: 16px; padding: 0 5px; font-weight: 700; line-height: 1; }
       /* Zdieľané "×" tlačidlo na zatvorenie — tlmené (žiadne pozadie v pokoji,
          jemné pri hoveri), rovnaký jazyk ako .rail-icon namiesto textového
          tlačidla "Zavrieť" alebo červeného kruhu. */
@@ -30177,7 +30065,7 @@ function GlobalStyle() {
          sekundách. z-index 250: nad kartami (160/170), pod dropdown/notif. (200+). */
       .app-toast {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 250;
-        background: var(--ok); color: #fff; padding: 9px 16px; border-radius: 8px;
+        background: var(--ok-fill); color: #fff; padding: 9px 16px; border-radius: 8px;
         font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.15);
         animation: app-toast-in .2s ease;
       }
@@ -30193,9 +30081,201 @@ function GlobalStyle() {
          záporný margin nech siaha až po okraj panelu ako pri iných kartách. */
       .modal-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin: -20px -20px 14px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
       .modal-title-block { margin-bottom: 16px; }
-      .modal-eyebrow { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-dim); margin-bottom: 2px; }
-      .modal-title-main { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.25; margin: 0; }
-      input, select, textarea { background: #fff; border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
+      .modal-eyebrow { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: 2px; }
+      .modal-title-main { font-family: 'Barlow', sans-serif; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; margin: 0; font-variant-numeric: tabular-nums; }
+      /* Bočný panel (Modal side — karta zákazky): vpravo cez celú výšku, vysunie sa sprava. */
+      .modal-panel.modal-side-panel { height: 100%; overflow-y: auto; display: flex; flex-direction: column; border: none; border-left: 1px solid var(--border); border-radius: 0; box-shadow: -12px 0 32px rgba(0,0,0,.08); animation: side-in .2s ease-out; }
+      @keyframes side-in { from { transform: translateX(100%); } }
+      @media (prefers-reduced-motion: reduce) { .modal-panel.modal-side-panel { animation: none; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+      .side-head { padding: 18px 28px 0; display: flex; flex-direction: column; gap: 10px; }
+      .side-eyebrow { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim); }
+      .side-title { margin: 0; font-size: 26px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; line-height: 1.2; font-variant-numeric: tabular-nums; }
+      .side-title-sub { font-size: 19px; font-weight: 500; color: var(--text-dim); }
+      .side-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 10px; }
+      .side-summary > div { padding: 10px 12px; border-right: 1px solid var(--border); min-width: 0; }
+      .side-summary > div:last-child { border-right: none; }
+      .side-summary span { display: block; font-size: 13px; color: var(--text-dim); }
+      .side-summary b { display: block; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+      .tnum { font-variant-numeric: tabular-nums; }
+      .side-body { flex: 1; padding: 0 28px 20px; }
+      .side-foot { position: sticky; bottom: 0; z-index: 5; background: var(--panel-2); border-top: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .side-foot .btn { min-height: 44px; font-size: 14px; }
+      /* Segmentovaný prepínač (stav/depo/doprava) — aktívne čierne, ostatné biele. */
+      .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--panel); max-width: 100%; }
+      .seg > button { min-height: 40px; padding: 0 14px; border: 0; border-left: 1px solid var(--border); background: transparent; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; flex: 1; }
+      .seg > button:first-child { border-left: 0; }
+      .seg > button.on { background: var(--text); color: var(--panel); font-weight: 600; }
+      .seg > button:disabled { opacity: .5; cursor: not-allowed; }
+      .seg-n { margin-left: 6px; font-variant-numeric: tabular-nums; opacity: .75; }
+      .fchip { min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); font: inherit; font-size: 14px; color: var(--text); cursor: pointer; display: inline-flex; align-items: center; }
+      .fchip:hover { border-color: var(--text); }
+      .fchip.on { background: var(--text); color: var(--panel); border-color: var(--text); }
+      .fchip.problem { background: var(--danger-bg); color: var(--danger-text); border-color: transparent; font-weight: 600; }
+      .fchip-x { margin-left: 6px; border: 0; background: transparent; font: inherit; font-weight: 700; color: inherit; cursor: pointer; padding: 0 2px; }
+      .spill { display: inline-block; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--s-neutral-bg); color: var(--s-neutral); }
+      .spill-active { background: var(--s-active-bg); color: var(--s-active); }
+      .spill-done { background: var(--s-done-bg); color: var(--s-done); }
+      .spill-wait { background: var(--s-wait-bg); color: var(--s-wait); }
+      .spill-problem { background: var(--danger-bg); color: var(--danger-text); }
+      .btn-outline { background: var(--panel); border: 1px solid var(--text); color: var(--text); }
+      .btn-outline:hover { background: var(--panel-2); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .cell-sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+      .jobs-table th { position: static; }
+      .jobs-table th { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: .05em; background: var(--panel); padding: 12px; }
+      .jobs-table td { font-size: 15px; padding: 12px; vertical-align: middle; }
+      .jobs-table th:first-child, .jobs-table td:first-child { padding-left: 20px; }
+      .jobs-table th:last-child, .jobs-table td:last-child { padding-right: 20px; }
+      .jobs-table tr.row-problem td { background: var(--danger-bg); }
+      .jobs-table .btn { min-height: 36px; font-size: 14px; }
+      .day-sec { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 8px; font-variant-numeric: tabular-nums; }
+      .day-sec.red { color: var(--danger-text); }
+      .tr-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 200px 150px; gap: 12px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); cursor: pointer; }
+      .tr-row:first-child { border-top: 0; }
+      .tr-row.row-problem { background: var(--danger-bg); }
+      .tr-row select { width: 100%; max-width: 200px; }
+      .job-form-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); margin: 0 -20px; border-top: 1px solid var(--border); }
+      .job-form-cols > fieldset { border: 0; margin: 0; padding: 16px 20px 4px; min-width: 0; }
+      .job-form-cols > fieldset + fieldset { background: var(--panel-2); border-left: 1px solid var(--border); }
+      .job-form-cols legend { float: left; width: 100%; padding: 0; margin-bottom: 12px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .06em; }
+      .job-form-cols legend + * { clear: both; }
+      .job-form-cols .seg > button { min-width: 0; white-space: normal; padding: 0 8px; line-height: 1.15; }
+      /* Pole pri fokuse (klávesnica) sa doscrolluje nad ukotvenú lištu, nie pod ňu. */
+      :is(.modal-overlay, .modal-panel, .side-body):has(.job-form-foot:not(.ff-confirm)) { scroll-padding-bottom: 140px; }
+      .job-form-foot { position: sticky; bottom: -20px; z-index: 5; margin: 0 -20px -20px; padding: 12px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--panel-2); border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; }
+      .job-form-foot .btn { min-height: 44px; font-size: 14px; }
+      .miss-pill { font-size: 14px; color: var(--s-wait); background: var(--s-wait-bg); padding: 6px 10px; border-radius: 6px; }
+      /* Formuláre (v1.0.794): popisky 14 px, polia 44 px (mobil 48 px), spodná lišta FormFoot, rámiky, kroky, checklist. */
+      .fld { margin-bottom: 14px; min-width: 0; }
+      .fld-l { display: block; font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+      .modal-panel:not(.modal-side-panel) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]), select) { min-height: 44px; font-size: 15px; }
+      .modal-panel:not(.modal-side-panel) textarea { font-size: 15px; }
+      .modal-panel label > input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--text); flex: none; margin: 0; }
+      /* Drobné inline písmo (10–12 px) v oknách → 13 px (minimum pre prácu v teréne). */
+      .modal-panel:not(.modal-side-panel) :is([style*="font-size: 10px"], [style*="font-size: 11px"], [style*="font-size: 12px"]) { font-size: 13px !important; }
+      .ff-btns { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; align-items: center; }
+      .job-form-foot .miss-pill { flex: 0 1 auto; }
+      .btn-black { background: var(--text); color: var(--panel); border-color: var(--text); }
+      .btn-black:hover { opacity: .88; }
+      .btn-danger-outline { background: var(--panel); border: 1px solid var(--danger); color: var(--danger-text); }
+      .btn-outline:disabled, .btn-danger-outline:disabled, .btn-black:disabled { opacity: .45; cursor: not-allowed; }
+      .fnote { border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-bottom: 14px; }
+      .fnote-i { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+      .fnote-y { background: var(--s-wait-bg); color: var(--s-wait); }
+      .fnote-g { background: var(--s-done-bg); color: var(--s-done); }
+      .fnote-r { background: var(--danger-bg); color: var(--danger-text); border-left: 3px solid var(--danger); font-weight: 600; }
+      .fhint { font-size: 13px; color: var(--text-dim); margin-top: 4px; font-weight: 400; }
+      .fck { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text); line-height: 1.35; margin: 2px 0 14px; cursor: pointer; }
+      .fck small { display: block; font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+      .fgrid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; align-items: start; }
+      .fstep { display: flex; align-items: center; gap: 10px; margin: 20px 0 10px; flex-wrap: wrap; }
+      .fstep-n { width: 26px; height: 26px; border-radius: 50%; background: var(--text); color: var(--panel); font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+      .fstep-t { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
+      .fstep .spill { text-transform: none; }
+      .flegend { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 10px; }
+      .fsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .fsum > div { background: var(--panel-2); border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+      .fsum > div > span:first-child { display: block; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); font-size: 13px; }
+      .fsum a { color: var(--text); text-decoration: none; font-weight: 600; }
+      .flist { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+      .flist > button { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; border: 0; border-top: 1px solid var(--border); background: var(--panel); font: inherit; font-size: 15px; color: var(--text); text-align: left; cursor: pointer; }
+      .flist > button:first-child { border-top: 0; }
+      .flist > button:hover, .flist > button.on { background: var(--panel-2); }
+      .flist small { color: var(--text-dim); font-size: 14px; }
+      /* Riadky zoznamu v okne (v1.0.795): deň technika, výdaj dielov, telefónny zoznam, merania EZ… */
+      .frow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; min-height: 56px; }
+      .frow + .frow { border-top: 1px solid var(--border); }
+      .frow .btn { min-height: 40px; font-size: 14px; }
+      .fintro { margin: -4px 0 14px; font-size: 14px; color: var(--text-dim); line-height: 1.4; }
+      .ckl { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+      .cki { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-top: 1px solid var(--border); }
+      .cki:first-child { border-top: 0; }
+      .cki.prob { background: var(--danger-bg); }
+      .ckt { flex: 1; min-width: 200px; font-size: 15px; }
+      .cks { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--panel); }
+      .cks > button { min-height: 48px; min-width: 104px; padding: 0 12px; font: inherit; font-size: 14px; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
+      .cks > button:first-child { border-left: 0; }
+      .cks > button.okon { background: var(--s-done-bg); color: var(--s-done); font-weight: 700; }
+      .cks > button.pon { background: var(--danger-bg); color: var(--danger-text); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--danger); }
+      .cki textarea { width: 100%; }
+      .fphotos { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+      .fphoto { position: relative; width: 84px; height: 84px; }
+      .fphoto img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
+      .fphoto button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
+      .ftable th { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; background: var(--panel-2); padding: 10px 8px; }
+      .ftable td { padding: 8px; vertical-align: top; font-size: 14px; }
+      .modal-panel .ftable :is(input, select) { min-height: 40px; font-size: 14px; }
+      .ftable tr:hover td { background: transparent; }
+      .print-bar-x { position: absolute; top: env(safe-area-inset-top); left: 0; height: 64px; max-width: min(46vw, 520px); display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 2; }
+      .print-bar-x .btn { min-height: 44px; font-size: 14px; flex: none; }
+      .print-bar-title { min-width: 0; font-size: 15px; font-weight: 600; color: #1A1A1A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        .tr-row { grid-template-columns: 70px minmax(0, 1fr); padding: 12px 14px; }
+        .tr-row > :nth-child(n+3) { grid-column: 2; }
+        .job-form-cols > fieldset + fieldset { border-left: 0; border-top: 1px solid var(--border); }
+        .seg { display: flex; width: 100%; }
+        .jobs-table tr.row-problem { background: var(--danger-bg); }
+        .jobs-table tr.row-problem td { background: transparent; }
+        .jobs-wrap { background: transparent !important; border: 0 !important; }
+        .jobs-table td { font-size: 14px; }
+        .jobs-table td:first-child, .jobs-table td:last-child { padding-left: 0; padding-right: 0; }
+        .jobs-table td:first-child { position: static; box-shadow: none; background: transparent; }
+      }
+      /* Ostatné obrazovky (v1.0.793): nadpis obrazovky, popis pod ním, lišta nad tabuľkou, nadpis sekcie. */
+      .page-h1 { margin: 0 0 4px; font-size: 24px; font-weight: 700; color: var(--text); }
+      .page-intro { margin: 0 0 14px; font-size: 14px; color: var(--text-dim); max-width: 920px; line-height: 1.45; }
+      .tbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+      .tbar .btn { min-height: 40px; font-size: 14px; }
+      .unit-in { position: relative; display: inline-block; }
+      .unit-in input { width: 92px; height: 38px; padding-right: 28px; font-size: 14px; }
+      .unit-in i { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 13px; color: var(--text-dim); pointer-events: none; }
+      .models-table td { padding-top: 8px; padding-bottom: 8px; }
+      .models-table select { height: 38px; font-size: 14px; }
+      .jobs-table.dense td { padding-top: 8px; padding-bottom: 8px; }
+      /* Prihlásenie / nové heslo / registrácia — karta s červeným pásom ako hlavička platformy. */
+      .auth-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); padding: 16px; }
+      .panel.auth-card { width: 400px; max-width: 100%; padding: 0 !important; overflow: hidden; border-radius: 12px; }
+      .auth-head { background: var(--accent-fill); padding: 14px 24px; }
+      .auth-body { padding: 24px 28px 28px; }
+      .auth-title { margin: 0 0 20px; font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.25; }
+      .auth-body label.label-font { font-family: 'Barlow', sans-serif; font-size: 14px !important; color: var(--text) !important; margin-bottom: 6px !important; }
+      .auth-body input { height: 48px; font-size: 16px; }
+      .auth-body .btn { min-height: 48px; font-size: 16px; border-radius: 8px; }
+      .auth-body > div[style] { font-size: 14px !important; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        .auth-body { padding: 20px 18px 24px; }
+        .auth-body input { height: 52px; font-size: 16px !important; }
+        .auth-body .btn { min-height: 52px; }
+      }
+      /* Lišta kalendára — na počítači ovládanie 34 px v jednom riadku (na mobile ostáva ako doteraz). */
+      @media (min-width: 1001px), (min-width: 721px) and (hover: hover) {
+        .cal-bar .seg > button { min-height: 34px; padding: 0 10px; }
+        .cal-bar input, .cal-bar select { height: 34px !important; }
+        .cal-bar button[aria-label$="mesiac"], .cal-bar .btn { min-height: 34px !important; min-width: 34px !important; height: 34px; padding-top: 0; padding-bottom: 0; }
+      }
+      .tbar input:not([type=checkbox]):not([type=radio]), .tbar select { min-height: 40px; font-size: 14px; }
+      .jobs-table th.m-only + th, .jobs-table td.m-only + td { padding-left: 20px; }
+      .m-only { display: none !important; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        .m-only { display: inline-flex !important; }
+        table.table-cards td.m-only { display: flex !important; }
+        table.table-cards td.m-only.td-plain { display: block !important; }
+      }
+      .utabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-top: 6px; overflow-x: auto; }
+      .utab { padding: 10px 0; border: none; border-bottom: 2px solid transparent; background: transparent; font: inherit; font-size: 15px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+      .utab:hover { color: var(--text); }
+      .utab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 700; }
+      .side-dl { margin: 0; display: grid; grid-template-columns: 170px minmax(0, 1fr); }
+      .side-dl dt { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: 14px; }
+      .side-dl dd { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 15px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+      .side-dl dd:has(select) { padding: 7px 0; }
+      .side-dl select { height: 38px; min-width: 220px; max-width: 100%; font-size: 15px; }
+      .side-dl a { color: var(--text); }
+      .side-dl dd.warn { color: var(--danger-text); font-weight: 600; }
+      /* Karta bez záložiek — obsah nesmie lepiť na súhrn v hlavičke. */
+      .side-body > :first-child:not(.utabs) { margin-top: 16px; }
+      .side-sec { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin: 22px 0 2px; }
+      input, select, textarea { background: var(--control-bg); border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
       input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
       table { width: 100%; border-collapse: collapse; }
       th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); position: sticky; top: var(--header-h, 62px); z-index: 40; }
@@ -30302,9 +30382,8 @@ function GlobalStyle() {
         .header-topbar { padding: 6px 10px !important; gap: 6px !important; flex-wrap: nowrap !important; }
         .header-navbar { padding: 7px 10px !important; gap: 8px !important; }
         .header-logo-img { height: 20px !important; }
-        .header-brand-sub { flex: 0 1 auto; overflow: hidden; gap: 6px !important; }
         .header-divider { display: none !important; }
-        .header-subtitle { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-brand-sub { display: none !important; }
         .user-menu-desktop-wrap { display: none !important; }
         .user-menu-mobile-wrap { display: block !important; }
         .header-top-actions { gap: 6px !important; flex: 0 0 auto; flex-wrap: nowrap !important; }
@@ -30317,10 +30396,10 @@ function GlobalStyle() {
            (veľkosť, tvar, priehľadné biele pozadie), nech na seba v hlavičke
            vizuálne sedia a nevyzerajú ako z inej appky. */
         .header-icon-btn {
-          width: 34px !important;
-          height: 34px !important;
-          min-width: 34px !important;
-          min-height: 34px !important;
+          width: 44px !important;
+          height: 44px !important;
+          min-width: 44px !important;
+          min-height: 44px !important;
           border-radius: 50% !important;
           padding: 0 !important;
           display: flex !important;
@@ -30433,10 +30512,48 @@ function GlobalStyle() {
            riadok telefónu a × sa dala schovať za hodiny/batériu, nedalo sa
            na ňu kliknúť. Safe-area medzera nad ňou tak ostáva zachovaná. */
         .modal-toolbar { margin: -12px -12px 14px !important; }
-        .modal-header h3 { font-size: 15px !important; }
-        .modal-title-main { font-size: 15px !important; }
+        .modal-header h3 { font-size: 20px !important; }
+        /* Formuláre (v1.0.794) na mobile: polia 48 px, lišta ukotvená dole na celú šírku. */
+        .modal-panel:not(.modal-side-panel) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]), select) { min-height: 48px; font-size: 16px; }
+        .modal-panel:not(.modal-side-panel) textarea { font-size: 16px; }
+        .modal-panel .btn { min-height: 48px; }
+        .job-form-cols { margin: 0 -12px; }
+        .job-form-cols > fieldset { padding: 14px 12px 4px; }
+        .job-form-foot { margin: 0 -12px -12px; bottom: -12px; padding: 10px 12px max(12px, env(safe-area-inset-bottom)); border-radius: 0; flex-wrap: wrap; }
+        .job-form-foot .miss-pill { order: -1; flex: 1 1 100%; }
+        .job-form-foot .ff-btns { flex: 1 1 0; margin-left: 0; flex-wrap: nowrap; }
+        .job-form-foot .ff-btns .btn, .job-form-foot > .btn { flex: 1; min-height: 52px; font-size: 15px; }
+        .job-form-foot:not(.ff-confirm) .ff-cancel { display: none; }
+        .job-form-foot.ff-confirm { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; }
+        .job-form-foot.ff-confirm .btn { min-height: 48px; }
+        .fgrid2 { grid-template-columns: minmax(0, 1fr); }
+        .cks { width: 100%; }
+        .cks > button { flex: 1; min-width: 0; }
+        .ckt { min-width: 0; flex-basis: 100%; }
+        .cki { padding: 10px 12px; }
+        .fsum { grid-template-columns: minmax(0, 1fr); }
+        .ftable td, .ftable th { font-size: 14px; }
+        .print-bar-x { height: 60px; max-width: 52vw; padding: 0 10px; gap: 8px; }
+        .print-bar-long { display: none; }
+        .modal-title-main { font-size: 20px !important; }
         /* Krížik na zatvorenie — 30px je na dotyk malé, na mobile väčší. */
-        .modal-close-x { width: 40px !important; height: 40px !important; font-size: 26px !important; }
+        .modal-close-x { width: 44px !important; height: 44px !important; font-size: 26px !important; }
+        /* Bočný panel zákazky = celoobrazovkový list; okraje rieši side-head/body/foot. */
+        .modal-panel.modal-side-panel { padding: 0 !important; height: 100dvh; }
+        .side-head { padding: max(10px, env(safe-area-inset-top)) 16px 0; }
+        .side-title { font-size: 22px; }
+        .side-body { padding: 0 16px 16px; }
+        .side-foot { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+        .side-foot .btn { min-height: 48px; }
+        .side-foot-btns { flex: 1 1 0; min-width: 0; }
+        .side-foot-btns .btn { flex: 1 1 100%; }
+        .side-summary { grid-template-columns: 1fr 1fr; }
+        .side-summary > div:nth-child(2) { border-right: none; }
+        .side-summary > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+        .side-dl { grid-template-columns: 1fr; }
+        .side-dl dt { border-bottom: none; padding: 10px 0 0; font-size: 13px; }
+        .side-dl dd { padding: 2px 0 10px; }
+        .side-dl select { min-width: 0; width: 100%; height: 48px; }
 
         /* Tabuľky — radšej vodorovné rolovanie vnútri panelu než rozbitie stránky.
            Zámerne LEN pre panely s tabuľkou (:has), nie pre všetky .panel —
@@ -30457,7 +30574,7 @@ function GlobalStyle() {
         }
 
         /* Väčšie, na dotyk pohodlnejšie tlačidlá */
-        .btn { padding: 7px 11px; font-size: 12px; }
+        .btn { min-height: 48px; padding: 7px 14px; font-size: 15px; }
 
         /* Formulárové polia nech nikdy nepretečú cez okraj obrazovky */
         input, select, textarea { min-width: 0 !important; max-width: 100%; font-size: 13px; }
@@ -30466,8 +30583,8 @@ function GlobalStyle() {
 
         /* Zákazky — rýchle rozbaľovacie zoznamy (po termíne/končí čoskoro/bez šoféra) */
         .quick-job-row { flex-direction: column !important; align-items: flex-start !important; gap: 6px !important; }
-        .quick-job-info { font-size: 12px !important; }
-        .quick-job-info .mono { font-size: 12px !important; }
+        .quick-job-info { font-size: 14px !important; }
+        .quick-job-info .mono { font-size: 14px !important; }
         .quick-job-btn { margin-left: 0 !important; width: 100%; }
 
         /* Gantty (Kalendár, Plán servisu) — kompaktnejšie stĺpce, menšie písmo */
@@ -30491,6 +30608,44 @@ function GlobalStyle() {
       @media (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) {
         .mobile-tech-actions { padding: 3px 6px calc(3px + env(safe-area-inset-bottom)) 6px !important; gap: 4px !important; }
         .app-main.has-mobile-tech-bar { padding-bottom: calc(64px + env(safe-area-inset-bottom)) !important; }
+      }
+
+      /* v1.0.795 — tmavý režim a mobil (len vzhľad). */
+      /* Bublina maSKota zakrývala spodné tlačidlá karty/okna — kým je okno otvorené, schová sa. */
+      body.has-open-modal .maskot-fab, body:has(.fullscreen-overlay) .maskot-fab { display: none !important; }
+      /* Pásy v pláne servisu majú biely text na farbe stavu — v tmavom režime sú tie farby svetlé, preto tu plné tmavšie. */
+      .app-shell.dark .gantt-scroll .gantt-cell { --danger: #c62f36; --info: #2b6cb0; --ok: #3d7a28; --warn: #9a5f0c; }
+      .app-shell.dark .global-search-input-wrap input { background: var(--bg) !important; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        /* Dotykové plochy min. 44 px (Gantt ostáva bez zmeny). */
+        /* Len zväčšuje (nikdy nezmenšuje väčšie terénne 48–56 px): nulová špecificita pre triedy, !important len pre malé inline hodnoty. */
+        :where(.app-shell) :where(.utab, .mnav-row, .kebab-item, summary, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]), select) { min-height: 44px; }
+        .app-shell .seg > button, .app-shell .fchip, .app-shell .tbar :is(input:not([type=checkbox]):not([type=radio]), select), .app-shell :is(.jobs-table, .frow, .tbar) .btn { min-height: 44px; }
+        :where(.app-shell) :where(.btn, .utab, button[aria-label$="mesiac"], .depo-chip-btn) { min-width: 44px; }
+        .app-shell :is(button, a, select, input, summary, [role=button]):is([style*="min-height: 2"], [style*="min-height: 3"], [style*="min-height: 40px"], [style*="min-height: 41px"], [style*="min-height: 42px"], [style*="min-height: 43px"], [style*="height: 3"], [style*="height: 40px"]):not(.gantt-scroll *) { min-height: 44px !important; }
+        .app-shell :is(button, a, [role=button]):is([style*="min-width: 2"], [style*="min-width: 3"], [style*="min-width: 40px"], [style*="min-width: 41px"], [style*="min-width: 42px"], [style*="min-width: 43px"]):not(.gantt-scroll *) { min-width: 44px !important; }
+        /* Písmo min. 13 px — drobné inline veľkosti (9–12,5 px) mimo Ganttu, spodná lišta, odznaky, päta. */
+        .app-shell :is([style*="font-size: 9px"], [style*="font-size: 9.5px"], [style*="font-size: 10px"], [style*="font-size: 10.5px"], [style*="font-size: 11px"], [style*="font-size: 11.5px"], [style*="font-size: 12px"], [style*="font-size: 12.5px"]):not(.gantt-scroll, .gantt-scroll *) { font-size: 13px !important; }
+        .app-shell :is(.badge, .count-badge, th, .mnav-t, .nav-b):not(.gantt-scroll *) { font-size: 13px; }
+        .app-shell :is(.depo-chip-short, .label-font):not(.gantt-scroll *) { font-size: max(13px, 1em); }
+        .mnav-b { font-size: 13px; line-height: 16px; }
+        .app-shell label:has(> input[type=checkbox], > input[type=radio]):not(.gantt-scroll *) { min-height: 44px; }
+        /* Čísla strojov / telefóny ako odkaz v texte — väčšia dotyková plocha bez zmeny riadkovania. */
+        .app-shell :is(button.tnum, a.tnum, a[href^="tel:"]):not(.btn):not(.gantt-scroll *) { padding-block: 14px !important; margin-block: -14px !important; }
+        /* Samostatné zaškrtávacie políčko (hromadný výber) — aspoň 24 px. */
+        .app-shell input[type=checkbox]:not(label *):not(.gantt-scroll *) { width: 24px; height: 24px; }
+        .fphoto button { width: 44px; height: 44px; top: -14px; right: -14px; }
+        /* Segmentový prepínač — jeden riadok rovnakých políčok, popis sa zalomí v políčku;
+           od 5 možností mriežka po 3 (nie osamotené „Externé“ / „Minulý mesiac“ na novom riadku). */
+        .seg { display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+        .seg > button { white-space: normal; min-width: 0; padding: 4px 6px; line-height: 1.15; }
+        .seg:has(> :nth-child(5)):not(:has(> :nth-child(7))) { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .seg:has(> :nth-child(5)):not(:has(> :nth-child(7))) > button:nth-child(n+4) { border-top: 1px solid var(--border); }
+        .seg:has(> :nth-child(5)):not(:has(> :nth-child(7))) > button:nth-child(3n+1) { border-left: 0; }
+        /* 4 voľby s dlhými slovami („Vyfakturované“) — 2×2, slovo sa nedá zalomiť. */
+        .seg.seg-2x2 { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .seg.seg-2x2 > button:nth-child(n+3) { border-top: 1px solid var(--border); }
+        .seg.seg-2x2 > button:nth-child(odd) { border-left: 0; }
       }
 
     `}</style>
