@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
@@ -29,10 +30,16 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.797";
+const APP_VERSION = "1.0.799";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.799", items: [
+    { roles: null, text: "Menu ⋯ sa otvára priamo pri tlačidle (aj na mobile a v kartách), nie hore na obrazovke." },
+  ] },
+  { v: "1.0.798", items: [
+    { roles: null, text: "Zbalené ľavé menu: po prejdení myšou na ikonku sa hneď ukáže, čo to je. Hlavičky tabuliek už neprekrývajú riadky." },
+  ] },
   { v: "1.0.797", items: [
     { roles: null, text: "Obnovenie stránky alebo zatvorenie platformy počas rozpísaného formulára (protokol, zákazka…) sa najprv opýta — fotky, podpisy ani text sa nestratia omylom." },
     { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servisu", "technik", "veduci_technik_ba"], text: "Plán servisu: kontrola checkera pred vývozom má tmavšiu fialovú, text je lepšie čitateľný." },
@@ -3306,24 +3313,50 @@ function SkeletonRows({ rows = 5, cols = 4 }) {
 // falsy položky (napr. akcia skrytá podľa práv) sa preskočia.
 function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  // Menu sa kreslí do body (portal) s pozíciou podľa tlačidla — inak ho orezal/posunul
+  // bočný panel (transform) a mobilné pravidlo pre zvonček ho pripínalo hore na obrazovku.
+  const [pos, setPos] = useState(null);
+  const toggle = () => {
+    if (open) return setOpen(false);
+    const r = btnRef.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const n = actions.filter(Boolean).length;
+    const below = vh - r.bottom, above = r.top;
+    const openUp = up ? above > 120 || above > below : below < Math.min(n * 46 + 24, 320) && above > below;
+    const p = { minWidth: Math.min(220, vw - 16), maxWidth: vw - 16, maxHeight: Math.max(160, (openUp ? above : below) - 12) };
+    if (openUp) p.bottom = vh - r.top + 4; else p.top = r.bottom + 4;
+    // zarovnať k pravej hrane tlačidla; keď by vyšlo mimo obrazovky, k ľavej
+    if (r.right - p.minWidth >= 8) p.right = Math.max(8, vw - r.right); else p.left = Math.max(8, r.left);
+    setPos(p);
+    setOpen(true);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); };
+  }, [open]);
   const items = actions.filter(Boolean);
   if (items.length === 0) return null;
   return (
     <div style={{ position: "relative", display: "inline-block" }} onClick={(e) => e.stopPropagation()}>
       <button
+        ref={btnRef}
         className={btnClass || "btn btn-ghost"}
         style={btnStyle || { fontSize: 15, padding: "4px 9px", lineHeight: 1 }}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-label={name || "Akcie"}
         aria-expanded={open}
         title={name || "Akcie"}
       >
         {label || "⋮"}
       </button>
-      {open && (
-        <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
-          <div className="panel dropdown-panel" style={{ position: "absolute", [up ? "bottom" : "top"]: "calc(100% + 4px)", [up ? "left" : "right"]: 0, minWidth: 190, zIndex: 201, padding: 6 }}>
+      {open && pos && createPortal(
+        <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+          <div style={{ position: "fixed", inset: 0, zIndex: 400 }} onClick={() => setOpen(false)} />
+          <div className="panel kebab-drop" role="menu" style={{ position: "fixed", ...pos, overflowY: "auto", zIndex: 401, padding: 6 }}>
             {items.map((a, i) =>
               a.href ? (
                 <a
@@ -3349,7 +3382,8 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
               )
             )}
           </div>
-        </>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -12853,7 +12887,7 @@ function NavList({ modules, module, view, exclude = [], collapsed, rowClass, onG
             <React.Fragment key={t.id}>
               <button
                 className={`${rowClass}${active ? " active" : ""}`}
-                title={collapsed ? t.label : undefined}
+                aria-label={t.label}
                 onClick={() => {
                   if (!t.dropdown) return onGo(m.id, t.id);
                   if (collapsed) onExpand?.();
@@ -12881,6 +12915,7 @@ function NavList({ modules, module, view, exclude = [], collapsed, rowClass, onG
 // Ľavý panel na počítači (fixed, pod hlavičkou). Zbalený = len ikony; voľba sa pamätá v prehliadači.
 function SideMenu({ modules, module, view, onGo, onPickDoc, onOpenPhoneDirectory }) {
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("mateco_menu_collapsed") === "1"; } catch { return false; } });
+  const [tip, setTip] = useState(null); // { label, y } — popisok ikony v zbalenom menu
   const setC = (v) => { setCollapsed(v); try { localStorage.setItem("mateco_menu_collapsed", v ? "1" : "0"); } catch { /* bez úložiska len na túto reláciu */ } };
   // Pozícia pod hlavičkou sa meria (hlavička sa zalamuje), panel je fixed — viď predošlý IconRail.
   const wrapRef = useRef(null);
@@ -12900,16 +12935,25 @@ function SideMenu({ modules, module, view, onGo, onPickDoc, onOpenPhoneDirectory
   }, []);
   return (
     <div className={`side-menu-wrap${collapsed ? " collapsed" : ""}`} ref={wrapRef}>
-      <nav className="side-menu" style={{ top }}>
-        <div className="side-menu-scroll">
+      {/* Zbalené menu: popisok ikony hneď pri prejdení myšou (natívny title má oneskorenie). */}
+      <nav className="side-menu" style={{ top }} onClick={() => setTip(null)} onMouseLeave={() => setTip(null)} onMouseOver={(e) => {
+        if (!collapsed) return;
+        const b = e.target.closest(".nav-it");
+        const label = b?.getAttribute("aria-label");
+        if (!label) return setTip(null);
+        const r = b.getBoundingClientRect();
+        setTip({ label, y: r.top + r.height / 2 });
+      }}>
+        <div className="side-menu-scroll" onScroll={() => setTip(null)}>
           <NavList modules={modules} module={module} view={view} collapsed={collapsed} rowClass="nav-it" onGo={onGo} onPickDoc={onPickDoc} onExpand={() => setC(false)} />
         </div>
         <div className="side-menu-foot">
-          <button className="nav-it" title="Telefónny zoznam" onClick={onOpenPhoneDirectory}><NavIcon id="telefon" />{!collapsed && <span className="nav-lbl">Telefónny zoznam</span>}</button>
-          <button className="nav-it" title="Poslať pripomienku" onClick={sendFeedbackMail}><NavIcon id="mail" />{!collapsed && <span className="nav-lbl">Poslať pripomienku</span>}</button>
-          <button className="nav-it nav-dim" title={collapsed ? "Rozbaliť menu" : "Zbaliť menu"} onClick={() => setC(!collapsed)}>{collapsed ? "»" : "« Zbaliť menu"}</button>
+          <button className="nav-it" aria-label="Telefónny zoznam" onClick={onOpenPhoneDirectory}><NavIcon id="telefon" />{!collapsed && <span className="nav-lbl">Telefónny zoznam</span>}</button>
+          <button className="nav-it" aria-label="Poslať pripomienku" onClick={sendFeedbackMail}><NavIcon id="mail" />{!collapsed && <span className="nav-lbl">Poslať pripomienku</span>}</button>
+          <button className="nav-it nav-dim" aria-label={collapsed ? "Rozbaliť menu" : "Zbaliť menu"} onClick={() => setC(!collapsed)}>{collapsed ? "»" : "« Zbaliť menu"}</button>
         </div>
       </nav>
+      {collapsed && tip && <div className="nav-tip" role="tooltip" style={{ top: tip.y }}>{tip.label}</div>}
     </div>
   );
 }
@@ -29911,6 +29955,7 @@ function GlobalStyle() {
       .nav-lbl { flex: 1; min-width: 0; }
       .nav-b { margin-left: auto; background: var(--text); color: var(--panel); border-radius: 10px; font-size: 10.5px; padding: 1px 7px; font-weight: 700; }
       .side-menu-wrap.collapsed .nav-it { justify-content: center; padding: 8px 0; }
+      .nav-tip { position: fixed; left: 62px; transform: translateY(-50%); z-index: 300; pointer-events: none; background: var(--text); color: var(--panel); font-size: 13px; font-weight: 600; line-height: 1.2; padding: 6px 10px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
       .nav-b.nav-b-problem { background: var(--accent-fill); color: #fff; }
       .side-menu-wrap.collapsed .nav-b { position: absolute; top: 0; right: 2px; font-size: 9px; padding: 0 5px; }
       .header-new-wrap { position: relative; }
@@ -29969,6 +30014,7 @@ function GlobalStyle() {
         border-radius: 5px; text-decoration: none;
       }
       .kebab-item:hover { background: var(--panel-2); }
+      .kebab-drop { box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 
       .mobile-nav-overlay { position: fixed; inset: 0; z-index: 300; display: flex; }
       .mobile-nav-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
@@ -30290,6 +30336,8 @@ function GlobalStyle() {
       /* Rovnaký prípad ako vyššie — tabuľka vo vlastnom vnútornom scrolli
          (maxHeight + overflow), nie v okne (Modal). */
       .table-scroll-inner th { top: 0; }
+      /* Tabuľka vo vlastnom rolovacom/orezanom kontajneri: sticky top sa ráta od kontajnera, nie od hlavičky stránky — inak hlavička vlezie do riadkov. */
+      [style*="overflow"] th { top: 0; }
       td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
       tr:hover td { background: var(--accent-light); }
 
@@ -30563,6 +30611,7 @@ function GlobalStyle() {
            .panel (napr. filter/search panela) siahajú POD jeho okraj —
            presne ten efekt, čo vyzeral ako "odlepený"/zmiznutý dropdown. */
         .panel:has(table) { overflow-x: auto; }
+        .panel:has(table) th { top: 0; }
         table { font-size: 11px; }
         th, td { padding: 6px 7px !important; }
         table th:first-child, table td:first-child {
