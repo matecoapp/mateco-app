@@ -30,10 +30,13 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.799";
+const APP_VERSION = "1.0.800";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.800", items: [
+    { roles: null, text: "Úvodná obrazovka „Načítavam dáta…“ sa na iPhone už neukáže bez farieb a písma." },
+  ] },
   { v: "1.0.799", items: [
     { roles: null, text: "Menu ⋯ sa otvára priamo pri tlačidle (aj na mobile a v kartách), nie hore na obrazovke." },
   ] },
@@ -29792,10 +29795,17 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
   );
 }
 
+// Písmo Barlow cez <link> v hlavičke, nie @import v <style>: Safari (iPhone) nepoužije štýly
+// z <style> s @import, kým sa externé písmo nestiahne — úvodná obrazovka bola dovtedy bez štýlov.
+if (typeof document !== "undefined" && !document.getElementById("mateco-font")) {
+  const l = document.createElement("link");
+  l.id = "mateco-font"; l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap";
+  document.head.appendChild(l);
+}
 function GlobalStyle() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
       *, *::before, *::after { box-sizing: border-box; }
       :root {
         --bg: #f0f0f0;
