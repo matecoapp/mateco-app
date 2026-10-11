@@ -30,7 +30,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.800";
+const APP_VERSION = "1.0.801";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
@@ -45,7 +45,7 @@ const CHANGELOG = [
   ] },
   { v: "1.0.797", items: [
     { roles: null, text: "Obnovenie stránky alebo zatvorenie platformy počas rozpísaného formulára (protokol, zákazka…) sa najprv opýta — fotky, podpisy ani text sa nestratia omylom." },
-    { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servisu", "technik", "veduci_technik_ba"], text: "Plán servisu: kontrola checkera pred vývozom má tmavšiu fialovú, text je lepšie čitateľný." },
+    { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servis", "technik", "veduci_technik_ba"], text: "Plán servisu: kontrola checkera pred vývozom má tmavšiu fialovú, text je lepšie čitateľný." },
   ] },
   { v: "1.0.796", items: [
     { roles: null, text: "Opravy: Prepravy na mobile – rýchly prehľad sa dá posunúť do strany (aj tlačidlo Odoslať), karta zákazky sa po zmene priamo na nej zavrie klikom mimo, obnova zamestnanca z Koša vždy ponúkne vrátiť účtu rolu, „Čo je nové“ sa na zdieľanom zariadení ukáže každému používateľovi. Na mobile kompaktnejšia lišta detailu poškodenia, prepínač stavu externých zákaziek bez orezania a pole pri písaní už nezakrýva spodná lišta. Pri vypnutých animáciách v systéme sa platforma nehýbe." },
@@ -30824,56 +30824,56 @@ function LiftLoader({ label }) {
       <svg width="210" height="280" viewBox="0 0 420 560">
         <ellipse cx="210" cy="532" rx="140" ry="12" fill="#000" opacity="0.08" />
         <g style={scissorStyle}>
-          <line x1="115" y1="480" x2="305" y2="381" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="480" x2="115" y2="381" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="381" x2="305" y2="282" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="381" x2="115" y2="282" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="282" x2="305" y2="183" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="282" x2="115" y2="183" stroke="var(--accent)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="183" x2="305" y2="84" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="183" x2="115" y2="84" stroke="var(--accent-dark)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="480" x2="305" y2="381" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="480" x2="115" y2="381" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="381" x2="305" y2="282" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="381" x2="115" y2="282" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="282" x2="305" y2="183" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="282" x2="115" y2="183" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="115" y1="183" x2="305" y2="84" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
+          <line x1="305" y1="183" x2="115" y2="84" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
         </g>
-        <rect x="90" y="472" width="240" height="52" rx="6" fill="var(--text)" />
+        <rect x="90" y="472" width="240" height="52" rx="6" fill="var(--text, #1a1a1a)" />
         <rect x="266" y="462" width="34" height="26" rx="2" fill="#2b2b2b" />
-        <circle cx="283" cy="475" r="4" fill="var(--accent)" />
-        <circle cx="150" cy="526" r="22" fill="var(--text)" />
+        <circle cx="283" cy="475" r="4" fill="var(--accent, #E30613)" />
+        <circle cx="150" cy="526" r="22" fill="var(--text, #1a1a1a)" />
         <circle cx="150" cy="526" r="9" fill="#666" />
-        <circle cx="270" cy="526" r="22" fill="var(--text)" />
+        <circle cx="270" cy="526" r="22" fill="var(--text, #1a1a1a)" />
         <circle cx="270" cy="526" r="9" fill="#666" />
         <g style={{ transform: risen ? "translateY(0px)" : "translateY(369.6px)", transition: rise }}>
-          <rect x="90" y="56" width="240" height="28" rx="4" fill="var(--text)" />
-          <rect x="90" y="10" width="8" height="50" fill="var(--text)" />
-          <rect x="322" y="10" width="8" height="50" fill="var(--text)" />
-          <rect x="90" y="10" width="240" height="8" fill="var(--accent)" />
-          <rect x="90" y="34" width="240" height="5" fill="var(--accent)" />
-          <rect x="170" y="10" width="8" height="50" fill="var(--text)" />
-          <rect x="242" y="10" width="8" height="50" fill="var(--text)" />
+          <rect x="90" y="56" width="240" height="28" rx="4" fill="var(--text, #1a1a1a)" />
+          <rect x="90" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
+          <rect x="322" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
+          <rect x="90" y="10" width="240" height="8" fill="var(--accent, #E30613)" />
+          <rect x="90" y="34" width="240" height="5" fill="var(--accent, #E30613)" />
+          <rect x="170" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
+          <rect x="242" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
         </g>
         {/* Obsluha stroja — malý pozdrav pri načítavaní appky, stojí bokom a
             kýva jednou rukou (nezávisle od zdvihu, len sa tu spolu s ním
             zjaví). */}
         <g>
-          <line x1="350" y1="504" x2="344" y2="552" stroke="var(--text)" strokeWidth="9" strokeLinecap="round" />
-          <line x1="363" y1="504" x2="372" y2="552" stroke="var(--text)" strokeWidth="9" strokeLinecap="round" />
-          <line x1="344" y1="462" x2="331" y2="491" stroke="var(--text)" strokeWidth="9" strokeLinecap="round" />
-          <rect x="342" y="458" width="29" height="48" rx="8" fill="var(--text)" />
-          <rect x="340" y="494" width="32" height="8" fill="var(--accent)" />
-          <line x1="345" y1="459" x2="371" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
-          <line x1="371" y1="459" x2="345" y2="502" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
-          <circle cx="356" cy="440" r="19" fill="var(--text)" />
-          <path d="M331 437 A 26 27 0 0 1 382 437 Z" fill="var(--accent)" />
+          <line x1="350" y1="504" x2="344" y2="552" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
+          <line x1="363" y1="504" x2="372" y2="552" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
+          <line x1="344" y1="462" x2="331" y2="491" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
+          <rect x="342" y="458" width="29" height="48" rx="8" fill="var(--text, #1a1a1a)" />
+          <rect x="340" y="494" width="32" height="8" fill="var(--accent, #E30613)" />
+          <line x1="345" y1="459" x2="371" y2="502" stroke="var(--accent, #E30613)" strokeWidth="5" strokeLinecap="round" />
+          <line x1="371" y1="459" x2="345" y2="502" stroke="var(--accent, #E30613)" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="356" cy="440" r="19" fill="var(--text, #1a1a1a)" />
+          <path d="M331 437 A 26 27 0 0 1 382 437 Z" fill="var(--accent, #E30613)" />
           {/* Ruka (mascot-wave-arm) je posunutá o 16px doľava oproti pôvodnej
               polohe — pri kývaní ±16° sa špička ruky vychyľuje až ~44px od
               ramena, a pri pôvodnej polohe (pivot pri x=387) to pri výkyve
               vpravo prestrelilo cez pravý okraj viewBoxu (0 0 420 560) a
               appka ruku odrezala. Tu už má rezervu. */}
           <g className="mascot-wave-arm">
-            <line x1="371" y1="462" x2="400" y2="424" stroke="var(--text)" strokeWidth="9" strokeLinecap="round" />
-            <circle cx="400" cy="424" r="6" fill="var(--text)" />
+            <line x1="371" y1="462" x2="400" y2="424" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
+            <circle cx="400" cy="424" r="6" fill="var(--text, #1a1a1a)" />
           </g>
         </g>
       </svg>
-      {label && <div className="label-font" style={{ color: "var(--text-dim)", fontSize: 13 }}>{label}</div>}
+      {label && <div className="label-font" style={{ color: "var(--text-dim, #5A5A5A)", fontSize: 13, fontFamily: "'Barlow', system-ui, -apple-system, sans-serif" }}>{label}</div>}
     </div>
   );
 }
