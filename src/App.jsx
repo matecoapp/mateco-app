@@ -30,10 +30,28 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.801";
+const APP_VERSION = "1.0.805";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.805", items: [
+    { roles: null, text: "Formuláre: kým neskúsite uložiť, dole je len sivé „Ešte treba: …“ — žlté „Chýba“ a zvýraznenie polí až po kliknutí na uloženie. Tlačidlá majú jednotné čiarové ikony a pri ovládaní klávesnicou je vidieť, kde ste." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Protokol a kontrola stroja: bod a V poriadku/Problém v jednom riadku, dole priebeh (Checklist 14/14 · Fotky…). Uložiť sa dá stlačiť vždy — pri neúplnom formulári nič neuloží, len posunie na to, čo chýba. Šofér má na Dnes pod hlavnou úlohou aj „Ďalej dnes“." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Zákazky: kliknutím na riadok sa otvorí karta, obdobie bez dvojitého roku, filtre stavu ako čipy so ✓. Prepravy: dátum len raz, prehľad šoférov s výraznejšími počtami. Karta zákazky: šoféri a dispečer v sekcii „Upraviť priamo“." },
+    { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servis"], text: "Poškodenia: filtre stavu ako čipy so ✓. Plán servisu: výber technika v jednom riadku s depami. Dlaždice na Dnes majú šípku — dajú sa otvoriť." },
+  ] },
+  { v: "1.0.804", items: [
+    { roles: null, text: "Ovládanie klávesnicou: Tab v otvorenom okne prechádza len po jeho políčkach a tlačidlách, neodchádza na stránku pod oknom." },
+  ] },
+  { v: "1.0.803", items: [
+    { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servis", "technik", "veduci_technik_ba"], text: "Plán servisu: kontrola po vrátení má tmavšiu tyrkysovú a hotové kontroly sú menej zosvetlené — text je lepšie čitateľný. Poškodenia: krok sa všade volá „Ukončiť zákazku“ (po ukončení „Upraviť stav zákazky“)." },
+  ] },
+  { v: "1.0.802", items: [
+    { roles: null, text: "Menu ⋯ má v tmavom režime tmavé farby, na mobile väčšie položky a už nepresahuje okraj obrazovky. Dá sa ovládať aj klávesnicou (šípky, Esc zavrie len menu)." },
+    { roles: ["technik", "veduci_technik_ba", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol: obnovenie alebo zatvorenie stránky sa najprv opýta — rozpísané údaje sa nestratia omylom." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Nová zákazka: pri zákazníkovi podobnom už existujúcemu (napr. „sro“ vs „s.r.o.“) sa ukáže upozornenie a tlačidlo „Použiť ho“." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Po návrate signálu už pri protokole s fotkami nechodí falošná hláška, že údaje medzitým zmenil niekto iný." },
+  ] },
   { v: "1.0.800", items: [
     { roles: null, text: "Úvodná obrazovka „Načítavam dáta…“ sa na iPhone už neukáže bez farieb a písma." },
   ] },
@@ -478,9 +496,9 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
 <html lang="sk"><head><meta charset="UTF-8">
 <meta name="mateco-bar" content="Protokol o odovzdaní a prevzatí stroja · ${esc(machine?.code || "")}">
 <title>Protokol ${esc(p.protocolNumber)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap">
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
   .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
   .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
   .btn-accent { background: #E30613; color: #fff; }
@@ -694,6 +712,7 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Servisný protokol ${esc(p.machineSerial)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap">
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
@@ -756,7 +775,6 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
      zvyšok appky (Barlow, .btn/.btn-accent/.btn-ghost, .panel, .modal-overlay),
      nie generický webový vzhľad. Samotná stránka protokolu nižšie ostáva podľa
      schváleného návrhu (Arial, firemná hlavička/pätka) — mení sa len appkové UI okolo nej. */
-  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
   .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
   .btn { padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
   .btn-accent { background: #E30613; color: #fff; }
@@ -1402,6 +1420,15 @@ const fmtDate = (iso) => {
   if (iso.length > 10 && iso.includes("T")) iso = toLocalISO(new Date(iso));
   const [y, m, d] = iso.split("T")[0].split("-");
   return `${d}.${m}.${y}`;
+};
+// Obdobie bez dvojitého roku (v1.0.805): „13.–19. 10.“, „28. 9.–3. 10.“; rok iný než aktuálny sa dopíše, rôzne roky = plný tvar.
+const fmtRange = (a, b) => {
+  const [ya, ma, da] = a.slice(0, 10).split("-").map(Number);
+  const [yb, mb, db] = b.slice(0, 10).split("-").map(Number);
+  if (ya !== yb) return `${fmtDate(a)} – ${fmtDate(b)}`;
+  const y = ya !== new Date().getFullYear() ? ` ${ya}` : "";
+  if (a.slice(0, 10) === b.slice(0, 10)) return `${da}. ${ma}.${y}`;
+  return ma === mb ? `${da}.–${db}. ${mb}.${y}` : `${da}. ${ma}.–${db}. ${mb}.${y}`;
 };
 const daysBetween = (a, b) => {
   const d1 = new Date(a + "T00:00:00");
@@ -3007,7 +3034,7 @@ function SearchInput({ value, onChange, placeholder, style }) {
         title="Hľadať"
         style={{ display: "none", background: "var(--panel-2)", border: "1px solid var(--border)", color: "var(--text-dim)", cursor: "pointer" }}
       >
-        🔍
+        <NavIcon id="hladat" />
       </button>
       <div className="list-search-input-wrap" style={{ position: "relative" }}>
         <input
@@ -3320,8 +3347,11 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
   // Menu sa kreslí do body (portal) s pozíciou podľa tlačidla — inak ho orezal/posunul
   // bočný panel (transform) a mobilné pravidlo pre zvonček ho pripínalo hore na obrazovku.
   const [pos, setPos] = useState(null);
-  const toggle = () => {
+  const dropRef = useRef(null);
+  const kbOpen = useRef(false); // otvorené klávesnicou (Enter/Space) → focus na prvú položku
+  const toggle = (e) => {
     if (open) return setOpen(false);
+    kbOpen.current = e?.detail === 0;
     const r = btnRef.current.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
     const n = actions.filter(Boolean).length;
@@ -3330,16 +3360,35 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
     const p = { minWidth: Math.min(220, vw - 16), maxWidth: vw - 16, maxHeight: Math.max(160, (openUp ? above : below) - 12) };
     if (openUp) p.bottom = vh - r.top + 4; else p.top = r.bottom + 4;
     // zarovnať k pravej hrane tlačidla; keď by vyšlo mimo obrazovky, k ľavej
-    if (r.right - p.minWidth >= 8) p.right = Math.max(8, vw - r.right); else p.left = Math.max(8, r.left);
+    if (r.right - p.minWidth >= 8) p.right = Math.max(8, vw - r.right); else p.left = Math.max(8, Math.min(r.left, vw - 8 - p.minWidth));
     setPos(p);
     setOpen(true);
   };
+  // Menu širšie ako minWidth (dlhé položky) — po vykreslení dorovnať, aby nevyšlo mimo obrazovky ani vľavo, ani vpravo.
+  useLayoutEffect(() => {
+    const d = open && dropRef.current?.getBoundingClientRect();
+    const vw = window.innerWidth;
+    if (d && (d.left < 8 || d.right > vw - 8)) setPos((p) => ({ ...p, right: undefined, left: Math.max(8, Math.min(d.left, vw - 8 - d.width)) }));
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
     window.addEventListener("resize", close);
     window.addEventListener("scroll", close, true);
-    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); };
+    // Klávesnica: Esc zavrie len menu (capture + stop — inak by Modal zavrel celú kartu), ↑/↓ položky, Tab zavrie.
+    const onKey = (e) => {
+      const its = Array.from(dropRef.current?.querySelectorAll(".kebab-item") || []);
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); setOpen(false); btnRef.current?.focus(); }
+      else if (e.key === "Tab") { if (dropRef.current?.contains(document.activeElement)) btnRef.current?.focus(); setOpen(false); }
+      else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && its.length) {
+        e.preventDefault();
+        const i = its.indexOf(document.activeElement);
+        its[(i + (e.key === "ArrowDown" ? 1 : i < 0 ? 0 : -1) + its.length) % its.length].focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    if (kbOpen.current) dropRef.current?.querySelector(".kebab-item")?.focus();
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); document.removeEventListener("keydown", onKey, true); };
   }, [open]);
   const items = actions.filter(Boolean);
   if (items.length === 0) return null;
@@ -3359,7 +3408,7 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
       {open && pos && createPortal(
         <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div style={{ position: "fixed", inset: 0, zIndex: 400 }} onClick={() => setOpen(false)} />
-          <div className="panel kebab-drop" role="menu" style={{ position: "fixed", ...pos, overflowY: "auto", zIndex: 401, padding: 6 }}>
+          <div ref={dropRef} className="panel kebab-drop" role="menu" style={{ position: "fixed", ...pos, overflowY: "auto", zIndex: 401, padding: 6 }}>
             {items.map((a, i) =>
               a.href ? (
                 <a
@@ -3368,6 +3417,7 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="kebab-item"
+                  role="menuitem"
                   style={{ color: a.danger ? "var(--danger)" : "var(--text)" }}
                   onClick={() => setOpen(false)}
                 >
@@ -3377,6 +3427,7 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
                 <button
                   key={i}
                   className="kebab-item"
+                  role="menuitem"
                   style={{ color: a.danger ? "var(--danger)" : "var(--text)" }}
                   onClick={() => { setOpen(false); a.onClick(); }}
                 >
@@ -3386,7 +3437,8 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
             )}
           </div>
         </div>,
-        document.body
+        // do .app-shell (bez transform/overflow) — inak neplatí tmavý režim ani mobilné 44 px pre .kebab-item
+        document.querySelector(".app-shell") || document.body
       )}
     </div>
   );
@@ -3445,6 +3497,17 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
     function onKeyDown(e) {
       if (_modalStack[_modalStack.length - 1] !== tokenRef.current) return;
       if (e.key === "Escape") { if (confirmDiscard()) onClose(); return; }
+      // Tab krúži len po prvkoch otvoreného okna (inak kurzor odišiel na stránku pod oknom).
+      if (e.key === "Tab" && panelRef.current) {
+        const els = [...panelRef.current.querySelectorAll('a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')]
+          .filter((el) => !el.disabled && el.getClientRects().length > 0 && el.type !== "hidden");
+        if (els.length === 0) return;
+        const first = els[0], last = els[els.length - 1];
+        const inside = panelRef.current.contains(document.activeElement);
+        if (!inside || (e.shiftKey && document.activeElement === first)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey && !e.defaultPrevented && e.target.tagName === "INPUT") {
         const skipTypes = ["checkbox", "radio", "file", "button", "submit", "reset", "range", "color"];
         if (skipTypes.includes(e.target.type)) return;
@@ -3825,17 +3888,39 @@ const closeOwnModal = (e) => e.currentTarget.closest(".modal-panel")?.querySelec
 // Spoločná spodná lišta formulára/potvrdenia (v1.0.794): vľavo `left` a čo chýba,
 // vpravo Zrušiť + jedno hlavné tlačidlo (children). confirm = potvrdzovacie okno
 // (na mobile ostáva Zrušiť vedľa akcie, vo formulári ho nahrádza × v hlavičke).
-function FormFoot({ missing, left, cancel = true, confirm, children }) {
+function FormFoot({ missing, progress, left, cancel = true, confirm, children }) {
+  const [tried, onTry] = useSaveTry();
+  const has = missing?.length > 0;
   return (
-    <div className={`job-form-foot${confirm ? " ff-confirm" : ""}`}>
+    <div className={`job-form-foot${confirm ? " ff-confirm" : ""}${tried && has ? " ff-tried" : ""}`}>
       {left}
-      {missing?.length > 0 && <span className="miss-pill">Chýba: {missing.join(", ")}</span>}
-      <div className="ff-btns">
+      <MissPill missing={missing} tried={tried} progress={progress} />
+      <div className="ff-btns" onClick={has ? onTry : undefined}>
         {cancel && <button type="button" className="btn btn-outline ff-cancel" onClick={closeOwnModal}>Zrušiť</button>}
         {children}
       </div>
     </div>
   );
+}
+// v1.0.805: „Chýba“ až po pokuse o uloženie. Pokus = klik na neaktívne hlavné tlačidlo (CSS ho prepustí
+// na rodiča .ff-btns) alebo na tlačidlo s data-incomplete (vždy aktívne Uložiť pri neúplnom formulári).
+// Posunie na prvé pole označené data-miss a zvýrazní ho; nič neukladá.
+function useSaveTry() {
+  const [tried, setTried] = useState(false);
+  const onTry = (e) => {
+    if (e.target !== e.currentTarget && !e.target.closest("[data-incomplete]")) return;
+    setTried(true);
+    const t = e.currentTarget.closest(".modal-panel")?.querySelector("[data-miss]");
+    if (!t) return;
+    t.scrollIntoView({ behavior: "smooth", block: "center" });
+    (t.matches("input, select, textarea, button") ? t : t.querySelector("input:not([type=hidden]):not([type=file]):not(:disabled), select, textarea, button:not(:disabled)"))?.focus({ preventScroll: true });
+  };
+  return [tried, onTry];
+}
+function MissPill({ missing, tried, progress }) {
+  if (tried && missing?.length) return <span className="miss-pill" role="status">Chýba: {missing.join(", ")}</span>;
+  if (progress) return <span className="miss-pill miss-soft tnum">{progress}</span>;
+  return missing?.length > 0 ? <span className="miss-pill miss-soft">Ešte treba: {missing.join(", ")}</span> : null;
 }
 // Očíslovaný nadpis kroku dlhého formulára (protokol, kontrola, meranie, import).
 function FormStep({ n, title, right }) {
@@ -6726,7 +6811,10 @@ function DispatcherApp() {
           // „už existuje“ z predošlého pokusu = hotovo.
           await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
           const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
-          _uploadedPhotoUrls.set(item.oldValue, pub.publicUrl);
+          // Rovnaká fotka viackrát (rovnaká dátová URL) → všade ten istý odkaz; inak by neskorší zápis menil
+          // odkaz na odkaz (DB: „fotky už nemožno meniť“) a fronta to hlásila ako cudziu zmenu (handoverPhotos).
+          if (!_uploadedPhotoUrls.has(item.oldValue)) _uploadedPhotoUrls.set(item.oldValue, pub.publicUrl);
+          const url = _uploadedPhotoUrls.get(item.oldValue);
           const TARGETS = {
             assignments: [assignmentsRef, persistAssignments],
             handoverProtocols: [handoverProtocolsRef, persistHandoverProtocols],
@@ -6739,7 +6827,7 @@ function DispatcherApp() {
           // jeho stará kópia prepísala odkaz späť na base64.
           if (await idbGet("outbox", `${item.table}:${item.recordId}`)) continue;
           const has = (v) => (Array.isArray(v) ? v.includes(item.oldValue) : v === item.oldValue);
-          const swap = (v) => (Array.isArray(v) ? v.map((x) => (x === item.oldValue ? pub.publicUrl : x)) : v === item.oldValue ? pub.publicUrl : v);
+          const swap = (v) => (Array.isArray(v) ? v.map((x) => (x === item.oldValue ? url : x)) : v === item.oldValue ? url : v);
           const rec = ref.current.find((r) => r.id === item.recordId);
           if (has(rec?.[item.field])) {
             persist((list) => list.map((r) => (r.id === item.recordId ? { ...r, [item.field]: swap(r[item.field]) } : r)));
@@ -9884,7 +9972,8 @@ function DispatcherApp() {
               <button type="button" role="tab" aria-selected={planMode === "gantt"} className={`utab${planMode === "gantt" ? " active" : ""}`} onClick={() => setPlanMode("gantt")}>Kalendár</button>
               <button type="button" role="tab" aria-selected={planMode === "zoznam"} className={`utab${planMode === "zoznam" ? " active" : ""}`} onClick={() => setPlanMode("zoznam")}>Prehľad najbližších 5 dní</button>
             </div>
-            <div className="quick-filters" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            {/* v1.0.805: v kalendári je výber technika v jednom riadku s depami (lišta TechnicianPlanner). */}
+            {(() => { const techFilters = (<>
               <select
                 value={planTechnicianFilter}
                 onChange={(e) => setPlanTechnicianFilter(e.target.value)}
@@ -9905,9 +9994,10 @@ function DispatcherApp() {
                   Zobraziť archivovaných
                 </label>
               )}
-            </div>
-            {planMode === "gantt" ? (
+            </>);
+            return planMode === "gantt" ? (
               <TechnicianPlanner
+                extraFilters={techFilters}
                 technicians={technicians}
                 assignments={assignments}
                 machines={enrichedMachines}
@@ -9933,7 +10023,8 @@ function DispatcherApp() {
                 plannerTargetDate={plannerTargetDate}
                 onPlannerTargetDateConsumed={() => setPlannerTargetDate(null)}
               />
-            ) : (
+            ) : (<>
+              <div className="quick-filters" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>{techFilters}</div>
               <TechniciansOverview
                 technicians={technicians}
                 assignments={assignments}
@@ -9952,7 +10043,7 @@ function DispatcherApp() {
                 user={effectiveUser}
                 hasServiceProtocol={hasServiceProtocol}
               />
-            )}
+            </>); })()}
           </div>
         )}
 
@@ -12063,8 +12154,9 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
           position: "relative",
         }}
         title="Upozornenia"
+        aria-label={unreadCount > 0 ? `Upozornenia (${unreadCount} neprečítané)` : "Upozornenia"}
       >
-        🔔
+        <NavIcon id="zvoncek" />
         {unreadCount > 0 && (
           <span
             style={{
@@ -12677,7 +12769,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         aria-label="Hľadať"
         style={{ display: "none", background: "rgba(0,0,0,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
       >
-        🔍
+        <NavIcon id="hladat" />
       </button>
       <div className="global-search-input-wrap" style={{ position: "relative", width: "100%" }}>
         <input
@@ -12858,10 +12950,20 @@ const NAV_ICON_PATHS = {
   mail: "M3 5h18v14H3z M3 6l9 7 9-7",
   viac: "M4 6h16 M4 12h16 M4 18h16",
   plus: "M12 5v14 M5 12h14",
+  // v1.0.805: ikony tlačidiel namiesto emoji (šofér, technik, protokoly, hlavička)
+  protokol: "M9 3h6v3H9z M7 4.5H5V21h14V4.5h-2 M9 11h6 M9 15h4",
+  navigovat: "M3 11 21 3l-8 18-2-8z",
+  problem: "M12 3 2 20h20z M12 10v4 M12 17v.5",
+  kamera: "M3 8h4l2-3h6l2 3h4v12H3z M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7",
+  galeria: "M3 4h18v16H3z M3 16l5-5 4 4 3-3 6 6 M15.5 9a1.5 1.5 0 1 0 0-.1",
+  podpis: "M3 21h18 M5 17 16 6l3 3L8 20H5z",
+  hladat: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14 M16 16l5 5",
+  zvoncek: "M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z M10 21h4",
+  oko: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
 };
 function NavIcon({ id, size = 18 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d={NAV_ICON_PATHS[id] || "M8 12h8"} />
     </svg>
   );
@@ -12936,17 +13038,19 @@ function SideMenu({ modules, module, view, onGo, onPickDoc, onOpenPhoneDirectory
     if (shell) Array.from(shell.children).forEach((c) => { if (!c.contains(wrapRef.current)) ro.observe(c); });
     return () => { window.removeEventListener("resize", measure); mo.disconnect(); ro.disconnect(); };
   }, []);
+  // aj pri prechode klávesnicou (Tab) — focus/blur
+  const showTip = (e) => {
+    if (!collapsed) return;
+    const b = e.target.closest(".nav-it");
+    const label = b?.getAttribute("aria-label");
+    if (!label) return setTip(null);
+    const r = b.getBoundingClientRect();
+    setTip({ label, y: r.top + r.height / 2 });
+  };
   return (
     <div className={`side-menu-wrap${collapsed ? " collapsed" : ""}`} ref={wrapRef}>
       {/* Zbalené menu: popisok ikony hneď pri prejdení myšou (natívny title má oneskorenie). */}
-      <nav className="side-menu" style={{ top }} onClick={() => setTip(null)} onMouseLeave={() => setTip(null)} onMouseOver={(e) => {
-        if (!collapsed) return;
-        const b = e.target.closest(".nav-it");
-        const label = b?.getAttribute("aria-label");
-        if (!label) return setTip(null);
-        const r = b.getBoundingClientRect();
-        setTip({ label, y: r.top + r.height / 2 });
-      }}>
+      <nav className="side-menu" style={{ top }} onClick={() => setTip(null)} onMouseLeave={() => setTip(null)} onBlurCapture={() => setTip(null)} onMouseOver={showTip} onFocusCapture={showTip}>
         <div className="side-menu-scroll" onScroll={() => setTip(null)}>
           <NavList modules={modules} module={module} view={view} collapsed={collapsed} rowClass="nav-it" onGo={onGo} onPickDoc={onPickDoc} onExpand={() => setC(false)} />
         </div>
@@ -13311,6 +13415,12 @@ function ProtocolModal({ html, params, onClose }) {
     const t = setTimeout(() => setShowBadge(false), 2800);
     return () => clearTimeout(t);
   }, []);
+  // F5 / zatvorenie stránky pri otvorenom protokole — prehliadač sa opýta (ako Modal), rozpísané údaje v iframe by sa stratili.
+  useEffect(() => {
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
   return (
     <div className="protocol-overlay" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, overflow: "hidden" }}>
       {/* Obal iframe začína AŽ pod stavovým riadkom telefónu (nie súčasť
@@ -13477,7 +13587,7 @@ function Dashboard({
       </div>
 
       <div className="tbar">
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
         <FilterPopover activeCount={activeFilterCount} onClear={clearFilters}>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Stav</div>
@@ -13729,11 +13839,11 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
-        <div className="seg" role="group" aria-label="Stav zákazky">
+        <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div className="fchips" role="group" aria-label="Stav zákazky">
           {filterButtons.map((f) => (
-            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
-              {f.label}<span className="seg-n">{bucketCount(f.id)}</span>
+            <button key={f.id} type="button" className={`fchip${activeFilters.has(f.id) ? " on" : ""}`} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {activeFilters.has(f.id) && "✓ "}{f.label}<span className="seg-n">{bucketCount(f.id)}</span>
             </button>
           ))}
         </div>
@@ -13779,7 +13889,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
                 const st = effectiveStatus(j, today);
                 const m = machineById[j.machineId];
                 return (
-                  <tr key={j.id} className={st === "overdue" ? "row-problem" : ""} style={{ cursor: onOpenJob ? "pointer" : "default" }} onClick={() => onOpenJob && onOpenJob(j)}>
+                  <tr key={j.id} className={`${st === "overdue" ? "row-problem" : ""}${onOpenJob ? " row-click" : ""}`} style={{ cursor: onOpenJob ? "pointer" : "default" }} onClick={() => onOpenJob && onOpenJob(j)}>
                     <td className="td-plain">
                       <strong className="tnum">{m?.code || "?"}</strong>
                       <div className="cell-sub">{[j.machineDisplayName || m?.type, j.fromDepo].filter(Boolean).join(" · ")}</div>
@@ -13790,7 +13900,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
                       {j.notes && <div className="cell-sub">Pozn.: {j.notes}</div>}
                     </td>
                     <td data-label="Obdobie" className="tnum" style={{ whiteSpace: "nowrap" }}>
-                      {fmtDate(j.startDate)} – {j.endDate ? fmtDate(j.endDate) : "bez určeného konca"}
+                      {j.startDate && j.endDate ? fmtRange(j.startDate, j.endDate) : `${fmtDate(j.startDate)} – bez určeného konca`}
                     </td>
                     <td data-label="Šofér">{j.selfPickup ? "Vlastná doprava" : driverById[j.driverId]?.name || <span style={{ color: "var(--text-dim)" }}>— neurčený —</span>}</td>
                     <td data-label="Stav">
@@ -13800,7 +13910,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
                       </span>
                     </td>
                     <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                      {onOpenJob && <button type="button" className="btn btn-outline" onClick={() => onOpenJob(j)}>Otvoriť</button>}{" "}
+                      {onOpenJob && <button type="button" className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => onOpenJob(j)}>Otvoriť</button>}{" "}
                       <KebabMenu label="⋯" actions={[
                         can(user, "job_edit") && { label: "Upraviť", onClick: () => onEdit(j) },
                         st !== "completed" && can(user, "job_complete") && { label: "Ukončiť", onClick: () => onComplete(j) },
@@ -14002,7 +14112,10 @@ function DriverTransportsList({ dnes, items, machineById, handoverProtocols, onO
       <div>
         {transportNotesPanel}
         {first ? card(first, true) : <div style={{ fontSize: 16, color: "var(--text-dim)", margin: "4px 0 14px" }}>Na dnes žiadne prepravy.</div>}
-        {restNow.length > 0 && <><div className="today-sec">Ďalej dnes · {restNow.length}</div>{restNow.map(row)}</>}
+        {/* Rovnako ako u technika: pod hlavnou kartou vždy „Ďalej dnes“ (v1.0.805). */}
+        {first && <div className="today-sec">Ďalej dnes · {restNow.length}</div>}
+        {restNow.map(row)}
+        {first && restNow.length === 0 && <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 10 }}>Na dnes nič ďalšie.</div>}
         {later.length > 0 && <><div className="today-sec">Zajtra a neskôr · {later.length}</div>{later.map(row)}</>}
       </div>
     );
@@ -14074,13 +14187,16 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
   // platformy) — šofér vyplní rovno protokol o vrátení.
   const clickable = true;
   // Pred dňom prepravy sa protokol ešte vyplniť nedá — karta otvorí len náhľad.
-  const statusLabel = preview && (isVyvoz ? !hp : !hp?.returnDone)
-    ? `👁 Náhľad — protokol od ${fmtDate(t.date)}`
+  const isPreview = preview && (isVyvoz ? !hp : !hp?.returnDone);
+  const statusText = isPreview
+    ? `Náhľad — protokol od ${fmtDate(t.date)}`
     : isVyvoz
     ? !hp
-      ? "📋 Vyplniť protokol"
+      ? "Vyplniť protokol"
       : "✓ Hotovo — zobraziť protokol"
-    : "📋 Dokončiť vrátenie";
+    : "Dokončiť vrátenie";
+  const statusIcon = isPreview ? "oko" : isVyvoz && hp ? null : "protokol";
+  const statusLabel = <>{statusIcon && <NavIcon id={statusIcon} size={20} />}{statusText}</>;
   const statusColor = isVyvoz && hp ? "var(--ok)" : "var(--accent)";
   const open = () => { if (highlighted) onDismissHighlight?.(); onOpenJob && onOpenJob(t.jobId, t.type); };
   if (hero) {
@@ -14091,12 +14207,12 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
         <div className="today-hero-sub">{t.customer && <>{t.customer}<br /></>}{t.from} → {t.to}</div>
         {t.issue && <div style={{ fontSize: 14, color: "var(--danger-text)", fontWeight: 600, whiteSpace: "pre-line" }}>🚨 {t.issue}</div>}
         <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : "btn-accent"} today-main`} onClick={open}>{statusLabel}</button>
-        {t.site && <a className="btn btn-ghost today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer">🧭 Navigovať</a>}
+        {t.site && <a className="btn btn-ghost today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer"><NavIcon id="navigovat" size={20} /> Navigovať</a>}
         {(t.customerPhone || t.dispatcher?.phone || onReportIssue) && (
           <div className="today-hero-more">
             {t.customerPhone && <a className="btn btn-ghost" href={`tel:${t.customerPhone}`}><PhoneIcon size={16} /> Zavolať</a>}
             {t.dispatcher?.phone && <a className="btn btn-ghost" href={`tel:${t.dispatcher.phone}`} title={`Dispečer zákazky: ${t.dispatcher.name}`}><PhoneIcon size={16} /> Dispečer</a>}
-            {onReportIssue && <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onReportIssue(t.jobId)}>🚨 Problém</button>}
+            {onReportIssue && <button type="button" className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => onReportIssue(t.jobId)}><NavIcon id="problem" /> Problém</button>}
           </div>
         )}
       </section>
@@ -14146,17 +14262,17 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
           </a>
         )}
         {t.site && (
-          <a className="btn btn-ghost" style={{ minHeight: 40, display: "inline-flex", alignItems: "center" }} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer">
-            🧭 Navigovať
+          <a className="btn btn-ghost" style={{ minHeight: 40, display: "inline-flex", alignItems: "center", gap: 6 }} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer">
+            <NavIcon id="navigovat" size={16} /> Navigovať
           </a>
         )}
         {onReportIssue && (
-          <button type="button" className="btn btn-ghost" style={{ minHeight: 40, color: "var(--danger)" }} onClick={() => onReportIssue(t.jobId)}>
-            🚨 Problém
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 40, color: "var(--danger)", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => onReportIssue(t.jobId)}>
+            <NavIcon id="problem" size={16} /> Problém
           </button>
         )}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: statusColor }}>{statusLabel}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: statusColor, display: "flex", alignItems: "center", gap: 6 }}>{statusLabel}</div>
     </div>
   );
 }
@@ -14188,6 +14304,7 @@ function TransportDateInput({ date, onSave, title, check }) {
       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
       style={{ fontSize: 11, padding: "3px 5px", width: 130 }}
       title={title}
+      aria-label={title}
     />
   );
 }
@@ -14474,7 +14591,8 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           <strong className="tnum">{machine?.code || "—"}</strong>{t.customer ? ` · ${t.customer}` : ""}
           <span className="cell-sub" style={{ display: "block" }}>{t.from} → {t.to}</span>
           <span className="cell-sub" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span className="tnum" style={{ color: t.overdue ? "var(--danger-text)" : undefined, fontWeight: t.overdue ? 600 : undefined }}>{fmtDate(t.date)}</span>
+            {/* v1.0.805: dátum len raz — kto ho smie meniť, vidí len pole. */}
+            {!can(user, "transport_assign_driver") && <span className="tnum" style={{ color: t.overdue ? "var(--danger-text)" : undefined, fontWeight: t.overdue ? 600 : undefined }}>{fmtDate(t.date)}</span>}
             {can(user, "transport_assign_driver") && (
               <TransportDateInput
                 date={t.date}
@@ -14538,7 +14656,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                   <span className={`badge ${t.type === "vyvoz" ? "badge-info" : "badge-warn"}`} style={{ minWidth: 70, textAlign: "center" }}>
                     {t.type === "vyvoz" ? "Odber" : "Vrátenie"}
                   </span>
-                  <span className="mono" style={{ fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>
+                  {!can(user, "transport_assign_driver") && <span className="mono" style={{ fontWeight: 600, color: t.overdue ? "var(--danger)" : "inherit" }}>{fmtDate(t.date)}</span>}
                   {can(user, "transport_assign_driver") && (
                     <TransportDateInput
                       date={t.date}
@@ -14576,7 +14694,8 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
         </div>
       )}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <div className="tr-filt2">
         {isLockedExternalSofer ? (
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>Vaše prepravy: {myEmployee.name}</div>
         ) : (
@@ -14590,6 +14709,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           <option value="">Všetky depá</option>
           {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
+        </div>
         {depoFilter && <span className="fchip">Filter: depo {depoFilter}<button type="button" className="fchip-x" aria-label="Zrušiť filter depa" onClick={() => setDepoFilter(null)}>×</button></span>}
         {driverFilter && !isLockedExternalSofer && <span className="fchip">Filter: šofér {driverFilter === "unassigned" ? "Nepridelené" : drivers.find((d) => d.id === driverFilter)?.name}<button type="button" className="fchip-x" aria-label="Zrušiť filter šoféra" onClick={() => setDriverFilter("")}>×</button></span>}
       </div>
@@ -14599,11 +14719,11 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes a 2 pracovné dni{effectiveDriverFilter ? " (len vybraný šofér)" : ""} · ↑ vývoz · ↓ zvoz
           </div>
-          <table>
+          <table className="qs-table">
             <thead>
               <tr>
                 <th>Šofér</th>
-                {summaryDays.map((d) => <th key={d}>{dayHead(d)}</th>)}
+                {summaryDays.map((d) => <th key={d} colSpan={2}>{dayHead(d)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -14623,8 +14743,8 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                   }
                   return (
                     <button
-                      className="btn btn-ghost"
-                      style={{ fontSize: 11, padding: "4px 8px", color: status.sent && !status.newCount ? "var(--ok)" : "var(--accent)" }}
+                      className="btn btn-ghost qs-send-btn"
+                      style={{ color: status.sent && !status.newCount ? "var(--ok)" : "var(--text)" }}
                       title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
                       onClick={() => {
                         const items = transports.filter((t) => t.driverId === driver.id && t.date === dateVal);
@@ -14648,18 +14768,19 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                       }}
                     >
                       {!status.sent
-                        ? "📧 Odoslať"
+                        ? <><MailIcon size={14} /> Odoslať</>
                         : status.newCount > 0
-                        ? `📧 Odoslať znova (zmeny: ${status.newCount})`
+                        ? <><MailIcon size={14} /> Odoslať znova (zmeny: {status.newCount})</>
                         : `✓ Odoslané ${sentWhen(status.sentAt)}`}
                     </button>
                   );
                 }
 
+                // v1.0.805: nuly sivo, nenulové tučne; „Odoslať“ v samostatnom stĺpci s pevnou šírkou.
                 const num = (dateVal, type, n) => (
                   <span
-                    className="mono"
-                    style={{ cursor: n ? "pointer" : "default", textDecoration: n ? "underline" : "none", color: n ? undefined : "var(--text-dim)" }}
+                    className={`tnum qs-n${n ? " on" : ""}`}
+                    style={{ cursor: n ? "pointer" : "default", textDecoration: n ? "underline" : "none" }}
                     onClick={() => n && cellClick(dateVal, type, `${type === "vyvoz" ? "Vývoz" : "Zvoz"} ${dateVal === today ? "dnes" : dayHead(dateVal)}`)}
                   >
                     {n} {type === "vyvoz" ? "↑" : "↓"}
@@ -14671,9 +14792,10 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                     {summaryDays.map((d) => {
                       const c = summary[key]?.[d] || { vyvoz: 0, zvoz: 0 };
                       return (
-                        <td key={d} style={{ whiteSpace: "nowrap" }}>
-                          {num(d, "vyvoz", c.vyvoz)} · {num(d, "zvoz", c.zvoz)} {sendCell(d)}
-                        </td>
+                        <React.Fragment key={d}>
+                          <td style={{ whiteSpace: "nowrap" }}>{num(d, "vyvoz", c.vyvoz)} · {num(d, "zvoz", c.zvoz)}</td>
+                          <td className="qs-send">{sendCell(d)}</td>
+                        </React.Fragment>
                       );
                     })}
                   </tr>
@@ -14734,9 +14856,9 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                   }}
                 >
                   {!sendStatus.sent
-                    ? "📧 Odoslať email"
+                    ? <><MailIcon size={14} /> Odoslať email</>
                     : sendStatus.newCount > 0
-                    ? `📧 Odoslať znova (zmeny: ${sendStatus.newCount})`
+                    ? <><MailIcon size={14} /> Odoslať znova (zmeny: {sendStatus.newCount})</>
                     : `✓ Odoslané ${sentWhen(sendStatus.sentAt)}`}
                 </button>
               </div>
@@ -16645,7 +16767,7 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
 // (SignatureOverlay nižšie), lebo na mobile sa do 100px vysokého pásika
 // nedá poriadne podpísať. Po "Hotovo" sa podpis zmenší späť do tohto poľa
 // presne ako doteraz (rovnaký onChange(dataUrl) kontrakt, nič okolo sa nemení).
-function SignaturePad({ value, onChange, label, summary }) {
+function SignaturePad({ value, onChange, label, summary, miss }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   return (
@@ -16654,6 +16776,7 @@ function SignaturePad({ value, onChange, label, summary }) {
       <button
         ref={btnRef}
         type="button"
+        data-miss={miss || undefined}
         onClick={() => setOpen(true)}
         style={{
           width: "100%", height: 100, border: "1px solid var(--border)", borderRadius: 6, background: "#fff",
@@ -16663,7 +16786,7 @@ function SignaturePad({ value, onChange, label, summary }) {
         {value ? (
           <img src={value} alt={label} style={{ maxWidth: "100%", maxHeight: "100%" }} />
         ) : (
-          <span style={{ fontSize: 13, color: "#5A5A5A" }}>✍️ Klikni sem pre podpis</span>
+          <span style={{ fontSize: 15, color: "#5A5A5A", display: "inline-flex", alignItems: "center", gap: 8 }}><NavIcon id="podpis" size={20} /> Ťuknite a podpíšte</span>
         )}
       </button>
       {value && (
@@ -16887,7 +17010,7 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
           const item = checklist[i] || {};
           const status = item[statusKey];
           return (
-            <div key={i} className={`cki${status === "problem" ? " prob" : ""}`}>
+            <div key={i} className={`cki${status === "problem" ? " prob" : ""}`} data-miss={status !== "ok" && status !== "problem" ? true : undefined}>
               <span className="ckt">{i + 1}. {label}</span>
               <div className="cks" role="group" aria-label={label}>
                 <button type="button" aria-pressed={status === "ok"} className={status === "ok" ? "okon" : ""} onClick={() => setItem(i, { [statusKey]: "ok" })}>
@@ -16914,16 +17037,16 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
 }
 
 // Fotky: „Odfotiť“ otvorí na mobile rovno fotoaparát, „Z galérie“ výber súborov.
-function PhotoPickButtons({ onFiles }) {
+function PhotoPickButtons({ onFiles, miss }) {
   const pick = (e) => { onFiles(e.target.files); e.target.value = ""; };
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
-        📷 Odfotiť
+    <div data-miss={miss || undefined} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+        <NavIcon id="kamera" /> Odfotiť
         <input type="file" accept="image/*" capture="environment" onChange={pick} style={{ display: "none" }} />
       </label>
-      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", cursor: "pointer", borderColor: "var(--line-strong)" }}>
-        🖼 Z galérie
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", borderColor: "var(--line-strong)" }}>
+        <NavIcon id="galeria" /> Z galérie
         <input type="file" accept="image/*" multiple onChange={pick} style={{ display: "none" }} />
       </label>
     </div>
@@ -16934,7 +17057,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Problém s prepravou — v záhlaví vedľa krížika (šofér), nech padne do oka.
   const issueBtn = onReportTransportIssue && can(user, "transport_issue_report") ? (
     <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
-      <span className="hd-full">🚨 Problém s prepravou</span><span className="hd-short">🚨 Problém</span>
+      <span className="hd-full"><NavIcon id="problem" size={16} /> Problém s prepravou</span><span className="hd-short"><NavIcon id="problem" size={16} /> Problém</span>
     </button>
   ) : null;
   const [portalQrDataUrl, setPortalQrDataUrl] = useState(null);
@@ -17197,7 +17320,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </div>
         {checkerInspection?.resolved && !checkerInspection.skipped && (
           <button type="button" className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy)}>
-            🔍 Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
+            <NavIcon id="hladat" size={16} /> Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
           </button>
         )}
       </Modal>
@@ -17326,7 +17449,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       {!isReturnPhase && (
         checkerInspection?.resolved && !checkerInspection.skipped ? (
           <button type="button" className="btn btn-outline" style={{ minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy)}>
-            🔍 Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
+            <NavIcon id="hladat" size={16} /> Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
           </button>
         ) : (
           <div className="fhint">Kontrola checkera v depe zatiaľ nebola vykonaná.</div>
@@ -17345,11 +17468,11 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           </div>
         ))}
       </div>
-      <PhotoPickButtons onFiles={handleReturnPhotoFiles} />
+      <PhotoPickButtons onFiles={handleReturnPhotoFiles} miss={photosNeeded > 0 || (customerAbsent && returnPhotos.length === 0)} />
       {uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
       {photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
       {photosNeeded > 0 && (
-        <div className="fhint" style={{ color: "var(--danger-text)" }}>
+        <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>
           {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — " : ""}Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
         </div>
       )}
@@ -17363,7 +17486,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       <FormStep n={4} title={`Podpisy — ${isReturnPhase ? "vrátenie" : "prevzatie"}`} />
       {/* Osobný odber/vrátenie je v depe so zákazníkom — tam voľba nemá zmysel. */}
       {(customerAbsent || !(isReturnPhase ? job?.selfReturn : job?.selfPickup)) && (
-      <label className="fck">
+      <label className="fck fck-big">
         <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} />
         <span>Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)</span>
       </label>
@@ -17377,6 +17500,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="napr. Ján Novák"
+            data-miss={!customerName.trim() || undefined}
             style={{ width: "100%" }}
           />
         </Field>
@@ -17386,17 +17510,23 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
             value={driverName}
             onChange={(e) => setDriverName(e.target.value)}
             placeholder="napr. Ján Novák"
+            data-miss={!driverName.trim() || undefined}
             style={{ width: "100%" }}
           />
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} />}
-        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} />
+        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} />}
+        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} />
       </div>
 
       <FormFoot
         cancel={false}
+        progress={[
+          `Checklist ${checklist.filter((it) => it?.[statusKey] === "ok" || it?.[statusKey] === "problem").length}/${HANDOVER_CHECKLIST_ITEMS.length}`,
+          !isCorrection && photosRequired ? `Fotky ${Math.min(returnPhotos.length, MIN_MACHINE_PHOTOS)}/${MIN_MACHINE_PHOTOS}` : customerAbsent ? `Fotky ${Math.min(returnPhotos.length, 1)}/1` : "",
+          `Podpisy ${(customerAbsent ? 0 : customerSig ? 1 : 0) + (driverSig ? 1 : 0)}/${customerAbsent ? 1 : 2}`,
+        ].filter(Boolean).join(" · ")}
         missing={canSave ? [] : [
           uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
           !checklistComplete && "všetky body checklistu",
@@ -17418,7 +17548,8 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           </>
         )}
       >
-        <button className="btn btn-accent" disabled={!canSave} onClick={handleSave}>
+        {/* v1.0.805: vždy klikateľné — neúplný formulár neuloží, FormFoot posunie na prvé chýbajúce (data-incomplete). */}
+        <button className="btn btn-accent" data-incomplete={!canSave || undefined} onClick={canSave ? handleSave : undefined}>
           {isCorrection ? "Uložiť opravu" : isReturnPhase ? "Dokončiť vrátenie" : "Uložiť prevzatie"}
         </button>
       </FormFoot>
@@ -17605,7 +17736,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
             Zákazník vracia stroj sám. Najprv spíšte so zákazníkom protokol o vrátení (jeho podpis), potom sa tu odomkne kontrola stroja.
           </div>
           {canEdit && onOpenHandover && (
-            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("vratenie")}>📋 Protokol o vrátení</button>
+            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("vratenie")}><NavIcon id="protokol" size={16} /> Protokol o vrátení</button>
           )}
         </div>
       ) : phase === "vratenie" ? (
@@ -17616,12 +17747,12 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       ) : selfTransport && (
         handoverDone ? (
           <button type="button" className="btn btn-outline" style={{ marginBottom: 12, borderColor: "var(--line-strong)" }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
-            📋 Zobraziť protokol o odovzdaní
+            <NavIcon id="protokol" size={16} /> Zobraziť protokol o odovzdaní
           </button>
         ) : assignment.resolved && canEdit && onOpenHandover ? (
           <div className="fnote fnote-i">
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Kontrola je hotová — odovzdajte stroj zákazníkovi</div>
-            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("prevzatie")}>📋 Odovzdať zákazníkovi (protokol)</button>
+            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => onOpenHandover("prevzatie")}><NavIcon id="protokol" size={16} /> Odovzdať zákazníkovi (protokol)</button>
           </div>
         ) : (
           <div className="fhint" style={{ marginBottom: 10 }}>
@@ -17668,10 +17799,10 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       </div>
       {showForm && (
         <>
-          <PhotoPickButtons onFiles={handlePhotoFiles} />
+          <PhotoPickButtons onFiles={handlePhotoFiles} miss={photosNeeded > 0} />
           {uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
           {photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
-          {photosNeeded > 0 && <div className="fhint" style={{ color: "var(--danger-text)" }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
+          {photosNeeded > 0 && <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
         </>
       )}
       {phase === "vyvoz" && !selfTransport && (handoverProtocol?.handoverPhotos || []).length > 0 && (
@@ -17682,14 +17813,14 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       {showForm ? (
         <div style={{ marginBottom: 10 }}>
           <Field label="Počet MTH (stav počítadla) *">
-            <input type="text" inputMode="decimal" value={noMth ? "" : mth} disabled={noMth} onChange={(e) => { setMth(e.target.value); setMthConfirmed(false); }} style={{ width: 180, maxWidth: "100%" }} />
+            <input type="text" inputMode="decimal" value={noMth ? "" : mth} disabled={noMth} data-miss={(!mthValid && !mthSuspicious) || undefined} onChange={(e) => { setMth(e.target.value); setMthConfirmed(false); }} style={{ width: 180, maxWidth: "100%" }} />
             {lastMth && <div className="fhint">Posledný stav: {lastMth.noMth ? "bez počítadla" : `${fmtMth(lastMth.value)} MTH`} ({lastMth.date ? fmtDate(String(lastMth.date).slice(0, 10)) : "—"}{lastMth.by ? `, ${lastMth.by}` : ""})</div>}
           </Field>
           <label className="fck">
             <input type="checkbox" checked={noMth} onChange={(e) => { setNoMth(e.target.checked); setMthConfirmed(false); }} /> <span>Stroj nemá počítadlo MTH</span>
           </label>
           {mthSuspicious && (
-            <label className="fck fnote fnote-r" style={{ fontWeight: 600 }}>
+            <label className="fck fnote fnote-r" style={{ fontWeight: 600 }} data-miss={!mthValid || undefined}>
               <input type="checkbox" checked={mthConfirmed} onChange={(e) => setMthConfirmed(e.target.checked)} />
               <span>{mthNum < lastMth.value ? `Menej ako posledný stav (${fmtMth(lastMth.value)} MTH)` : `O ${fmtMth(mthNum - lastMth.value)} MTH viac ako posledný stav`} — áno, {fmtMth(mthNum)} MTH je správne</span>
             </label>
@@ -17708,12 +17839,13 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
               inputMode="decimal"
               value={workHours}
               onChange={(e) => setWorkHours(e.target.value)}
+              data-miss={!hoursValid || undefined}
               style={{ width: 140 }}
             />
           </Field>
           {usedParts.map((p) => (
             <div key={p.id} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input placeholder="Diel" aria-label="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} style={{ flex: "2 1 160px" }} />
+              <input placeholder="Diel" aria-label="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} data-miss={!p.name.trim() || undefined} style={{ flex: "2 1 160px" }} />
               <input placeholder="P/N" aria-label="P/N" value={p.partNumber} onChange={(e) => updatePartRow(p.id, { partNumber: e.target.value })} style={{ flex: "1 1 100px" }} />
               <input type="number" inputMode="numeric" min="1" placeholder="ks" aria-label="Počet kusov" value={p.qty} onChange={(e) => updatePartRow(p.id, { qty: e.target.value })} style={{ width: 70 }} />
               <button type="button" className="btn btn-outline" aria-label="Odstrániť diel" style={{ minWidth: 44, minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => removePartRow(p.id)}>✕</button>
@@ -17764,6 +17896,12 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       {showForm && (
         <FormFoot
           cancel={false}
+          progress={[
+            `Checklist ${checklist.filter((it) => it?.checkerStatus === "ok" || it?.checkerStatus === "problem").length}/${HANDOVER_CHECKLIST_ITEMS.length}`,
+            phase === "vyvoz" ? `Fotky ${Math.min(photos.length, photosMin)}/${photosMin}` : "",
+            `MTH ${mthValid ? "✓" : "✗"}`,
+            `Hodiny ${hoursValid ? "✓" : "✗"}`,
+          ].filter(Boolean).join(" · ")}
           missing={[
             !checklistComplete && "všetky body checklistu",
             photosNeeded > 0 && `fotky (${photosNeeded})`,
@@ -17777,7 +17915,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
             </button>
           )}
         >
-          <button className="btn btn-accent" disabled={!canSaveForm} onClick={handleSaveClick}>Uložiť</button>
+          <button className="btn btn-accent" data-incomplete={!canSaveForm || undefined} onClick={canSaveForm ? handleSaveClick : undefined}>Uložiť</button>
         </FormFoot>
       )}
       </>)}
@@ -17902,6 +18040,29 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
       </span>
     ) : text;
   }
+  const canAssignDrv = can(user, "transport_assign_driver") && drivers;
+  const vyvozEditable = !job.selfPickup && canAssignDrv && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized;
+  const zvozEditable = !job.selfReturn && canAssignDrv && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized;
+  const dispEditable = !!(dispatchers && onSetDispatcher && can(user, "job_edit") && job.status !== "completed");
+  const driverSelect = (value, onChange, id, label) => (
+    <select id={id} aria-label={label} value={value || ""} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">— neurčený —</option>
+      {driverOptionsGrouped(drivers)}
+    </select>
+  );
+  // Dispečer zákazky — dostáva upozornenia k nej; počas zástupu koná zastupujúci.
+  const dispD = dispatchers?.find((x) => x.id === job.dispatcherId);
+  const dispActing = dispatchers ? (actingDispatcher ? actingDispatcher(job.dispatcherId, undefined, job.fromDepo) : dispD) : null;
+  const dispSubNote = dispD && dispActing && dispActing.id !== dispD.id ? ` (zastupuje ${dispActing.name})` : dispD && !dispActing ? " (dovolenka — bez zástupu)" : "";
+  const canDamage = machine && onReportDamage && can(user, "job_report_damage");
+  const canIssue = onReportTransportIssue && can(user, "transport_issue_report");
+  const reportBtns = (canDamage || canIssue) ? (
+    <>
+      {canDamage && <button className="btn btn-outline jc-report" onClick={onReportDamage}><NavIcon id="problem" size={16} /> Nahlásiť poškodenie</button>}
+      {/* Problém s prepravou ostáva viditeľný (rozhodnutie 6. 10.), nie schovaný v ⋯. */}
+      {canIssue && <button className="btn btn-outline jc-report" onClick={onReportTransportIssue}><NavIcon id="problem" size={16} /> Problém s prepravou</button>}
+    </>
+  ) : null;
   return (
     <Modal
       eyebrow="Požičovňová zákazka"
@@ -17915,28 +18076,24 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
       onClose={() => { forgetBinder(); onClose(); }}
       onBack={onBack}
       side
-      headerExtra={
+      headerExtra={<>
         <div className="side-summary">
           <div><span>Zákazník</span><b>{job.customer || "—"}</b></div>
           <div><span>Obdobie</span><b className="tnum" style={!job.endDate && job.status !== "completed" ? { color: "var(--danger)" } : undefined}>{fmtDate(job.startDate)} – {job.endDate ? fmtDate(job.endDate) : "bez určeného konca"}</b></div>
           <div><span>Depo</span><b>{job.fromDepo || "—"} → {job.returnDepo || job.fromDepo || "—"}</b></div>
           <div><span>Šofér</span><b>{job.selfPickup ? "Vlastná doprava" : job.driverId ? driverById[job.driverId]?.name || "—" : "— neurčený —"}</b></div>
         </div>
+        {reportBtns && <div className="jc-report-m">{reportBtns}</div>}</>
       }
       footer={
         <>
-          {machine && onReportDamage && can(user, "job_report_damage") && (
-            <button className="btn btn-ghost header-damage-btn" onClick={onReportDamage}>Nahlásiť poškodenie</button>
-          )}
-          {/* Problém s prepravou ostáva viditeľný (rozhodnutie 6. 10.), nie schovaný v ⋯. */}
-          {onReportTransportIssue && can(user, "transport_issue_report") && (
-            <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>🚨 Problém s prepravou</button>
-          )}
+          {/* v1.0.805: hlásenia obrysové s ⚠ (nie červené); na mobile sú hore na karte (lišta = ⋯ / Upraviť / Ukončiť). */}
+          {reportBtns}
           <KebabMenu up label="⋯" actions={[
             onEmailDriver && { label: "✉ Email šoférovi", onClick: onEmailDriver },
             machine && onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) },
           ]} />
-          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="side-foot-btns one-row" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
             {can(user, "job_edit") && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
             {/* Zrušiť ukončenie len admin / vedúci dispečer a len kým stroj nie je vrátený. */}
             {job.status === "completed" && onUncomplete && !handoverProtocol?.returnDone && (
@@ -17994,18 +18151,18 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
               {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
           !handoverProtocol ? (
             job.status !== "completed" && canFillHandoverPhase(job, myEmployee, "prevzatie", user) ? (
-              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("prevzatie")}>📋 Vypísať protokol</button>
+              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("prevzatie")}><NavIcon id="protokol" size={16} /> Vypísať protokol</button>
             ) : canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
-              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
+              <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}><NavIcon id="protokol" size={16} /> Dokončiť vrátenie</button>
             ) : (
               <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér, od dňa vývozu" style={{ opacity: 0.5 }}>
-                📋 Vypísať protokol
+                <NavIcon id="protokol" size={16} /> Vypísať protokol
               </button>
             )
           ) : !handoverProtocol.returnDone && can(user, "handover_protocol_write") && canFillHandoverPhase(job, myEmployee, "vratenie", user) ? (
-            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}>📋 Dokončiť vrátenie</button>
+            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol("vratenie")}><NavIcon id="protokol" size={16} /> Dokončiť vrátenie</button>
           ) : (
-            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol()}>📋 Zobraziť protokol</button>
+            <button className="btn btn-ghost" onClick={() => onOpenHandoverProtocol()}><NavIcon id="protokol" size={16} /> Zobraziť protokol</button>
           )
         )}
             </div>
@@ -18135,60 +18292,32 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         <dt>Telefón zákazníka</dt><dd className="tnum">{job.customerPhone ? <a href={`tel:${job.customerPhone}`}>{job.customerPhone}</a> : "—"}</dd>
         <dt>Email zákazníka</dt><dd>{job.customerEmail ? <a href={`mailto:${job.customerEmail}`}>{job.customerEmail}</a> : "—"}</dd>
         <dt>Kam</dt><dd>{job.toLocation || "—"}</dd>
-        {(() => {
-          // Šofér sa dá prideliť/zmeniť priamo tu na karte (bez Upraviť alebo Prepráv),
-          // kým daná fáza (prevzatie/vrátenie) neprebehla.
-          const canAssign = can(user, "transport_assign_driver") && drivers;
-          const driverSelect = (value, onChange, id, label) => (
-            <select id={id} aria-label={label} value={value || ""} onChange={(e) => onChange(e.target.value || null)}>
-              <option value="">— neurčený —</option>
-              {driverOptionsGrouped(drivers)}
-            </select>
-          );
-          return (
-            <>
-              <dt>Šofér (vývoz)</dt>
-              <dd>
-                {job.selfPickup ? "Vlastná doprava — osobný odber v depe"
-                  : canAssign && onAssignDriver && !handoverProtocol?.handoverDone && !job.notRealized ? driverSelect(job.driverId, (id) => onAssignDriver(job.id, id), "job-driver-vyvoz", "Šofér (vývoz)")
-                  : job.driverId ? driverById[job.driverId]?.name || "—" : "— neurčený —"}
-              </dd>
-              <dt>Šofér (zvoz)</dt>
-              <dd>
-                {job.selfReturn ? "Vlastná doprava — vráti sám do depa"
-                  : canAssign && onAssignReturnDriver && !handoverProtocol?.returnDone && !job.notRealized ? driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id), "job-driver-zvoz", "Šofér (zvoz)")
-                  : job.returnDriverId ? driverById[job.returnDriverId]?.name || "—" : "— neurčený —"}
-              </dd>
-            </>
-          );
-        })()}
+        {/* Šofér vývozu je v súhrne hore — tu len zvoz/dispečer, ak sa nedajú meniť (v1.0.805). */}
+        {!zvozEditable && <><dt>Šofér (zvoz)</dt><dd>{job.selfReturn ? "Vlastná doprava — vráti sám do depa" : job.returnDriverId ? driverById[job.returnDriverId]?.name || "—" : "— neurčený —"}</dd></>}
         <dt>Obchodník</dt>
         <dd>{job.obchodnik ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{salespersonColor(job.obchodnik, salespeople) && <span style={{ width: 9, height: 9, borderRadius: 3, background: salespersonColor(job.obchodnik, salespeople), flexShrink: 0 }} />}{job.obchodnik}</span> : "—"}</dd>
         <dt>Číslo zmluvy</dt><dd>{job.cisloZmluvy || "—"}</dd>
-        {dispatchers && (() => {
-          // Dispečer zákazky — dostáva upozornenia k nej; počas zástupu koná zastupujúci.
-          const d = dispatchers.find((x) => x.id === job.dispatcherId);
-          const acting = actingDispatcher ? actingDispatcher(job.dispatcherId, undefined, job.fromDepo) : d;
-          const subNote = d && acting && acting.id !== d.id ? ` (zastupuje ${acting.name})` : d && !acting ? " (dovolenka — bez zástupu)" : "";
-          return (
-            <>
-              <dt>Dispečer zákazky</dt>
-              <dd>
-                {onSetDispatcher && can(user, "job_edit") && job.status !== "completed" ? (
-                  <>
-                    <select aria-label="Dispečer zákazky" value={job.dispatcherId || ""} onChange={(e) => onSetDispatcher(job.id, e.target.value || null)}>
-                      <option value="">— podľa depa —</option>
-                      {dispatchers.map((x) => <option key={x.id} value={x.id}>{x.name}{!x.linkedUserId ? " (bez účtu)" : _inactiveUserIds.has(x.linkedUserId) ? " (neaktívny účet)" : ""}</option>)}
-                    </select>
-                    {subNote && <div style={{ fontSize: 13, color: "var(--warn)", marginTop: 2 }}>{subNote.trim()}</div>}
-                  </>
-                ) : d ? `${d.name}${subNote}` : "— podľa depa —"}
-              </dd>
-            </>
-          );
-        })()}
+        {dispatchers && !dispEditable && <><dt>Dispečer zákazky</dt><dd>{dispD ? `${dispD.name}${dispSubNote}` : "— podľa depa —"}</dd></>}
         {job.notes && <><dt>Poznámka</dt><dd>{job.notes}</dd></>}
       </dl>
+      {/* Šofér sa dá prideliť/zmeniť priamo tu na karte (bez Upraviť alebo Prepráv), kým daná fáza neprebehla. */}
+      {(vyvozEditable || zvozEditable || dispEditable) && (<>
+        <FormStep title="Upraviť priamo" />
+        <dl className="side-dl side-dl-edit">
+          {vyvozEditable && <><dt><label htmlFor="job-driver-vyvoz">Šofér (vývoz)</label></dt><dd>{driverSelect(job.driverId, (id) => onAssignDriver(job.id, id), "job-driver-vyvoz", "Šofér (vývoz)")}</dd></>}
+          {zvozEditable && <><dt><label htmlFor="job-driver-zvoz">Šofér (zvoz)</label></dt><dd>{driverSelect(job.returnDriverId, (id) => onAssignReturnDriver(job.id, id), "job-driver-zvoz", "Šofér (zvoz)")}</dd></>}
+          {dispEditable && (<>
+            <dt><label htmlFor="job-dispatcher">Dispečer zákazky</label></dt>
+            <dd>
+              <select id="job-dispatcher" aria-label="Dispečer zákazky" value={job.dispatcherId || ""} onChange={(e) => onSetDispatcher(job.id, e.target.value || null)}>
+                <option value="">— podľa depa —</option>
+                {dispatchers.map((x) => <option key={x.id} value={x.id}>{x.name}{!x.linkedUserId ? " (bez účtu)" : _inactiveUserIds.has(x.linkedUserId) ? " (neaktívny účet)" : ""}</option>)}
+              </select>
+              {dispSubNote && <div style={{ fontSize: 13, color: "var(--warn)", marginTop: 2 }}>{dispSubNote.trim()}</div>}
+            </dd>
+          </>)}
+        </dl>
+      </>)}
       </>} />
     </Modal>
   );
@@ -18427,12 +18556,12 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
               </button>
               {onRequestReminder && (
                 <button className="btn btn-ghost" onClick={onRequestReminder}>
-                  🔔 Pripomenúť dispečerovi
+                  <NavIcon id="zvoncek" size={16} /> Pripomenúť dispečerovi
                 </button>
               )}
             </>
           )}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="side-foot-btns one-row" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
             {canActDirectly && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
             {canActDirectly && isPending && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onApprove}>✓ Schváliť</button>}
             {canActDirectly && <button className="btn btn-accent" onClick={onConvert}>Premeniť na zákazku</button>}
@@ -18459,11 +18588,9 @@ function ReservationCardModal({ reservation, machine, salespeople, user, onClose
           )}
         </div>
       )}
+      {/* Zákazník a obdobie sú v súhrne hore (v1.0.805). */}
       <dl className="side-dl">
-        <dt>Zákazník</dt><dd>{r.customer || "—"}</dd>
         <dt>Kam</dt><dd>{r.toLocation || "—"}</dd>
-        <dt>Predpokladaný začiatok</dt><dd className="tnum">{fmtDate(r.expectedStart)}</dd>
-        <dt>Predpokladaný koniec</dt><dd className="tnum">{r.expectedEnd ? fmtDate(r.expectedEnd) : "— zatiaľ neznámy —"}</dd>
         {r.notes && <><dt>Poznámka</dt><dd style={{ whiteSpace: "pre-wrap" }}>{r.notes}</dd></>}
       </dl>
     </Modal>
@@ -18492,6 +18619,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
     const t = setInterval(() => writeRecordLock("jobs", existing.id, currentUser?.id, currentUser?.name), LOCK_HEARTBEAT_MS);
     return () => { clearInterval(t); clearRecordLock("jobs", existing.id, currentUser?.id); };
   }, [existing?.id]);
+  const [saveTried, onSaveTry] = useSaveTry();
   const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.id) : null;
   const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
   const [driverId, setDriverId] = useState(existing?.driverId || "");
@@ -18615,6 +18743,13 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   // Ukončená (realizovaná) zákazka musí mať koniec — bez neho zmizne zvoz z Prepráv a stroj ostane obsadený navždy.
   const endRequired = existing?.status === "completed" && !existing.notRealized;
   const canSave = machineId && fromDepo.trim() && (selfPickup || toLocation.trim()) && customer.trim() && obchodnik && startDate && (!endRequired || endDate) && !conflict && !pendingPrep && !dateOrderInvalid;
+  const pickCustomer = (c) => {
+    setCustomer(c.firma);
+    if (c.email && !customerEmail) setCustomerEmail(c.email);
+    if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
+    setSelectedContacts(c.contacts || []);
+    setSelectedCustomerId(c.id);
+  };
 
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} xwide>
@@ -18653,14 +18788,21 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
               }}
               customers={customers || []}
               placeholder="Názov firmy…"
-              onSelectCustomer={(c) => {
-                setCustomer(c.firma);
-                if (c.email && !customerEmail) setCustomerEmail(c.email);
-                if (c.telefon && !customerPhone) setCustomerPhone(c.telefon);
-                setSelectedContacts(c.contacts || []);
-                setSelectedCustomerId(c.id);
-              }}
+              onSelectCustomer={pickCustomer}
             />
+            {/* Podobný (nie presne zhodný) existujúci zákazník — upozorniť, inak vznikne duplicita. Uloženie neblokuje. */}
+            {!selectedCustomerId && customer.trim() && !(customers || []).some((c) => (c.firma || "").trim().toLowerCase() === customer.trim().toLowerCase()) &&
+              similarCustomers(customers, customer).length > 0 && (
+              <div role="alert" className="fnote fnote-y" style={{ marginTop: 6 }}>
+                <strong>Podobný zákazník už existuje — nie je to ten istý?</strong>
+                {similarCustomers(customers, customer).map((c) => (
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
+                    <span>{c.firma}{c.ico ? ` · IČO ${c.ico}` : ""}</span>
+                    <button type="button" className="btn btn-outline" style={{ minHeight: 36 }} onClick={() => pickCustomer(c)}>Použiť ho</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
           <div style={{ gridColumn: contactAdding ? "1 / -1" : undefined }}>
           <ContactPicker
@@ -18826,11 +18968,9 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
           Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov
         </label>
       )}
-      <div className="job-form-foot">
-      {missingFields.length > 0 && (
-        <span className="miss-pill">Na uloženie chýba: {missingFields.join(", ")}.</span>
-      )}
-      <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap", alignItems: "center" }}>
+      <div className={`job-form-foot${saveTried && missingFields.length ? " ff-tried" : ""}`}>
+      <MissPill missing={missingFields} tried={saveTried} />
+      <div className="ff-try" style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap", alignItems: "center" }} onClick={missingFields.length ? onSaveTry : undefined}>
         {/* Zrušiť = to isté ako × v hlavičke okna (vrátane otázky pri rozpísaných údajoch). */}
         <button type="button" className="btn btn-outline ff-cancel" onClick={(e) => e.currentTarget.closest(".modal-panel")?.querySelector(".modal-close-x")?.click()}>Zrušiť</button>
         <button
@@ -21311,7 +21451,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
               </button>
             ))}
           </div>
-          <SearchInput placeholder="Hľadať sériové číslo, typ, depo alebo zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
+          <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
           <GearPopover className="gantt-mobile-settings">{settingsControls}</GearPopover>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", margin: "0 auto" }}>
@@ -21738,11 +21878,11 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                       <span style={{ fontSize: 11, color: badgeColor }}>{badgeLabel}</span>
                       {!hp && can(user, "handover_protocol_write") && !canFillHandoverPhase(j, myEmployee, "prevzatie", user) ? (
                         <button className="btn btn-ghost" disabled title="Vypísať vie len pridelený šofér, od dňa vývozu" style={{ fontSize: 11, padding: "4px 9px", opacity: 0.5 }}>
-                          📋 Vypísať
+                          <NavIcon id="protokol" size={14} /> Vypísať
                         </button>
                       ) : (
                         <button className="btn btn-accent" style={{ fontSize: 11, padding: "4px 9px" }} onClick={() => onOpenHandoverProtocol(j)}>
-                          {!hp ? "📋 Vypísať" : "📋 Otvoriť"}
+                          <NavIcon id="protokol" size={14} /> {!hp ? "Vypísať" : "Otvoriť"}
                         </button>
                       )}
                     </div>
@@ -22486,7 +22626,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
   const missingSerial = variant === "poskodenie" && !d.machineId;
   const barColor = isSimple ? (d.resolved ? "var(--ok)" : assignedTech ? "var(--info)" : "var(--danger)") : missingSerial ? "var(--danger)" : damageColor(d);
   const isDone = isSimple ? d.resolved : damageDisplayStav(d) === "opravene";
-  const completeLabel = variant === "revizia" ? "Revízia vykonaná" : variant === "uradnaSkuska" ? "Úradná skúška vykonaná" : "Upraviť stav zákazky";
+  const completeLabel = variant === "revizia" ? "Revízia vykonaná" : variant === "uradnaSkuska" ? "Úradná skúška vykonaná" : d.resolved ? "Upraviť stav zákazky" : "Ukončiť zákazku";
   const permGroup = d.type === "externa" ? "external" : variant === "revizia" ? "revision" : variant === "uradnaSkuska" ? "uradnaskuska" : "damage";
   const perm = PERM_GROUP[permGroup];
   const pill = (cls) => `spill ${{ "badge-danger": "spill-problem", "badge-info": "spill-active", "badge-ok": "spill-done", "badge-warn": "spill-wait" }[cls] || ""}`;
@@ -22755,7 +22895,7 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
   return (
     <div>
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Depo</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -22780,7 +22920,7 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
         <div style={{ flex: 1 }} />
         {onOpenSummary && (
           <button className="btn btn-ghost" onClick={onOpenSummary}>
-            📋 Zhrnutie
+            <NavIcon id="protokol" size={16} /> Zhrnutie
           </button>
         )}
         {onImport && can(user, "damage_import_csv") && (
@@ -22794,10 +22934,10 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
           </button>
         )}
       </div>
-      <div className="seg" role="group" aria-label="Stav" style={{ marginBottom: 14 }}>
+      <div className="fchips" role="group" aria-label="Stav" style={{ marginBottom: 14 }}>
         {filterButtons.map((f) => (
-          <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
-            {f.label}
+          <button key={f.id} type="button" className={`fchip${activeFilters.has(f.id) ? " on" : ""}`} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+            {activeFilters.has(f.id) && "✓ "}{f.label}
           </button>
         ))}
       </div>
@@ -22987,7 +23127,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   return (
     <div>
       <div className="tbar">
-        <SearchInput placeholder="Hľadať sériové číslo, model, depo, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
         <FilterPopover activeCount={depoFilter ? 1 : 0} onClear={() => setDepoFilter(null)}>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Depo</div>
           <div className="seg" role="group" aria-label="Depo" style={{ marginBottom: 8 }}>
@@ -23004,7 +23144,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
         <div style={{ flex: 1 }} />
         {onOpenSummary && (
           <button className="btn btn-outline" onClick={onOpenSummary}>
-            📋 Zhrnutie
+            <NavIcon id="protokol" size={16} /> Zhrnutie
           </button>
         )}
         <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
@@ -23788,10 +23928,10 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   return (
     <div>
       <div className="tbar" style={{ marginBottom: 14 }}>
-        <div className="seg" role="group" aria-label="Stav">
+        <div className="fchips" role="group" aria-label="Stav">
           {filterButtons.map((f) => (
-            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
-              {f.label}
+            <button key={f.id} type="button" className={`fchip${activeFilters.has(f.id) ? " on" : ""}`} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {activeFilters.has(f.id) && "✓ "}{f.label}
             </button>
           ))}
         </div>
@@ -23802,7 +23942,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
             </button>
           ))}
         </div>
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <div style={{ flex: 1 }} />
         <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
           onDedupe && { label: "Upratať duplicitné tikety", onClick: onDedupe },
@@ -24595,10 +24735,10 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
   return (
     <div>
       <div className="tbar" style={{ marginBottom: 14 }}>
-        <div className="seg" role="group" aria-label="Stav">
+        <div className="fchips" role="group" aria-label="Stav">
           {filterButtons.map((f) => (
-            <button key={f.id} type="button" className={activeFilters.has(f.id) ? "on" : ""} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
-              {f.label}
+            <button key={f.id} type="button" className={`fchip${activeFilters.has(f.id) ? " on" : ""}`} aria-pressed={activeFilters.has(f.id)} onClick={() => toggleFilter(f.id)}>
+              {activeFilters.has(f.id) && "✓ "}{f.label}
             </button>
           ))}
         </div>
@@ -24609,7 +24749,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
             </button>
           ))}
         </div>
-        <SearchInput placeholder="Hľadať sériové číslo, typ, depo, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <div style={{ flex: 1 }} />
         <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
           can(user, "uradnaskuska_clear_all") && { label: "Vymazať všetky úradné skúšky", danger: true, onClick: onClearAll },
@@ -24829,7 +24969,7 @@ function MissingProtocolBanner({ damage, protocolLogs, onAssignProtocol }) {
       <div className="fnote fnote-r" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ flex: 1, minWidth: 200 }}>⚠ Zákazka nemá priradený servisný protokol.</span>
         <button className="btn btn-outline" style={{ minHeight: 40, fontWeight: 600 }} onClick={() => setShowPicker((v) => !v)}>
-          📋 Prideliť protokol{availableProtocols.length ? ` (${availableProtocols.length})` : ""}
+          <NavIcon id="protokol" size={16} /> Prideliť protokol{availableProtocols.length ? ` (${availableProtocols.length})` : ""}
         </button>
       </div>
       {showPicker && (
@@ -24972,7 +25112,7 @@ function ResolveDamageModal({ damage, today, protocolLogs, onAssignProtocol, onC
   }, [damage.id]);
   const otherLock = findOtherLock(recordLocks, "damages", damage.id, currentUser?.id);
   return (
-    <Modal eyebrow="Upraviť stav zákazky" title={damage.code} onClose={onClose} wide>
+    <Modal eyebrow={damage.resolved ? "Upraviť stav zákazky" : "Ukončiť zákazku"} title={damage.code} onClose={onClose} wide>
       {otherLock && (
         <div className="fnote fnote-y" style={{ fontWeight: 600 }}>
           ⚠️ Toto poškodenie práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
@@ -25293,7 +25433,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
+function TechnicianPlanner({ extraFilters, technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
   const [checksDay, setChecksDay] = useState(null); // { technician, date, ids } — zoznam zbalených kontrol v bunke
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
@@ -25501,6 +25641,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
               </button>
             ))}
           </div>
+          {extraFilters}
           {can(user, "plan_quick_events") && (
             <KebabMenu
               label="+ Udalosť ▾"
@@ -25707,7 +25848,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                           const ezAllDone = isEz && ezOpen.length === 0;
                           const ezLate = isEz && !ezAllDone && a.date < today;
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
-                          const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0d9488" : "#6d28d9") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
+                          const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0f766e" : "#6d28d9") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
                           const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.skipped ? "⊘ " : a.resolved ? "✓ " : ""}${a.self ? "🏢 " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
                           const tooltip = isEz
                             ? `Spracovanie meraní EZ (${ezOpen.length} z ${a.ezItems.length} čaká)${ezLate ? " — po termíne" : ""}: ${a.ezItems.map((x) => x.machineCode || "—").join(", ")}`
@@ -25730,7 +25871,7 @@ function TechnicianPlanner({ technicians, assignments, machines, damages, weekly
                                 color: "#fff",
                                 fontSize: 9,
                                 fontWeight: 600,
-                                opacity: (isCheckerInspection && a.resolved) || ezAllDone ? 0.5 : 1,
+                                opacity: (isCheckerInspection && a.resolved) || ezAllDone ? 0.8 : 1,
                                 outline: ezLate ? "2px solid var(--danger)" : undefined,
                                 display: "flex",
                                 alignItems: "center",
@@ -27577,7 +27718,7 @@ function dispatchResolver(dispatchers, records) {
   };
   return { map, vacations, vacation, owner, ownedDepos, subIdOf, actingForDepo };
 }
-const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--text)", textDecoration: "none", whiteSpace: "nowrap" }}>📞 {p}</a> : null);
+const telLink = (p) => (p ? <a href={`tel:${p}`} style={{ color: "var(--text)", textDecoration: "none", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}><PhoneIcon size={14} /> {p}</a> : null);
 const mapsUrl = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
 // Kto je dnes kde — dispečer požičovne a checker pre každé depo (aj so zástupmi).
@@ -27662,9 +27803,11 @@ function TodayHero({ tag, head, headSmall, sub, problem, actions, children }) {
   const [main, ...rest] = (actions || []).filter(Boolean);
   const nav = rest.find((a) => a.label === "Navigovať");
   const more = rest.filter((a) => a !== nav);
+  // Rovnaké čiarové ikony ako na karte šoféra (v1.0.805).
+  const ico = (a) => { if (a.label === "Zavolať") return <PhoneIcon size={16} />; const id = { "Navigovať": "navigovat", "Vypísať protokol": "protokol", "Skontrolovať": "protokol" }[a.label]; return id ? <NavIcon id={id} size={20} /> : null; };
   const btn = (a, cls) => (a.href
-    ? <a key={a.label} className={`btn ${cls}`} href={a.href} target="_blank" rel="noreferrer">{a.label}</a>
-    : <button key={a.label} type="button" className={`btn ${cls}`} onClick={a.onClick}>{a.label}</button>);
+    ? <a key={a.label} className={`btn ${cls}`} href={a.href} target="_blank" rel="noreferrer">{ico(a)}{a.label}</a>
+    : <button key={a.label} type="button" className={`btn ${cls}`} onClick={a.onClick}>{ico(a)}{a.label}</button>);
   return (
     <section aria-label="Ďalšia úloha" className={`today-hero${problem ? " today-problem" : ""}`}>
       <div className={`today-hero-tag${problem ? " today-problem-title" : ""}`}>{problem ? "⚠ " : "Ďalšia · "}{tag}</div>
@@ -27704,7 +27847,8 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const isDriver = role === "sofer" || role === "externy_sofer";
   const myId = myEmployee?.id;
   const weekday = new Date(today + "T00:00:00").toLocaleDateString("sk-SK", { weekday: "long" });
-  const header = (
+  // v1.0.805: podnadpis bez mena (je v hlavičke); technik tu má aj „Máte N úloh“ namiesto samostatného boxu.
+  const header = (subExtra) => (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontSize: 24 }}>Dnes</h2>
@@ -27712,7 +27856,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
         {isAdminUser(user) && onAskDaily && <button className="btn btn-ghost" onClick={onAskDaily}>💬 Čo vyriešiť dnes?</button>}
         {onDriverReport && <button className="btn btn-ghost" onClick={onDriverReport}>📄 Výkaz mojich prepráv</button>}
       </div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}{subExtra}</div>
     </div>
   );
   const waitingParts = phMineWaiting(partHandovers, myEmployee, tomorrow).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -27729,7 +27873,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   if (isDriver) {
     return (
       <div style={{ maxWidth: 1100 }}>
-        {header}
+        {header()}
         {whoPanel}
         {transportsPanel}
         {partCards.length > 0 && <><div className="today-sec">Výdaj dielov · {partCards.length}</div>{partCards}</>}
@@ -27747,7 +27891,8 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
     const d = a.damageId ? damageById[a.damageId] : null;
     const m = machineById[a.machineId || d?.machineId];
     const place = a.umiestnenie || d?.location || "";
-    const what = `${a.firma || d?.customer || m?.code || a.stroj || "Servis"}${d?.popis ? ` — ${d.popis}` : a.poznamka ? ` — ${a.poznamka}` : ""}`;
+    // Číslo stroja je v nadpise karty — v popise ho neopakovať (v1.0.805).
+    const what = [a.firma || d?.customer, d?.popis || a.poznamka].filter(Boolean).join(" — ") || m?.code || a.stroj || "Servis";
     return { key: a.id, tag: late ? `SERVIS · ${fmtDate(a.date)}` : "SERVIS", ...(late ? TODAY_TAG.late : TODAY_TAG.srv), problem: late,
       title: what, sub: [m ? `${m.code}${m.type ? ` (${m.type})` : ""}` : a.stroj, place].filter(Boolean).join(" · "),
       head: m?.code || a.stroj || "Servis", headSmall: m?.type, heroSub: [what, place].filter(Boolean).join(" · "),
@@ -27793,14 +27938,15 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const todayRest = restItems.filter((it) => !it.problem);
   return (
     <div style={{ maxWidth: 820 }}>
-      {header}
+      {header(<> · <b style={{ color: "var(--text)", fontWeight: 600 }}>{total === 0 ? "Na dnes nemáte nič otvorené." : `Máte ${total} ${total === 1 ? "úlohu" : total < 5 ? "úlohy" : "úloh"}${late.length ? `, ${late.length} mešká` : ""}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}</b></>)}
       {whoPanel}
-      <div className="panel" style={{ padding: "10px 12px", marginBottom: 12, fontSize: 14, background: "var(--panel-2)", boxShadow: "none" }}>
-        {total === 0 ? "Na dnes nemáte nič otvorené. 👍" : `Máte ${total} ${total === 1 ? "úlohu" : total < 5 ? "úlohy" : "úloh"}${late.length ? `, ${late.length} mešká` : ""}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}
-        {total === 0 && tomorrowList.length > 0 && <button type="button" className="btn btn-ghost" style={{ border: "none", padding: "0 6px", fontSize: 14 }} onClick={() => document.getElementById("today-zajtra")?.scrollIntoView({ behavior: "smooth" })}>Zajtra: {tomorrowList.length} ›</button>}
-        {duty && <span className="badge badge-warn" style={{ marginLeft: 8 }}>Tento týždeň máte službu na telefóne</span>}
-        {infos.map((a) => <span key={a.id} className="badge" style={{ marginLeft: 8 }}>{a.kind === "udalost" ? a.poznamka || "Udalosť" : { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" }[a.kind] || a.kind}</span>)}
-      </div>
+      {((total === 0 && tomorrowList.length > 0) || duty || infos.length > 0) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12, fontSize: 14 }}>
+          {total === 0 && tomorrowList.length > 0 && <button type="button" className="btn btn-ghost" style={{ border: "none", padding: "0 6px", fontSize: 14 }} onClick={() => document.getElementById("today-zajtra")?.scrollIntoView({ behavior: "smooth" })}>Zajtra: {tomorrowList.length} ›</button>}
+          {duty && <span className="badge badge-warn">Tento týždeň máte službu na telefóne</span>}
+          {infos.map((a) => <span key={a.id} className="badge">{a.kind === "udalost" ? a.poznamka || "Udalosť" : { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" }[a.kind] || a.kind}</span>)}
+        </div>
+      )}
       {hero && <TodayHero tag={hero.tag} head={hero.head} headSmall={hero.headSmall} sub={hero.heroSub} problem={hero.problem} actions={hero.actions} />}
       {lateRest.length > 0 && <><div className="today-sec red">⚠ Mešká · {lateRest.length}</div>{lateRest.map(asRow)}</>}
       {hero && <div className="today-sec">Ďalej dnes · {todayRest.length}</div>}
@@ -27979,6 +28125,7 @@ function TodayTiles({ tiles }) {
           <Tag key={t.label} type={t.onClick ? "button" : undefined} className="panel today-tile" onClick={t.onClick}>
             <span className={`today-tile-n${t.tone === "red" && t.n > 0 ? " problem" : ""}`}>{t.n}</span>
             <span style={{ fontSize: 14 }}>{t.label}</span>
+            {t.onClick && <span className="today-tile-go" aria-hidden="true">›</span>}
           </Tag>
         );
       })}
@@ -28004,7 +28151,7 @@ function TodayList({ title, rows, empty }) {
                 <div className={problem ? "today-problem-title" : undefined} style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
                 {r.sub && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{r.sub}</div>}
               </div>
-              {r.load != null && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
+              {r.load > 0 && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
               <div style={{ display: "flex", gap: 6 }}>
                 {(r.actions || []).filter(Boolean).map((a, k) => (
                   a.href
@@ -28221,7 +28368,7 @@ function TodayOffice(props) {
           <div style={{ flex: 1 }} />
           {admin && onAskDaily && <button className="btn btn-ghost" onClick={onAskDaily}>💬 Čo vyriešiť dnes?</button>}
         </div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee ? ` · ${myEmployee.name}` : ""} · {roleLabel(role)}{mineNote}</div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}{mineNote}</div>
       </div>
       {whoPanel}
       <TodayTiles tiles={tiles} />
@@ -28616,7 +28763,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         <>
           {!canSave && (
             <span style={{ fontSize: 13, color: "var(--text-dim)", flex: "1 1 220px" }}>
-              Chýba: {[changedSinceOpen && "kontrola zmenených dielov so zákazníkom", !dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
+              Ešte treba: {[changedSinceOpen && "kontrola zmenených dielov so zákazníkom", !dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
             </span>
           )}
           <button className="btn btn-accent" style={{ marginLeft: "auto" }} disabled={!canSave} onClick={save}>Odovzdať a podpísať</button>
@@ -29865,6 +30012,9 @@ function GlobalStyle() {
       .panel.today-tile { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: var(--text); padding: 14px 18px; border-radius: 12px; box-shadow: none; }
       button.today-tile { cursor: pointer; }
       button.today-tile:hover { border-color: var(--text-dim); }
+      button.today-tile { position: relative; padding-right: 40px; }
+      .today-tile-go { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 28px; line-height: 1; color: var(--text-dim); }
+      button.today-tile:hover .today-tile-go { color: var(--text); }
       .today-tile-n { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
       .today-tile-n.problem { color: var(--danger-text); }
       .today-problem { background: var(--danger-bg) !important; }
@@ -30097,7 +30247,8 @@ function GlobalStyle() {
       .depo-chip-short { display: none; }
       .btn-accent { background: var(--accent-fill); color: #fff; }
       .btn-accent:hover { background: var(--accent-fill-hover); }
-      .btn-accent:disabled { opacity: .4; cursor: not-allowed; }
+      /* v1.0.805: neaktívne hlavné tlačidlo čitateľné (aj v tmavom režime) — sivé, nie bledočervené. */
+      .btn-accent:disabled { background: var(--s-neutral-bg); color: var(--text-dim); cursor: not-allowed; }
       .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
       .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
       .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
@@ -30201,6 +30352,25 @@ function GlobalStyle() {
       .job-form-foot { position: sticky; bottom: -20px; z-index: 5; margin: 0 -20px -20px; padding: 12px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--panel-2); border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; }
       .job-form-foot .btn { min-height: 44px; font-size: 14px; }
       .miss-pill { font-size: 14px; color: var(--s-wait); background: var(--s-wait-bg); padding: 6px 10px; border-radius: 6px; }
+      /* v1.0.805: kým sa neskúsilo uložiť — neutrálny sivý „Ešte treba“ / priebeh; žlté „Chýba“ a zvýraznenie polí až po pokuse. */
+      .miss-pill.miss-soft { color: var(--s-neutral); background: var(--s-neutral-bg); }
+      .ff-btns .btn:disabled, .ff-try .btn:disabled { pointer-events: none; }
+      .modal-panel:has(.job-form-foot:not(.ff-tried)) .need-hint { display: none; }
+      .modal-panel:has(.ff-tried) [data-miss] { outline: 2px solid var(--danger); outline-offset: 2px; border-radius: 8px; }
+      .modal-panel:has(.ff-tried) .cki[data-miss] { outline: none; box-shadow: inset 4px 0 0 var(--danger); background: var(--danger-bg); }
+      .fck.fck-big { font-size: 16px; font-weight: 600; align-items: center; min-height: 52px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; }
+      .modal-panel label.fck-big > input[type=checkbox] { width: 28px; height: 28px; }
+      .btn > svg, .btn > span > svg { vertical-align: -3px; }
+      .fchips { display: flex; gap: 6px; flex-wrap: wrap; }
+      .jobs-table tr.row-click:not(.row-problem):hover td { background: var(--panel-2); }
+      .jc-report-m { display: none; }
+      .tr-filt2 { display: contents; }
+      .side-dl-edit { background: var(--panel-2); border-radius: 10px; padding: 0 14px; }
+      .side-dl-edit dt:last-of-type, .side-dl-edit dd:last-of-type { border-bottom: none; }
+      .qs-table td.qs-send { width: 210px; min-width: 210px; height: 48px; padding-top: 4px; padding-bottom: 4px; }
+      .qs-send-btn { font-size: 13px; padding: 4px 10px; min-height: 34px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      .qs-n { color: var(--text-dim); }
+      .qs-n.on { color: var(--text); font-weight: 700; }
       /* Formuláre (v1.0.794): popisky 14 px, polia 44 px (mobil 48 px), spodná lišta FormFoot, rámiky, kroky, checklist. */
       .fld { margin-bottom: 14px; min-width: 0; }
       .fld-l { display: block; font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
@@ -30332,7 +30502,14 @@ function GlobalStyle() {
       .side-body > :first-child:not(.utabs) { margin-top: 16px; }
       .side-sec { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin: 22px 0 2px; }
       input, select, textarea { background: var(--control-bg); border: 1.5px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 14px; font-family: 'Barlow', sans-serif; }
-      input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.08); }
+      input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(227,6,19,.25); }
+      /* v1.0.805: viditeľný fokus pri ovládaní klávesnicou (Tab) — tmavý obrys, v tmavom režime a v červenej hlavičke svetlý. */
+      :is(button, a, summary, label.btn, [tabindex]:not([tabindex="-1"]), input, select, textarea):focus-visible { outline: 2px solid #1A1A1A; outline-offset: 2px; }
+      :is(input, select, textarea):focus-visible { outline-offset: 1px; }
+      body.dark :is(button, a, summary, label.btn, [tabindex]:not([tabindex="-1"]), input, select, textarea):focus-visible,
+      .header-topbar :focus-visible { outline-color: #F2F2F2; }
+      label.btn:has(input:focus-visible) { outline: 2px solid #1A1A1A; outline-offset: 2px; }
+      body.dark label.btn:has(input:focus-visible) { outline-color: #F2F2F2; }
       table { width: 100%; border-collapse: collapse; }
       th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); position: sticky; top: var(--header-h, 62px); z-index: 40; }
       /* Tabuľky v paneli: na širokej obrazovke orezané (hlavička tabuľky ostáva prilepená pod lištou),
@@ -30585,10 +30762,19 @@ function GlobalStyle() {
         .job-form-foot.ff-confirm { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; }
         .job-form-foot.ff-confirm .btn { min-height: 48px; }
         .fgrid2 { grid-template-columns: minmax(0, 1fr); }
-        .cks { width: 100%; }
-        .cks > button { flex: 1; min-width: 0; }
-        .ckt { min-width: 0; flex-basis: 100%; }
-        .cki { padding: 10px 12px; }
+        /* v1.0.805: bod a V poriadku/Problém v jednom riadku (na úzkom displeji sa zalomí). */
+        .cks { margin-left: auto; }
+        .cks > button { min-width: 82px; padding: 0 8px; }
+        .ckt { min-width: 0; flex: 1 1 110px; }
+        .cki { padding: 8px 10px; gap: 8px; }
+        .side-foot .jc-report { display: none; }
+        .jc-report-m { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .jc-report-m .btn { flex: 1 1 140px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .side-foot:has(.one-row) { flex-wrap: nowrap; }
+        .side-foot-btns.one-row { flex-wrap: nowrap !important; }
+        .side-foot-btns.one-row .btn { flex: 1 1 0; min-width: 0; padding: 7px 8px; }
+        .tr-filt2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+        .tr-filt2 > * { min-width: 0 !important; width: 100%; }
         .fsum { grid-template-columns: minmax(0, 1fr); }
         .ftable td, .ftable th { font-size: 14px; }
         .print-bar-x { height: 60px; max-width: 52vw; padding: 0 10px; gap: 8px; }
