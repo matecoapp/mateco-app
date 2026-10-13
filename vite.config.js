@@ -12,5 +12,12 @@ export default defineConfig({
   // v zdrojovom kóde namiesto zašifrovaných písmeniek — nič iné sa nemení.
   build: {
     sourcemap: true,
+    // Knižnice (React, Supabase, Sentry) v samostatnom súbore — pri novej verzii sa mení len
+    // súbor platformy, knižnice ostanú v prehliadači uložené a znova sa nesťahujú (v1.0.807).
+    rollupOptions: {
+      output: {
+        manualChunks: { kniznice: ["react", "react-dom", "@supabase/supabase-js", "@sentry/react"] },
+      },
+    },
   },
 });
