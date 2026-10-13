@@ -252,7 +252,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     invalid_date: "Dátum nesmie byť v minulosti ani pred začiatkom prenájmu.",
     not_realized: "Tento prenájom sa nerealizoval.",
     too_long: "Správa je príliš dlhá (najviac 2000 znakov).",
-    already_returned: "Stroj už bol vrátený — predĺženie nie je možné.",
+    already_returned: "Stroj už bol vrátený — žiadosť ani hlásenie už nie je možné.",
   };
 
   async function handleSubmit() {
