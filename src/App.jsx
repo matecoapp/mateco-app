@@ -39,6 +39,7 @@ const CHANGELOG = [
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Protokol spísaný bez zákazníka („Zákazník nebol prítomný“): zákazník ho v portáli potvrdí podpisom, alebo napíše, s čím nesúhlasí — dostanete upozornenie. Ak do 24 h nereaguje, tiež. Stav potvrdenia (aj nesúhlas) je na karte zákazky pri protokole a v tlači. Zákazníkovi pošlite odkaz na portál (záložka Zákazník)." },
     { roles: ["sofer", "externy_sofer"], text: "Protokol bez zákazníka: zákazník ho dodatočne potvrdí v portáli — nič navyše nerobíte, fotky stroja sú preto dôležité." },
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Číslo pri „Dnes“ v menu ráta len dnešné úlohy — výdaj dielov na zajtra je v zozname označený „zajtra“." },
+    { roles: ["sofer", "externy_sofer"], text: "Dnes: „Hotové dnes“ ráta aj dnešné hotové zvozy (len počtom, bez karty)." },
   ] },
   { v: "1.0.807", items: [
     { roles: null, text: "Platforma sa načíta rýchlejšie — knižnice sa pri novej verzii znova nesťahujú. Okná: klávesnicou sa kurzor dostane do okna a po zatvorení sa vráti na tlačidlo. Výber zo zoznamu (napr. stroj) sa zavrie klikom mimo a klik rovno prejde ďalej." },
@@ -14180,7 +14181,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ dnes, items, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
+function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -14246,13 +14247,15 @@ function DriverTransportsList({ dnes, items, machineById, handoverProtocols, onO
     return (
       <div>
         {transportNotesPanel}
-        {first ? card(first, true) : <div style={{ fontSize: 16, color: "var(--text-dim)", margin: "4px 0 14px" }}>{doneNow.length ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."}</div>}
+        {first ? card(first, true) : <div style={{ fontSize: 16, color: "var(--text-dim)", margin: "4px 0 14px" }}>{doneNow.length || doneZvozCount ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."}</div>}
         {/* Rovnako ako u technika: pod hlavnou kartou vždy „Ďalej dnes“ (v1.0.805). */}
         {first && <div className="today-sec">Ďalej dnes · {restNow.length}</div>}
         {restNow.map(row)}
         {first && restNow.length === 0 && <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 10 }}>Na dnes nič ďalšie.</div>}
         {later.length > 0 && <><div className="today-sec">Zajtra a neskôr · {later.length}</div>{later.map(row)}</>}
-        {doneNow.length > 0 && <><div className="today-sec">Hotové dnes · {doneNow.length}</div>{doneNow.map(row)}</>}
+        {/* hotové vývozy s kartou (QR, protokol); hotové zvozy len počtom — šofér ich už nepotrebuje otvárať */}
+        {(doneNow.length > 0 || doneZvozCount > 0) && <><div className="today-sec">Hotové dnes · {doneNow.length + doneZvozCount}</div>{doneNow.map(row)}
+          {doneZvozCount > 0 && <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 10 }}>+ {plural(doneZvozCount, "hotový zvoz", "hotové zvozy", "hotových zvozov")}</div>}</>}
       </div>
     );
   }
@@ -14680,6 +14683,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
       <DriverTransportsList
         dnes={dnes}
         items={filtered}
+        doneZvozCount={dnes ? jobs.filter((j) => j.returnDriverId && j.returnDriverId === effectiveDriverFilter && (handoverProtocols || []).some((h) => h.jobId === j.id && h.returnDone && String(h.returnDate || "").slice(0, 10) === today)).length : 0}
         machineById={machineById}
         handoverProtocols={handoverProtocols}
         onOpenJob={onOpenJob}
