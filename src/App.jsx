@@ -40,6 +40,7 @@ const CHANGELOG = [
     { roles: ["sofer", "externy_sofer"], text: "Protokol bez zákazníka: zákazník ho dodatočne potvrdí v portáli — nič navyše nerobíte, fotky stroja sú preto dôležité." },
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Číslo pri „Dnes“ v menu ráta len dnešné úlohy — výdaj dielov na zajtra je v zozname označený „zajtra“." },
     { roles: ["sofer", "externy_sofer"], text: "Dnes: „Hotové dnes“ ráta aj dnešné hotové zvozy (len počtom, bez karty)." },
+    { roles: null, text: "Upozornenia vedú presnejšie: protokol a potvrdenie zákazníka rovno na záložku Protokol, nález checkera na Kontroly, poškodenie rovno do detailu tiketu, výdaj a náhradný diel sa v zozname zvýraznia. Technikovi dnešná úloha otvorí „Dnes“." },
   ] },
   { v: "1.0.807", items: [
     { roles: null, text: "Platforma sa načíta rýchlejšie — knižnice sa pri novej verzii znova nesťahujú. Okná: klávesnicou sa kurzor dostane do okna a po zatvorení sa vráti na tlačidlo. Výber zo zoznamu (napr. stroj) sa zavrie klikom mimo a klik rovno prejde ďalej." },
@@ -5705,7 +5706,7 @@ function DispatcherApp() {
       title: "Pridelené meranie EZ na spracovanie",
       message: `Stroj ${meas.machineCode || "—"} — termín spracovania ${fmtDate(date)}.`,
       kind: "ez_measurement",
-      link: { module: "servis", view: "ez_merania" },
+      link: { module: "servis", view: "ez_merania", taskDate: date },
     });
   }
   function markEzMeasurementProcessed(id) {
@@ -6160,8 +6161,12 @@ function DispatcherApp() {
   function markNotificationRead(id) {
     markNotificationsRead([id]);
   }
-  function navigateFromNotification(link) {
+  function navigateFromNotification(link, notif) {
     if (!link) return;
+    // Technik: dnešná (aj zmeškaná) úloha z Plánu/EZ → „Dnes“ (v telefóne), budúca ostáva v Pláne.
+    if (effectiveUser?.role === "technik" && link.module === "servis" && ["plan", "ez_merania"].includes(link.view) && (link.plannerDate || link.taskDate) && (link.plannerDate || link.taskDate) <= todayISO()) {
+      link = { ...link, module: "dnes", view: "dnes", plannerDate: null };
+    }
     // Šofér nemá Zákazky ani kartu zákazky (číslo protokolu z ERP) — upozornenie ho zavedie do Prepráv.
     if (["sofer", "externy_sofer"].includes(effectiveUser?.role) && link.module === "poziciovna") {
       setModule("dnes");
@@ -6185,10 +6190,16 @@ function DispatcherApp() {
     } else if (link.module !== "administrativa") {
       setModule("dnes");
     }
-    if (link.partHandoverId) setPartHandoverFocusId(link.partHandoverId);
+    if (link.partHandoverId) { setPartHandoverFocusId(link.partHandoverId); flashById("ph-" + link.partHandoverId); }
+    if (link.partId) flashById("sp-" + link.partId);
     if (link.damageId) {
-      setHighlightDamageId(link.damageId);
-      setHighlightLocation({ module: link.module, view: link.view });
+      // Z upozornenia rovno detail tiketu; zvýraznenie v zozname len keď detail netreba (karta stroja) alebo tiket už nie je.
+      const dmg = link.openDetail !== false && damages.find((x) => x.id === link.damageId);
+      if (dmg) setServiceEventDetail(dmg);
+      else {
+        setHighlightDamageId(link.damageId);
+        setHighlightLocation({ module: link.module, view: link.view });
+      }
     }
     if (link.machineId) {
       const m = enrichedMachineById[link.machineId];
@@ -6211,6 +6222,10 @@ function DispatcherApp() {
     }
     if (link.jobId) {
       const j = jobs.find((x) => x.id === link.jobId);
+      // Protokol / potvrdenie zákazníka → záložka Protokol; nález checkera → Kontroly.
+      const tab = link.binderTab || (notif?.kind === "handover_protocol" || (notif?.kind === "portal_request" && /protokol/i.test(notif?.title || "")) ? "protokol"
+        : /^Checker našiel problém/.test(notif?.title || "") ? "kontroly" : null);
+      if (j && tab) _binderMem["job:" + j.id] = tab;
       if (j) setJobDetail(j);
     }
     if (link.depo) {
@@ -7166,7 +7181,7 @@ function DispatcherApp() {
         roles: ["fakturant_pozicovna"],
         title: "Opravený protokol o vrátení",
         message: `${currentUser?.name || "Dispečer"} opravil už spracovaný protokol o vrátení — stroj ${machine?.code || "—"} (${job?.customer || "—"}). Skontrolujte fakturáciu.`,
-        link: { module: "poziciovna", view: "jobs", jobId },
+        link: { module: "poziciovna", view: "jobs", jobId, binderTab: "protokol" },
       });
     }
     if (existing) {
@@ -7184,7 +7199,7 @@ function DispatcherApp() {
         kind: "handover_protocol",
         title: "Protokol o vrátení vypísaný",
         message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.returnCustomerAbsent ? " — zákazník nebol prítomný. Pošlite mu odkaz na portál (karta zákazky → záložka Zákazník), aby protokol potvrdil" : ""}. Dostupné na karte zákazky.`,
-        link: { module: "poziciovna", view: "jobs", jobId },
+        link: { module: "poziciovna", view: "jobs", jobId, binderTab: "protokol" },
         afterProtocolId: recordId,
       }, { job });
       if (job && !job.selfReturn) ensureReturnCheckerAssignment({ ...job, ...data, id: job.id }, depoCheckers, checkerSubstitutions, recordId); // data.id = ID protokolu, nie zákazky
@@ -7195,7 +7210,7 @@ function DispatcherApp() {
         kind: "handover_protocol",
         title: "Protokol o prevzatí vypísaný",
         message: `${currentUser?.name || "Šofér"} dokončil protokol o prevzatí pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.handoverCustomerAbsent ? " — zákazník nebol prítomný. Pošlite mu odkaz na portál (karta zákazky → záložka Zákazník), aby protokol potvrdil" : ""}.`,
-        link: { module: "poziciovna", view: "jobs", jobId },
+        link: { module: "poziciovna", view: "jobs", jobId, binderTab: "protokol" },
         afterProtocolId: recordId,
       }, { job });
     }
@@ -9201,7 +9216,7 @@ function DispatcherApp() {
     const asg = rec.status === "waiting" && rec.assigneeId && prevAsgId !== rec.assigneeId && employees.find((e) => e.id === rec.assigneeId);
     if (asg?.linkedUserId && asg.linkedUserId !== currentUser?.id) pushNotification({ roles: [], userName: asg.name, userId: asg.linkedUserId, kind: "spare_parts", title: "Výdaj dielov na odovzdanie",
       message: `Odovzdajte diely pre ${rec.customer || "—"} (${plural((rec.items || []).length, "položka", "položky", "položiek")})${rec.date ? ` · ${fmtDate(rec.date)}` : ""} · ${rec.method === "delivery" ? `doručenie${rec.deliveryAddress ? ` ${rec.deliveryAddress}` : ""}` : `osobný odber${rec.depo ? `, depo ${rec.depo}` : ""}`}.`,
-      link: { module: "dnes", view: "dnes" } });
+      link: { module: "dnes", view: "dnes", partHandoverId: rec.id } });
     return true;
   }
   function billPartHandover(p, { dlNumber, erpDoc, done }) {
@@ -10276,9 +10291,10 @@ function DispatcherApp() {
               if (!depo) { showNotice(canManage ? "Vyberte depo." : "Nemáte na karte zamestnanca depo — požiadajte vedúceho servisu, nech vám ho doplní."); return false; }
               if (allowedDepos && (!allowedDepos.includes(depo) || items.some((it) => it.depo && !allowedDepos.includes(it.depo)))) return;
               const nowIso = new Date().toISOString();
+              const newIds = items.map(() => uid());
               if (persistSpareParts((spareParts) => [...spareParts,
-                ...items.map((data) => ({
-                  id: uid(),
+                ...items.map((data, i) => ({
+                  id: newIds[i],
                   ...data,
                   ...(forcedDepo ? { depo: forcedDepo } : null),
                   stav: canManage ? SPAREPART_STAV.CAKA_NA_OBJEDNANIE : SPAREPART_STAV.CAKA_NA_SCHVALENIE,
@@ -10299,7 +10315,7 @@ function DispatcherApp() {
                     items.length === 1
                       ? `${myEmployee?.name || "Technik"} žiada ${items[0].pocetKusov}× ${items[0].cisloDielu} — ${items[0].popisDielu} (${depo})`
                       : `${myEmployee?.name || "Technik"} žiada ${items.length} položiek (${depo})`,
-                  link: { module: "servis", view: "diely", depo },
+                  link: { module: "servis", view: "diely", depo, partId: newIds[0] },
                 });
               }
             }}
@@ -10313,7 +10329,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Požiadavka na diel schválená",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo schválené, čaká na objednanie.`,
-                  link: { module: "servis", view: "diely", depo: p.depo },
+                  link: { module: "servis", view: "diely", depo: p.depo, partId: p.id },
                 });
               }
             }}
@@ -10336,7 +10352,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Požiadavka na diel schválená",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo schválené, čaká na objednanie.`,
-                  link: { module: "servis", view: "diely", depo: p.depo },
+                  link: { module: "servis", view: "diely", depo: p.depo, partId: p.id },
                 });
               });
             }}
@@ -10350,7 +10366,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Požiadavka na diel zamietnutá",
                   message: `${p.cisloDielu} — ${p.popisDielu}: ${reason}`,
-                  link: { module: "servis", view: "diely", depo: p.depo },
+                  link: { module: "servis", view: "diely", depo: p.depo, partId: p.id },
                 });
               }
             }}
@@ -10366,7 +10382,7 @@ function DispatcherApp() {
                   userName: p.requestedBy,
                   title: "Náhradný diel objednaný",
                   message: `${p.cisloDielu} — ${p.popisDielu} bolo objednané.`,
-                  link: { module: "servis", view: "diely", depo: p.depo },
+                  link: { module: "servis", view: "diely", depo: p.depo, partId: p.id },
                 });
               }
             }}
@@ -11087,7 +11103,7 @@ function DispatcherApp() {
               // Kto do Servisu nemá prístup (šofér), dostane aspoň detail nad kartou.
               if (!canNavTo("servis", view)) { pushCard("machine", machineCard); setServiceEventDetail(d); setMachineCard(null); return; }
               setMachineCard(null);
-              navigateFromNotification({ module: "servis", view, damageId: d.id });
+              navigateFromNotification({ module: "servis", view, damageId: d.id, openDetail: false });
               return;
             }
             pushCard("machine", machineCard);
@@ -11778,7 +11794,7 @@ function DispatcherApp() {
                   kind: "damage_new",
                   title: `Checker našiel problém pri kontrole ${isReturn ? "po vrátení" : "pred vývozom"}`,
                   message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola ${isReturn ? "po vrátení" : "pred vývozom"} zaznamenala problém.`,
-                  link: { module: "poziciovna", view: "jobs", jobId: job.id },
+                  link: { module: "poziciovna", view: "jobs", jobId: job.id, binderTab: "kontroly" },
                 }, { job, extraRoles: ["dispecer_servisu", "veduci_servisu"] });
               }
               setCheckerInspectionTarget(null);
@@ -12346,7 +12362,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                     onClick={() => {
                       if (isUnread) onMarkRead(n.id);
                       if (n.link) {
-                        onNavigate?.(n.link);
+                        onNavigate?.(n.link, n);
                         setOpen(false);
                       }
                     }}
@@ -27954,9 +27970,9 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
 }
 
 // Karta úlohy na „Dnes“ — všetky akcie obrysové; plné červené tlačidlo má len veľká karta (TodayHero) navrchu.
-function TodayCard({ tag, tagColor, tagBg, title, sub, problem, actions, children }) {
+function TodayCard({ id, tag, tagColor, tagBg, title, sub, problem, actions, children }) {
   return (
-    <div className={`panel${problem ? " today-problem" : ""}`} style={{ padding: 12, marginBottom: 10 }}>
+    <div id={id} className={`panel${problem ? " today-problem" : ""}`} style={{ padding: 12, marginBottom: 10 }}>
       <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: tagBg, color: tagColor }}>{problem ? "⚠ " : ""}{tag}</span>
       <div className={problem ? "today-problem-title" : undefined} style={{ fontWeight: 700, fontSize: 15, margin: "6px 0 2px" }}>{title}</div>
       {sub && <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{sub}</div>}
@@ -27997,6 +28013,19 @@ function TodayHero({ tag, head, headSmall, sub, problem, actions, children }) {
   );
 }
 // Kompaktný 64px riadok; ťuk rozbalí plnú kartu so všetkými akciami.
+// Po kliknutí na upozornenie: počká, kým sa záznam vykreslí, posunie naň a na chvíľu ho orámuje.
+function flashById(domId) {
+  let n = 0;
+  const t = setInterval(() => {
+    const el = document.getElementById(domId);
+    if (!el && ++n < 30) return;
+    clearInterval(t);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.outline = "2px solid var(--accent)"; el.style.boxShadow = "0 0 0 4px var(--accent-light)";
+    setTimeout(() => { el.style.outline = ""; el.style.boxShadow = ""; }, 4000);
+  }, 100);
+}
 function TodayCompactRow({ id, title, sub, problem, defaultOpen, children }) {
   const [open, setOpen] = useState(!!defaultOpen);
   if (open) return children;
@@ -28039,11 +28068,11 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const partItems = waitingParts.map((p) => {
     const title = `${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`;
     const sub = `${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`;
-    return { key: p.id, tag: `VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`, ...TODAY_TAG.part, title, sub, head: p.customer, heroSub: sub, rowTitle: `Výdaj dielov${p.date && p.date > today ? " · zajtra" : ""} · ${p.customer}`,
+    return { key: p.id, domId: "ph-" + p.id, tag: `VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`, ...TODAY_TAG.part, title, sub, head: p.customer, heroSub: sub, rowTitle: `Výdaj dielov${p.date && p.date > today ? " · zajtra" : ""} · ${p.customer}`,
       actions: [{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }] };
   });
-  const asCard = (it) => <TodayCard key={it.key} tag={it.tag} tagColor={it.tagColor} tagBg={it.tagBg} title={it.title} sub={it.sub} problem={it.problem} actions={it.actions} />;
-  const asRow = (it) => <TodayCompactRow key={it.key} title={it.rowTitle || it.title} sub={it.rowSub ?? it.sub} problem={it.problem}>{asCard(it)}</TodayCompactRow>;
+  const asCard = (it) => <TodayCard key={it.key} id={it.domId} tag={it.tag} tagColor={it.tagColor} tagBg={it.tagBg} title={it.title} sub={it.sub} problem={it.problem} actions={it.actions} />;
+  const asRow = (it) => <TodayCompactRow key={it.key} id={it.domId} title={it.rowTitle || it.title} sub={it.rowSub ?? it.sub} problem={it.problem}>{asCard(it)}</TodayCompactRow>;
   const partCards = partItems.map(asCard);
 
   if (isDriver) {
@@ -28320,7 +28349,7 @@ function TodayList({ title, rows, empty }) {
           // Plné červené tlačidlo len prvý riadok zoznamu, a len ak je to problém; ostatné obrysové.
           const primary = i === 0 && problem;
           return (
-            <div key={r.key} className={problem ? "today-problem" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderTop: i ? "1px solid var(--border)" : "none", flexWrap: "wrap" }}>
+            <div key={r.key} id={r.key} className={problem ? "today-problem" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderTop: i ? "1px solid var(--border)" : "none", flexWrap: "wrap" }}>
               {problem && <span aria-hidden="true" style={{ color: "var(--danger)", fontSize: 16 }}>⚠</span>}
               <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: problem ? "var(--panel)" : TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
               <div style={{ flex: "1 1 200px", minWidth: 0 }}>
@@ -29309,7 +29338,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                 <tr><td className="td-plain" colSpan={11} style={{ color: "var(--text-dim)" }}>Žiadne položky nezodpovedajú filtru.</td></tr>
               ) : (
                 groupRows.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} id={`sp-${p.id}`}>
                     {columns.map((c) =>
                       canManage ? (
                         <td key={c.key} data-label={c.label}>
@@ -29464,7 +29493,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                   <tr><td className="td-plain" colSpan={9} style={{ color: "var(--text-dim)" }}>Nič sa nenašlo.</td></tr>
                 ) : (
                   searchResults.map((p) => (
-                    <tr key={p.id}>
+                    <tr key={p.id} id={`sp-${p.id}`}>
                       <td data-label="Depo">{p.depo}</td>
                       <td style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
                       <td data-label="Stav">
@@ -29519,7 +29548,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </thead>
               <tbody>
                 {pending.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} id={`sp-${p.id}`}>
                     {pending.length > 1 && (
                       <td data-label="Vybrať">
                         <input
@@ -29572,7 +29601,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
               </thead>
               <tbody>
                 {zamietnute.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} id={`sp-${p.id}`}>
                     {columns.map((c) => <td key={c.key} data-label={c.label}>{p[c.key] || "—"}</td>)}
                     <td style={{ whiteSpace: "nowrap" }} data-label="Určenie">{urcenieLabel(p.urcenie)}</td>
                     <td style={{ color: "var(--danger-text)" }} data-label="Dôvod">{p.rejectionReason}</td>
