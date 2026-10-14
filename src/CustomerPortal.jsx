@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // Samostatná, ľahká stránka bez prihlásenia — zámerne NEIMPORTUJE App.jsx (obrovský
@@ -62,7 +62,7 @@ function protocolEsc(s) {
 function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
-  const absentBlock = () => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div></div>`;
+  const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div>${confirmLine(c) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
   function sigBlock(dataUrl, label, name) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -145,7 +145,7 @@ function buildOfficialProtocolHtml(data) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${data.handoverCustomerAbsent ? absentBlock() : sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
+        ${data.handoverCustomerAbsent ? absentBlock(data.handoverCustomerConfirm) : sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
         ${sigBlock(data.handoverDriverSignature, "Za prenajímateľa", data.handoverDriverName)}
       </div>`}
     </div>
@@ -154,7 +154,7 @@ function buildOfficialProtocolHtml(data) {
       ${data.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${data.returnCustomerAbsent ? absentBlock() : sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
+        ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm) : sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
         ${sigBlock(data.returnDriverSignature, "Za prenajímateľa", data.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
@@ -182,7 +182,79 @@ const SEC = { fontFamily: "'Barlow Condensed', 'Barlow', Arial, sans-serif", fon
 const LINK = { color: "#1A1A1A", textDecoration: "none" };
 const BTN = { width: "100%", minHeight: 48, padding: "10px 14px", borderRadius: 8, background: "#fff", fontFamily: "inherit", fontWeight: 600, fontSize: 15, cursor: "pointer" };
 
-function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent }) {
+// v1.0.808: protokol spísaný bez zákazníka — potvrdenie / nesúhlas zákazníka cez portál.
+function confirmLine(c) {
+  if (!c || !c.status) return "";
+  const at = c.at ? new Date(c.at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  return c.status === "confirmed"
+    ? `Potvrdené zákazníkom v portáli ${at} — ${c.name || ""}`
+    : `Zákazník nesúhlasí (${at}, ${c.name || ""}): ${c.comment || ""}`;
+}
+function SignaturePad({ onChange }) {
+  const ref = useRef(null);
+  const drawing = useRef(false);
+  const moved = useRef(false); // ťuknutie bez ťahu nie je podpis
+  const pos = (e) => { const b = ref.current.getBoundingClientRect(); return [(e.clientX - b.left) * (ref.current.width / b.width), (e.clientY - b.top) * (ref.current.height / b.height)]; };
+  const down = (e) => { e.preventDefault(); ref.current.setPointerCapture?.(e.pointerId); drawing.current = true; const ctx = ref.current.getContext("2d"); const [x, y] = pos(e); ctx.beginPath(); ctx.moveTo(x, y); moved.current = false; };
+  const move = (e) => { if (!drawing.current) return; const ctx = ref.current.getContext("2d"); ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.strokeStyle = "#111"; const [x, y] = pos(e); ctx.lineTo(x, y); ctx.stroke(); moved.current = true; };
+  const up = () => { if (!drawing.current) return; drawing.current = false; if (moved.current) onChange(ref.current.toDataURL("image/png")); };
+  const clear = () => { ref.current.getContext("2d").clearRect(0, 0, ref.current.width, ref.current.height); onChange(null); };
+  return (
+    <div>
+      <canvas ref={ref} width={600} height={200} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
+        style={{ width: "100%", height: 120, border: "1px solid #CFCFCF", borderRadius: 8, background: "#fff", touchAction: "none" }} aria-label="Podpis" />
+      <button type="button" onClick={clear} style={{ ...BTN, width: "auto", minHeight: 36, fontSize: 14, border: "1px solid #CFCFCF", marginTop: 6 }}>Vymazať podpis</button>
+    </div>
+  );
+}
+function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
+  const [mode, setMode] = useState(null); // null | "agree" | "disagree"
+  const [name, setName] = useState("");
+  const [sig, setSig] = useState(null);
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+  const ok = name.trim() && (mode === "agree" ? !!sig : comment.trim());
+  async function send() {
+    if (!ok || sending) return;
+    setSending(true); setError(null);
+    const res = await onSubmit(mode === "agree", name.trim(), sig, comment.trim());
+    setSending(false);
+    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : "Nepodarilo sa odoslať — skúste to znova.");
+  }
+  return (
+    <div style={{ background: "#FFF8E1", border: "1px solid #E6C25A", borderRadius: 8, padding: 12, marginTop: 10 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{phaseLabel} stroja prebehlo bez Vás</div>
+      <div style={{ fontSize: 14, color: "#3A3A3A", marginBottom: 8 }}>Skontrolujte stav stroja podľa fotiek a checklistu vyššie a protokol potvrďte, alebo nám napíšte, s čím nesúhlasíte.</div>
+      {!mode ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => setMode("agree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", background: "#E30613", color: "#fff", border: "none" }}>Potvrdiť protokol</button>
+          <button type="button" onClick={() => setMode("disagree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", border: "1px solid #CFCFCF" }}>Nesúhlasím</button>
+        </div>
+      ) : (
+        <div>
+          <label htmlFor={`cf-meno-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>Meno a priezvisko *</label>
+          <input id={`cf-meno-${phaseLabel}`} autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} style={{ width: "100%", minHeight: 44, border: "1px solid #CFCFCF", borderRadius: 8, padding: "0 10px", fontSize: 15, boxSizing: "border-box", marginBottom: 8 }} />
+          {mode === "agree" ? (
+            <><label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>Podpis *</label><SignaturePad onChange={setSig} /></>
+          ) : (
+            <><label htmlFor={`cf-koment-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>S čím nesúhlasíte? *</label>
+              <textarea id={`cf-koment-${phaseLabel}`} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} style={{ width: "100%", border: "1px solid #CFCFCF", borderRadius: 8, padding: 10, fontSize: 15, boxSizing: "border-box" }} /></>
+          )}
+          {error && <div style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {error}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => { setMode(null); setError(null); }} style={{ ...BTN, flex: "1 1 120px", width: "auto", border: "1px solid #CFCFCF" }}>Späť</button>
+            <button type="button" disabled={!ok || sending} onClick={send} style={{ ...BTN, flex: "2 1 180px", width: "auto", background: ok ? "#E30613" : "#EFEFEF", color: ok ? "#fff" : "#767676", border: "none" }}>
+              {sending ? "Odosielam…" : mode === "agree" ? "Potvrdiť podpisom" : "Odoslať nesúhlas"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, onConfirm }) {
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
@@ -210,13 +282,22 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 13, color: "#8E0A12", height: 50, display: "flex", alignItems: "center" }}>Zákazník nebol prítomný</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
         <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
           {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
       </div>
+      {custAbsent && (photos || []).length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Fotky stroja pri {title === "Prevzatie" ? "odovzdaní" : "vrátení"}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {photos.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt={`Fotka ${i + 1}`} style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }} /></a>)}
+          </div>
+        </div>
+      )}
+      {custAbsent && !confirm && onConfirm && <div id={`potvrdit-${title}`}><ConfirmProtocolBox phaseLabel={title} onSubmit={onConfirm} /></div>}
     </div>
   );
 }
@@ -352,6 +433,16 @@ export default function CustomerPortal({ token }) {
   const [state, setState] = useState("loading"); // loading | ok | invalid | error
   const [data, setData] = useState(null);
 
+  async function confirmProtocol(phase, agree, name, signature, comment) {
+    const { data: result, error } = await supabase.rpc("confirm_portal_protocol", {
+      p_token: token, p_phase: phase, p_agree: agree, p_name: name, p_signature: agree ? signature : null, p_comment: comment || null,
+    });
+    if (error || !result?.ok) { console.error("confirm_portal_protocol zlyhalo", error, result); return result?.reason || "error"; }
+    const { data: fresh } = await supabase.rpc("get_portal_job", { p_token: token });
+    if (fresh) setData(fresh);
+    return true;
+  }
+
   async function submitRequest(message, requestedEndDate) {
     const type = requestedEndDate ? "extension" : "problem";
     const { data: result, error } = await supabase.rpc("submit_portal_request", {
@@ -450,6 +541,13 @@ export default function CustomerPortal({ token }) {
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             Odkaz bude aktívny od {fmtDate(data?.activeFrom)} — od dňa vývozu stroja.
           </div>
+        )}
+        {/* v1.0.808: krátka výzva hore — potvrdenie protokolu je až pri protokole na konci stránky */}
+        {state === "ok" && data && ((data.handoverCustomerAbsent && !data.handoverCustomerConfirm) || (data.returnCustomerAbsent && !data.returnCustomerConfirm)) && (
+          <button type="button" onClick={() => document.getElementById(data.handoverCustomerAbsent && !data.handoverCustomerConfirm ? "potvrdit-Prevzatie" : "potvrdit-Vrátenie")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            style={{ ...BTN, background: "#FFF8E1", border: "1px solid #E6C25A", color: "#1A1A1A", textAlign: "left", marginBottom: 12 }}>
+            ⚠ Protokol prebehol bez Vás — prosíme o potvrdenie ›
+          </button>
         )}
         {state === "error" && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
@@ -585,6 +683,9 @@ export default function CustomerPortal({ token }) {
                   checklist={data.checklist}
                   custSig={data.handoverCustomerSignature}
                   custAbsent={data.handoverCustomerAbsent}
+                  confirm={data.handoverCustomerConfirm}
+                  photos={data.handoverPhotos}
+                  onConfirm={(a, n, sg, c) => confirmProtocol("handover", a, n, sg, c)}
                   driverSig={data.handoverDriverSignature}
                 />
               )}
@@ -598,6 +699,9 @@ export default function CustomerPortal({ token }) {
                     checklist={data.checklist}
                     custSig={data.returnCustomerSignature}
                     custAbsent={data.returnCustomerAbsent}
+                    confirm={data.returnCustomerConfirm}
+                    photos={data.returnPhotos}
+                    onConfirm={(a, n, sg, c) => confirmProtocol("return", a, n, sg, c)}
                     driverSig={data.returnDriverSignature}
                   />
                 ) : (

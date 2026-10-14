@@ -31,10 +31,15 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.807";
+const APP_VERSION = "1.0.808";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.808", items: [
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Protokol spísaný bez zákazníka („Zákazník nebol prítomný“): zákazník ho v portáli potvrdí podpisom, alebo napíše, s čím nesúhlasí — dostanete upozornenie. Ak do 24 h nereaguje, tiež. Stav potvrdenia (aj nesúhlas) je na karte zákazky pri protokole a v tlači. Zákazníkovi pošlite odkaz na portál (záložka Zákazník)." },
+    { roles: ["sofer", "externy_sofer"], text: "Protokol bez zákazníka: zákazník ho dodatočne potvrdí v portáli — nič navyše nerobíte, fotky stroja sú preto dôležité." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Číslo pri „Dnes“ v menu ráta len dnešné úlohy — výdaj dielov na zajtra je v zozname označený „zajtra“." },
+  ] },
   { v: "1.0.807", items: [
     { roles: null, text: "Platforma sa načíta rýchlejšie — knižnice sa pri novej verzii znova nesťahujú. Okná: klávesnicou sa kurzor dostane do okna a po zatvorení sa vráti na tlačidlo. Výber zo zoznamu (napr. stroj) sa zavrie klikom mimo a klik rovno prejde ďalej." },
     { roles: ["veduci_servisu", "dispecer_servisu", "fakturant_servis", "technik", "veduci_technik_ba"], text: "Poškodenia: technici na tikete sa sami zosúladia s pridelením. „Upraviť stav zákazky“ po novom protokole predvyplní stav z protokolu. Dnes: Otvoriť pri EZ meraniach ukáže všetky na spracovanie. Plán servisu: hotové kontroly čitateľnejšie." },
@@ -485,10 +490,18 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   const { canEdit = false, canGoReturn = false, canEmail = false, portalLink = null, qrDataUrl = null, embedded = false } = opts;
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
-  function absentBlock(at, by) {
+  function absentBlock(at, by, conf) {
     const when = at ? new Date(at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
-    return `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu${when ? ` (${esc(when)}` : ""}${by ? `${when ? ", " : " ("}spísal ${esc(by)}` : ""}${when || by ? ")" : ""}</div></div>`;
+    return `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu${when ? ` (${esc(when)}` : ""}${by ? `${when ? ", " : " ("}spísal ${esc(by)}` : ""}${when || by ? ")" : ""}</div>${confirmHtml(conf)}</div>`;
   }
+  // v1.0.808: potvrdenie / nesúhlas zákazníka cez portál (protokol bez zákazníka).
+  function confirmHtml(c) {
+    if (!c || !c.status) return "";
+    const at = c.at ? new Date(c.at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    if (c.status === "confirmed") return `<div class="signone" style="color:#1a1a1a">Potvrdené zákazníkom v portáli ${esc(at)} — ${esc(c.name)}</div>${safeImgUrl(c.signature) ? `<img src="${escAttr(c.signature)}" class="sigimg">` : ""}`;
+    return `<div class="signone" style="color:#c62828">Zákazník nesúhlasí (${esc(at)}, ${esc(c.name)}): ${esc(c.comment)}</div>`;
+  }
+
   function sigBlock(dataUrl, label, name) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${safeImgUrl(dataUrl) ? `<img src="${escAttr(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
@@ -615,7 +628,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${p.handoverCustomerAbsent ? absentBlock(p.handoverAbsentAt, p.handoverDriverName) : sigBlock(p.handoverCustomerSignature, "Za nájomcu", p.handoverCustomerName)}
+        ${p.handoverCustomerAbsent ? absentBlock(p.handoverAbsentAt, p.handoverDriverName, p.handoverCustomerConfirm) : sigBlock(p.handoverCustomerSignature, "Za nájomcu", p.handoverCustomerName)}
         ${sigBlock(p.handoverDriverSignature, "Za prenajímateľa", p.handoverDriverName)}
       </div>`}
     </div>
@@ -624,7 +637,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
       ${p.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${p.returnCustomerAbsent ? absentBlock(p.returnAbsentAt, p.returnDriverName) : sigBlock(p.returnCustomerSignature, "Za nájomcu", p.returnCustomerName)}
+        ${p.returnCustomerAbsent ? absentBlock(p.returnAbsentAt, p.returnDriverName, p.returnCustomerConfirm) : sigBlock(p.returnCustomerSignature, "Za nájomcu", p.returnCustomerName)}
         ${sigBlock(p.returnDriverSignature, "Za prenajímateľa", p.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
@@ -3239,7 +3252,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
         onClick={() => { if (!open) { setOpen(true); setQuery(""); } }}
         // Enter vyberie prvú možnosť — nie odoslanie celého formulára (Modal).
         onKeyDown={(e) => {
-          if (e.key === "Escape" && open) { e.stopPropagation(); setOpen(false); return; } // Esc zavrie len zoznam, nie okno
+          if (e.key === "Escape" && open) { e.stopPropagation(); setOpen(false); const el = e.currentTarget; setTimeout(() => el.select(), 0); return; } // Esc zavrie len zoznam, nie okno; text označený → písanie ho nahradí
           if (e.key !== "Enter") return;
           e.preventDefault();
           if (open && query && filtered.length > 0) {
@@ -3452,7 +3465,7 @@ function KebabMenu({ actions, up, label, name, btnClass, btnStyle }) {
                   className="kebab-item"
                   role="menuitem"
                   style={{ color: a.danger ? "var(--danger)" : "var(--text)" }}
-                  onClick={() => { setOpen(false); a.onClick(); }}
+                  onClick={() => { setOpen(false); btnRef.current?.focus({ preventScroll: true }); a.onClick(); }}
                 >
                   {a.label}
                 </button>
@@ -6989,8 +7002,9 @@ function DispatcherApp() {
       return;
     }
     const hasCompleted = damageProtocols.some((p) => p.status === "Dokončené");
-    if (!hasCompleted) {
-      const lastStatus = damageProtocols[damageProtocols.length - 1]?.status || "—";
+    // už ukončený tiket (napr. „Upraviť stav zákazky“) sa znova „ukončiť“ nepýta
+    if (!hasCompleted && !d.resolved) {
+      const lastStatus = [...damageProtocols].sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))).pop()?.status || "—";
       setConfirmAction({
         message: `Podľa vypísaného protokolu servis ešte nie je dokončený (posledný stav: ${lastStatus}). Naozaj chceš zákazku ukončiť?`,
         confirmLabel: "Napriek tomu ukončiť →",
@@ -7168,7 +7182,7 @@ function DispatcherApp() {
       notifyDispatchers({
         kind: "handover_protocol",
         title: "Protokol o vrátení vypísaný",
-        message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.returnCustomerAbsent ? " — zákazník nebol prítomný" : ""}. Dostupné na karte zákazky.`,
+        message: `${currentUser?.name || "Šofér"} dokončil protokol o vrátení pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.returnCustomerAbsent ? " — zákazník nebol prítomný. Pošlite mu odkaz na portál (karta zákazky → záložka Zákazník), aby protokol potvrdil" : ""}. Dostupné na karte zákazky.`,
         link: { module: "poziciovna", view: "jobs", jobId },
         afterProtocolId: recordId,
       }, { job });
@@ -7179,7 +7193,7 @@ function DispatcherApp() {
       notifyDispatchers({
         kind: "handover_protocol",
         title: "Protokol o prevzatí vypísaný",
-        message: `${currentUser?.name || "Šofér"} dokončil protokol o prevzatí pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.handoverCustomerAbsent ? " — zákazník nebol prítomný" : ""}.`,
+        message: `${currentUser?.name || "Šofér"} dokončil protokol o prevzatí pre stroj ${machine?.code || "—"} (${job?.customer || "—"})${data.handoverCustomerAbsent ? " — zákazník nebol prítomný. Pošlite mu odkaz na portál (karta zákazky → záložka Zákazník), aby protokol potvrdil" : ""}.`,
         link: { module: "poziciovna", view: "jobs", jobId },
         afterProtocolId: recordId,
       }, { job });
@@ -9627,11 +9641,11 @@ function DispatcherApp() {
     else if (me && (r === "sofer" || r === "externy_sofer")) dnes = jobs.filter((j) => { const hp = hpByJob[j.id];
       return (j.driverId === me && j.status !== "completed" && !hp?.handoverDone && (j.departureDate || j.startDate) <= today)
         || (j.returnDriverId === me && j.status === "completed" && !j.notRealized && !hp?.returnDone && (j.pickupDate || j.endDate) <= today); }).length
-      + phMineWaiting(partHandovers, myEmployee, tomorrow).length;
+      + phMineWaiting(partHandovers, myEmployee, today).length;
     else if (me) dnes = assignments.filter((a) => a.technicianId === me && a.date && a.date <= today
       && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol(a))).length
       // rovnako ako „Máte N úloh“ na Dnes technika: + výdaje dielov na odovzdanie + EZ merania (jedna položka)
-      + phMineWaiting(partHandovers, myEmployee, tomorrow).length
+      + phMineWaiting(partHandovers, myEmployee, today).length
       + (ezMeasurements.some((m) => m.assignedTechnicianId === me && !m.processed && m.assignedDate && m.assignedDate <= today) ? 1 : 0);
     const monthAgo = addDaysISO(today, -30);
     const prepravy = !can(effectiveUser, "transport_assign_driver") ? 0 : jobs.filter((j) => todayOfficeProps.isMyJob(j) && !j.notRealized).reduce((n, j) => {
@@ -11960,6 +11974,8 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
           {!isMobileVariant && <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />}
           <div
             className="panel dropdown-panel"
+            // položka menu otvorí okno → fokus vopred na tlačidlo účtu, aby sa po zatvorení okna vrátil sem (nie na <body>)
+            onClickCapture={(e) => { if (e.target.closest("button")) e.currentTarget.parentElement.querySelector(":scope > button")?.focus({ preventScroll: true }); }}
             style={
               isMobileVariant
                 ? { position: "static", width: "100%", maxWidth: "none", marginTop: 6, padding: 6 }
@@ -13284,7 +13300,7 @@ function NewMenu({ actions }) {
       {open && (
         <div className="header-new-drop">
           {actions.map((a) => (
-            <button key={a.key} className="kebab-item" onClick={() => { setOpen(false); a.onClick(); }}>{a.label}</button>
+            <button key={a.key} className="kebab-item" onClick={() => { setOpen(false); ref.current?.querySelector(".header-new-btn")?.focus({ preventScroll: true }); a.onClick(); }}>{a.label}</button>
           ))}
         </div>
       )}
@@ -17483,7 +17499,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
             )}
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={{ fontSize: 13, marginBottom: 6 }}>
-                Ukážte tento QR kód zákazníkovi — naskenovaním uvidí stav zákazky a tento protokol, bez prihlásenia.
+                {customerAbsent ? "Zákazník nebol prítomný — odkaz na portál mu pošle dispečer, aby protokol potvrdil." : "Ukážte tento QR kód zákazníkovi — naskenovaním uvidí stav zákazky a tento protokol, bez prihlásenia."}
               </div>
               <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ width: "100%", fontSize: 12, marginBottom: 6 }} />
               <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(portalLink)}>
@@ -18281,6 +18297,19 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           {handoverProtocol.returnDone && ` · Vrátenie ${fmtDate(handoverProtocol.returnDate)}`}
         </div>
       )}
+            {/* Protokol bez zákazníka: stav potvrdenia v portáli (nesúhlas aj s komentárom) */}
+            {handoverProtocol && [["handover", "Prevzatie"], ["return", "Vrátenie"]].map(([ph, lbl]) => {
+              if (!handoverProtocol[ph + "CustomerAbsent"] || !handoverProtocol[ph + "Done"]) return null;
+              const c = handoverProtocol[ph + "CustomerConfirm"];
+              const st = c?.status === "disputed" ? "disputed" : c?.status === "confirmed" ? "confirmed" : null;
+              return (
+                <div key={ph} style={{ fontSize: 13, marginBottom: 10, color: st === "disputed" ? "var(--danger)" : st ? "var(--text)" : "var(--text-dim)" }}>
+                  {st === "disputed" ? `⚠ ${lbl}: zákazník nesúhlasí s protokolom${c.name ? ` (${c.name})` : ""}${c.comment ? ` — „${c.comment}“` : ""}`
+                    : st ? `✓ ${lbl}: zákazník potvrdil protokol v portáli${c.name ? ` (${c.name})` : ""}`
+                    : `${lbl} prebehlo bez zákazníka — čaká na potvrdenie v portáli.`}
+                </div>
+              );
+            })}
             {!handoverProtocol && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Protokol zatiaľ nie je vypísaný.</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {machine && (handoverProtocol ? (can(user, "handover_protocol_write") || can(user, "handover_protocol_edit_locked")) : can(user, "handover_protocol_write")) && (
@@ -18354,6 +18383,10 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
               actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: onComplete } : job.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${job.customerPhone}` }] },
           ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
             text: <>Stroj má otvorené poškodenie: <b>{d.popis || "—"}</b></>, actions: [onOpenDamage && { label: "Detail poškodenia", onClick: () => onOpenDamage(d) }] })),
+          ...[["handover", "prevzatí"], ["return", "vrátení"]].filter(([ph]) => handoverProtocol?.[ph + "CustomerConfirm"]?.status === "disputed").map(([ph, lbl]) => {
+            const c = handoverProtocol[ph + "CustomerConfirm"];
+            return { tone: "red", text: <>Zákazník nesúhlasí s protokolom o {lbl}{c.comment ? <>: „{c.comment}“</> : ""}</>, actions: [{ label: "Protokol", onClick: () => setBinderTab("protokol") }] };
+          }),
           user?.role === "fakturant_pozicovna" && handoverProtocol?.returnDone && !handoverProtocol?.erpProcessed &&
             { text: "Stroj je vrátený — čaká na spracovanie do ERP (Dnes · Fakturácia)." },
         ];
@@ -28002,7 +28035,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
   const partItems = waitingParts.map((p) => {
     const title = `${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`;
     const sub = `${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`;
-    return { key: p.id, tag: `VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`, ...TODAY_TAG.part, title, sub, head: p.customer, heroSub: sub, rowTitle: `Výdaj dielov · ${p.customer}`,
+    return { key: p.id, tag: `VÝDAJ DIELOV${p.date && p.date > today ? " · ZAJTRA" : ""}`, ...TODAY_TAG.part, title, sub, head: p.customer, heroSub: sub, rowTitle: `Výdaj dielov${p.date && p.date > today ? " · zajtra" : ""} · ${p.customer}`,
       actions: [{ label: "Odovzdať", onClick: () => onPartHandover(p) }, p.method === "delivery" && p.deliveryAddress && { label: "Navigovať", href: mapsUrl(p.deliveryAddress) }] };
   });
   const asCard = (it) => <TodayCard key={it.key} tag={it.tag} tagColor={it.tagColor} tagBg={it.tagBg} title={it.title} sub={it.sub} problem={it.problem} actions={it.actions} />;
