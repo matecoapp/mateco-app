@@ -32,6 +32,8 @@ const MACHINE_CATEGORY_OPTIONS = [
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
 const APP_VERSION = "1.0.809";
+// Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
+const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
@@ -139,6 +141,10 @@ function whatsNewFor(role, seen) {
   return CHANGELOG.filter((c) => _verNum(c.v) > _verNum(seen))
     .flatMap((c) => c.items.filter((i) => !i.roles || role === "admin" || i.roles.includes(role)).map((i) => i.text));
 }
+// Odkaz zákazníka na portál (?portal=<token>) nesmie odísť do hlásenia chýb — v adrese, breadcrumboch ani názve stránky.
+function scrubPortalToken(event) {
+  try { return JSON.parse(JSON.stringify(event).replace(/(portal=)[^&"#\s\\]+/g, "$1[skryté]")); } catch { return event; }
+}
 // Sledovanie chýb (Sentry) — zapne sa len s DSN (GitHub secret VITE_SENTRY_DSN), bez mien a e-mailov.
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -150,8 +156,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     tracesSampleRate: 0.2, // ponytail: 20 % obrazoviek stačí na prehľad o používaní a drží free tier
     beforeSend(event) {
       event.tags = { ...event.tags, signal: navigator.onLine ? "áno" : "nie" };
-      return event;
+      return scrubPortalToken(event);
     },
+    beforeSendTransaction: scrubPortalToken,
   });
 }
 // Prehľad prepráv: hlavička dňa („Dnes · pi 2. 10.“ / „Po 5. 10.“) a deň v maile („na pondelok“).
@@ -473,7 +480,7 @@ function jsonForScriptTag(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 function decodeProtocolHtml(params) {
-  let html = PROTOCOL_HTML;
+  let html = PROTOCOL_HTML.replace(/https:\/\/fonts\.googleapis\.com\/css2\?[^"]*/, FONT_CSS_URL);
   const script = `<script>window.__PROTOCOL_PREFILL__ = ${jsonForScriptTag(params || {})}; window.__PROTOCOL_MACHINES__ = ${jsonForScriptTag(_protocolMachinesList)}; window.__PROTOCOL_TECHNICIANS__ = ${jsonForScriptTag(_protocolTechniciansList)}; window.__PROTOCOL_TODAY__ = ${jsonForScriptTag(todayISO())};</script>`;
   html = html.replace("<head>", "<head>" + script);
   return html;
@@ -530,7 +537,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
 <html lang="sk"><head><meta charset="UTF-8">
 <meta name="mateco-bar" content="Protokol o odovzdaní a prevzatí stroja · ${esc(machine?.code || "")}">
 <title>Protokol ${esc(p.protocolNumber)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="${FONT_CSS_URL}">
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: 'Barlow', Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
@@ -746,7 +753,7 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Servisný protokol ${esc(p.machineSerial)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="${FONT_CSS_URL}">
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; margin: 0; background: #e8e8e8; }
@@ -30203,7 +30210,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
 if (typeof document !== "undefined" && !document.getElementById("mateco-font")) {
   const l = document.createElement("link");
   l.id = "mateco-font"; l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap";
+  l.href = FONT_CSS_URL;
   document.head.appendChild(l);
 }
 function GlobalStyle() {
