@@ -220,7 +220,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
     setSending(true); setError(null);
     const res = await onSubmit(mode === "agree", name.trim(), sig, comment.trim());
     setSending(false);
-    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : "Nepodarilo sa odoslať — skúste to znova.");
+    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : res === "invalid_token" ? "Tento odkaz už nie je platný." : "Nepodarilo sa odoslať — skúste to znova.");
   }
   return (
     <div style={{ background: "#FFF8E1", border: "1px solid #E6C25A", borderRadius: 8, padding: 12, marginTop: 10 }}>
@@ -498,7 +498,7 @@ export default function CustomerPortal({ token }) {
               setTimeout(() => { if (!cancelled) refetch(true, attemptsLeft - 1); }, 1500);
               return;
             }
-            if (showLoading) setState("invalid");
+            setState("invalid"); // aj pri obnove na pozadí — dispečer odkaz medzitým zneplatnil
             return;
           }
           setData(result);
