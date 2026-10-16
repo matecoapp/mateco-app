@@ -31,12 +31,22 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.809";
+const APP_VERSION = "1.0.811";
+const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.811", items: [
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"], text: "Pod podpisom zákazníka je odkaz na Ochranu osobných údajov, v tlači protokolov a dodacích listov je v pätičke." },
+  ] },
+  { v: "1.0.810", items: [
+    { roles: ["veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "admin"], text: "Vedúci technik BA je v zozname technikov: dá sa prideliť, predvyplní sa v protokole a dostáva upozornenia ako technik." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "„Vybavené“ pri nesúhlase zákazníka už neprepíše vrátenie stroja uložené z iného zariadenia. Karta otvorená z upozornenia na záložke Zákazník hneď vytvorí odkaz." },
+    { roles: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"], text: "Žiadosť zákazníka o predĺženie po vrátení stroja sa zamietne s upozornením obchodníkovi." },
+    { roles: null, text: "Písmo Barlow aj na tlačidlách a poliach, aj pri prvom spustení bez signálu. Kurzor sa po zatvorení okien a ponuky Viac vracia na správne miesto." },
+  ] },
   { v: "1.0.809", items: [
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Nesúhlas zákazníka s protokolom sa dá v „Teraz treba“ označiť ako Vybavené (v protokole aj v tlači ostane). Upozornenie „pošlite mu odkaz“ a „Zákazník nepotvrdil protokol“ otvorí kartu zákazky rovno na záložke Zákazník (odkaz, QR, email)." },
     { roles: ["veduci_technik_ba"], text: "Upozornenie na dnešnú úlohu otvorí „Dnes“ (budúcu ako doteraz Plán servisu)." },
@@ -269,6 +279,14 @@ const ROLES = [
 const LEAD_TECHNICIAN_DEPOS = {
   veduci_technik_ba: ["Bratislava", "Nitra"],
 };
+// Veta pod podpisom zákazníka (rovnaká ako v portáli).
+function PrivacyNote() {
+  return (
+    <div style={{ fontSize: 12, color: "var(--text-dim)", margin: "-4px 0 12px" }}>
+      Meno a podpis zákazníka uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline", display: "inline-block", padding: "14px 0" }}>Ochrana osobných údajov</a>
+    </div>
+  );
+}
 function myAssignableDepos(user) {
   return LEAD_TECHNICIAN_DEPOS[user?.role] || null;
 }
@@ -667,7 +685,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   </div>
   <div class="footer">
     mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
-    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>
     IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
   </div>
@@ -975,7 +993,7 @@ ${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-ite
 
   <div class="footer">
     mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
-    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>
     IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
   </div>
@@ -1159,7 +1177,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
   </div>
   <div class="footer">
     mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
-    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
+    T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>
     IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
   </div>
@@ -2748,7 +2766,7 @@ async function flushPublicTokenClaims() {
 if (typeof window !== "undefined") {
   window.addEventListener("online", flushPublicTokenClaims);
 }
-const MERGE_ON_SAVE = new Set(["jobs", "customers", "employees", "damages", "machines", "reservations", "vehicles", "partHandovers"]);
+const MERGE_ON_SAVE = new Set(["jobs", "customers", "employees", "damages", "machines", "reservations", "vehicles", "partHandovers", "handoverProtocols"]); // protokol: kancelária zo staršej kópie neprepíše práve dokončenú fázu šoféra
 function saveRecordRow(table, item, base) {
   if (table !== "record_locks" && officeOffline(table, item, base)) return Promise.resolve();
   const qKey = `${table}:${item.id}`;
@@ -3548,8 +3566,14 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
       const i = _modalStack.indexOf(token);
       if (i >= 0) _modalStack.splice(i, 1);
       // Až po prekreslení — tlačidlo (napr. „+“ v mobilnej lište) je pri otvorenom okne skryté a fokus by neprijalo.
-      const back = () => { if (opener && opener !== document.body && opener.isConnected && !opener.matches("input, textarea, select")
-        && (!document.activeElement || document.activeElement === document.body)) opener.focus({ preventScroll: true }); };
+      const back = () => {
+        if (document.activeElement && document.activeElement !== document.body) return;
+        if (opener && opener !== document.body && opener.isConnected && !opener.matches("input, textarea, select")) opener.focus({ preventScroll: true });
+        else { const panels = document.querySelectorAll(".modal-panel"); panels[panels.length - 1]?.focus({ preventScroll: true }); } // tlačidlo zmizlo (napr. „Vybavené“) → okno pod ním
+      };
+      // Okno zavreté Enterom v poli (uloženie): fokus prejde na tlačidlo ešte počas stlačenia — bez preventDefault by ho Enter hneď „klikol“ (napr. znova otvoril menu).
+      const ev = window.event;
+      if (ev?.type === "keydown" && (ev.key === "Enter" || ev.key === " ")) ev.preventDefault();
       back(); setTimeout(back, 0);
     };
   }, []);
@@ -4044,7 +4068,7 @@ function DispatcherApp() {
   const [vehicles, setVehicles] = useState([]); // vozový park (STK/EK)
   const [portalRequests, setPortalRequests] = useState([]); // žiadosti zákazníka z portálu (problém / predĺženie)
   const [employees, setEmployees] = useState([]); // zjednotený zoznam osôb (technici, šoféri, obchodníci, dispečeri...)
-  const technicians = useMemo(() => employees.filter((e) => e.role === "technik"), [employees]);
+  const technicians = useMemo(() => employees.filter((e) => e.role === "technik" || e.role === "veduci_technik_ba"), [employees]); // vedúci technik BA robí aj servisné úlohy (meno na pridelení, protokol, upozornenia)
   const drivers = useMemo(() => employees.filter((e) => e.role === "sofer" || e.role === "externy_sofer"), [employees]);
   // Auto (ŠPZ) sa už nezadáva ručne na technikovi/šoférovi — ťahá sa z
   // Administratívy → Autá, podľa toho, komu je tam auto priradené
@@ -7601,8 +7625,7 @@ function DispatcherApp() {
     }
     if (approve && returned) {
       showNotice("Stroj už bol vrátený — zmenu termínu nie je možné schváliť. Žiadosť sa uzavrie ako zamietnutá.");
-      approve = false;
-      note = "Stroj už bol vrátený.";
+      return rejectPortalRequest(request, "Stroj už bol vrátený."); // aj s upozornením obchodníkovi, ako pri ručnom zamietnutí
     }
     if (approve) {
       // Zvoz (pickupDate) sa posunie spolu s koncom zákazky len vtedy, keď bol
@@ -13287,7 +13310,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
         )}
         {item(s1)}
         {(restTabs.length > 0 || !phoneInBar) && (
-          <button className={`mnav-t${restActive ? " active" : ""}`} onClick={() => setSheet("viac")}>
+          <button className={`mnav-t mnav-viac${restActive ? " active" : ""}`} onClick={() => setSheet("viac")}>
             <NavIcon id="viac" size={22} />
             <span>Viac</span>
             {restBadge > 0 && <span className="mnav-b">{restBadge}</span>}
@@ -13295,7 +13318,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
         )}
       </div>
       {sheet && (
-        <div className="mobile-nav-overlay">
+        <div className="mobile-nav-overlay" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setSheet(null); document.querySelector(sheet === "plus" ? ".mnav-plus" : ".mnav-viac")?.closest("button")?.focus({ preventScroll: true }); } }}>
           <div className="mobile-nav-scrim" onClick={() => setSheet(null)} />
           <div className="mnav-sheet">
             <div className="mnav-grab" />
@@ -13313,7 +13336,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
                 <NavList modules={rest} module={module} view={view} exclude={used} rowClass="mnav-row" onGo={go} onPickDoc={(m, st) => { setSheet(null); onPickDoc(m, st); }} />
                 <div className="nav-sec">Ostatné</div>
                 {!phoneInBar && (
-                  <button className="mnav-row" onClick={() => { setSheet(null); onOpenPhoneDirectory(); }}><NavIcon id="telefon" />Telefónny zoznam</button>
+                  <button className="mnav-row" onClick={() => { setSheet(null); setTimeout(() => { document.querySelector(".mnav-viac")?.focus({ preventScroll: true }); onOpenPhoneDirectory(); }, 0); }}><NavIcon id="telefon" />Telefónny zoznam</button>
                 )}
                 <button className="mnav-row" onClick={() => { setSheet(null); sendFeedbackMail(); }}><NavIcon id="mail" />Poslať pripomienku</button>
               </>
@@ -17717,6 +17740,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} />}
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} />
       </div>
+      {!customerAbsent && <PrivacyNote />}
 
       <FormFoot
         cancel={false}
@@ -18198,6 +18222,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
   const portalLink = job.publicToken
     ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
     : null;
+  // Karta otvorená z upozornenia rovno na záložke Zákazník — odkaz vytvoriť hneď (inak by ostalo „Generujem odkaz…“).
+  useEffect(() => { if (binderTab === "zakaznik" && !portalLink && onGeneratePortalLink) onGeneratePortalLink(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!showPortalPanel || !portalLink) return;
     let cancelled = false;
@@ -18439,7 +18465,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
             text: <>Stroj má otvorené poškodenie: <b>{d.popis || "—"}</b></>, actions: [onOpenDamage && { label: "Detail poškodenia", onClick: () => onOpenDamage(d) }] })),
           ...[["handover", "prevzatí"], ["return", "vrátení"]].filter(([ph]) => handoverProtocol?.[ph + "CustomerConfirm"]?.status === "disputed" && !handoverProtocol[ph + "DisputeDone"]).map(([ph, lbl]) => {
             const c = handoverProtocol[ph + "CustomerConfirm"];
-            // Vybaviť smie kancelária požičovne (DB: handover_protocol_guard pustí len ju a admina).
+            // Vybaviť smie kancelária požičovne a admin (DB: keep_portal_confirm, step96 — iným rolám značku zahodí, staršia kópia ju nezmaže).
             const canResolve = onResolveDispute && (isAdminUser(user) || ["dispecer_pozicovne", "veduci_pozicovne"].includes(user?.role));
             return { tone: "red", text: <>Zákazník nesúhlasí s protokolom o {lbl}{c.comment ? <>: „{c.comment}“</> : ""}</>,
               actions: [{ label: "Protokol", onClick: () => setBinderTab("protokol") }, canResolve && { label: "Vybavené", onClick: () => setConfirmDispute(ph) }] };
@@ -28863,7 +28889,7 @@ ${rec.note || rec.handoverNote ? `<div class="note">${rec.note ? `<b>Poznámka:<
 ${rec.correctedAt ? `<div class="corr">Opravené dispečerom ${esc(fmtDate(String(rec.correctedAt).slice(0, 10)))}${rec.correctedBy ? ` (${esc(rec.correctedBy)})` : ""}.</div>` : ""}
 <div class="confirm">Odberateľ svojím podpisom potvrdzuje prevzatie vyššie uvedených dielov v uvedenom množstve a bez zjavných vád. Ceny sú uvedené bez DPH, ak sú vyplnené; záväzná je faktúra.</div>
 </div>
-<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX<div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div></div>
+<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX<div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div></div>
 </div></body></html>`;
   if (_printProtocolOpenListener) _printProtocolOpenListener(docHtml);
   else console.error("Zobrazenie dodacieho listu ešte nie je pripravené.");
@@ -29065,6 +29091,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         {customerAbsent ? <div /> : <SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} />}
         <SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} />
       </div>
+      {!customerAbsent && <PrivacyNote />}
     </Modal>
   );
 }
@@ -30217,6 +30244,7 @@ function GlobalStyle() {
   return (
     <style>{`
       *, *::before, *::after { box-sizing: border-box; }
+      button, input, select, textarea { font-family: inherit; } /* prehliadač inak dá tlačidlám Arial (účet, zvonček, × v okne) */
       :root {
         --bg: #f0f0f0;
         --panel: #ffffff;

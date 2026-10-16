@@ -723,7 +723,7 @@ export default function CustomerPortal({ token }) {
       </main>
       <footer style={{ fontSize: 12, color: "#5A5A5A", textAlign: "center", padding: "16px 12px 24px", lineHeight: 1.6 }}>
         mateco Slovakia s.r.o. · Strážska cesta 7892, 960 01 Zvolen<br />
-        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ ...LINK, textDecoration: "underline" }}>Zásady ochrany osobných údajov</a>
+        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ ...LINK, textDecoration: "underline", display: "inline-block", padding: "12px 8px", minHeight: 44, boxSizing: "border-box" }}>Zásady ochrany osobných údajov</a>
       </footer>
     </div>
   );
