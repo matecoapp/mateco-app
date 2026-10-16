@@ -15,7 +15,7 @@
 // CACHE_VERSION sa bumpuje ručne spolu s APP_VERSION v App.jsx (pri každom
 // vydaní appky) — inak by appka po vydaní novej verzie zostala niekomu
 // natrvalo zaseknutá na starej cache aj keď má signál.
-const CACHE_VERSION = "mateco-appshell-v3";
+const CACHE_VERSION = "mateco-appshell-v4";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -34,6 +34,13 @@ self.addEventListener("install", (event) => {
           .map((m) => new URL(m[1], self.registration.scope).href)
           .filter((u) => u.startsWith(self.location.origin));
         await Promise.all(urls.map((u) => fetch(u).then((r) => (r.ok ? cache.put(u, r) : null)).catch(() => {})));
+        // Písmo z platformy (fonts/barlow.css → *.woff2) — aby aj prvý štart bez signálu mal Barlow.
+        const fontCss = urls.find((u) => u.endsWith("/fonts/barlow.css"));
+        if (fontCss) {
+          const css = await (await caches.match(fontCss))?.text() || "";
+          const files = [...css.matchAll(/url\(([^)]+\.woff2)\)/g)].map((m) => new URL(m[1].replace(/['"]/g, ""), fontCss).href);
+          await Promise.all(files.map((u) => fetch(u).then((r) => (r.ok ? cache.put(u, r) : null)).catch(() => {})));
+        }
       })
       .catch(() => {})
   );
