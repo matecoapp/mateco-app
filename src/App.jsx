@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.813";
+const APP_VERSION = "1.0.814";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -11548,7 +11548,7 @@ function DispatcherApp() {
               maxWidth: 320,
               background: "var(--accent-fill)",
               color: "#fff",
-              borderRadius: 10,
+              borderRadius: 12,
               padding: "12px 14px",
               boxShadow: "0 4px 16px rgba(0,0,0,.12)",
               display: "flex",
@@ -11978,7 +11978,7 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
     cursor: "pointer",
     borderRadius: 5,
   };
-  const sectionLabel = { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim)", padding: "8px 10px 2px" };
+  const sectionLabel = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim)", padding: "8px 10px 2px" };
   const divider = { height: 1, background: "var(--border)", margin: "4px 0" };
 
   // Mobilná verzia (dole v mobile-nav-drawer, na tmavom/svetlom var(--panel)
@@ -12306,7 +12306,7 @@ function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisa
           Pre vašu rolu momentálne platforma neposiela žiadne notifikácie na nastavenie.
         </div>
       ) : (
-        <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 18 }}>
           {relevantKinds.map((kind, i) => (
             <label key={kind} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 15, gap: 10, minHeight: 44, padding: "0 14px", borderTop: i ? "1px solid var(--border)" : 0, cursor: "pointer" }}>
               <span>{NOTIFICATION_KIND_LABELS[kind]}</span>
@@ -12381,7 +12381,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
               background: "var(--accent-fill)",
               color: "#fff",
               borderRadius: 10,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               minWidth: 16,
               height: 16,
@@ -12451,10 +12451,10 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                       {isUnread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                       <span style={{ fontSize: 12, fontWeight: 700 }}>{n.title}</span>
-                      {n.link && <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>zobraziť →</span>}
+                      {n.link && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent)" }}>zobraziť →</span>}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{n.message}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
                   </div>
                 );
                 };
@@ -12470,13 +12470,13 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                         {unreadIds.length > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                         <span style={{ fontSize: 12, fontWeight: 700 }}>{g.items[0].title} ({g.items.length})</span>
-                        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>{isOpen ? "skryť ▲" : "rozbaliť ▼"}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent)" }}>{isOpen ? "skryť ▲" : "rozbaliť ▼"}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{g.items[0].message}{g.items.length > 1 ? " …" : ""}</div>
-                      <div style={{ fontSize: 10, color: "var(--text-dim)", display: "flex", gap: 8 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 8 }}>
                         <span>{fmtWhen(g.items[0].createdAt)}</span>
                         {unreadIds.length > 0 && (
-                          <button className="btn btn-ghost" style={{ fontSize: 10, padding: "0 6px", marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); onMarkAllRead(unreadIds); }}>
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "0 6px", marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); onMarkAllRead(unreadIds); }}>
                             Označiť ako prečítané
                           </button>
                         )}
@@ -14294,7 +14294,7 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
         {myTransportNotes.map((t) => {
           const m = machineById[t.machineId];
           return (
-            <div key={t.id} className="panel" style={{ padding: 16, borderRadius: 10 }}>
+            <div key={t.id} className="panel" style={{ padding: 16, borderRadius: 12 }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>
                 Previezť stroj <strong>{m?.code || t.machineCode || "—"}</strong> z <strong>{m?.depo || t.fromDepo || "—"}</strong> do <strong>{t.targetDepo}</strong>
                 {t.note ? ` — ${t.note}` : ""}
@@ -14459,7 +14459,7 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
       }}
       style={{
         padding: 16,
-        borderRadius: 10,
+        borderRadius: 12,
         border: "1px solid " + (t.overdue ? "var(--danger)" : "var(--border)"),
         background: "var(--panel)",
         cursor: clickable ? "pointer" : "default",
@@ -14872,7 +14872,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
     <div>
       {selfTransports.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             🏢 Osobný odber / vrátenie v depe (vlastná doprava — rieši checker)
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -14896,7 +14896,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                       title="Zmeniť dátum — kontrola checkera sa presunie spolu s ním"
                     />
                   )}
-                  {t.overdue && <span className="badge badge-danger" style={{ fontSize: 10 }}>Po termíne</span>}
+                  {t.overdue && <span className="badge badge-danger" style={{ fontSize: 11 }}>Po termíne</span>}
                   <span className="mono">{m?.code || "—"}</span>
                   <span>depo {t.type === "vyvoz" ? t.from : t.to}</span>
                   {t.customer && <span style={{ color: "var(--text-dim)" }}>· {t.customer}</span>}
@@ -14908,7 +14908,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
       )}
       {assignedTransportNotes.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             🚚 Prevozy priradené šoférom (čakajú na potvrdenie)
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -14947,7 +14947,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
 
       {summaryDriverIds.length > 0 && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, overflowX: "auto" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes a 2 pracovné dni{effectiveDriverFilter ? " (len vybraný šofér)" : ""} · ↑ vývoz · ↓ zvoz
           </div>
           <table className="qs-table">
@@ -16353,7 +16353,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
             resize: "both",
             background: "var(--panel)",
             border: "1px solid var(--border)",
-            borderRadius: 10,
+            borderRadius: 12,
             boxShadow: "0 4px 16px rgba(0,0,0,.12)",
             display: "flex",
             flexDirection: "column",
@@ -17180,7 +17180,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
         <div style={{ position: "relative", lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
-          style={{ touchAction: "none", background: "#fff", border: "2px solid var(--border)", borderRadius: 10, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}
+          style={{ touchAction: "none", background: "#fff", border: "2px solid var(--border)", borderRadius: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}
           onMouseDown={start}
           onMouseMove={move}
           onMouseUp={end}
@@ -22029,7 +22029,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       </dl>
       {modelParams.length > 0 && (
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
             Parametre modelu
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12 }}>
@@ -22092,7 +22092,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           </div>
           {(protocolLogs || []).filter((p) => p.machineId === m.id && !p.damageId && !p.assignmentId).length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
                 Ostatné protokoly (bez priradenia)
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -22220,8 +22220,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
 }
 function CardField({ label, value, danger, dotColor }) {
   return (
-    <div style={{ padding: "10px 12px", borderRadius: 10, background: danger ? "var(--danger-bg)" : "var(--panel-2)" }}>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
+    <div style={{ padding: "10px 12px", borderRadius: 12, background: danger ? "var(--danger-bg)" : "var(--panel-2)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: danger ? "var(--danger)" : "var(--text-dim)", marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: danger ? "var(--danger)" : "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
         {dotColor && <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: dotColor, flexShrink: 0 }} />}
         {value || "—"}
@@ -22957,7 +22957,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
             )}
             <span style={{ fontSize: 14, color: "var(--text-dim)" }}>{d.model}</span>
             {missingSerial && (
-              <span className="badge badge-danger" style={{ fontSize: 10 }}>
+              <span className="badge badge-danger" style={{ fontSize: 11 }}>
                 ⚠ Chýba sériové číslo
               </span>
             )}
@@ -24716,7 +24716,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {uncovered.length > 0 && (
-        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-bg)", border: "1px solid var(--danger-bg)", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--danger-text)" }}>
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-bg)", border: "1px solid var(--danger-bg)", borderRadius: 12, padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--danger-text)" }}>
           <span aria-hidden="true">⚠</span>
           <span>{uncovered.length === 1 ? `Depo ${uncovered[0]} nemá` : `Depá ${uncovered.join(", ")} nemajú`} dispečera{canManage ? " — vyberte ho v stĺpci Dnes rieši" : ""}. Kým nikto, upozornenia idú vedúcemu dispečerovi a vedúcemu požičovne.</span>
         </div>
@@ -26934,7 +26934,7 @@ function DielyStatistiky({ spareParts, start, end }) {
       <StatSection title="Podľa depa a najčastejšie diely">
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Objednávky podľa depa
           </div>
           <div className="panel table-wrap" style={{ padding: 0 }}>
@@ -26951,7 +26951,7 @@ function DielyStatistiky({ spareParts, start, end }) {
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie objednávaný diel
           </div>
           <div className="panel table-wrap" style={{ padding: 0 }}>
@@ -27102,7 +27102,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
     .sort((a, b) => b.sum - a.sum);
   const tSum = (k, f = () => true) => driverRows.filter(f).reduce((x, r) => x + r[k], 0);
 
-  const secTitle = (t) => <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>{t}</div>;
+  const secTitle = (t) => <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>{t}</div>;
   const th = (t) => <th key={t} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t}</th>;
   const td = (v, label, bold) => <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: bold ? 600 : undefined }} data-label={label}>{v}</td>;
 
@@ -27425,7 +27425,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
       <StatSection title="Najviac servisované modely a stroje">
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najviac servisované modely
           </div>
           <div className="panel table-wrap" style={{ padding: 0 }}>
@@ -27442,7 +27442,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Najčastejšie servisovaný stroj
           </div>
           <div className="panel table-wrap" style={{ padding: 0 }}>
@@ -27640,7 +27640,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
         Vypíš toľko riadkov, koľko dielov potrebuješ — Počet kusov, Číslo dielu, Popis dielu a Určenie sú povinné, zvyšok voliteľný. Prázdne riadky sa preskočia.
       </div>
 
-      <div style={{ overflowX: "auto", marginBottom: 10, border: "1px solid var(--border)", borderRadius: 10 }}>
+      <div style={{ overflowX: "auto", marginBottom: 10, border: "1px solid var(--border)", borderRadius: 12 }}>
         <table className="table-cards ftable" style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
@@ -27931,7 +27931,7 @@ function ColumnFilterButton({ label, options, selected, onChange }) {
     <span style={{ position: "relative", display: "inline-block", marginLeft: 4 }}>
       <button
         className="btn btn-ghost"
-        style={{ padding: "1px 5px", fontSize: 10, opacity: allSelected ? 0.7 : 1 }}
+        style={{ padding: "1px 5px", fontSize: 11, opacity: allSelected ? 0.7 : 1 }}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         title={`Filter: ${label}`}
       >
@@ -28051,7 +28051,7 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
   const person = (p, note) => (
     <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
       <span style={{ fontWeight: 600 }}>{p.name}</span>
-      {note && <span className="badge badge-warn" style={{ fontSize: 10 }}>{note}</span>}
+      {note && <span className="badge badge-warn" style={{ fontSize: 11 }}>{note}</span>}
       {telLink(p.phone)}
     </div>
   );
@@ -28340,7 +28340,7 @@ function MachinePhotoGroup({ title, who, date, photos, empty }) {
   if (!list.length && !empty) return null;
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 6 }}>
         {title}{who ? ` · ${who}` : ""}{date ? ` · ${fmtDate(String(date).slice(0, 10))}` : ""}
       </div>
       {list.length ? (
@@ -28412,7 +28412,7 @@ function NextStepBar({ items }) {
   if (!list.length) return null;
   return (
     <div style={{ border: "1px solid var(--border)", borderLeft: "4px solid var(--accent)", borderRadius: 8, padding: "8px 12px", marginBottom: 14, background: "var(--panel-2)" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent-dark)", marginBottom: 4 }}>Teraz treba</div>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent-dark)", marginBottom: 4 }}>Teraz treba</div>
       {list.map((it, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
           <div style={{ flex: "1 1 220px", fontSize: 13.5, color: it.tone === "red" ? "var(--danger)" : it.tone === "warn" ? "var(--warn)" : "var(--text)" }}>{it.text}</div>
@@ -30216,7 +30216,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
       <div className="fhint" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
         Noví ľudia sa registrujú sami na prihlasovacej obrazovke — tu im len prideľte rolu, prípadne ich deaktivujte/zmažte.
       </div>
-      <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
       <table className="table-cards jobs-table">
         <thead>
           <tr>
@@ -30454,7 +30454,7 @@ function GlobalStyle() {
       .side-menu-wrap.collapsed .nav-b { position: absolute; top: 0; right: 2px; font-size: 9px; padding: 0 5px; }
       .header-new-wrap { position: relative; }
       .header-new-btn { background: #fff; color: var(--accent-fill); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
-      .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
+      .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
       .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
       .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(0,0,0,.14); color: #fff; cursor: pointer; }
       /* Spodná lišta na mobile (zobrazí sa len v mobilnom @media cez .mobile-tech-actions). */
@@ -30485,7 +30485,7 @@ function GlobalStyle() {
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         table.table-cards thead { display: none; }
         table.table-cards, table.table-cards tbody { display: block; width: 100%; }
-        table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+        table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--panel); }
         table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
         table.table-cards td[data-label]::before { content: attr(data-label); font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
         table.table-cards td.td-plain { display: block; text-align: left; }
@@ -30574,7 +30574,7 @@ function GlobalStyle() {
       .mascot-wave-arm { transform-origin: 371px 462px; animation: mascot-wave 1s ease-in-out infinite; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
-      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
       .mobile-tech-actions { display: none; }
       .btn { min-height: 40px; padding: 7px 14px; border-radius: 6px; font-family: 'Barlow', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: .15s; display: inline-block; text-decoration: none; }
       /* Depo filter chipy — na desktope plný názov, na mobile skratka (BA/NR/ZV/ZA/PO/EXT), nech je to jednotné so ganttom. */
@@ -30649,7 +30649,7 @@ function GlobalStyle() {
       .side-eyebrow { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim); }
       .side-title { margin: 0; font-size: 26px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; line-height: 1.2; font-variant-numeric: tabular-nums; }
       .side-title-sub { font-size: 19px; font-weight: 500; color: var(--text-dim); }
-      .side-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 10px; }
+      .side-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 12px; }
       .side-summary > div { padding: 10px 12px; border-right: 1px solid var(--border); min-width: 0; }
       .side-summary > div:last-child { border-right: none; }
       .side-summary span { display: block; font-size: 13px; color: var(--text-dim); }
@@ -30718,7 +30718,7 @@ function GlobalStyle() {
       .jobs-table tr.row-click:not(.row-problem):hover td { background: var(--panel-2); }
       .jc-report-m { display: none; }
       .tr-filt2 { display: contents; }
-      .side-dl-edit { background: var(--panel-2); border-radius: 10px; padding: 0 14px; }
+      .side-dl-edit { background: var(--panel-2); border-radius: 12px; padding: 0 14px; }
       .side-dl-edit dt:last-of-type, .side-dl-edit dd:last-of-type { border-bottom: none; }
       .qs-table td.qs-send { width: 210px; min-width: 210px; height: 48px; padding-top: 4px; padding-bottom: 4px; }
       .qs-send-btn { font-size: 13px; padding: 4px 10px; min-height: 34px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
@@ -30766,7 +30766,7 @@ function GlobalStyle() {
       .frow + .frow { border-top: 1px solid var(--border); }
       .frow .btn { min-height: 40px; font-size: 14px; }
       .fintro { margin: -4px 0 14px; font-size: 14px; color: var(--text-dim); line-height: 1.4; }
-      .ckl { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+      .ckl { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
       .cki { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-top: 1px solid var(--border); }
       .cki:first-child { border-top: 0; }
       .cki.prob { background: var(--danger-bg); }
