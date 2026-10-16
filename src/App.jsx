@@ -31,13 +31,17 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.811";
+const APP_VERSION = "1.0.812";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.812", items: [
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "admin"], text: "Upozornenie, keď revízia alebo úradná skúška stroja vyprší počas prenájmu (14 dní vopred). Na karte zákazky je aj v „Teraz treba“." },
+    { roles: ["veduci_servisu", "admin"], text: "Upozornenie „Stroj sa často kazí“ pri 3. poruche za 90 dní; na karte stroja štítok." },
+  ] },
   { v: "1.0.811", items: [
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"], text: "Pod podpisom zákazníka je odkaz na Ochranu osobných údajov, v tlači protokolov a dodacích listov je v pätičke." },
   ] },
@@ -12217,6 +12221,8 @@ const NOTIFICATION_KIND_LABELS = {
   vehicle_stk_ek: "STK/EK áut",
   portal_request: "Žiadosti zo zákazníckeho portálu",
   rental_end: "Končí prenájom (predĺžiť / zvoz)",
+  revision_expiry: "Revízia / úradná skúška vyprší počas prenájmu",
+  often_broken: "Stroj sa často kazí",
   weekly_summary: "Týždenný súhrn (pondelok ráno)",
 };
 // Ktoré kategórie sú pre danú rolu vôbec relevantné — v nastaveniach sa
@@ -12226,12 +12232,12 @@ const NOTIFICATION_KIND_LABELS = {
 // vyskúšať, ako to vidí iná rola.
 const ROLE_NOTIFICATION_KINDS = {
   admin: Object.keys(NOTIFICATION_KIND_LABELS),
-  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end", "weekly_summary"],
-  dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end"],
+  veduci_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "checker_inspection", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end", "revision_expiry", "weekly_summary"],
+  dispecer_pozicovne: ["reservation", "damage_new", "damage_resolved", "handover_protocol", "assignment_transport", "transport_note", "transport_note_done", "vehicle_stk_ek", "portal_request", "rental_end", "revision_expiry"],
   obchodnik: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek", "portal_request", "rental_end"],
   fakturant_pozicovna: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek"],
-  veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "weekly_summary"],
-  dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
+  veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "often_broken", "weekly_summary"],
+  dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "revision_expiry"],
   fakturant_servis: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
   veduci_technik_ba: ["damage_new", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek"],
   technik: ["assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek"],
@@ -18461,6 +18467,13 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           ["active", "overdue"].includes(effectiveStatus(job, todayISO())) && job.endDate && job.endDate <= tomorrow && (can(user, "job_complete") || mine) &&
             { text: <>Prenájom končí {relDay(job.endDate, today)}{job.endDate < today ? " — už je po konci" : ""}</>,
               actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: onComplete } : job.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${job.customerPhone}` }] },
+          // Revízia / úradná skúška vyprší pred koncom prenájmu (14 dní vopred) — rovnaké pravidlo ako upozornenie v DB (step97).
+          ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && job.endDate && job.endDate >= today
+            ? [["revizia", "trackRevisions", "Revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "Revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "Úradná skúška"]]
+              .filter(([f, t]) => machine[t] !== false && machine[f] && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
+              .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — prenájom trvá do {fmtDate(job.endDate)}</>,
+                actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
+            : []),
           ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
             text: <>Stroj má otvorené poškodenie: <b>{d.popis || "—"}</b></>, actions: [onOpenDamage && { label: "Detail poškodenia", onClick: () => onOpenDamage(d) }] })),
           ...[["handover", "prevzatí"], ["return", "vrátení"]].filter(([ph]) => handoverProtocol?.[ph + "CustomerConfirm"]?.status === "disputed" && !handoverProtocol[ph + "DisputeDone"]).map(([ph, lbl]) => {
@@ -21880,6 +21893,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaNotTracked = m.trackUradnaSkuska === false;
   const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
+  // Poškodenia za posledných 90 dní — od 3 štítok „Často sa kazí“ (rovnaké pravidlo ako upozornenie v DB, step97).
+  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && (d.dateReported || "") >= addDaysISO(todayISO(), -90)).length;
   const jobCount = (jobs || []).filter((j) => j.machineId === m.id).length;
   const binderTabs = [
     { id: "servis", label: "Servis", count: (history || []).length, title: `Servisná história (${(history || []).length})` },
@@ -21939,6 +21954,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
           {m.code}
           {m.type && <span className="side-title-sub">{m.type}</span>}
           {m.archived ? <span className="spill">Archivovaný</span> : !m.currentJob ? <span className="spill spill-done">Voľný stroj</span> : <span className="spill spill-active">Na zákazke</span>}
+          {brokenCount >= 3 && <span className="spill spill-problem">⚠ Často sa kazí ({brokenCount} za 90 dní)</span>}
         </>
       }
       onClose={() => { forgetBinder(); onClose(); }}
@@ -28372,7 +28388,7 @@ function NextStepBar({ items }) {
       <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--accent-dark)", marginBottom: 4 }}>Teraz treba</div>
       {list.map((it, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
-          <div style={{ flex: "1 1 220px", fontSize: 13.5, color: it.tone === "red" ? "var(--danger)" : "var(--text)" }}>{it.text}</div>
+          <div style={{ flex: "1 1 220px", fontSize: 13.5, color: it.tone === "red" ? "var(--danger)" : it.tone === "warn" ? "var(--warn)" : "var(--text)" }}>{it.text}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {(it.actions || []).filter(Boolean).map((a, k) => (
               a.href
