@@ -31,13 +31,16 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.812";
+const APP_VERSION = "1.0.813";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.813", items: [
+    { roles: null, text: "Okná a menu sa na počítači jemne otvárajú a zatvárajú, uložená zákazka sa v zozname na chvíľu podfarbí, prázdny zoznam zákaziek má „Zrušiť filter“." },
+  ] },
   { v: "1.0.812", items: [
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "admin"], text: "Upozornenie, keď revízia alebo úradná skúška stroja vyprší počas prenájmu (14 dní vopred). Na karte zákazky je aj v „Teraz treba“." },
     { roles: ["veduci_servisu", "admin"], text: "Upozornenie „Stroj sa často kazí“ pri 3. poruche za 90 dní; na karte stroja štítok." },
@@ -3540,6 +3543,16 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   // checkbox/radio/file/select a už odoslaný/disabled stav.
   const panelRef = useRef(null);
   const tokenRef = useRef(null);
+  // Bočný panel sa na PC zasunie späť (160 ms), až potom sa zavrie; inak (mobil, vypnuté animácie) hneď.
+  const closingRef = useRef(false);
+  const closeAnimated = () => {
+    if (closingRef.current) return;
+    const ov = panelRef.current?.parentElement;
+    if (!side || !ov || getComputedStyle(ov).animationName === "none" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return onClose();
+    closingRef.current = true;
+    ov.classList.add("closing");
+    setTimeout(onClose, 160);
+  };
   // Rozpísané údaje: čokoľvek sa v okne napísalo/zmenilo (alebo je to formulár
   // s podpisom/checklistom — prop form). Také okno sa klikom mimo nezatvorí
   // a Esc sa najprv opýta.
@@ -3584,7 +3597,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   useEffect(() => {
     function onKeyDown(e) {
       if (_modalStack[_modalStack.length - 1] !== tokenRef.current) return;
-      if (e.key === "Escape") { if (confirmDiscard()) onClose(); return; }
+      if (e.key === "Escape") { if (confirmDiscard()) closeAnimated(); return; }
       // Tab krúži len po prvkoch otvoreného okna (inak kurzor odišiel na stránku pod oknom).
       if (e.key === "Tab" && panelRef.current) {
         const els = [...panelRef.current.querySelectorAll('a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')]
@@ -3658,7 +3671,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
       onClick={(e) => {
         if (e.target !== e.currentTarget || !pressedOnOverlay.current) return;
         if (dirtyRef.current || form) return;
-        onClose();
+        closeAnimated();
       }}
     >
       <div
@@ -3676,7 +3689,7 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="side-eyebrow">{eyebrow}</span>
                 {onBack && <button className="btn btn-ghost" style={{ marginLeft: "auto" }} onClick={onBack}>← Späť</button>}
-                <button className="modal-close-x" style={{ marginLeft: onBack ? 0 : "auto" }} onClick={() => { if (confirmDiscard()) onClose(); }} aria-label="Zavrieť" title="Zavrieť">×</button>
+                <button className="modal-close-x" style={{ marginLeft: onBack ? 0 : "auto" }} onClick={() => { if (confirmDiscard()) closeAnimated(); }} aria-label="Zavrieť" title="Zavrieť">×</button>
               </div>
               <h3 className="side-title">{title}</h3>
               {headerExtra}
@@ -9039,6 +9052,7 @@ function DispatcherApp() {
     persistJobs((jobs) => [...jobs, record]);
     setShowAddJob(null);
     showToast("Zákazka bola vytvorená.");
+    markRowSaved("job-row-" + record.id);
     const list = [...jobs, record];
     ensureCheckerAssignment(record, depoCheckers, checkerSubstitutions, list);
     // Nová zákazka môže byť predchádzajúcim prenájmom inej zákazky toho istého stroja.
@@ -9325,6 +9339,7 @@ function DispatcherApp() {
       if (Object.keys(patch).length && !updateJob(snap.id, patch)) return; // bez signálu — okno necháme otvorené
       setShowAddJob(null);
       showToast("Zákazka bola upravená.");
+      markRowSaved("job-row-" + snap.id);
     } else {
       const newJob = addJob(data);
       if (!newJob) return; // bez signálu — formulár ostane otvorený
@@ -14081,6 +14096,9 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
       {sorted.length === 0 ? (
         <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
           {activeFilters.size === 0 ? "Vyberte aspoň jeden filter." : "Žiadne zákazky nezodpovedajú filtru."}
+          {(search.trim() || depoFilter || quickCategory || activeFilters.size === 0) && (
+            <button type="button" className="btn btn-outline" style={{ marginLeft: 8 }} onClick={() => { setSearch(""); setDepoFilter(null); setQuickCategory(null); setActiveFilters(new Set(["planned", "active"])); }}>Zrušiť filter</button>
+          )}
         </div>
       ) : (
         <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
@@ -14093,7 +14111,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
                 const st = effectiveStatus(j, today);
                 const m = machineById[j.machineId];
                 return (
-                  <tr key={j.id} className={`${st === "overdue" ? "row-problem" : ""}${onOpenJob ? " row-click" : ""}`} style={{ cursor: onOpenJob ? "pointer" : "default" }} onClick={() => onOpenJob && onOpenJob(j)}>
+                  <tr key={j.id} id={"job-row-" + j.id} className={`${st === "overdue" ? "row-problem" : ""}${onOpenJob ? " row-click" : ""}`} style={{ cursor: onOpenJob ? "pointer" : "default" }} onClick={() => onOpenJob && onOpenJob(j)}>
                     <td className="td-plain">
                       <strong className="tnum">{m?.code || "?"}</strong>
                       <div className="cell-sub">{[j.machineDisplayName || m?.type, j.fromDepo].filter(Boolean).join(" · ")}</div>
@@ -15130,7 +15148,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
         ostatných miestach. Vidíte a spravujete len role z vlastnej oblasti.
       </p>
       {duplicateKeys.length > 0 && (
-        <div style={{ background: "#fff7e6", border: "1px solid #f0b429", color: "#7a5200", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn)", color: "var(--warn)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           ⚠ Duplicitný záznam — {duplicateKeys.map((k) => `"${nameDisplay[k]}" (${nameCounts[k]}×)`).join(", ")}. Skontrolujte nižšie (označené) a jeden zo záznamov zmažte.
         </div>
       )}
@@ -15165,13 +15183,13 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
             const isDuplicate = !e.archived && duplicateKeys.includes(e.name.trim().toLowerCase());
             const statusPill = e.archived ? <span className="spill">Archivovaný</span> : <span className="spill spill-done">Aktívny</span>;
             return (
-              <tr key={e.id} style={isDuplicate ? { background: "#fff7e6", color: "#1a1a1a" } : undefined}>
+              <tr key={e.id} style={isDuplicate ? { background: "var(--warn-bg)", color: "var(--text)" } : undefined}>
                 <td className="td-plain">
                   <span style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
                     <span style={{ fontWeight: 600 }}>
                       {e.name}
                       {isDuplicate && (
-                        <span style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: "#7a5200" }} title="Rovnaké meno má aj iný aktívny záznam">
+                        <span style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: "var(--warn)" }} title="Rovnaké meno má aj iný aktívny záznam">
                           ⚠ duplicita
                         </span>
                       )}
@@ -19028,7 +19046,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   return (
     <Modal title={existing ? "Upraviť zákazku" : prefillReservation ? "Premeniť rezerváciu na zákazku" : "Nová zákazka"} onClose={onClose} xwide>
       {otherLock && (
-        <div style={{ background: "var(--warning-bg, #fff3cd)", color: "var(--warning, #856404)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+        <div style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
           ⚠️ Túto zákazku práve edituje {otherLock.userName} — ak uložíte obaja naraz, uloží sa len prvý.
         </div>
       )}
@@ -24698,7 +24716,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, onPersist, onRpc,
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {uncovered.length > 0 && (
-        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-bg)", border: "1px solid #F0C5C8", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--danger-text)" }}>
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-bg)", border: "1px solid var(--danger-bg)", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--danger-text)" }}>
           <span aria-hidden="true">⚠</span>
           <span>{uncovered.length === 1 ? `Depo ${uncovered[0]} nemá` : `Depá ${uncovered.join(", ")} nemajú`} dispečera{canManage ? " — vyberte ho v stĺpci Dnes rieši" : ""}. Kým nikto, upozornenia idú vedúcemu dispečerovi a vedúcemu požičovne.</span>
         </div>
@@ -25302,7 +25320,7 @@ function CompleteRevisionModal({ damage, today, protocolLogs, onAssignProtocol, 
             </label>
           </div>
           {!doneZZ || !doneEZ ? (
-            <div className="fhint" style={{ color: "#6B4A00" }}>
+            <div className="fhint" style={{ color: "var(--warn)" }}>
               {!doneZZ && !doneEZ
                 ? "Zaškrtni aspoň jednu, inak nie je čo uložiť."
                 : `Nezaškrtnutá časť (${!doneZZ ? "ZZ" : "EZ"}) ostane naďalej otvorená v Revíziách.`}
@@ -28100,6 +28118,15 @@ function TodayHero({ id, tag, head, headSmall, sub, problem, actions, children }
     </section>
   );
 }
+// Riadok v zozname po uložení na chvíľu podfarbí (bez posunu stránky) — vidno, čo sa zmenilo.
+function markRowSaved(domId) {
+  setTimeout(() => {
+    const el = document.getElementById(domId);
+    if (!el) return;
+    el.classList.remove("row-saved"); void el.offsetWidth; el.classList.add("row-saved");
+    setTimeout(() => el.classList.remove("row-saved"), 1700);
+  }, 300);
+}
 // Kompaktný 64px riadok; ťuk rozbalí plnú kartu so všetkými akciami.
 // Po kliknutí na upozornenie: počká, kým sa záznam vykreslí, posunie naň a na chvíľu ho orámuje.
 function flashById(domId) {
@@ -30600,6 +30627,23 @@ function GlobalStyle() {
       /* Bočný panel (Modal side — karta zákazky): vpravo cez celú výšku, vysunie sa sprava. */
       .modal-panel.modal-side-panel { height: 100%; overflow-y: auto; display: flex; flex-direction: column; border: none; border-left: 1px solid var(--border); border-radius: 0; box-shadow: -12px 0 32px rgba(0,0,0,.08); animation: side-in .2s ease-out; }
       @keyframes side-in { from { transform: translateX(100%); } }
+      /* Jemné objavenie/zatvorenie okien a menu — len PC (na mobile sú okná cez celú obrazovku a WebKit s animáciou vrstiev zlobí). */
+      @media (min-width: 1001px), (min-width: 721px) and (hover: hover) {
+        .modal-overlay { animation: fade-in .15s ease-out; }
+        .modal-panel:not(.modal-side-panel) { animation: pop-in .16s ease-out; }
+        .modal-overlay.closing { animation: fade-out .16s ease-in forwards; pointer-events: none; }
+        .modal-overlay.closing .modal-side-panel { animation: side-out .16s ease-in forwards; }
+        .kebab-drop, .dropdown-panel, .header-new-drop { animation: fade-in .12s ease-out; } /* bez zmeny veľkosti — menu si pri otvorení meria polohu */
+      }
+      .mnav-sheet { animation: sheet-up .2s ease-out; }
+      .btn:active:not(:disabled) { transform: scale(.97); }
+      .row-saved > td { animation: row-saved 1.6s ease-out; }
+      @keyframes fade-in { from { opacity: 0; } }
+      @keyframes fade-out { to { opacity: 0; } }
+      @keyframes pop-in { from { opacity: 0; transform: scale(.98); } }
+      @keyframes side-out { to { transform: translateX(100%); } }
+      @keyframes sheet-up { from { transform: translateY(100%); } }
+      @keyframes row-saved { from { background: var(--warn-bg); } }
       @media (prefers-reduced-motion: reduce) { .modal-panel.modal-side-panel { animation: none; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
       .side-head { padding: 18px 28px 0; display: flex; flex-direction: column; gap: 10px; }
       .side-eyebrow { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim); }
