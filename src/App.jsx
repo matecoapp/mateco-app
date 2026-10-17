@@ -31,13 +31,18 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.815";
+const APP_VERSION = "1.0.816";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.816", items: [
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Dnes: v pravom stĺpci „Revízia/ÚS počas prenájmu“ — stroje v prenájme, ktorým do 14 dní (alebo už po termíne) vyprší revízia alebo úradná skúška pred koncom zákazky." },
+    { roles: null, text: "Nové načítavacie okno: realistickejšia nožnicová plošina, ktorá vyjde hore, a prúžok priebehu." },
+    { roles: null, text: "Mobil: lupa, zvonček a účet v hlavičke sú biele kolieska s červenou ikonou — lepšie viditeľné na červenom páse. Prázdne zoznamy majú malú siluetu plošiny namiesto holého textu. „Po termíne“ je jantárové (nie červené), červená ostáva hlavnej akcii." },
+  ] },
   { v: "1.0.815", items: [
     { roles: null, text: "Väčšie drobné písmo (11 px) a jednotné zaoblenie kariet. Na mobile Esc zavrie ponuku ＋ / Viac." },
     { roles: ["veduci_servisu", "admin"], text: "„Stroj sa často kazí“ nepočíta prípravu do požičovne ani poškodenie s budúcim dátumom." },
@@ -12036,9 +12041,9 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
                 borderRadius: "50%",
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#fff",
-                background: "rgba(0,0,0,.14)",
-                border: "1px solid rgba(255,255,255,.3)",
+                color: "var(--accent-fill)",
+                background: "#fff",
+                border: "none",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -12367,9 +12372,9 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
         className="header-icon-btn"
         style={{
           fontSize: 13,
-          color: "#fff",
-          background: unreadCount > 0 ? "rgba(0,0,0,.2)" : "rgba(0,0,0,.14)",
-          border: "1px solid rgba(255,255,255,.3)",
+          color: "var(--accent-fill)",
+          background: "#fff",
+          border: "none",
           borderRadius: 4,
           padding: "3px 9px",
           cursor: "pointer",
@@ -12989,7 +12994,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
         className="global-search-mobile-trigger header-icon-btn"
         onClick={() => setMobileExpanded(true)}
         aria-label="Hľadať"
-        style={{ display: "none", background: "rgba(0,0,0,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer" }}
+        style={{ display: "none", background: "#fff", border: "none", color: "var(--accent-fill)", cursor: "pointer" }}
       >
         <NavIcon id="hladat" />
       </button>
@@ -13820,7 +13825,7 @@ function Dashboard({
         <StatCard label="Strojov celkom" value={stats.total} />
         <StatCard label="Na zákazke" value={stats.onJob} />
         <StatCard label="Voľné" value={stats.free} />
-        <StatCard label="⚠ Po termíne" value={stats.overdue} color={stats.overdue > 0 ? "var(--danger-text)" : undefined} />
+        <StatCard label="⚠ Po termíne" value={stats.overdue} color={stats.overdue > 0 ? "var(--warn)" : undefined} />
       </div>
 
       <div className="tbar">
@@ -14019,7 +14024,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
   const pendingReservations = (reservations || []).filter((r) => r.status === "pending" && matchesSearchAndDepoRes(r));
   const quickTiles = [
     { id: "pendingReservations", label: "Rezervácie čakajúce na schválenie", color: "var(--warn)", items: pendingReservations, isReservation: true },
-    { id: "overdue", label: "Zákazka po termíne", color: "var(--danger)", items: overdueJobs },
+    { id: "overdue", label: "Zákazka po termíne", color: "var(--warn)", items: overdueJobs },
     { id: "endingSoon", label: "Zákazka končí čoskoro (do 5 dní)", color: "var(--warn)", items: endingSoonJobs },
     { id: "noDriver", label: "Zákazka bez šoféra", color: "var(--info)", items: noDriverJobs },
     { id: "noEndDate", label: "Zákazka bez dátumu ukončenia", color: "var(--warn)", items: noEndDateJobs },
@@ -28470,12 +28475,30 @@ function TodayTiles({ tiles }) {
   );
 }
 
+// Prázdny stav: malá silueta plošiny + text, nech prázdna obrazovka nevyzerá ako chyba.
+function EmptyLift({ text }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "26px 14px", color: "var(--text-dim)", textAlign: "center" }}>
+      <svg width="64" height="54" viewBox="0 0 120 100" aria-hidden="true" style={{ opacity: 0.5 }}>
+        <g stroke="var(--text-dim)" strokeWidth="5" strokeLinecap="round" fill="none">
+          <line x1="42" y1="76" x2="78" y2="52" /><line x1="78" y1="76" x2="42" y2="52" />
+          <line x1="42" y1="52" x2="78" y2="28" /><line x1="78" y1="52" x2="42" y2="28" />
+        </g>
+        <rect x="30" y="76" width="60" height="12" rx="3" fill="var(--text-dim)" />
+        <circle cx="46" cy="91" r="6" fill="var(--text-dim)" /><circle cx="74" cy="91" r="6" fill="var(--text-dim)" />
+        <rect x="24" y="18" width="72" height="8" rx="2" fill="var(--text-dim)" />
+        <rect x="24" y="12" width="72" height="4" fill="var(--text-dim)" />
+      </svg>
+      <div style={{ fontSize: 14 }}>{text}</div>
+    </div>
+  );
+}
 function TodayList({ title, rows, empty }) {
   return (
     <div>
       <div className="today-sec">{title}{rows.length ? ` · ${rows.length}` : ""}</div>
       <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-        {rows.length === 0 && <div style={{ padding: "12px 14px", fontSize: 14, color: "var(--text-dim)" }}>{empty}</div>}
+        {rows.length === 0 && (empty ? <EmptyLift text={empty} /> : null)}
         {rows.map((r, i) => {
           const problem = r.tone === "red"; // po termíne / porucha / nepridelené — podfarbenie + ⚠
           // Plné červené tlačidlo len prvý riadok zoznamu, a len ak je to problém; ostatné obrysové.
@@ -28563,10 +28586,31 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: `koniec ${fmtDate(j.endDate)}${j.obchodnik ? ` · ${j.obchodnik}` : ""}`,
       actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
     resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
+    // Revízia/ÚS stroja vyprší ešte počas prenájmu (rovnaké pravidlo ako upozornenie a „Teraz treba“, step97).
+    const isoD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const revExp = [];
+    mine.forEach((j) => {
+      if (j.status === "completed" || j.notRealized || !isoD(j.endDate) || j.endDate < today) return;
+      const m = machineById[j.machineId];
+      if (!m || m.archived === true || m.archived === "true" || (m.objekt || "Požičovňový stroj") !== "Požičovňový stroj") return;
+      [["revizia", "trackRevisions", "revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "úradná skúška"]].forEach(([f, tr, lbl]) => {
+        const due = m[f];
+        if (m[tr] === false || m[tr] === "false" || !isoD(due) || due >= j.endDate || due > addDaysISO(today, 14)) return;
+        revExp.push({ j, lbl, due });
+      });
+    });
+    revExp.sort((a, b) => a.due.localeCompare(b.due));
     side = (
-      <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "dim" : "info",
-        title: `${mcode(t.j.machineId)} ${t.type === "vyvoz" ? "→" : "←"} ${t.j.customer || "—"}`, sub: driverById[t.driverId]?.name || "bez šoféra",
-        actions: [{ label: "Detail", onClick: () => onOpenJob(t.j) }] }))} />
+      <>
+        {revExp.length > 0 && (
+          <TodayList title="Revízia/ÚS počas prenájmu" rows={revExp.slice(0, 8).map((x, i) => ({ key: "rev" + i, tag: x.due < today ? "PO TERMÍNE" : "DO 14 DNÍ", tone: x.due < today ? "red" : "warn",
+            title: `${mcode(x.j.machineId)} · ${x.lbl}`, sub: `platí do ${fmtDate(x.due)} · prenájom do ${fmtDate(x.j.endDate)} · ${x.j.customer || "—"}`,
+            actions: [{ label: "Otvoriť", onClick: () => onOpenJob(x.j) }] }))} />
+        )}
+        <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "dim" : "info",
+          title: `${mcode(t.j.machineId)} ${t.type === "vyvoz" ? "→" : "←"} ${t.j.customer || "—"}`, sub: driverById[t.driverId]?.name || "bez šoféra",
+          actions: [{ label: "Detail", onClick: () => onOpenJob(t.j) }] }))} />
+      </>
     );
   }
 
@@ -30472,7 +30516,7 @@ function GlobalStyle() {
       .header-new-btn { background: #fff; color: var(--accent-fill); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
       .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
       .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
-      .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(0,0,0,.14); color: #fff; cursor: pointer; }
+      .header-phone-mobile { display: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: none; background: #fff; color: var(--accent-fill); cursor: pointer; }
       /* Spodná lišta na mobile (zobrazí sa len v mobilnom @media cez .mobile-tech-actions). */
       .mnav-t { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; font: inherit; font-size: 12px; color: var(--text-dim); position: relative; padding: 4px 0; cursor: pointer; min-width: 0; }
       .mnav-t.active { color: var(--accent); font-weight: 700; }
@@ -30581,13 +30625,6 @@ function GlobalStyle() {
          context" tohto boxu. */
       .gantt-transport-icon { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 600; color: #1a1a1a; pointer-events: auto; cursor: default; line-height: 1; }
       .app-shell.dark .gantt-transport-icon { color: #fff; }
-      /* Kývajúca ruka panáčika na uvítacej obrazovke (LiftLoader) — transform-origin
-         zámerne BEZ transform-box: fill-box (pre <g> s len obrysovými čiarami,
-         bez "fill" geometrie, si to niektoré prehliadače spočítajú s nulovým
-         rozmerom a ruka potom zmizne — bez neho sa origin berie z vlastných
-         súradníc SVG, presne ako pri zdvíhaní nožníc vyššie). */
-      @keyframes mascot-wave { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
-      .mascot-wave-arm { transform-origin: 371px 462px; animation: mascot-wave 1s ease-in-out infinite; }
       .label-font { font-family: 'Barlow Condensed', sans-serif; }
       .mono { font-family: 'Barlow', sans-serif; font-weight: 700; letter-spacing: .01em; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
@@ -30691,7 +30728,7 @@ function GlobalStyle() {
       .spill-active { background: var(--s-active-bg); color: var(--s-active); }
       .spill-done { background: var(--s-done-bg); color: var(--s-done); }
       .spill-wait { background: var(--s-wait-bg); color: var(--s-wait); }
-      .spill-problem { background: var(--danger-bg); color: var(--danger-text); }
+      .spill-problem { background: var(--warn-bg); color: var(--warn); }
       .btn-outline { background: var(--panel); border: 1px solid var(--text); color: var(--text); }
       .btn-outline:hover { background: var(--panel-2); }
       .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -31360,76 +31397,58 @@ function LiftLoader({ label }) {
     const raf = requestAnimationFrame(() => setRisen(true));
     return () => cancelAnimationFrame(raf);
   }, []);
-  const rise = "transform 2.4s cubic-bezier(.2,.7,.3,1)";
-  // Skutočná príčina prestrekávania: vrch cik-caku (pôvodne y=60) bol podľa
-  // pevných súradníc o 24px VYŠŠIE než spodný okraj koša v pokojovej polohe
-  // (y=84) — nezávisle od animácie, trvalo, aj v pokoji. Prepočítané tak, aby
-  // vrch cik-caku (teraz y=84, rovnomerne rozostúpené kroky po 99px namiesto
-  // 105px) presne sadol na spodný okraj koša pri každom snímku animácie
-  // (zloženého aj rozťiahnutého stavu) — koeficient stlačenia (1/15 namiesto
-  // pôvodných 0.12) je dopočítaný z rovnakej rovnice, takže sa cik-cak a kôš
-  // hýbu presne súhlasne, bez medzery aj bez prekrytia. Vďaka tomu už netreba
-  // mechanizmus na začiatku schovávať priehľadnosťou — je vidno hneď od štartu.
-  const scissorStyle = {
-    transformOrigin: "210px 480px",
-    transform: risen ? "scaleY(1)" : "scaleY(0.0667)",
-    transition: rise,
-  };
+  // Zdvih vyjde raz hore a ostane (žiadne kývanie); priebeh ukazuje prúžok pod plošinou.
+  const rise = "transform 1.7s cubic-bezier(.2,.7,.3,1)";
+  const scissorStyle = { transformOrigin: "230px 486px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise };
+  const platStyle = { transform: risen ? "translateY(0px)" : "translateY(300px)", transition: rise };
+  const S1 = "#aab0b8", S2 = "#7c838c", SD = "#565c64", BOLT = "#e4e7ea", BOLTC = "#6a6f76";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <svg width="210" height="280" viewBox="0 0 420 560">
-        <ellipse cx="210" cy="532" rx="140" ry="12" fill="#000" opacity="0.08" />
+      <svg width="220" height="287" viewBox="0 0 460 600">
+        <ellipse cx="230" cy="562" rx="162" ry="14" fill="#000" opacity="0.10" />
         <g style={scissorStyle}>
-          <line x1="115" y1="480" x2="305" y2="381" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="480" x2="115" y2="381" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="381" x2="305" y2="282" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="381" x2="115" y2="282" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="282" x2="305" y2="183" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="282" x2="115" y2="183" stroke="var(--accent, #E30613)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="115" y1="183" x2="305" y2="84" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
-          <line x1="305" y1="183" x2="115" y2="84" stroke="var(--accent-dark, #B5040F)" strokeWidth="12" strokeLinecap="round" />
-        </g>
-        <rect x="90" y="472" width="240" height="52" rx="6" fill="var(--text, #1a1a1a)" />
-        <rect x="266" y="462" width="34" height="26" rx="2" fill="#2b2b2b" />
-        <circle cx="283" cy="475" r="4" fill="var(--accent, #E30613)" />
-        <circle cx="150" cy="526" r="22" fill="var(--text, #1a1a1a)" />
-        <circle cx="150" cy="526" r="9" fill="#666" />
-        <circle cx="270" cy="526" r="22" fill="var(--text, #1a1a1a)" />
-        <circle cx="270" cy="526" r="9" fill="#666" />
-        <g style={{ transform: risen ? "translateY(0px)" : "translateY(369.6px)", transition: rise }}>
-          <rect x="90" y="56" width="240" height="28" rx="4" fill="var(--text, #1a1a1a)" />
-          <rect x="90" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
-          <rect x="322" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
-          <rect x="90" y="10" width="240" height="8" fill="var(--accent, #E30613)" />
-          <rect x="90" y="34" width="240" height="5" fill="var(--accent, #E30613)" />
-          <rect x="170" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
-          <rect x="242" y="10" width="8" height="50" fill="var(--text, #1a1a1a)" />
-        </g>
-        {/* Obsluha stroja — malý pozdrav pri načítavaní appky, stojí bokom a
-            kýva jednou rukou (nezávisle od zdvihu, len sa tu spolu s ním
-            zjaví). */}
-        <g>
-          <line x1="350" y1="504" x2="344" y2="552" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
-          <line x1="363" y1="504" x2="372" y2="552" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
-          <line x1="344" y1="462" x2="331" y2="491" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
-          <rect x="342" y="458" width="29" height="48" rx="8" fill="var(--text, #1a1a1a)" />
-          <rect x="340" y="494" width="32" height="8" fill="var(--accent, #E30613)" />
-          <line x1="345" y1="459" x2="371" y2="502" stroke="var(--accent, #E30613)" strokeWidth="5" strokeLinecap="round" />
-          <line x1="371" y1="459" x2="345" y2="502" stroke="var(--accent, #E30613)" strokeWidth="5" strokeLinecap="round" />
-          <circle cx="356" cy="440" r="19" fill="var(--text, #1a1a1a)" />
-          <path d="M331 437 A 26 27 0 0 1 382 437 Z" fill="var(--accent, #E30613)" />
-          {/* Ruka (mascot-wave-arm) je posunutá o 16px doľava oproti pôvodnej
-              polohe — pri kývaní ±16° sa špička ruky vychyľuje až ~44px od
-              ramena, a pri pôvodnej polohe (pivot pri x=387) to pri výkyve
-              vpravo prestrelilo cez pravý okraj viewBoxu (0 0 420 560) a
-              appka ruku odrezala. Tu už má rezervu. */}
-          <g className="mascot-wave-arm">
-            <line x1="371" y1="462" x2="400" y2="424" stroke="var(--text, #1a1a1a)" strokeWidth="9" strokeLinecap="round" />
-            <circle cx="400" cy="424" r="6" fill="var(--text, #1a1a1a)" />
+          <g strokeLinecap="round" strokeWidth="16">
+            <line x1="168" y1="486" x2="292" y2="388" stroke={S1} />
+            <line x1="292" y1="486" x2="168" y2="388" stroke={S2} />
+            <line x1="168" y1="388" x2="292" y2="290" stroke={S1} />
+            <line x1="292" y1="388" x2="168" y2="290" stroke={S2} />
+            <line x1="168" y1="290" x2="292" y2="192" stroke={S1} />
+            <line x1="292" y1="290" x2="168" y2="192" stroke={S2} />
           </g>
+          <g fill={BOLT}>
+            <circle cx="168" cy="486" r="7" /><circle cx="292" cy="486" r="7" /><circle cx="230" cy="437" r="7.5" />
+            <circle cx="168" cy="388" r="7" /><circle cx="292" cy="388" r="7" /><circle cx="230" cy="339" r="7.5" />
+            <circle cx="168" cy="290" r="7" /><circle cx="292" cy="290" r="7" /><circle cx="230" cy="241" r="7.5" />
+            <circle cx="168" cy="192" r="7" /><circle cx="292" cy="192" r="7" />
+          </g>
+          <g fill={BOLTC}><circle cx="230" cy="437" r="3" /><circle cx="230" cy="339" r="3" /><circle cx="230" cy="241" r="3" /></g>
+        </g>
+        <rect x="104" y="484" width="252" height="44" rx="7" fill="#23262b" />
+        <rect x="104" y="484" width="252" height="7" rx="4" fill="#3a3f45" />
+        <rect x="112" y="514" width="236" height="7" fill="var(--accent, #E30613)" />
+        <rect x="312" y="466" width="36" height="20" rx="3" fill="#2a2e33" />
+        <circle cx="322" cy="476" r="3.4" fill="#f5434d" /><rect x="330" y="472" width="12" height="3" rx="1.5" fill={S2} /><rect x="330" y="478" width="12" height="3" rx="1.5" fill={S2} />
+        <circle cx="158" cy="530" r="29" fill="#1a1c1f" /><circle cx="158" cy="530" r="23" fill="none" stroke="#000" strokeOpacity="0.35" strokeWidth="4" strokeDasharray="5 6" /><circle cx="158" cy="530" r="13" fill="#cfd3d8" /><circle cx="158" cy="530" r="4.5" fill="#2b2f34" />
+        <circle cx="302" cy="532" r="27" fill="#1a1c1f" /><circle cx="302" cy="532" r="21" fill="none" stroke="#000" strokeOpacity="0.35" strokeWidth="4" strokeDasharray="5 6" /><circle cx="302" cy="532" r="12" fill="#cfd3d8" /><circle cx="302" cy="532" r="4" fill="#2b2f34" />
+        <g style={platStyle}>
+          <rect x="160" y="190" width="140" height="14" rx="2" fill={SD} />
+          <rect x="86" y="176" width="288" height="22" rx="3" fill="#b4bbc3" />
+          <rect x="86" y="176" width="288" height="5" rx="2" fill="#eef1f3" />
+          <rect x="86" y="171" width="288" height="6" fill="var(--accent, #E30613)" />
+          <rect x="92" y="108" width="8" height="68" rx="2" fill={SD} />
+          <rect x="360" y="108" width="8" height="68" rx="2" fill={SD} />
+          <rect x="226" y="108" width="7" height="68" rx="2" fill={SD} />
+          <rect x="88" y="102" width="284" height="9" rx="4" fill="var(--accent, #E30613)" />
+          <rect x="88" y="132" width="284" height="7" rx="3" fill="var(--accent, #E30613)" />
+          <rect x="326" y="146" width="34" height="26" rx="3" fill="#2a2e33" />
+          <circle cx="335" cy="157" r="3" fill="#f5434d" /><rect x="342" y="153" width="13" height="3" rx="1.5" fill={S2} /><rect x="342" y="160" width="13" height="3" rx="1.5" fill={S2} />
         </g>
       </svg>
-      {label && <div className="label-font" style={{ color: "var(--text-dim, #5A5A5A)", fontSize: 13, fontFamily: "'Barlow', system-ui, -apple-system, sans-serif" }}>{label}</div>}
+      <div style={{ width: 180, height: 5, borderRadius: 3, background: "var(--border, #e0e0e0)", overflow: "hidden", position: "relative" }}>
+        <div className="lift-ldr-sweep" style={{ position: "absolute", top: 0, height: "100%", width: "42%", borderRadius: 3, background: "var(--accent, #E30613)" }} />
+      </div>
+      <style>{"@keyframes liftLdrSweep{0%{left:-45%}100%{left:103%}}.lift-ldr-sweep{left:-45%;animation:liftLdrSweep 1.8s cubic-bezier(.65,0,.35,1) infinite}@media (prefers-reduced-motion:reduce){.lift-ldr-sweep{animation:none;left:30%}}"}</style>
+      {label && <div className="label-font" style={{ color: "var(--text-dim, #5A5A5A)", fontSize: 14, fontWeight: 600, fontFamily: "'Barlow', system-ui, -apple-system, sans-serif" }}>{label}</div>}
     </div>
   );
 }
