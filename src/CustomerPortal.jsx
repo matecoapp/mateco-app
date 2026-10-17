@@ -113,7 +113,7 @@ function buildOfficialProtocolHtml(data) {
   .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
   .legal ol { margin: 4px 0; padding-left: 17px; }
   .legal li { margin-bottom: 2px; }
-  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; }
+  .footer { margin-top: auto; padding-top: 8px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.4; }
   .footer .legal { margin-top: 6px; padding-top: 0; border-top: none; color: #888; font-size: 10px; }
   @media print {
     body { background: #fff; }
@@ -246,7 +246,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
           )}
           {error && <div style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {error}</div>}
           <div style={{ fontSize: 12, color: "#5A5A5A", marginTop: 8 }}>
-            Meno{mode === "agree" ? " a podpis" : " a komentár"} uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#5A5A5A", textDecoration: "underline" }}>Ochrana osobných údajov</a>
+            Meno{mode === "agree" ? " a podpis" : " a komentár"} uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#5A5A5A", textDecoration: "underline", display: "inline-flex", alignItems: "center", minHeight: 44 }}>Ochrana osobných údajov</a>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <button type="button" onClick={() => { setMode(null); setError(null); }} style={{ ...BTN, flex: "1 1 120px", width: "auto", border: "1px solid #CFCFCF" }}>Späť</button>

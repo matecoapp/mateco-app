@@ -31,13 +31,17 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.814";
+const APP_VERSION = "1.0.815";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.815", items: [
+    { roles: null, text: "Väčšie drobné písmo (11 px) a jednotné zaoblenie kariet. Na mobile Esc zavrie ponuku ＋ / Viac." },
+    { roles: ["veduci_servisu", "admin"], text: "„Stroj sa často kazí“ nepočíta prípravu do požičovne ani poškodenie s budúcim dátumom." },
+  ] },
   { v: "1.0.813", items: [
     { roles: null, text: "Okná a menu sa na počítači jemne otvárajú a zatvárajú, uložená zákazka sa v zozname na chvíľu podfarbí, prázdny zoznam zákaziek má „Zrušiť filter“." },
   ] },
@@ -289,8 +293,8 @@ const LEAD_TECHNICIAN_DEPOS = {
 // Veta pod podpisom zákazníka (rovnaká ako v portáli).
 function PrivacyNote() {
   return (
-    <div style={{ fontSize: 12, color: "var(--text-dim)", margin: "-4px 0 12px" }}>
-      Meno a podpis zákazníka uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline", display: "inline-block", padding: "14px 0" }}>Ochrana osobných údajov</a>
+    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
+      Meno a podpis zákazníka uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline", display: "inline-flex", alignItems: "center", minHeight: 44 }}>Ochrana osobných údajov</a>
     </div>
   );
 }
@@ -611,7 +615,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
   .legal ol { margin: 4px 0; padding-left: 17px; }
   .legal li { margin-bottom: 2px; }
-  .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.7; }
+  .footer { margin-top: auto; padding-top: 8px; border-top: 1px solid #ccc; font-size: 11px; color: #555; line-height: 1.4; }
   .footer .legal { margin-top: 6px; padding-top: 0; border-top: none; color: #888; font-size: 10px; }
   @media print {
     body { background: #fff; }
@@ -1436,11 +1440,13 @@ function parseImportDate(raw) {
   if (/^\d{4}$/.test(v)) return `${v}-01-01`;
   // Rok vpredu (rrrr.mm.dd / rrrr/mm/dd / rrrr-mm-dd) — ľubovoľný z bežných
   // oddeľovačov, nech nezáleží, ktorý má kto zvyknutý v Exceli.
-  let m = v.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  // Rok vzadu (dd.mm.rrrr / dd/mm/rrrr / dd-mm-rrrr).
-  m = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/);
-  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  // Neexistujúci dátum (napr. 31. 9.) → prázdne, nech sa do DB nedostane.
+  const ok = (y, mo, d) => { const t = new Date(Date.UTC(+y, +mo - 1, +d)); return t.getUTCMonth() === +mo - 1 && t.getUTCDate() === +d ? `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}` : ""; };
+  let m = v.match(/^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})$/);
+  if (m) return ok(m[1], m[2], m[3]);
+  // Rok vzadu (dd.mm.rrrr / dd/mm/rrrr / dd-mm-rrrr, aj „1. 3. 2027“).
+  m = v.match(/^(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{4})$/);
+  if (m) return ok(m[3], m[2], m[1]);
   return v;
 }
 // Pre porovnanie období v štatistikách — vráti rovnako dlhé obdobie hneď pred
@@ -3544,14 +3550,15 @@ function Modal({ title, eyebrow, onClose, onBack, children, wide, xwide, headerE
   const panelRef = useRef(null);
   const tokenRef = useRef(null);
   // Bočný panel sa na PC zasunie späť (160 ms), až potom sa zavrie; inak (mobil, vypnuté animácie) hneď.
-  const closingRef = useRef(false);
+  // Počas zasúvania okno ďalšie kliky zachytí (klik „cez“ by otvoril inú kartu, ktorú by oneskorené zatvorenie hneď zavrelo).
+  const closingRef = useRef(null);
+  useEffect(() => () => clearTimeout(closingRef.current), []);
   const closeAnimated = () => {
     if (closingRef.current) return;
     const ov = panelRef.current?.parentElement;
     if (!side || !ov || getComputedStyle(ov).animationName === "none" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return onClose();
-    closingRef.current = true;
     ov.classList.add("closing");
-    setTimeout(onClose, 160);
+    closingRef.current = setTimeout(onClose, 160);
   };
   // Rozpísané údaje: čokoľvek sa v okne napísalo/zmenilo (alebo je to formulár
   // s podpisom/checklistom — prop form). Také okno sa klikom mimo nezatvorí
@@ -12253,7 +12260,7 @@ const ROLE_NOTIFICATION_KINDS = {
   fakturant_pozicovna: ["reservation", "damage_new", "damage_resolved", "vehicle_stk_ek"],
   veduci_servisu: ["damage_new", "damage_resolved", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "often_broken", "weekly_summary"],
   dispecer_servisu: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "revision_expiry"],
-  fakturant_servis: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request"],
+  fakturant_servis: ["damage_new", "damage_resolved", "assignment_service", "spare_parts", "ez_measurement", "vehicle_stk_ek", "portal_request", "revision_expiry"],
   veduci_technik_ba: ["damage_new", "assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek"],
   technik: ["assignment_service", "checker_inspection", "spare_parts", "ez_measurement", "vehicle_stk_ek"],
   sofer: ["assignment_transport", "transport_note", "vehicle_stk_ek"],
@@ -12451,7 +12458,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                       {isUnread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                       <span style={{ fontSize: 12, fontWeight: 700 }}>{n.title}</span>
-                      {n.link && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent)" }}>zobraziť →</span>}
+                      {n.link && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent-dark)" }}>zobraziť →</span>}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{n.message}</div>
                     <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
@@ -12470,7 +12477,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                         {unreadIds.length > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                         <span style={{ fontSize: 12, fontWeight: 700 }}>{g.items[0].title} ({g.items.length})</span>
-                        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent)" }}>{isOpen ? "skryť ▲" : "rozbaliť ▼"}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent-dark)" }}>{isOpen ? "skryť ▲" : "rozbaliť ▼"}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{g.items[0].message}{g.items.length > 1 ? " …" : ""}</div>
                       <div style={{ fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 8 }}>
@@ -13300,6 +13307,17 @@ function mobileBarHasPhone(role) {
 }
 function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, onOpenPhoneDirectory }) {
   const [sheet, setSheet] = useState(null); // null | "plus" | "viac"
+  // Esc zavrie ponuku aj keď fokus ostal na stránke (tlačidlo v lište sa pri otvorenej ponuke skryje); fokus späť až po prekreslení.
+  useEffect(() => {
+    if (!sheet) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault(); e.stopImmediatePropagation(); setSheet(null);
+      setTimeout(() => document.querySelector(sheet === "plus" ? ".mnav-plus" : ".mnav-viac")?.closest("button")?.focus({ preventScroll: true }), 0);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [sheet]);
   const all = modules.flatMap((m) => m.tabs.map((t) => ({ ...t, mod: m.id })));
   const pick = (k) => (k === "telefon" ? { id: "telefon", label: "Telefón" } : k ? all.find((t) => navKey(t) === k) : null);
   const [s0, s1] = (MOBILE_BAR_SLOTS[role] || ["calendar", "plan"]).map(pick);
@@ -13339,7 +13357,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
         )}
       </div>
       {sheet && (
-        <div className="mobile-nav-overlay" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setSheet(null); document.querySelector(sheet === "plus" ? ".mnav-plus" : ".mnav-viac")?.closest("button")?.focus({ preventScroll: true }); } }}>
+        <div className="mobile-nav-overlay">
           <div className="mobile-nav-scrim" onClick={() => setSheet(null)} />
           <div className="mnav-sheet">
             <div className="mnav-grab" />
@@ -14096,7 +14114,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
       {sorted.length === 0 ? (
         <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)" }}>
           {activeFilters.size === 0 ? "Vyberte aspoň jeden filter." : "Žiadne zákazky nezodpovedajú filtru."}
-          {(search.trim() || depoFilter || quickCategory || activeFilters.size === 0) && (
+          {(search.trim() || depoFilter || quickCategory || [...activeFilters].sort().join() !== "active,planned") && (
             <button type="button" className="btn btn-outline" style={{ marginLeft: 8 }} onClick={() => { setSearch(""); setDepoFilter(null); setQuickCategory(null); setActiveFilters(new Set(["planned", "active"])); }}>Zrušiť filter</button>
           )}
         </div>
@@ -17761,10 +17779,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {customerAbsent ? <div /> : <SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} />}
+        {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} /><PrivacyNote /></div>}
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} />
       </div>
-      {!customerAbsent && <PrivacyNote />}
 
       <FormFoot
         cancel={false}
@@ -18247,7 +18264,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
     ? `${window.location.origin}${window.location.pathname}?portal=${job.publicToken}`
     : null;
   // Karta otvorená z upozornenia rovno na záložke Zákazník — odkaz vytvoriť hneď (inak by ostalo „Generujem odkaz…“).
-  useEffect(() => { if (binderTab === "zakaznik" && !portalLink && onGeneratePortalLink) onGeneratePortalLink(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (binderTab === "zakaznik" && !portalLink && onGeneratePortalLink && navigator.onLine !== false) onGeneratePortalLink(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!showPortalPanel || !portalLink) return;
     let cancelled = false;
@@ -18488,8 +18505,8 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
           // Revízia / úradná skúška vyprší pred koncom prenájmu (14 dní vopred) — rovnaké pravidlo ako upozornenie v DB (step97).
           ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && job.endDate && job.endDate >= today
             ? [["revizia", "trackRevisions", "Revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "Revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "Úradná skúška"]]
-              .filter(([f, t]) => machine[t] !== false && machine[f] && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
-              .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — prenájom trvá do {fmtDate(job.endDate)}</>,
+              .filter(([f, t]) => machine[t] !== false && /^\d{4}-\d{2}-\d{2}$/.test(machine[f] || "") && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
+              .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — pred koncom prenájmu ({fmtDate(job.endDate)})</>,
                 actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
             : []),
           ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
@@ -20703,7 +20720,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   gridColumn: i + 2,
                   textAlign: "center",
                   fontSize: 11,
-                  color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
+                  color: isToday ? (isWeekend ? "var(--accent-dark)" : "var(--accent)") : isWeekend ? "var(--warn)" : "var(--text-dim)", // dnes cez víkend: tmavšia červená kvôli kontrastu na žltom
                   fontWeight: isToday ? 600 : 400,
                   whiteSpace: "nowrap",
                   borderRight: "1px solid var(--border)",
@@ -21912,7 +21929,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
   // Poškodenia za posledných 90 dní — od 3 štítok „Často sa kazí“ (rovnaké pravidlo ako upozornenie v DB, step97).
-  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && (d.dateReported || "") >= addDaysISO(todayISO(), -90)).length;
+  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && !d.prepCheck && (d.dateReported || "") >= addDaysISO(todayISO(), -90) && (d.dateReported || "") <= todayISO()).length;
   const jobCount = (jobs || []).filter((j) => j.machineId === m.id).length;
   const binderTabs = [
     { id: "servis", label: "Servis", count: (history || []).length, title: `Servisná história (${(history || []).length})` },
@@ -26006,7 +26023,7 @@ function TechnicianPlanner({ extraFilters, technicians, assignments, machines, d
                     style={{
                       textAlign: "center",
                       fontSize: 11,
-                      color: isToday ? "var(--accent)" : isWeekend ? "var(--warn)" : "var(--text-dim)",
+                      color: isToday ? (isWeekend ? "var(--accent-dark)" : "var(--accent)") : isWeekend ? "var(--warn)" : "var(--text-dim)", // dnes cez víkend: tmavšia červená kvôli kontrastu na žltom
                       fontWeight: isToday ? 700 : 400,
                       whiteSpace: "nowrap",
                       borderRight: "1px solid var(--border)",
@@ -28793,7 +28810,7 @@ function openPrintableDriverReport(rep, from, to, issuedBy) {
 <table class="sum">${sums}<tr class="tot"><td>Spolu prepráv</td><td class="n">${rows.length}</td></tr></table>
 <div class="sigs"><div>Vystavil (mateco)${issuedBy ? `: ${esc(issuedBy)}` : ""}</div><div>Odsúhlasil (dopravca)</div></div>
 </div>
-<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen · T +421 (0)45 5410763 · www.matecoslovakia.sk<div class="gen">Podklad k faktúre dopravcu · vygenerované v internej platforme ${esc(now)}</div></div>
+<div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen · T +421 (0)45 5410763 · www.matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<div class="gen">Podklad k faktúre dopravcu · vygenerované v internej platforme ${esc(now)}</div></div>
 </div></body></html>`;
   if (_printProtocolOpenListener) _printProtocolOpenListener(docHtml);
   else console.error("Zobrazenie výkazu ešte nie je pripravené.");
@@ -29131,10 +29148,9 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         <Field label="Meno preberajúceho *"><input value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: "100%" }} /></Field>
       )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        {customerAbsent ? <div /> : <SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} />}
+        {customerAbsent ? <div /> : <div><SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} /><PrivacyNote /></div>}
         <SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} />
       </div>
-      {!customerAbsent && <PrivacyNote />}
     </Modal>
   );
 }
@@ -30447,7 +30463,7 @@ function GlobalStyle() {
       .nav-it.nav-sub { padding-left: 38px; font-size: 12.5px; }
       .nav-it.nav-dim { color: var(--text-dim); font-size: 12px; }
       .nav-lbl { flex: 1; min-width: 0; }
-      .nav-b { margin-left: auto; background: var(--text); color: var(--panel); border-radius: 10px; font-size: 10.5px; padding: 1px 7px; font-weight: 700; }
+      .nav-b { margin-left: auto; background: var(--text); color: var(--panel); border-radius: 10px; font-size: 11px; padding: 1px 7px; font-weight: 700; }
       .side-menu-wrap.collapsed .nav-it { justify-content: center; padding: 8px 0; }
       .nav-tip { position: fixed; left: 62px; transform: translateY(-50%); z-index: 300; pointer-events: none; background: var(--text); color: var(--panel); font-size: 13px; font-weight: 600; line-height: 1.2; padding: 6px 10px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
       .nav-b.nav-b-problem { background: var(--accent-fill); color: #fff; }
@@ -30631,7 +30647,7 @@ function GlobalStyle() {
       @media (min-width: 1001px), (min-width: 721px) and (hover: hover) {
         .modal-overlay { animation: fade-in .15s ease-out; }
         .modal-panel:not(.modal-side-panel) { animation: pop-in .16s ease-out; }
-        .modal-overlay.closing { animation: fade-out .16s ease-in forwards; pointer-events: none; }
+        .modal-overlay.closing { animation: fade-out .16s ease-in forwards; }
         .modal-overlay.closing .modal-side-panel { animation: side-out .16s ease-in forwards; }
         .kebab-drop, .dropdown-panel, .header-new-drop { animation: fade-in .12s ease-out; } /* bez zmeny veľkosti — menu si pri otvorení meria polohu */
       }
