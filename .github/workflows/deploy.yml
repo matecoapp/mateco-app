@@ -35,6 +35,9 @@ jobs:
       - name: Kontrola kódu (zjavné chyby, napr. preklep v názve)
         run: npm run lint
 
+      - name: Automatické testy (pri chybe sa nová verzia nenasadí)
+        run: npm test
+
       - name: Build appky
         run: npm run build
         env:
