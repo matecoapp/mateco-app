@@ -39,7 +39,7 @@ const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
   { v: "1.0.816", items: [
-    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Dnes: v pravom stĺpci „Revízia/ÚS počas prenájmu“ — stroje v prenájme, ktorým do 14 dní (alebo už po termíne) vyprší revízia alebo úradná skúška pred koncom zákazky." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Dnes: v pravom stĺpci „Revízia/ÚS pred koncom prenájmu“ — stroje v prenájme, ktorým do 14 dní (alebo už po termíne) vyprší revízia alebo úradná skúška pred koncom zákazky." },
     { roles: null, text: "Nové načítavacie okno: realistickejšia nožnicová plošina, ktorá vyjde hore, a prúžok priebehu." },
     { roles: null, text: "Mobil: lupa, zvonček a účet v hlavičke sú biele kolieska s červenou ikonou — lepšie viditeľné na červenom páse. Prázdne zoznamy majú malú siluetu plošiny namiesto holého textu. „Po termíne“ je jantárové (nie červené), červená ostáva hlavnej akcii." },
   ] },
@@ -3406,7 +3406,7 @@ function StatusBadge({ status }) {
 
 // Stav zákazky ako pilulka (zoznam zákaziek) — farby podľa základu dizajnu.
 function JobStatusPill({ status }) {
-  const m = { active: ["spill-active", "Na zákazke"], planned: ["spill-planned", "Naplánovaná"], overdue: ["spill-problem", "⚠ Po termíne"], completed: ["spill-done", "Dokončená"] }[status] || ["spill-planned", status];
+  const m = { active: ["spill-active", "Na zákazke"], planned: ["spill-planned", "Naplánovaná"], overdue: ["spill-overdue", "⚠ Po termíne"], completed: ["spill-done", "Dokončená"] }[status] || ["spill-planned", status];
   return <span className={`spill ${m[0]}`}>{m[1]}</span>;
 }
 
@@ -6557,6 +6557,7 @@ function DispatcherApp() {
             reviziaEZ: ezActive ? m.reviziaEZ || null : null,
             overdue: desiredOverdue,
             dateReported: today,
+            createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
             popis: `Revízia ${desiredPopis}`,
             resolved: false,
             technicianId: null,
@@ -6614,6 +6615,7 @@ function DispatcherApp() {
               customer: "",
               ...desired,
               dateReported: today,
+              createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
               resolved: false,
               technicianId: null,
               assignedDate: null,
@@ -7351,6 +7353,7 @@ function DispatcherApp() {
       customer: machine.currentJob?.customer || "",
       obchodnik: machine.currentJob?.obchodnik || "", // uložené hneď teraz, nech sa dá spárovať aj keď sa zákazka medzitým zmení/skončí
       dateReported: today,
+      createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
       reportedBy: currentUser?.name || "", // kto nahlásil (rozhodnutie 7. 10.)
       popis,
       resolved: false,
@@ -7394,6 +7397,7 @@ function DispatcherApp() {
       location: data.location || "",
       customer: data.customer || "",
       dateReported: today,
+      createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
       reportedBy: currentUser?.name || "", // kto nahlásil (rozhodnutie 7. 10.)
       popis: data.popis,
       resolved: false,
@@ -7451,6 +7455,7 @@ function DispatcherApp() {
       customer: data.customer || "",
       assignedDepo: data.assignedDepo || "",
       dateReported: today,
+      createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
       reportedBy: currentUser?.name || "", // kto nahlásil (rozhodnutie 7. 10.)
       popis: data.popis,
       resolved: false,
@@ -7727,6 +7732,7 @@ function DispatcherApp() {
       customer: request.customer || machine.currentJob?.customer || "",
       obchodnik: machine.currentJob?.obchodnik || "",
       dateReported: today,
+      createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
       popis: `${request.message} (nahlásené zákazníkom cez portál)`,
       resolved: false,
       technicianId: null,
@@ -8570,6 +8576,7 @@ function DispatcherApp() {
         location: machine.depo || "",
         customer: "",
         dateReported: today,
+        createdAt: new Date(serverNowMs()).toISOString(), // poradie porúch z jedného dňa (upozornenie „Stroj sa často kazí“)
         popis: "Príprava do požičovne",
         resolved: false,
         technicianId: null,
@@ -12248,7 +12255,7 @@ const NOTIFICATION_KIND_LABELS = {
   vehicle_stk_ek: "STK/EK áut",
   portal_request: "Žiadosti zo zákazníckeho portálu",
   rental_end: "Končí prenájom (predĺžiť / zvoz)",
-  revision_expiry: "Revízia / úradná skúška vyprší počas prenájmu",
+  revision_expiry: "Revízia / úradná skúška vyprší pred koncom prenájmu",
   often_broken: "Stroj sa často kazí",
   weekly_summary: "Týždenný súhrn (pondelok ráno)",
 };
@@ -12401,6 +12408,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
               alignItems: "center",
               justifyContent: "center",
               padding: "0 3px",
+              boxShadow: "0 0 0 2px #fff",
             }}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -13015,7 +13023,6 @@ function GlobalSearch({ searchIndex, onNavigate }) {
             borderRadius: 6,
             padding: "5px 10px",
             fontSize: 13,
-            outline: "none",
           }}
         />
         {mobileExpanded && (
@@ -13905,11 +13912,11 @@ function Dashboard({
                 if (track === false) return <span style={{ color: "var(--text-dim)" }}>Nesledované</span>;
                 if (!date) return <span style={{ color: "var(--text-dim)" }}>—</span>;
                 const d = daysBetween(today, date);
-                if (d < 0) return <span className="spill spill-problem tnum">⚠ {fmtDate(date)}</span>;
+                if (d < 0) return <span className="spill spill-overdue tnum">⚠ {fmtDate(date)}</span>;
                 return <span className="tnum" style={{ color: d <= 30 ? "var(--warn)" : undefined, fontWeight: d <= 30 ? 600 : undefined }}>{fmtDate(date)}</span>;
               };
               const statusPill = m.status === "overdue"
-                ? <span className="spill spill-problem">⚠ Po termíne +{overdueDays} dní</span>
+                ? <span className="spill spill-overdue">⚠ Po termíne +{overdueDays} dní</span>
                 : m.status === "active" ? <span className="spill spill-active">Na zákazke</span> : <span className="spill spill-done">Voľný</span>;
               return (
                 <tr
@@ -14110,7 +14117,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
             </button>
           )}
           {quickTiles.filter((t) => t.items.length > 0).map((t) => (
-            <button key={t.id} type="button" className={`fchip${t.id === "overdue" ? " problem" : ""}`} onClick={() => setQuickCategory(t.id)}>
+            <button key={t.id} type="button" className={`fchip${t.id === "overdue" ? " overdue" : ""}`} onClick={() => setQuickCategory(t.id)}>
               {t.id === "overdue" && "⚠ "}{t.label}<span className="seg-n">{t.items.length}</span>
             </button>
           ))}
@@ -14361,7 +14368,7 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
     return (
       <div>
         {transportNotesPanel}
-        {first ? card(first, true) : <div style={{ fontSize: 16, color: "var(--text-dim)", margin: "4px 0 14px" }}>{doneNow.length || doneZvozCount ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."}</div>}
+        {first ? card(first, true) : <EmptyLift text={doneNow.length || doneZvozCount ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."} />}
         {/* Rovnako ako u technika: pod hlavnou kartou vždy „Ďalej dnes“ (v1.0.805). */}
         {first && <div className="today-sec">Ďalej dnes · {restNow.length}</div>}
         {restNow.map(row)}
@@ -14874,7 +14881,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           )}
         </div>
         <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {t.overdue && <span className="spill spill-problem">⚠ Po termíne</span>}
+          {t.overdue && <span className="spill spill-overdue">⚠ Po termíne</span>}
           {!t.driverId && <span className="spill spill-problem">Bez šoféra</span>}
           {showProtocol && <span className={`spill ${protocol[0]}`}>{protocol[1]}</span>}
         </span>
@@ -18508,9 +18515,9 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
             { text: <>Prenájom končí {relDay(job.endDate, today)}{job.endDate < today ? " — už je po konci" : ""}</>,
               actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: onComplete } : job.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${job.customerPhone}` }] },
           // Revízia / úradná skúška vyprší pred koncom prenájmu (14 dní vopred) — rovnaké pravidlo ako upozornenie v DB (step97).
-          ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && job.endDate && job.endDate >= today
+          ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && /^\d{4}-\d{2}-\d{2}$/.test(job.endDate || "") && !isNaN(Date.parse(job.endDate)) && new Date(job.endDate + "T00:00:00Z").toISOString().slice(0, 10) === job.endDate && job.endDate >= today
             ? [["revizia", "trackRevisions", "Revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "Revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "Úradná skúška"]]
-              .filter(([f, t]) => machine[t] !== false && /^\d{4}-\d{2}-\d{2}$/.test(machine[f] || "") && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
+              .filter(([f, t]) => machine[t] !== false && /^\d{4}-\d{2}-\d{2}$/.test(machine[f] || "") && !isNaN(Date.parse(machine[f])) && new Date(machine[f] + "T00:00:00Z").toISOString().slice(0, 10) === machine[f] && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
               .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — pred koncom prenájmu ({fmtDate(job.endDate)})</>,
                 actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
             : []),
@@ -20081,6 +20088,8 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
   const [mapObchodnik, setMapObchodnik] = useState("");
   const [fileName, setFileName] = useState("");
   const [notFound, setNotFound] = useState([]);
+  const [badDates, setBadDates] = useState([]);
+  const [warned, setWarned] = useState(false); // po upozornení na vynechané riadky druhý klik importuje
 
   const machineByCode = useMemo(() => Object.fromEntries(machines.map((m) => [m.code.trim().toLowerCase(), m])), [machines]);
   // Párovanie na existujúcich zákazníkov - najprv podľa IČO (spoľahlivejšie,
@@ -20095,6 +20104,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
     const file = e.target.files[0];
     if (!file) return;
     setFileName(file.name);
+    setWarned(false); setNotFound([]); setBadDates([]);
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -20109,6 +20119,7 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
 
   function doImport() {
     const missing = [];
+    const bad = [];
     const jobs = [];
     const customerUpserts = [];
     rows.forEach((r) => {
@@ -20120,7 +20131,8 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
         return;
       }
       const startDate = parseImportDate(r[mapStart]);
-      if (!startDate) return;
+      const endRaw = mapEnd ? (r[mapEnd] || "").toString().trim() : "";
+      if (!startDate || (endRaw && !parseImportDate(endRaw))) { bad.push(codeRaw); return; } // chýbajúci alebo neexistujúci dátum
       const customerName = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
       const ico = mapIco ? (r[mapIco] || "").toString().trim() : "";
       if (customerName) {
@@ -20146,6 +20158,8 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
       });
     });
     setNotFound(missing);
+    setBadDates(bad);
+    if ((missing.length || bad.length) && !warned) { setWarned(true); return; }
     if (jobs.length > 0) onImport(jobs, customerUpserts);
   }
 
@@ -20232,10 +20246,16 @@ function ImportJobsModal({ machines, customers, user, onClose, onImport }) {
           {notFound.length > 6 ? "…" : ""}
         </div>
       )}
+      {badDates.length > 0 && (
+        <div className="fnote fnote-r">
+          ⚠ {badDates.length} riadkov má chýbajúci alebo neexistujúci dátum (napr. 31. 9.) a nenaimportuje sa: {badDates.slice(0, 6).join(", ")}
+          {badDates.length > 6 ? "…" : ""}
+        </div>
+      )}
 
       <FormFoot>
         <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-          Importovať zákazky
+          {warned ? "Importovať zvyšné zákazky" : "Importovať zákazky"}
         </button>
       </FormFoot>
     </Modal>
@@ -21934,7 +21954,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
   // Poškodenia za posledných 90 dní — od 3 štítok „Často sa kazí“ (rovnaké pravidlo ako upozornenie v DB, step97).
-  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && !d.prepCheck && (d.dateReported || "") >= addDaysISO(todayISO(), -90) && (d.dateReported || "") <= todayISO()).length;
+  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && !d.prepCheck && /^\d{4}-\d{2}-\d{2}$/.test(d.dateReported || "") && !isNaN(Date.parse(d.dateReported)) && new Date(d.dateReported + "T00:00:00Z").toISOString().slice(0, 10) === d.dateReported && d.dateReported >= addDaysISO(todayISO(), -90) && (d.dateReported || "") <= todayISO()).length;
   const jobCount = (jobs || []).filter((j) => j.machineId === m.id).length;
   const binderTabs = [
     { id: "servis", label: "Servis", count: (history || []).length, title: `Servisná história (${(history || []).length})` },
@@ -24121,7 +24141,7 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
                 </td>
                 <td data-label="Pridelené">
                   {!meas.assignedTechnicianId ? <span style={{ color: "var(--text-dim)" }}>nepridelené</span>
-                    : lateAssigned ? <span className="spill spill-problem tnum">⚠ {meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)} (po termíne)</span>
+                    : lateAssigned ? <span className="spill spill-overdue tnum">⚠ {meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)} (po termíne)</span>
                     : <span className="tnum">{meas.assignedTechnicianName || "technik"} na {fmtDate(meas.assignedDate)}</span>}
                 </td>
                 <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -28289,6 +28309,7 @@ function TodayView({ user, myEmployee, today, tomorrow, assignments, damages, jo
           {infos.map((a) => <span key={a.id} className="badge">{a.kind === "udalost" ? a.poznamka || "Udalosť" : { pohotovost: "Pohotovosť", dovolenka: "Dovolenka", pn: "PN / Doktor" }[a.kind] || a.kind}</span>)}
         </div>
       )}
+      {!hero && <EmptyLift text="Nič nečaká. 👍" />}
       {hero && <TodayHero id={hero.domId} tag={hero.tag} head={hero.head} headSmall={hero.headSmall} sub={hero.heroSub} problem={hero.problem} actions={hero.actions} />}
       {lateRest.length > 0 && <><div className="today-sec red">⚠ Mešká · {lateRest.length}</div>{lateRest.map(asRow)}</>}
       {hero && <div className="today-sec">Ďalej dnes · {todayRest.length}</div>}
@@ -28493,10 +28514,10 @@ function EmptyLift({ text }) {
     </div>
   );
 }
-function TodayList({ title, rows, empty }) {
+function TodayList({ title, rows, empty, total }) {
   return (
     <div>
-      <div className="today-sec">{title}{rows.length ? ` · ${rows.length}` : ""}</div>
+      <div className="today-sec">{title}{rows.length ? ` · ${total > rows.length ? `${rows.length} z ${total}` : rows.length}` : ""}</div>
       <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
         {rows.length === 0 && (empty ? <EmptyLift text={empty} /> : null)}
         {rows.map((r, i) => {
@@ -28587,7 +28608,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
     resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
     // Revízia/ÚS stroja vyprší ešte počas prenájmu (rovnaké pravidlo ako upozornenie a „Teraz treba“, step97).
-    const isoD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const isoD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s; // aj 2026-09-31 = neplatný
     const revExp = [];
     mine.forEach((j) => {
       if (j.status === "completed" || j.notRealized || !isoD(j.endDate) || j.endDate < today) return;
@@ -28603,8 +28624,8 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     side = (
       <>
         {revExp.length > 0 && (
-          <TodayList title="Revízia/ÚS počas prenájmu" rows={revExp.slice(0, 8).map((x, i) => ({ key: "rev" + i, tag: x.due < today ? "PO TERMÍNE" : "DO 14 DNÍ", tone: x.due < today ? "red" : "warn",
-            title: `${mcode(x.j.machineId)} · ${x.lbl}`, sub: `platí do ${fmtDate(x.due)} · prenájom do ${fmtDate(x.j.endDate)} · ${x.j.customer || "—"}`,
+          <TodayList title="Revízia/ÚS pred koncom prenájmu" total={revExp.length} rows={revExp.slice(0, 8).map((x, i) => ({ key: "rev" + i, tag: x.due < today ? "PO TERMÍNE" : "DO 14 DNÍ", tone: x.due < today ? "red" : "warn",
+            title: `${mcode(x.j.machineId)} · ${x.lbl}`, sub: `${x.due < today ? "platila" : "platí"} do ${fmtDate(x.due)} · prenájom do ${fmtDate(x.j.endDate)} · ${x.j.customer || "—"}`,
             actions: [{ label: "Otvoriť", onClick: () => onOpenJob(x.j) }] }))} />
         )}
         <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "dim" : "info",
@@ -30723,12 +30744,14 @@ function GlobalStyle() {
       .fchip:hover { border-color: var(--text); }
       .fchip.on { background: var(--text); color: var(--panel); border-color: var(--text); }
       .fchip.problem { background: var(--danger-bg); color: var(--danger-text); border-color: transparent; font-weight: 600; }
+      .fchip.overdue { background: var(--warn-bg); color: var(--warn); border-color: transparent; font-weight: 600; }
       .fchip-x { margin-left: 6px; border: 0; background: transparent; font: inherit; font-weight: 700; color: inherit; cursor: pointer; padding: 0 2px; }
       .spill { display: inline-block; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--s-neutral-bg); color: var(--s-neutral); }
       .spill-active { background: var(--s-active-bg); color: var(--s-active); }
       .spill-done { background: var(--s-done-bg); color: var(--s-done); }
       .spill-wait { background: var(--s-wait-bg); color: var(--s-wait); }
-      .spill-problem { background: var(--warn-bg); color: var(--warn); }
+      .spill-problem { background: var(--danger-bg); color: var(--danger-text); }
+      .spill-overdue { background: var(--warn-bg); color: var(--warn); } /* len „Po termíne“ (v1.0.816) */
       .btn-outline { background: var(--panel); border: 1px solid var(--text); color: var(--text); }
       .btn-outline:hover { background: var(--panel-2); }
       .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -31392,19 +31415,19 @@ function useNewVersionCheck() {
 // scissor → chassis), nech vyzerá, že nožnice vychádzajú znútra podvozku,
 // nie že sú položené pred ním.
 function LiftLoader({ label }) {
-  const [risen, setRisen] = useState(false);
+  const [risen, setRisen] = useState(() => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); // bez animácie hneď hore
   useEffect(() => {
     const raf = requestAnimationFrame(() => setRisen(true));
     return () => cancelAnimationFrame(raf);
   }, []);
   // Zdvih vyjde raz hore a ostane (žiadne kývanie); priebeh ukazuje prúžok pod plošinou.
   const rise = "transform 1.7s cubic-bezier(.2,.7,.3,1)";
-  const scissorStyle = { transformOrigin: "230px 486px", transform: risen ? "scaleY(1)" : "scaleY(0.12)", transition: rise };
-  const platStyle = { transform: risen ? "translateY(0px)" : "translateY(300px)", transition: rise };
+  const scissorStyle = { transformOrigin: "230px 486px", transform: risen ? "scaleY(1)" : "scaleY(0.05)", transition: rise };
+  const platStyle = { transform: risen ? "translateY(0px)" : "translateY(279px)", transition: rise }; // rám koša sedí na vrchu nožníc po celý zdvih
   const S1 = "#aab0b8", S2 = "#7c838c", SD = "#565c64", BOLT = "#e4e7ea", BOLTC = "#6a6f76";
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <svg width="220" height="287" viewBox="0 0 460 600">
+    <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <svg width="220" height="287" viewBox="0 0 460 600" aria-hidden="true">
         <ellipse cx="230" cy="562" rx="162" ry="14" fill="#000" opacity="0.10" />
         <g style={scissorStyle}>
           <g strokeLinecap="round" strokeWidth="16">
