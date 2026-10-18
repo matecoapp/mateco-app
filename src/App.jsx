@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.816";
+const APP_VERSION = "1.0.817";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -1429,6 +1429,8 @@ function composeMail(mail) {
 
 // Kalendárne dni (setDate), nie 24 h v ms — pri zmene času (25. 10.) by
 // „zajtra“ vyšlo na dnešok.
+// Skutočný kalendárny dátum rrrr-mm-dd (2026-09-31 aj 2026-10-32 = neplatný) — rovnako ako private.safe_date v DB.
+const isRealISODate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s;
 const addDaysISO = (iso, days) => {
   const d = new Date(iso + "T00:00:00");
   d.setDate(d.getDate() + days);
@@ -2627,6 +2629,22 @@ function listDiffUpdater(before, after) {
   ];
 }
 const _recordSaveQueues = {};
+// Upozornenia k záznamu: odídu spolu s ním (pole _notify) a databáza (step101) ich uloží v tej istej
+// transakcii — uloží sa záznam, uloží sa aj upozornenie (aj z offline fronty).
+const _pendingNotify = new Map(); // id záznamu → upozornenia (id sú unikátne naprieč tabuľkami)
+function attachNotify(id, n) {
+  _pendingNotify.set(id, [...(_pendingNotify.get(id) || []), n]);
+  // Záznam sa neuložil (nič sa nezmenilo / zmazaný) — upozornenie nezostane visieť pre neskorší zápis.
+  setTimeout(() => {
+    const left = _pendingNotify.get(id);
+    if (!left?.some((x) => x.id === n.id)) return;
+    const rest = left.filter((x) => x.id !== n.id);
+    if (rest.length) _pendingNotify.set(id, rest); else _pendingNotify.delete(id);
+    saveRecordRow("notifications", n);
+  }, 1500);
+}
+let _dropLocalNotifs = null; // zruší upozornenia zo zvončeka, ak sa záznam neuložil
+const mergeNotify = (a, b) => [...(a || []), ...(b || [])].filter((n, i, all) => all.findIndex((x) => x.id === n.id) === i);
 const _protocolInFlight = new Set();
 // JSON s ustáleným poradím kľúčov (DB jsonb poradie kľúčov mení).
 function stableJson(v) {
@@ -2664,7 +2682,7 @@ async function writeRecordRowWithRetry(table, rawItem, attempt = 1) {
       // presne to isté, je to úspech, nie „nemáte oprávnenie“.
       if (attempt > 1) {
         const { data: row } = await supabase.from(table).select("data").eq("id", item.id).maybeSingle();
-        if (row && Object.keys(item).every((k) => stableJson(row.data?.[k]) === stableJson(item[k]))) return true;
+        if (row && Object.keys(item).every((k) => k === "_notify" || /^[a-z][A-Za-z]*At$/.test(k) || stableJson(row.data?.[k]) === stableJson(item[k]))) return true;
       }
       console.error(`Zápis zamietnutý — chýba oprávnenie (${table})`, item.id, e);
       return "denied";
@@ -2786,11 +2804,17 @@ if (typeof window !== "undefined") {
 }
 const MERGE_ON_SAVE = new Set(["jobs", "customers", "employees", "damages", "machines", "reservations", "vehicles", "partHandovers", "handoverProtocols"]); // protokol: kancelária zo staršej kópie neprepíše práve dokončenú fázu šoféra
 function saveRecordRow(table, item, base) {
-  if (table !== "record_locks" && officeOffline(table, item, base)) return Promise.resolve();
+  const pendingN = item?.id ? _pendingNotify.get(item.id) : null;
+  if (pendingN) _pendingNotify.delete(item.id);
+  if (table !== "record_locks" && officeOffline(table, item, base)) { if (pendingN) _dropLocalNotifs?.(pendingN); return Promise.resolve(); }
+  if (pendingN) item = { ...item, _notify: pendingN };
   const qKey = `${table}:${item.id}`;
   const prev = _recordSaveQueues[qKey] || Promise.resolve();
   const queueIt = () => idbGet("outbox", qKey)
-    .then((queued) => idbPut("outbox", qKey, { table, item, base: queued && "base" in queued ? queued.base : base || null }))
+    .then((queued) => {
+      const qn = mergeNotify(queued?.item?._notify, item._notify); // novší zápis toho istého záznamu nezahodí upozornenie z fronty
+      return idbPut("outbox", qKey, { table, item: qn.length ? { ...item, _notify: qn } : item, base: queued && "base" in queued ? queued.base : base || null });
+    })
     .then(refreshOutboxCount);
   const next = prev.then(async () => {
     _saveStatusListener?.("pending", table);
@@ -2828,7 +2852,9 @@ function saveRecordRow(table, item, base) {
         if (merged) toSend = { ...merged, ...(item._rev !== undefined ? { _rev: item._rev !== base._rev ? (freshObj._rev || 0) + 1 : freshObj._rev } : {}) };
       }
     }
+    if (pendingN && !toSend._notify) toSend = { ...toSend, _notify: pendingN };
     const ok = await writeRecordRowWithRetry(table, toSend);
+    if (pendingN && ok === "denied" && !fieldRow) _dropLocalNotifs?.(pendingN); // databáza záznam (a s ním upozornenie) odmietla
     if (ok === "denied") {
       delete _retryActions[table];
       if (table === "handoverProtocols" && _offlineQueueAllowed) {
@@ -3046,7 +3072,7 @@ const LOCK_HEARTBEAT_MS = 20 * 1000;
 // menami podľa toho, kto naposledy zapísal).
 function writeRecordLock(table, recordId, userId, userName) {
   if (!userId || !userName) return;
-  saveRecordRow("record_locks", { id: `${table}:${recordId}:${userId}`, table, recordId, userId, userName, lockedAt: new Date().toISOString() });
+  saveRecordRow("record_locks", { id: `${table}:${recordId}:${userId}`, table, recordId, userId, userName, lockedAt: new Date(serverNowMs()).toISOString() });
 }
 function clearRecordLock(table, recordId, userId) {
   if (!userId) return;
@@ -4444,7 +4470,7 @@ function DispatcherApp() {
     });
     if (stale.length === 0) return;
     (async () => {
-      const sentAt = new Date().toISOString();
+      const sentAt = new Date(serverNowMs()).toISOString();
       const won = [];
       for (const r of stale) {
         if (await claimReminder("reservations", r, { reminderSentAt: sentAt }, "reminderSentAt")) won.push(r.id);
@@ -5336,6 +5362,7 @@ function DispatcherApp() {
     withAccount.forEach((e) => pushNotification({ ...notif, roles: [], userName: e.name }));
   }
   _fieldRole = ["sofer", "externy_sofer"].includes(currentUser?.role);
+  _dropLocalNotifs = (list) => { const ids = new Set(list.map((n) => n.id)); setNotifications((prev) => prev.filter((n) => !ids.has(n.id))); };
   _offlineQueueAllowed = ["sofer", "externy_sofer", "technik", "veduci_technik_ba"].includes(currentUser?.role);
 
   // Predtým tu bol vlastný "Denný súhrn" počítaný z lokálnych dát appky —
@@ -5768,7 +5795,7 @@ function DispatcherApp() {
     persistEzMeasurements(
       (ezMeasurements) => ezMeasurements.map((m) =>
         m.id === id
-          ? { ...m, assignedTechnicianId: tech.id, assignedTechnicianName: tech.name, assignedDate: date, assignedBy: currentUser?.name || "", assignedAt: new Date().toISOString() }
+          ? { ...m, assignedTechnicianId: tech.id, assignedTechnicianName: tech.name, assignedDate: date, assignedBy: currentUser?.name || "", assignedAt: new Date(serverNowMs()).toISOString() }
           : m
       )
     );
@@ -5803,7 +5830,7 @@ function DispatcherApp() {
         originalId: record.id,
         originalData: record,
         label: label || record.code || record.name || record.nazovZakaznika || record.customer || record.id,
-        deletedAt: new Date().toISOString(),
+        deletedAt: new Date(serverNowMs()).toISOString(),
         deletedById: currentUser?.id || null,
         deletedByName: currentUser?.name || null,
         deletedByRole: currentUser?.role || null,
@@ -6024,7 +6051,7 @@ function DispatcherApp() {
                 email: c.email || email || "",
                 telefon: c.telefon || telefon || "",
                 contacts: contacts && contacts.length ? [...(c.contacts || []), ...contacts] : c.contacts,
-                updatedAt: new Date().toISOString(),
+                updatedAt: new Date(serverNowMs()).toISOString(),
               }
             : c
         )
@@ -6105,7 +6132,7 @@ function DispatcherApp() {
       const hits = jobs.filter(mine).length;
       if (!window.confirm(`Premenovať zákazníka „${oldName}" na „${newName}"? Zmení sa aj na ${hits} zákazkách, v rezerváciách, blackliste a rámcových zmluvách.`)) return;
     }
-    persistCustomers((customers) => customers.map((c) => (c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c)));
+    persistCustomers((customers) => customers.map((c) => (c.id === id ? { ...c, ...data, updatedAt: new Date(serverNowMs()).toISOString() } : c)));
     if (renamed) {
       persistJobs((list) => list.map((j) => (mine(j) ? { ...j, customer: newName } : j)));
       persistReservations((list) => list.map((r) => (low(r.customer) === low(oldName) ? { ...r, customer: newName } : r)));
@@ -6190,7 +6217,7 @@ function DispatcherApp() {
   // afterProtocolId: upozornenie čaká vo fronte, kým sa neodošle protokol (offline) — odmietnutý protokol ho nepošle.
   // deferred: len vráti záznam (uloží ho volajúci neskôr, napr. z offline fronty).
   pushNotificationRef.current = pushNotification; // pre listenery registrované raz (useEffect [])
-  function pushNotification({ roles, userName, userId: explicitUserId, title, message, link, kind, system, afterProtocolId, deferred }) {
+  function pushNotification({ roles, userName, userId: explicitUserId, title, message, link, kind, system, afterProtocolId, deferred, attachTo }) {
     // Osobná notifikácia sa páruje aj podľa ID účtu (userId) — meno v profile a v
     // zázname zamestnanca sa môže líšiť (diakritika, preklep) a človeku by nič neprišlo.
     // createdById: autor akcie — sám sebe notifikáciu nedostane.
@@ -6204,6 +6231,8 @@ function DispatcherApp() {
     Object.entries(ROLE_PERM_ALIAS).forEach(([r, parent]) => { if (allRoles.includes(parent) && !allRoles.includes(r)) allRoles.push(r); });
     const newNotif = { id: uid(), createdAt: new Date(serverNowMs()).toISOString(), roles: allRoles, userName: userName || null, userId, createdById: system ? null : currentUser?.id || null, ...(system && (currentUser?.id || session?.user?.id) ? { insertedBy: currentUser?.id || session.user.id } : {}), title, message, link: link || null, kind: kind || null, readBy: [], ...(afterProtocolId ? { afterProtocol: `handoverProtocols:${afterProtocolId}` } : {}) };
     if (deferred) return newNotif;
+    // attachTo: uloží ho databáza spolu so záznamom (step101) — zapíše sa len pri uložení záznamu
+    if (attachTo) { if (!_offlineQueueAllowed && typeof navigator !== "undefined" && !navigator.onLine) return null; attachNotify(typeof attachTo === "string" ? attachTo : attachTo.id, newNotif); setNotifications((prev) => [newNotif, ...prev]); return newNotif; }
     if (officeOffline("notifications", newNotif)) return null;
     // Staré upozornenia (60+ dní) maže denne databáza (step58) — nie hodiny tohto zariadenia.
     setNotifications((prev) => [newNotif, ...prev]);
@@ -6655,7 +6684,7 @@ function DispatcherApp() {
     if (additions.length) {
       // Nové tikety len VLOŽIŤ — ak rovnaký (stroj + deň) už založilo iné
       // zariadenie a medzičasom ho niekto pridelil, nesmie sa prepísať.
-      const now = new Date().toISOString();
+      const now = new Date(serverNowMs()).toISOString();
       supabase
         .from("damages")
         .upsert(additions.map((x) => ({ id: x.id, data: x, updated_at: now })), { onConflict: "id", ignoreDuplicates: true })
@@ -6774,7 +6803,7 @@ function DispatcherApp() {
     persistAssignments(
       (assignments) => assignments.map((a) =>
         ids.has(a.id)
-          ? { ...a, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts, mth: a.mth ?? null, noMth: !!a.noMth } }
+          ? { ...a, erpProcessed: true, erpProcessedAt: new Date(serverNowMs()).toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { workHours: a.workHours, usedParts: a.usedParts, mth: a.mth ?? null, noMth: !!a.noMth } }
           : a
       )
     );
@@ -6788,7 +6817,7 @@ function DispatcherApp() {
     persistProtocolLogs(
       (protocolLogs) => protocolLogs.map((p) =>
         ids.has(p.id)
-          ? { ...p, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
+          ? { ...p, erpProcessed: true, erpProcessedAt: new Date(serverNowMs()).toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "", erpSnapshot: { totalHours: p.totalHours, materialItems: p.materialItems, travelKm: p.travelKm, travelHours: p.travelHours } }
           : p
       )
     );
@@ -6803,7 +6832,7 @@ function DispatcherApp() {
     const ids = new Set([].concat(id));
     persistHandoverProtocols(
       (handoverProtocols) => handoverProtocols.map((h) =>
-        ids.has(h.id) ? { ...h, erpProcessed: true, erpProcessedAt: new Date().toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "" } : h
+        ids.has(h.id) ? { ...h, erpProcessed: true, erpProcessedAt: new Date(serverNowMs()).toISOString(), erpProcessedBy: currentUser?.name || "", erpOrderNumber: orderNumber || "" } : h
       )
     );
   }
@@ -7361,9 +7390,9 @@ function DispatcherApp() {
       assignedDate: null,
       assignmentId: null,
     };
-    persistDamages((damages) => [...damages, record]);
     const dmgNotif = {
       kind: "damage_new",
+      attachTo: record, // uloží ho databáza spolu s poškodením (step101)
       // Externý šofér smie písať len dispečingu/servisu (step65) — obchodník sa dozvie z rolí požičovne.
       userName: currentUser?.role === "externy_sofer" ? null : record.obchodnik || null,
       title: "Nové poškodenie",
@@ -7372,6 +7401,7 @@ function DispatcherApp() {
     };
     if (opts?.notifyRoles) pushNotification({ ...dmgNotif, roles: withLeadTechnician(opts.notifyRoles, machine) });
     else notifyDispatchers(dmgNotif, { job: machine.currentJob || jobs.find((j) => j.machineId === machine.id && ["active", "overdue"].includes(effectiveStatus(j, todayISO()))), machine, extraRoles: withLeadTechnician(["dispecer_servisu", "veduci_servisu"], machine) });
+    persistDamages((damages) => [...damages, record]);
     showToast("Poškodenie bolo nahlásené.");
     if (!opts?.silent) {
       setShowDamageReport(null);
@@ -7405,14 +7435,15 @@ function DispatcherApp() {
       assignedDate: null,
       assignmentId: null,
     };
-    persistDamages((damages) => [...damages, record]);
     pushNotification({
       kind: "damage_new",
+      attachTo: record,
       roles: ["dispecer_servisu", "veduci_servisu", "dispecer_pozicovne", "veduci_pozicovne"],
       title: "Nové poškodenie — chýba sériové číslo",
       message: `Nahlásené poškodenie bez sériového čísla${data.customer ? " — " + data.customer : ""}: „${data.popis}“. Treba doplniť stroj, kým sa dá prideliť technikovi.`,
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     });
+    persistDamages((damages) => [...damages, record]);
     showToast("Poškodenie bolo nahlásené.");
     setShowUnknownSerialReport(false);
   }
@@ -7463,14 +7494,15 @@ function DispatcherApp() {
       assignedDate: null,
       assignmentId: null,
     };
-    persistDamages((damages) => [...damages, record]);
     pushNotification({
       kind: "damage_new",
+      attachTo: record,
       roles: withLeadTechnician(["dispecer_servisu", "veduci_servisu"], { depo: data.assignedDepo || "" }),
       title: "Nová externá zákazka",
       message: `Nahlásená nová externá servisná zákazka${data.customer ? " — " + data.customer : ""}: „${data.popis}“.`,
       link: { module: "servis", view: "externe", damageId: record.id },
     });
+    persistDamages((damages) => [...damages, record]);
     setShowExternalReport(false);
   }
   function updateExternalService(id, data) {
@@ -7592,18 +7624,11 @@ function DispatcherApp() {
       showNotice("Toto poškodenie medzičasom zmenil niekto iný. Obnov stránku (F5) a uprav znova, nech sa nič neprepíše.");
       return false;
     }
-    persistDamages(
-      (damages) => damages.map((x) =>
-        x.id === damageId
-          ? { ...x, stav, stavAt: new Date().toISOString(), resolved: stav === "opravene", opravaDatum, opravaKomentar, ...(x.resolved && stav !== "opravene" ? { invoiced: false, invoiceNumber: null, invoicedAt: null, invoicedBy: null, ...unassignIfNoTask(x) } : {}), _rev: (x._rev || 0) + 1 }
-          : x
-      )
-    );
-    if (stav === "opravene") dropOpenAssignmentsForDamages([damageId]);
     if (d && stav === "opravene" && d.type !== "externa") {
       const where = d.customer || d.location || "—";
       notifyDispatchers({
         kind: "damage_resolved",
+        attachTo: damageId,
         userName: d.obchodnik || null,
         title: "Stroj opravený",
         message: `Stroj ${d.code} u zákazníka/na depe ${where} bol opravený dňa ${fmtDate(opravaDatum)}.`,
@@ -7613,12 +7638,21 @@ function DispatcherApp() {
       const where = d.customer || d.location || "—";
       pushNotification({
         kind: "damage_resolved",
+        attachTo: damageId,
         roles: ["dispecer_servisu", "veduci_servisu"],
         title: "Externá servisná zákazka ukončená",
         message: `Externá servisná zákazka ${d.code}${where !== "—" ? " — " + where : ""} bola ukončená dňa ${fmtDate(opravaDatum)}.`,
         link: { module: "servis", view: "externe", damageId: d.id },
       });
     }
+    persistDamages(
+      (damages) => damages.map((x) =>
+        x.id === damageId
+          ? { ...x, stav, stavAt: new Date(serverNowMs()).toISOString(), resolved: stav === "opravene", opravaDatum, opravaKomentar, ...(x.resolved && stav !== "opravene" ? { invoiced: false, invoiceNumber: null, invoicedAt: null, invoicedBy: null, ...unassignIfNoTask(x) } : {}), _rev: (x._rev || 0) + 1 }
+          : x
+      )
+    );
+    if (stav === "opravene") dropOpenAssignmentsForDamages([damageId]);
     // Spätná väzba na zákaznícky portál — ak toto poškodenie vzniklo z žiadosti
     // zaslanej zákazníkom (convertPortalRequestToDamage nižšie), zákazník pri
     // ďalšom otvorení svojho odkazu uvidí, že je to vyriešené.
@@ -7676,6 +7710,7 @@ function DispatcherApp() {
       if (job?.obchodnik) {
         pushNotification({
           kind: "portal_request",
+          attachTo: request.id,
           roles: [],
           userName: job.obchodnik,
           title: "Schválená zmena termínu vrátenia",
@@ -7739,28 +7774,27 @@ function DispatcherApp() {
       assignedDate: null,
       assignmentId: null,
     };
-    persistDamages((damages) => [...damages, damageRecord]);
-    persistPortalRequests(
-      (portalRequests) => portalRequests.map((r) => (r.id === request.id ? { ...r, status: "in_progress", linkedDamageId: damageRecord.id } : r))
-    );
     pushNotification({
       kind: "damage_new",
+      attachTo: damageRecord,
       roles: withLeadTechnician(["dispecer_servisu", "veduci_servisu"], machine),
       userName: damageRecord.obchodnik || null,
       title: "Nové poškodenie (z portálu)",
       message: `Založené z hlásenia zákazníka: stroj ${machine.code}${damageRecord.customer ? " u zákazníka " + damageRecord.customer : ""} — „${request.message}“.`,
       link: { module: "servis", view: "poskodenia", damageId: damageRecord.id },
     });
+    persistDamages((damages) => [...damages, damageRecord]);
+    persistPortalRequests(
+      (portalRequests) => portalRequests.map((r) => (r.id === request.id ? { ...r, status: "in_progress", linkedDamageId: damageRecord.id } : r))
+    );
   }
   function rejectPortalRequest(request, note) {
     if (!(request.type === "problem" ? can(effectiveUser, "damage_status") : can(effectiveUser, "job_edit"))) return;
-    persistPortalRequests(
-      (portalRequests) => portalRequests.map((r) => (r.id === request.id ? { ...r, status: "rejected", responseNote: note || null, resolvedAt: today } : r))
-    );
     const job = jobs.find((j) => j.id === request.jobId);
     if (request.type === "extension" && job?.obchodnik) {
       pushNotification({
         kind: "portal_request",
+        attachTo: request.id,
         roles: [],
         userName: job.obchodnik,
         title: "Zamietnutá zmena termínu",
@@ -7768,6 +7802,9 @@ function DispatcherApp() {
         link: { module: "poziciovna", view: "jobs", jobId: job.id },
       });
     }
+    persistPortalRequests(
+      (portalRequests) => portalRequests.map((r) => (r.id === request.id ? { ...r, status: "rejected", responseNote: note || null, resolvedAt: today } : r))
+    );
   }
   function completeRevision(damageId, performedDate, parts) {
     const d = damages.find((x) => x.id === damageId);
@@ -8584,14 +8621,15 @@ function DispatcherApp() {
         assignmentId: null,
         prepCheck: true,
       };
-      persistDamages((damages) => [...damages, record]);
       pushNotification({
         kind: "damage_new",
+        attachTo: record,
         roles: ["dispecer_servisu", "veduci_servisu"],
         title: "Nový stroj čaká na prípravu do požičovne",
         message: `Stroj ${machine.code}${machine.type ? " (" + machine.type + ")" : ""} treba pripraviť do požičovne, kým to nebude hotové, nedá sa naň založiť zákazka.`,
         link: { module: "servis", view: "poskodenia", damageId: record.id },
       });
+      persistDamages((damages) => [...damages, record]);
     }
     setShowAddMachine(null);
   }
@@ -8802,7 +8840,7 @@ function DispatcherApp() {
       stkEkDate: date,
       stkEkSnoozeUntil: null,
       stkEkNotifiedDate: null,
-      stkEkChangedAt: new Date().toISOString(),
+      stkEkChangedAt: new Date(serverNowMs()).toISOString(),
       stkEkChangedBy: myEmployee?.name || effectiveUser?.name || "",
     });
   }
@@ -9375,7 +9413,7 @@ function DispatcherApp() {
         });
         // Rezervácia sa NEmaže — len sa označí ako premenená, nech sa dá
         // sledovať úspešnosť rezervácií podľa obchodníka v štatistikách.
-        updateReservation(r.id, { status: "converted", convertedJobId: newJob.id, convertedAt: new Date().toISOString() });
+        updateReservation(r.id, { status: "converted", convertedJobId: newJob.id, convertedAt: new Date(serverNowMs()).toISOString() });
       }
     }
     goBackCard();
@@ -10377,7 +10415,7 @@ function DispatcherApp() {
               // Diel bez depa by nikto v zozname nevidel (zoznam je po depách).
               if (!depo) { showNotice(canManage ? "Vyberte depo." : "Nemáte na karte zamestnanca depo — požiadajte vedúceho servisu, nech vám ho doplní."); return false; }
               if (allowedDepos && (!allowedDepos.includes(depo) || items.some((it) => it.depo && !allowedDepos.includes(it.depo)))) return;
-              const nowIso = new Date().toISOString();
+              const nowIso = new Date(serverNowMs()).toISOString();
               const newIds = items.map(() => uid());
               if (persistSpareParts((spareParts) => [...spareParts,
                 ...items.map((data, i) => ({
@@ -10483,7 +10521,7 @@ function DispatcherApp() {
                   stav: normalizeSparePartStav(item.stav),
                   rejectionReason: "",
                   requestedBy: myEmployee?.name || "",
-                  requestedAt: new Date().toISOString(),
+                  requestedAt: new Date(serverNowMs()).toISOString(),
                 })),
               ])
             }
@@ -11878,17 +11916,18 @@ function DispatcherApp() {
                 return;
               }
               const erpPatch = revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]);
-              persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null } : a)));
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
               const isReturn = checkerInspectionTarget.phase === "vratenie";
               if (hasProblem && job) {
                 notifyDispatchers({
                   kind: "damage_new",
+                  attachTo: checkerInspectionTarget.id, // uloží ho databáza spolu s kontrolou (aj z offline fronty)
                   title: `Checker našiel problém pri kontrole ${isReturn ? "po vrátení" : "pred vývozom"}`,
                   message: `Stroj ${machine?.code || "—"}${machine?.type ? " (" + machine.type + ")" : ""} pre ${job.customer || "—"} — kontrola ${isReturn ? "po vrátení" : "pred vývozom"} zaznamenala problém.`,
                   link: { module: "poziciovna", view: "jobs", jobId: job.id, binderTab: "kontroly" },
                 }, { job, extraRoles: ["dispecer_servisu", "veduci_servisu"] });
               }
+              persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null } : a)));
               setCheckerInspectionTarget(null);
               // Osobný odber: po kontrole hneď odovzdanie zákazníkovi (protokol).
               if (job?.selfPickup && !isReturn && !handoverForJob?.handoverDone && !checkerInspectionTarget.resolved) { // úprava hotovej kontroly protokol neotvára
@@ -12821,7 +12860,7 @@ function ExportPhotosPanel() {
       a.download = `mateco-fotky-export-${todayISO()}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      const now = new Date().toISOString();
+      const now = new Date(serverNowMs()).toISOString();
       saveKey("lastPhotoExportAt", now);
       setLastExportAt(now);
       setDone(true);
@@ -17970,7 +18009,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       usedParts,
       mth: noMth ? null : mthNum,
       noMth,
-      checkerAt: new Date().toISOString(), // poradie dvoch kontrol toho istého stroja v jeden deň (posledný stav MTH)
+      checkerAt: new Date(serverNowMs()).toISOString(), // poradie dvoch kontrol toho istého stroja v jeden deň (posledný stav MTH)
     };
   }
   function handleSave() {
@@ -18515,9 +18554,9 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
             { text: <>Prenájom končí {relDay(job.endDate, today)}{job.endDate < today ? " — už je po konci" : ""}</>,
               actions: [can(user, "job_complete") ? { label: "Ukončiť zákazku", onClick: onComplete } : job.customerPhone && { label: "Zavolať zákazníkovi", href: `tel:${job.customerPhone}` }] },
           // Revízia / úradná skúška vyprší pred koncom prenájmu (14 dní vopred) — rovnaké pravidlo ako upozornenie v DB (step97).
-          ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && /^\d{4}-\d{2}-\d{2}$/.test(job.endDate || "") && !isNaN(Date.parse(job.endDate)) && new Date(job.endDate + "T00:00:00Z").toISOString().slice(0, 10) === job.endDate && job.endDate >= today
+          ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && isRealISODate(job.endDate) && job.endDate >= today
             ? [["revizia", "trackRevisions", "Revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "Revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "Úradná skúška"]]
-              .filter(([f, t]) => machine[t] !== false && /^\d{4}-\d{2}-\d{2}$/.test(machine[f] || "") && !isNaN(Date.parse(machine[f])) && new Date(machine[f] + "T00:00:00Z").toISOString().slice(0, 10) === machine[f] && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
+              .filter(([f, t]) => machine[t] !== false && isRealISODate(machine[f]) && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
               .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — pred koncom prenájmu ({fmtDate(job.endDate)})</>,
                 actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
             : []),
@@ -21954,7 +21993,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
   const skuskaOverdue = !skuskaNotTracked && (!m.uradnaSkuska || daysBetween(todayISO(), m.uradnaSkuska) < 0);
   const isStroj = !m.objekt || m.objekt === "Požičovňový stroj";
   // Poškodenia za posledných 90 dní — od 3 štítok „Často sa kazí“ (rovnaké pravidlo ako upozornenie v DB, step97).
-  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && !d.prepCheck && /^\d{4}-\d{2}-\d{2}$/.test(d.dateReported || "") && !isNaN(Date.parse(d.dateReported)) && new Date(d.dateReported + "T00:00:00Z").toISOString().slice(0, 10) === d.dateReported && d.dateReported >= addDaysISO(todayISO(), -90) && (d.dateReported || "") <= todayISO()).length;
+  const brokenCount = (history || []).filter((d) => d.type === "poskodenie" && !d.prepCheck && isRealISODate(d.dateReported) && d.dateReported >= addDaysISO(todayISO(), -90) && (d.dateReported || "") <= todayISO()).length;
   const jobCount = (jobs || []).filter((j) => j.machineId === m.id).length;
   const binderTabs = [
     { id: "servis", label: "Servis", count: (history || []).length, title: `Servisná história (${(history || []).length})` },
@@ -28608,7 +28647,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
     resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
     // Revízia/ÚS stroja vyprší ešte počas prenájmu (rovnaké pravidlo ako upozornenie a „Teraz treba“, step97).
-    const isoD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s; // aj 2026-09-31 = neplatný
+    const isoD = isRealISODate;
     const revExp = [];
     mine.forEach((j) => {
       if (j.status === "completed" || j.notRealized || !isoD(j.endDate) || j.endDate < today) return;
@@ -31534,3 +31573,6 @@ export default function App() {
     </AppErrorBoundary>
   );
 }
+
+// Len pre automatické testy (src/logika.test.js) — platforma ich nepoužíva.
+export const _test = { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum };

@@ -6,6 +6,12 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  // Automatické testy (npm test, aj na GitHube pred nasadením) — bežia bez databázy.
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.js"],
+    env: { VITE_SUPABASE_URL: "http://localhost:54321", VITE_SUPABASE_ANON_KEY: "test" },
+  },
   // sourcemap: true — appka sa aj naďalej zmenší (minifikuje) rovnako ako doteraz,
   // toto len pridá súbor navyše (.js.map), vďaka ktorému prehliadač v konzole
   // (a v tejto chybovej obrazovke) ukáže skutočné mená funkcií a presné miesto
