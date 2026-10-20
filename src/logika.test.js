@@ -100,3 +100,29 @@ describe("verzie", () => {
     expect(_verNum("1.1.0") > _verNum("1.0.999")).toBe(true);
   });
 });
+
+describe("štatistiky", () => {
+  const { statBuckets, techFond, monthEndISO, numMth } = _test;
+  it("obdobie na stĺpce: dni / týždne / mesiace", () => {
+    expect(statBuckets("2026-10-01", "2026-10-20")).toHaveLength(20);
+    const w = statBuckets("2026-08-01", "2026-10-20");
+    expect(w[0]).toMatchObject({ s: "2026-08-01", e: "2026-08-02" }); // sobota → koniec týždňa v nedeľu
+    expect(w[1]).toMatchObject({ s: "2026-08-03", e: "2026-08-09" });
+    expect(w[w.length - 1].e).toBe("2026-10-20");
+    expect(statBuckets("2026-01-01", "2026-10-20")).toHaveLength(10);
+    expect(monthEndISO("2028-02-10")).toBe("2028-02-29");
+  });
+  it("fond technika: víkendy, sviatky, dovolenka a PN", () => {
+    // október 2026: 22 pracovných dní (28. 10. nie je deň pracovného pokoja)
+    expect(techFond("t1", "2026-10-01", "2026-10-31", [])).toEqual({ days: 22, hours: 176 });
+    const a = [{ technicianId: "t1", kind: "dovolenka", date: "2026-10-05" }, { technicianId: "t1", kind: "pn", date: "2026-10-06" },
+      { technicianId: "t1", kind: "dovolenka", date: "2026-10-10" }, { technicianId: "t2", kind: "dovolenka", date: "2026-10-07" }, { technicianId: "t1", kind: "pohotovost", date: "2026-10-08" }];
+    expect(techFond("t1", "2026-10-01", "2026-10-31", a).hours).toBe(160); // sobota 10. 10. a cudzí/pohotovosť sa neodrátajú
+    expect(techFond("t1", "2026-12-21", "2026-12-31", []).days).toBe(7); // 24. a 25. 12. sviatky (26. je sobota)
+  });
+  it("motohodiny z protokolu", () => {
+    expect(numMth("1234,5")).toBe(1234.5);
+    expect(numMth("")).toBe(null);
+    expect(numMth("abc")).toBe(null);
+  });
+});

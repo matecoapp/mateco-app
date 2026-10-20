@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.822";
+const APP_VERSION = "1.0.823";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -14009,11 +14009,14 @@ function Dashboard({
   );
 }
 
-function StatCard({ label, value, color, delta }) {
+function StatCard({ label, value, color, delta, spark }) {
   return (
     <div className="panel" style={{ padding: "14px 16px" }}>
       <div className="label-font" style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
-      <div className="mono" style={{ fontSize: 28, fontWeight: 600, color }}>{value}</div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+        <div className="mono" style={{ fontSize: 28, fontWeight: 600, color }}>{value}</div>
+        {spark && <Spark values={spark} />}
+      </div>
       {delta && (
         <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color: delta.direction === "up" ? "var(--ok)" : delta.direction === "down" ? "var(--danger)" : "var(--text-dim)" }}>
           {delta.direction === "up" ? "▲" : delta.direction === "down" ? "▼" : "–"} {delta.text}
@@ -26885,10 +26888,204 @@ function LoginScreen({ onLogin, onSignUp }) {
    nimi), ale upravovať zoznam vylúčených z počítania smie len ten vedúci, komu
    dané odvetvie patrí. Admin vidí a upravuje všetko.
 --------------------------------------------------------- */
-// Zbaliteľná sekcia štatistík — predvolene zbalená, v hlavičke krátky súhrn.
-function StatSection({ title, hint, children }) {
+// --- Grafy štatistík: jednoduché pruhy/stĺpce/čiara bez knižnice. Farby radov v CSS premenných --c1…--c5 (svetlý aj tmavý režim). ---
+const SERIES = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+const C_BAD = "var(--c-bad)", C_IDLE = "var(--c-idle)";
+const fmt1 = (v) => (Math.round(v * 10) / 10).toLocaleString("sk-SK");
+const sumOf = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0);
+// Obdobie na stĺpce: do 31 dní po dňoch, do ~6 mesiacov po týždňoch, inak po mesiacoch.
+function statBuckets(start, end) {
+  const out = [];
+  const n = statDays(start, end);
+  if (n <= 31) {
+    for (let d = start; d <= end; d = addDaysISO(d, 1)) out.push({ s: d, e: d, label: `${Number(d.slice(8))}.${Number(d.slice(5, 7))}.` });
+  } else if (n <= 190) {
+    for (let s = start; s <= end; ) {
+      const we = weekRangeFor(s).weekEnd;
+      const e = we < end ? we : end;
+      out.push({ s, e, label: `${Number(s.slice(8))}.${Number(s.slice(5, 7))}.` });
+      s = addDaysISO(e, 1);
+    }
+  } else {
+    for (let s = start; s <= end; ) {
+      const me = monthEndISO(s);
+      const e = me < end ? me : end;
+      out.push({ s, e, label: `${Number(s.slice(5, 7))}/${s.slice(2, 4)}` });
+      s = addDaysISO(e, 1);
+    }
+  }
+  return out;
+}
+const monthEndISO = (iso) => { const [y, m] = iso.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`; };
+const bucketOf = (buckets, iso) => (iso ? buckets.findIndex((b) => iso >= b.s && iso <= b.e) : -1);
+// Fond technika: pracovné dni (po–pi) bez sviatkov s pracovným pokojom, dovolenky a PN/lekára × 8 h.
+function techFond(techId, s, e, assignments) {
+  const off = new Set((assignments || []).filter((a) => a.technicianId === techId && (a.kind === "dovolenka" || a.kind === "pn")).map((a) => String(a.date || "").slice(0, 10)));
+  let days = 0;
+  for (let d = s; d <= e; d = addDaysISO(d, 1)) {
+    const dow = new Date(d + "T00:00:00").getDay();
+    if (dow === 0 || dow === 6 || holidayInfo(d)?.rest || off.has(d)) continue;
+    days += 1;
+  }
+  return { days, hours: days * 8 };
+}
+
+function ChartLegend({ items }) {
   return (
-    <details style={{ marginBottom: 10 }}>
+    <div className="chart-legend">
+      {items.map(([name, c]) => <span key={name}><i style={{ background: c }} aria-hidden="true" />{name}</span>)}
+    </div>
+  );
+}
+// Vodorovné pruhy. Riadok: {label, value} alebo {label, segs:[{v,c,name}]}; target = zvislá čiarka (v tých istých jednotkách).
+function HBars({ rows, max, fmt = (v) => v, target, labelW = 160, empty = "Žiadne údaje v tomto období." }) {
+  if (!rows.length) return <div className="chart-empty">{empty}</div>;
+  const total = (r) => (r.segs ? sumOf(r.segs.map((s) => s.v)) : r.value);
+  const mx = max || Math.max(1e-9, ...rows.map(total), target || 0);
+  return (
+    <div className="hbars" style={{ gridTemplateColumns: `minmax(0, ${labelW}px) minmax(60px, 1fr) auto` }}>
+      {rows.map((r) => {
+        const segs = (r.segs || [{ v: r.value, c: r.c || SERIES[0] }]).filter((s) => s.v > 0);
+        const tot = total(r);
+        return (
+          <div key={r.key || r.label} className="hbar">
+            <div className="hbar-l" title={r.label}>{r.label}</div>
+            <div className="hbar-t" title={r.title || `${r.label}: ${fmt(tot)}`}>
+              <div className="hbar-fill">
+                {segs.map((s, i) => <div key={i} style={{ width: `${(s.v / mx) * 100}%`, background: s.c }} title={s.name ? `${s.name}: ${fmt(s.v)}` : undefined} />)}
+              </div>
+              {target != null && <div className="hbar-target" style={{ left: `${Math.min(100, (target / mx) * 100)}%` }} aria-hidden="true" />}
+            </div>
+            <div className="hbar-v tnum">{r.valueText ?? fmt(tot)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// Stĺpce v čase. buckets: [{label, values:[…]}] — hodnota na rad; stacked = na sebe, inak vedľa seba.
+function Columns({ buckets, series, stacked, height = 160, fmt = (v) => v }) {
+  if (!buckets.length) return <div className="chart-empty">Žiadne údaje v tomto období.</div>;
+  const tot = (b) => (stacked ? sumOf(b.values) : Math.max(0, ...b.values));
+  const mx = Math.max(1, ...buckets.map(tot));
+  const step = Math.max(1, Math.ceil(buckets.length / 10));
+  return (
+    <div className="cols-wrap">
+      <div className="cols-y tnum" aria-hidden="true" style={{ height }}><span>{fmt(mx)}</span><span>0</span></div>
+      <div className="cols-main">
+        <div className="cols" style={{ height }}>
+          {buckets.map((b, i) => (
+            <div key={i} className="col" title={`${b.label}: ${series.map((s, j) => `${s[0]} ${fmt(b.values[j] || 0)}`).join(", ")}`}>
+              {stacked ? (
+                <div className="col-stack" style={{ height: `${(tot(b) / mx) * 100}%` }}>
+                  {b.values.map((v, j) => v > 0 && <div key={j} style={{ flexGrow: v, background: series[j][1] }} />)}
+                </div>
+              ) : (
+                b.values.map((v, j) => <div key={j} className="col-bar" style={{ height: `${(v / mx) * 100}%`, background: series[j][1] }} />)
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="cols-x">{buckets.map((b, i) => <span key={i}>{i % step === 0 ? b.label : ""}</span>)}</div>
+      </div>
+    </div>
+  );
+}
+// Čiara v čase; series: [{name, c, values, dashed}]; target = vodorovná čiara cieľa.
+function LineTrend({ labels, series, max, unit = "", target, height = 180, ariaLabel }) {
+  // Šírka podľa skutočného miesta — text grafu ostane 12 px na PC aj na mobile.
+  const box = useRef(null);
+  const [W, setW] = useState(600);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(260, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const n = labels.length;
+  if (!n) return <div className="chart-empty">Žiadne údaje v tomto období.</div>;
+  const H = height, L = 40, R = 16, T = 12, B = 24;
+  const all = series.flatMap((s) => s.values.filter((v) => v != null));
+  const mx = max || Math.max(1, ...all, target || 0) * 1.15;
+  const x = (i) => L + (n <= 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1));
+  const y = (v) => T + (1 - v / mx) * (H - T - B);
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(W / 70))));
+  const pts = (vals) => vals.map((v, i) => (v == null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(" ");
+  const main = series[0];
+  const lastI = main.values.length - 1;
+  return (
+    <div ref={box}><svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="line-trend" role="img" aria-label={ariaLabel || `${main.name}: ${main.values.filter((v) => v != null).map((v) => fmt1(v) + unit).join(", ")}`}>
+      {[0, 0.5, 1].map((f) => (
+        <g key={f}>
+          <line x1={L} x2={W - R} y1={y(mx * f)} y2={y(mx * f)} style={{ stroke: "var(--border)" }} />
+          <text x={L - 6} y={y(mx * f) + 4} textAnchor="end" fontSize="12" style={{ fill: "var(--text-dim)" }}>{fmt1(mx * f)}{f === 0 ? unit : ""}</text>
+        </g>
+      ))}
+      {target != null && <line x1={L} x2={W - R} y1={y(target)} y2={y(target)} strokeDasharray="4 4" style={{ stroke: "var(--text-dim)" }} />}
+      {series.map((s, si) => (
+        <polyline key={si} points={pts(s.values)} fill="none" strokeWidth={si === 0 ? 2.5 : 2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" style={{ stroke: s.c }} />
+      ))}
+      {main.values.map((v, i) => v != null && (
+        <circle key={i} cx={x(i)} cy={y(v)} r={i === lastI ? 4.5 : 8} style={{ fill: i === lastI ? main.c : "transparent", stroke: i === lastI ? "var(--panel)" : "none" }} strokeWidth="2">
+          <title>{`${labels[i]}: ${series.map((s) => `${s.name} ${s.values[i] == null ? "—" : fmt1(s.values[i]) + unit}`).join(", ")}`}</title>
+        </circle>
+      ))}
+      {labels.map((l, i) => i % step === 0 && <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="12" style={{ fill: "var(--text-dim)" }}>{l}</text>)}
+    </svg></div>
+  );
+}
+// Jeden pruh rozdelený na časti + legenda s počtom a %.
+function StackBar({ segs, fmt = (v) => v }) {
+  const tot = sumOf(segs.map((s) => s.v));
+  if (!tot) return <div className="chart-empty">Žiadne údaje v tomto období.</div>;
+  return (
+    <div>
+      <div className="stackbar">{segs.filter((s) => s.v > 0).map((s) => <div key={s.name} style={{ flexGrow: s.v, background: s.c }} title={`${s.name}: ${fmt(s.v)}`} />)}</div>
+      <div className="stack-legend">
+        {segs.map((s) => <span key={s.name}><i style={{ background: s.c }} aria-hidden="true" />{s.name} <b className="tnum">{fmt(s.v)}</b> <span className="tnum" style={{ color: "var(--text-dim)" }}>({Math.round((s.v / tot) * 100)} %)</span></span>)}
+      </div>
+    </div>
+  );
+}
+function Spark({ values }) {
+  const v = values.filter((x) => x != null);
+  if (v.length < 2) return null;
+  const mn = Math.min(...v), mx = Math.max(...v);
+  const pts = v.map((x, i) => `${(2 + (i * 92) / (v.length - 1)).toFixed(1)},${(29 - ((x - mn) / (mx - mn || 1)) * 26).toFixed(1)}`).join(" ");
+  return <svg width="96" height="32" viewBox="0 0 96 32" aria-hidden="true" style={{ flexShrink: 0 }}><polyline points={pts} fill="none" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" style={{ stroke: "var(--c1)" }} /></svg>;
+}
+// Prepínač Graf / Tabuľka (tabuľka = presné čísla, aj pre čítačky obrazovky).
+function GraphOrTable({ chart, table }) {
+  const [asTable, setAsTable] = useState(false);
+  return (
+    <div>
+      <div className="seg" role="group" aria-label="Zobrazenie" style={{ marginBottom: 10 }}>
+        <button type="button" className={!asTable ? "on" : ""} aria-pressed={!asTable} onClick={() => setAsTable(false)}>Graf</button>
+        <button type="button" className={asTable ? "on" : ""} aria-pressed={asTable} onClick={() => setAsTable(true)}>Tabuľka</button>
+      </div>
+      {asTable ? table : chart}
+    </div>
+  );
+}
+function StatTable({ head, rows, empty = "Žiadne údaje v tomto období." }) {
+  if (!rows.length) return <div className="chart-empty">{empty}</div>;
+  return (
+    <div className="panel table-scroll-inner" style={{ padding: 0, maxHeight: 420, overflowY: "auto" }}>
+      <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>{head.map((h) => <th key={h} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{h}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>{r.map((c, j) => <td key={j} data-label={head[j]} style={{ padding: "8px 12px", fontSize: 13, fontWeight: j === 0 ? 600 : undefined }}>{c}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+const ChartNote = ({ children }) => <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 8 }}>{children}</div>;
+const ChartTitle = ({ children }) => <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>{children}</div>;
+
+// Zbaliteľná sekcia štatistík — predvolene zbalená (open = rozbalená), v hlavičke krátky súhrn.
+function StatSection({ title, hint, children, open }) {
+  return (
+    <details open={open} style={{ marginBottom: 10 }}>
       <summary style={{ cursor: "pointer", padding: "10px 12px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
         {title}{hint != null && <span style={{ fontWeight: 400, color: "var(--text-dim)", marginLeft: 8 }}>{hint}</span>}
       </summary>
@@ -26906,6 +27103,11 @@ function periodBounds(period, today, customStart, customEnd) {
   if (period === "month") {
     return { start: today.slice(0, 8) + "01", end: today };
   }
+  if (period === "quarter") {
+    const d = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 3, 1);
+    return { start: toLocalISO(d), end: today };
+  }
+  if (period === "year") return { start: today.slice(0, 4) + "-01-01", end: today };
   const a = customStart || today, b = customEnd || today;
   return a <= b ? { start: a, end: b } : { start: b, end: a }; // Od > Do → prehodiť
 }
@@ -26919,6 +27121,7 @@ function comparePeriod(period, start, end) {
     const day = Math.min(Number(end.slice(8, 10)), Number(prevEnd.slice(8, 10)));
     return { start: prevEnd.slice(0, 8) + "01", end: prevEnd.slice(0, 8) + String(day).padStart(2, "0") };
   }
+  if (period === "year") return { start: addYearsISO(start, -1), end: addYearsISO(end, -1) };
   return previousPeriod(start, end);
 }
 const statDays = (s, e) => daysBetween(s, e) + 1;
@@ -26955,7 +27158,7 @@ function StatistikyView({ domainTarget, user, machines, machineModels, technicia
   const periodPicker = (
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
       <div className="seg" role="group" aria-label="Obdobie">
-        {[["week", "Tento týždeň"], ["month", "Tento mesiac"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
+        {[["week", "Tento týždeň"], ["month", "Tento mesiac"], ["quarter", "Posledné 3 mesiace"], ["year", "Tento rok"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
           <button key={id} type="button" className={period === id ? "on" : ""} aria-pressed={period === id} onClick={() => setPeriod(id)}>{label}</button>
         ))}
       </div>
@@ -26992,6 +27195,7 @@ function StatistikyView({ domainTarget, user, machines, machineModels, technicia
           transportNotes={transportNotes}
           portalRequests={portalRequests}
           employees={employees}
+          damages={damages}
           today={today}
           start={start}
           end={end}
@@ -27004,6 +27208,9 @@ function StatistikyView({ domainTarget, user, machines, machineModels, technicia
           protocolLogs={protocolLogs}
           assignments={assignments}
           damages={damages}
+          jobs={jobs}
+          handoverProtocols={handoverProtocols}
+          today={today}
           start={start}
           end={end}
           prev={comparePeriod(period, start, end)}
@@ -27019,9 +27226,26 @@ function StatistikyView({ domainTarget, user, machines, machineModels, technicia
   );
 }
 
+// Dni, keď bol stroj u zákazníka (zjednotené zákazky), od winStart — Map<machineId, Set<ISO deň>>.
+function busyDaySets(jobs, hpByJob, today, winStart) {
+  const map = new Map();
+  jobs.forEach((j) => {
+    const iv = jobBusyInterval(j, hpByJob.get(j.id), today);
+    if (!iv || !j.machineId) return;
+    let set = map.get(j.machineId);
+    if (!set) map.set(j.machineId, (set = new Set()));
+    for (let d = iv.s > winStart ? iv.s : winStart; d <= iv.e; d = addDaysISO(d, 1)) set.add(d);
+  });
+  return map;
+}
+const countInSet = (set, s, e) => { if (!set || s > e) return 0; let n = 0; for (let d = s; d <= e; d = addDaysISO(d, 1)) if (set.has(d)) n += 1; return n; };
+const numMth = (v) => { const n = Number(String(v ?? "").replace(",", ".").trim()); return v === "" || v == null || !Number.isFinite(n) ? null : n; };
+const MONTHS_SK = ["jan", "feb", "mar", "apr", "máj", "jún", "júl", "aug", "sep", "okt", "nov", "dec"];
+
 function DielyStatistiky({ spareParts, start, end }) {
   const ordered = spareParts.filter((p) => p.stav === SPAREPART_STAV.OBJEDNANE && p.datumObjednania >= start && p.datumObjednania <= end);
-
+  const buckets = statBuckets(start, end);
+  const perBucket = buckets.map(() => 0);
   const byDepo = {};
   const byDiel = {};
   let totalKusov = 0;
@@ -27031,74 +27255,69 @@ function DielyStatistiky({ spareParts, start, end }) {
     const dielKey = `${p.cisloDielu} — ${p.popisDielu}`;
     byDiel[dielKey] = (byDiel[dielKey] || 0) + 1;
     totalKusov += parseFloat(p.pocetKusov) || 0;
+    const bi = bucketOf(buckets, String(p.datumObjednania).slice(0, 10));
+    if (bi >= 0) perBucket[bi] += 1;
   });
   const depoRows = Object.entries(byDepo).sort((a, b) => b[1] - a[1]);
-  const dielRows = Object.entries(byDiel).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  const dielRows = Object.entries(byDiel).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
   return (
     <div>
-      <StatSection title="Objednávky dielov" hint={`${ordered.length} položiek`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Objednaných položiek" value={ordered.length} />
+      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+        <StatCard label="Objednaných položiek" value={ordered.length} spark={perBucket} />
         <StatCard label="Celkovo kusov" value={totalKusov} />
         <StatCard label="Rôznych depí" value={Object.keys(byDepo).length} />
       </div>
+      <StatSection title="Objednávky dielov v čase" hint={`${ordered.length} položiek`} open>
+        <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: [perBucket[i]] }))} series={[["Objednané položky", SERIES[0]]]} />
       </StatSection>
-
       <StatSection title="Podľa depa a najčastejšie diely">
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Objednávky podľa depa
+        <div className="chart-grid">
+          <div className="chart-card">
+            <ChartTitle>Objednávky podľa depa</ChartTitle>
+            <HBars rows={depoRows.map(([label, value]) => ({ label, value }))} empty="Žiadne objednávky v tomto období." />
           </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            {depoRows.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
-            ) : (
-              depoRows.map(([depo, count]) => (
-                <div key={depo} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                  <span>{depo}</span>
-                  <span style={{ fontWeight: 600 }}>{count}</span>
-                </div>
-              ))
-            )}
+          <div className="chart-card">
+            <ChartTitle>Najčastejšie objednávané diely (top 10)</ChartTitle>
+            <HBars rows={dielRows.map(([label, value]) => ({ label, value }))} labelW={240} empty="Žiadne objednávky v tomto období." />
           </div>
         </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Najčastejšie objednávaný diel
-          </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            {dielRows.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne objednávky v tomto období.</div>
-            ) : (
-              dielRows.map(([diel, count]) => (
-                <div key={diel} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                  <span>{diel}</span>
-                  <span style={{ fontWeight: 600 }}>{count}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
       </StatSection>
     </div>
   );
 }
 
-function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, handoverProtocols, transportNotes, portalRequests, employees, today, start, end, prev }) {
+function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, handoverProtocols, transportNotes, portalRequests, employees, damages, today, start, end, prev }) {
   const [idleMin, setIdleMin] = useState(14);
+  const [fleetAll, setFleetAll] = useState(false);
   const hpByJob = useMemo(() => new Map((handoverProtocols || []).map((h) => [h.jobId, h])), [handoverProtocols]);
   const busyOf = (j) => jobBusyInterval(j, hpByJob.get(j.id), today);
+  const d10 = (x) => String(x || "").slice(0, 10);
   const active = machines.filter((m) => !m.archived);
   // Do štatistík sa automaticky počítajú len Požičovňové stroje — Externé
   // stroje a Príslušenstvo sa vylučujú samy, netreba na to žiadny ručný zoznam.
   const tracked = active.filter((m) => (m.objekt || "Požičovňový stroj") === "Požičovňový stroj");
+  const machineById = new Map(machines.map((m) => [m.id, m]));
   // Na zákazke = stroj reálne u zákazníka dnes (skutočný vývoz, ešte nevrátený).
   const busyToday = (m) => jobs.some((j) => { if (j.machineId !== m.id) return false; const iv = busyOf(j); return !!iv && iv.s <= today && iv.e >= today; });
   const onJob = tracked.filter(busyToday);
   const utilizationPct = tracked.length ? Math.round((onJob.length / tracked.length) * 100) : 0;
+
+  const endC = end < today ? end : today; // budúce dni sa nerátajú
+  const thisYear = Number(today.slice(0, 4));
+  const winStart = [start, prev.start, `${thisYear - 1}-01-01`].sort()[0];
+  const busySets = useMemo(() => busyDaySets(jobs, hpByJob, today, winStart), [jobs, hpByJob, today, winStart]);
+  const fleetUtil = (s, e) => {
+    const ee = e < today ? e : today;
+    if (s > ee || !tracked.length) return null;
+    return (sumOf(tracked.map((m) => countInSet(busySets.get(m.id), s, ee))) / (tracked.length * statDays(s, ee))) * 100;
+  };
+  const buckets = statBuckets(start, end);
+  const prevBuckets = statBuckets(prev.start, prev.end);
+  const utilTrend = buckets.map((b) => fleetUtil(b.s, b.e));
+  const utilPrev = buckets.map((_, i) => (prevBuckets[i] ? fleetUtil(prevBuckets[i].s, prevBuckets[i].e) : null));
+  const utilPeriod = fleetUtil(start, end);
+  const utilPrevPeriod = fleetUtil(prev.start, prev.end);
 
   const periodReservations = reservations.filter((r) => r.createdAt && toLocalISO(new Date(r.createdAt)) >= start && toLocalISO(new Date(r.createdAt)) <= end);
   const byObchodnik = {};
@@ -27111,30 +27330,18 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
   const obchodnikRows = Object.entries(byObchodnik).sort((a, b) => b[1] - a[1]);
   const totalConverted = periodReservations.filter((r) => r.status === "converted").length;
   const successRatePct = periodReservations.length ? Math.round((totalConverted / periodReservations.length) * 100) : 0;
-
-  // Porovnanie s predchádzajúcim obdobím (rovnaké dni minulého týždňa / mesiaca).
   const prevReservations = reservations.filter((r) => r.createdAt && toLocalISO(new Date(r.createdAt)) >= prev.start && toLocalISO(new Date(r.createdAt)) <= prev.end);
   const prevConverted = prevReservations.filter((r) => r.status === "converted").length;
   const prevSuccessRatePct = prevReservations.length ? Math.round((prevConverted / prevReservations.length) * 100) : 0;
   const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
   const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
 
-  // Vyťaženosť podľa modelu — koľko % dní v zvolenom období boli stroje daného
-  // modelu reálne u zákazníka (skutočný vývoz → skutočné vrátenie, bez nerealizovaných).
-  const totalDaysInPeriod = Math.round((new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000) + 1;
-  const rentabilityByModel = {};
+  // Vyťaženosť podľa modelu — % dní v období u zákazníka (skutočný vývoz → skutočné vrátenie).
+  const totalDaysInPeriod = start > endC ? 0 : statDays(start, endC);
   const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
+  const rentabilityByModel = {};
   tracked.forEach((m) => {
-    // Zjednotenie dní (vrátenie a nový vývoz v ten istý deň = jeden deň).
-    const days = new Set();
-    jobs.forEach((j) => {
-      if (j.machineId !== m.id) return;
-      const iv = busyOf(j);
-      if (!iv || clipDays(iv, start, end) === 0) return;
-      for (let d = iv.s > start ? iv.s : start, e = iv.e < end ? iv.e : end; d <= e; d = addDaysISO(d, 1)) days.add(d);
-    });
-    let busyDays = days.size;
-    busyDays = Math.min(busyDays, totalDaysInPeriod);
+    const busyDays = countInSet(busySets.get(m.id), start, endC);
     const mm = modelByName.get((m.type || "").trim().toLowerCase());
     const category = mm?.category || "Nezaradené";
     const model = m.type || "— bez modelu —";
@@ -27153,6 +27360,33 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
       if (ca !== cb) return (ca === -1 ? 999 : ca) - (cb === -1 ? 999 : cb);
       return a.pct - b.pct;
     });
+  const categories = [...new Set(rentabilityRows.map((r) => r.category))];
+
+  // Kde chýbajú stroje: modely nad 85 % a rezervácie (z obdobia), ktoré sa nepremenili na zákazku.
+  const lostByModel = {};
+  periodReservations.filter((r) => r.status !== "converted").forEach((r) => {
+    const t = machineById.get(r.machineId)?.type || "— bez modelu —";
+    lostByModel[t] = (lostByModel[t] || 0) + 1;
+  });
+  const shortRows = rentabilityRows.filter((r) => r.pct >= 85).sort((a, b) => b.pct - a.pct);
+
+  // Využitie flotily po strojoch: na zákazke / v servise (otvorená porucha) / stojí.
+  const dmgIv = new Map();
+  (damages || []).filter((d) => d.type === "poskodenie" && d.machineId && d10(d.dateReported)).forEach((d) => {
+    const e = d.resolved ? d10(d.opravaDatum || d.resolvedAt || d.stavAt) || d10(d.dateReported) : today;
+    if (!dmgIv.has(d.machineId)) dmgIv.set(d.machineId, []);
+    dmgIv.get(d.machineId).push({ s: d10(d.dateReported), e });
+  });
+  const fleetRows = totalDaysInPeriod ? tracked.map((m) => {
+    const set = busySets.get(m.id);
+    const ivs = dmgIv.get(m.id) || [];
+    let rent = 0, srv = 0;
+    for (let d = start; d <= endC; d = addDaysISO(d, 1)) {
+      if (set?.has(d)) rent += 1;
+      else if (ivs.some((iv) => iv.s <= d && iv.e >= d)) srv += 1;
+    }
+    return { m, rent, srv, idle: totalDaysInPeriod - rent - srv };
+  }).sort((a, b) => b.idle - a.idle || a.rent - b.rent) : [];
 
   // Zákazky za obdobie: vyvezené, vrátené, priemerná dĺžka prenájmu vrátených, predĺženia z portálu.
   const inP = (d, p0 = start, p1 = end) => !!d && d >= p0 && d <= p1;
@@ -27163,13 +27397,57 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
       if (!iv) return;
       const h = hpByJob.get(j.id);
       if (inP(iv.s, p0, p1) && !h?.migratedWithoutHandover) out += 1;
-      if (h?.returnDone && inP(String(h.returnDate || "").slice(0, 10), p0, p1)) { back += 1; len += statDays(iv.s, iv.e); }
+      if (h?.returnDone && inP(d10(h.returnDate), p0, p1)) { back += 1; len += statDays(iv.s, iv.e); }
     });
-    const ext = (portalRequests || []).filter((r) => r.type === "extension" && r.status === "approved" && inP(String(r.resolvedAt || "").slice(0, 10), p0, p1)).length;
+    const ext = (portalRequests || []).filter((r) => r.type === "extension" && r.status === "approved" && inP(d10(r.resolvedAt), p0, p1)).length;
     return { out, back, avg: back ? len / back : 0, ext };
   };
   const js = jobStats(start, end);
   const jsPrev = jobStats(prev.start, prev.end);
+  const outB = buckets.map(() => 0), backB = buckets.map(() => 0), extB = buckets.map(() => 0);
+  jobs.forEach((j) => {
+    const iv = busyOf(j);
+    if (!iv) return;
+    const h = hpByJob.get(j.id);
+    const oi = !h?.migratedWithoutHandover ? bucketOf(buckets, iv.s) : -1;
+    if (oi >= 0) outB[oi] += 1;
+    const bi = h?.returnDone ? bucketOf(buckets, d10(h.returnDate)) : -1;
+    if (bi >= 0) backB[bi] += 1;
+  });
+  (portalRequests || []).forEach((r) => { if (r.type !== "extension" || r.status !== "approved") return; const i = bucketOf(buckets, d10(r.resolvedAt)); if (i >= 0) extB[i] += 1; });
+
+  // Vrátenia v období (pre obrat, neskoré vrátenia, motohodiny a poškodenia po prenájme).
+  const returns = jobs.map((j) => ({ j, h: hpByJob.get(j.id) })).filter(({ j, h }) => h?.returnDone && inP(d10(h.returnDate)) && !j.notRealized).map(({ j, h }) => ({ j, h, ret: d10(h.returnDate), m: machineById.get(j.machineId) }));
+
+  // Obrat stroja: dni od vrátenia po ďalší vývoz toho istého stroja.
+  const startsByMachine = new Map();
+  jobs.forEach((j) => { const iv = busyOf(j); if (!iv || !j.machineId) return; if (!startsByMachine.has(j.machineId)) startsByMachine.set(j.machineId, []); startsByMachine.get(j.machineId).push({ id: j.id, s: iv.s }); });
+  const turn = returns.filter((r) => r.m && (r.m.objekt || "Požičovňový stroj") === "Požičovňový stroj").map((r) => {
+    const next = (startsByMachine.get(r.j.machineId) || []).filter((x) => x.id !== r.j.id && x.s >= r.ret).map((x) => x.s).sort()[0];
+    return { ...r, days: next ? daysBetween(r.ret, next) : null, waiting: next ? null : daysBetween(r.ret, today) };
+  });
+  const turnDone = turn.filter((t) => t.days != null);
+  const turnAvg = turnDone.length ? sumOf(turnDone.map((t) => t.days)) / turnDone.length : 0;
+  const groupAvg = (rows, keyOf) => {
+    const g = {};
+    rows.forEach((t) => { const k = keyOf(t) || "— neuvedené —"; if (!g[k]) g[k] = { sum: 0, n: 0 }; g[k].sum += t.days; g[k].n += 1; });
+    return Object.entries(g).map(([label, v]) => ({ label, value: v.sum / v.n, n: v.n })).sort((a, b) => b.value - a.value);
+  };
+  const turnByModel = groupAvg(turnDone, (t) => t.m?.type);
+  const turnByDepo = groupAvg(turnDone, (t) => t.m?.depo);
+
+  // Neskoré vrátenia: skutočné vrátenie po plánovanom konci zákazky.
+  const lateRet = returns.filter((r) => isRealISODate(r.j.endDate) && r.ret > r.j.endDate);
+  const lateAvg = lateRet.length ? sumOf(lateRet.map((r) => daysBetween(r.j.endDate, r.ret))) / lateRet.length : 0;
+  const lateByCust = {};
+  lateRet.forEach((r) => { const k = r.j.customer || "— neuvedené —"; lateByCust[k] = (lateByCust[k] || 0) + 1; });
+
+  // Sezónnosť: vyťaženosť po mesiacoch, minulý a tento rok (súčasný počet strojov).
+  const season = MONTHS_SK.map((label, i) => {
+    const mm = String(i + 1).padStart(2, "0");
+    const val = (y) => { const s = `${y}-${mm}-01`; return fleetUtil(s, monthEndISO(s)); };
+    return { label, values: [val(thisYear - 1) ?? 0, val(thisYear) ?? 0] };
+  });
 
   // Top zákazníci podľa dní prenájmu v období.
   const byCustomer = {};
@@ -27181,6 +27459,20 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
     byCustomer[k].days += d; byCustomer[k].jobs += 1;
   });
   const customerRows = Object.entries(byCustomer).sort((a, b) => b[1].days - a[1].days).slice(0, 10);
+
+  // Noví a vracajúci sa zákazníci za posledných 12 mesiacov (podľa prvej zákazky v platforme).
+  const firstStart = {};
+  jobs.forEach((j) => { if (j.notRealized || !isRealISODate(j.startDate) || !j.customer) return; const k = String(j.customer).trim().toLowerCase(); if (!firstStart[k] || j.startDate < firstStart[k]) firstStart[k] = j.startDate; });
+  const custMonths = [];
+  for (let i = 11; i >= 0; i -= 1) {
+    const d = new Date(thisYear, Number(today.slice(5, 7)) - 1 - i, 1);
+    const s = toLocalISO(d);
+    const e = monthEndISO(s);
+    const seen = new Set(jobs.filter((j) => !j.notRealized && j.customer && j.startDate >= s && j.startDate <= e).map((j) => String(j.customer).trim().toLowerCase()));
+    let nw = 0, old = 0;
+    seen.forEach((k) => { if (firstStart[k] >= s) nw += 1; else old += 1; });
+    custMonths.push({ label: `${MONTHS_SK[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, values: [old, nw] });
+  }
 
   // Stroje, ktoré stoja (stav dnes): bez bežiacej zákazky, od posledného vrátenia aspoň idleMin dní.
   const idleRows = tracked
@@ -27195,187 +27487,284 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
   // Prepravy za obdobie podľa šoféra: vývoz / zvoz (podpísaný protokol), prevoz (prevezený alebo potvrdený).
   const empById = new Map((employees || []).map((e) => [e.id, e]));
   const byDriver = {};
-  const addT = (id, kind) => {
+  const extB2 = buckets.map(() => ({ all: 0, ext: 0 }));
+  const addT = (id, kind, day) => {
     if (!id) return;
     if (!byDriver[id]) byDriver[id] = { vyvoz: 0, zvoz: 0, prevoz: 0 };
     byDriver[id][kind] += 1;
+    const i = bucketOf(buckets, day);
+    if (i >= 0) { extB2[i].all += 1; if (empById.get(id)?.role === "externy_sofer") extB2[i].ext += 1; }
   };
   jobs.forEach((j) => {
     const h = hpByJob.get(j.id);
     if (!h || j.notRealized) return;
-    if (h.handoverDone && !h.migratedWithoutHandover && !j.selfPickup && inP(String(h.handoverDate || "").slice(0, 10))) addT(j.driverId, "vyvoz");
-    if (h.returnDone && !j.selfReturn && inP(String(h.returnDate || "").slice(0, 10))) addT(j.returnDriverId, "zvoz");
+    if (h.handoverDone && !h.migratedWithoutHandover && !j.selfPickup && inP(d10(h.handoverDate))) addT(j.driverId, "vyvoz", d10(h.handoverDate));
+    if (h.returnDone && !j.selfReturn && inP(d10(h.returnDate))) addT(j.returnDriverId, "zvoz", d10(h.returnDate));
   });
   (transportNotes || []).forEach((t) => {
     if (!t.driverDone && !t.confirmed) return;
     const at = t.driverDoneAt || t.confirmedAt;
-    if (inP(at ? toLocalISO(new Date(at)) : t.date)) addT(t.driverId, "prevoz");
+    const day = at ? toLocalISO(new Date(at)) : t.date;
+    if (inP(day)) addT(t.driverId, "prevoz", day);
   });
   const driverRows = Object.entries(byDriver)
     .map(([id, v]) => ({ id, name: empById.get(id)?.name || "— neznámy šofér —", ext: empById.get(id)?.role === "externy_sofer", ...v, sum: v.vyvoz + v.zvoz + v.prevoz }))
     .sort((a, b) => b.sum - a.sum);
   const tSum = (k, f = () => true) => driverRows.filter(f).reduce((x, r) => x + r[k], 0);
 
-  const secTitle = (t) => <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>{t}</div>;
-  const th = (t) => <th key={t} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t}</th>;
-  const td = (v, label, bold) => <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: bold ? 600 : undefined }} data-label={label}>{v}</td>;
+  // Naša doprava vs. zákazník sám; presnosť prepráv (plánovaný vs. skutočný deň).
+  let ourOut = 0, selfOut = 0, ourBack = 0, selfBack = 0;
+  const punct = { out: [0, 0, 0], back: [0, 0, 0] }; // [v plánovaný deň, neskôr, skôr]
+  jobs.forEach((j) => {
+    const h = hpByJob.get(j.id);
+    if (!h || j.notRealized) return;
+    const hd = d10(h.handoverDate), rd = d10(h.returnDate);
+    if (h.handoverDone && !h.migratedWithoutHandover && inP(hd)) {
+      if (j.selfPickup) selfOut += 1; else {
+        ourOut += 1;
+        const plan = d10(j.departureDate || j.startDate);
+        if (isRealISODate(plan)) punct.out[hd === plan ? 0 : hd > plan ? 1 : 2] += 1;
+      }
+    }
+    if (h.returnDone && inP(rd)) {
+      if (j.selfReturn) selfBack += 1; else {
+        ourBack += 1;
+        const plan = d10(j.pickupDate || j.endDate);
+        if (isRealISODate(plan)) punct.back[rd === plan ? 0 : rd > plan ? 1 : 2] += 1;
+      }
+    }
+  });
+
+  // Motohodiny za prenájom podľa modelu (z protokolov o odovzdaní a vrátení).
+  const mthByModel = {};
+  returns.forEach((r) => {
+    const a = numMth(r.h.handoverMth), b = numMth(r.h.returnMth);
+    if (a == null || b == null || b < a || b - a > 5000) return;
+    const iv = busyOf(r.j);
+    const days = iv ? statDays(iv.s, iv.e) : 1;
+    const k = r.m?.type || "— bez modelu —";
+    if (!mthByModel[k]) mthByModel[k] = { mth: 0, days: 0, n: 0 };
+    mthByModel[k].mth += b - a; mthByModel[k].days += days; mthByModel[k].n += 1;
+  });
+  const mthRows = Object.entries(mthByModel).map(([label, v]) => ({ label, perDay: v.mth / v.days, perRent: v.mth / v.n, n: v.n })).sort((a, b) => b.perDay - a.perDay);
+
+  // Potvrdenie protokolu: s podpisom zákazníka / bez zákazníka — potvrdené, nesúhlas, čaká.
+  const conf = { signed: 0, confirmed: 0, disputed: 0, waiting: 0 };
+  const confHours = [];
+  (handoverProtocols || []).forEach((h) => {
+    [["handover", h.handoverDate], ["return", h.returnDate]].forEach(([ph, date]) => {
+      if (!h[ph + "Done"] || !inP(d10(date)) || (ph === "handover" && h.migratedWithoutHandover)) return;
+      if (!h[ph + "CustomerAbsent"]) { conf.signed += 1; return; }
+      const c = h[ph + "CustomerConfirm"];
+      if (c?.status === "confirmed") conf.confirmed += 1;
+      else if (c?.status === "disputed") conf.disputed += 1;
+      else conf.waiting += 1;
+      const t0 = Date.parse(h[ph + "AbsentAt"] || ""), t1 = Date.parse(c?.at || "");
+      if (Number.isFinite(t0) && Number.isFinite(t1) && t1 >= t0) confHours.push((t1 - t0) / 3600000);
+    });
+  });
+
+  // Poškodenia nahlásené do 2 dní po vrátení stroja — podľa zákazníka.
+  const dmgAfter = {};
+  returns.forEach((r) => {
+    const k = r.j.customer || "— neuvedené —";
+    if (!dmgAfter[k]) dmgAfter[k] = { n: 0, ret: 0 };
+    dmgAfter[k].ret += 1;
+    const lim = addDaysISO(r.ret, 2);
+    if ((damages || []).some((d) => d.type === "poskodenie" && d.machineId === r.j.machineId && d10(d.dateReported) >= r.ret && d10(d.dateReported) <= lim)) dmgAfter[k].n += 1;
+  });
+  const dmgAfterRows = Object.entries(dmgAfter).filter(([, v]) => v.n > 0).sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+  const dmgAfterTotal = sumOf(Object.values(dmgAfter).map((v) => v.n));
+
+  const fleetShown = fleetAll ? fleetRows : fleetRows.slice(0, 15);
+  const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
-        <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct} %`} />
-        <StatCard label="Vyvezené / vrátené" value={`${js.out} / ${js.back}`} />
+        <StatCard label="Vyťaženosť flotily za obdobie" value={`${utilPeriod == null ? "—" : Math.round(utilPeriod)} %`} delta={utilPeriod != null && utilPrevPeriod != null ? statDelta(Math.round(utilPeriod), Math.round(utilPrevPeriod), { percent: true }) : undefined} spark={utilTrend} />
+        <StatCard label="Na zákazke dnes" value={`${onJob.length} / ${tracked.length}`} />
         <StatCard label={`Stroje, ktoré stoja (${idleMin}+ dní)`} value={idleRows.length} color={idleRows.length > 0 ? "var(--danger-text)" : undefined} />
-        <StatCard label="Prepravy za obdobie" value={tSum("sum")} />
+        <StatCard label="Vyvezené / vrátené" value={`${js.out} / ${js.back}`} spark={outB} />
       </div>
-      <StatSection title="Utilizácia a rezervácie" hint={`${utilizationPct} % · ${periodReservations.length} rezervácií`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Utilizácia (k dnešku)" value={`${utilizationPct}%`} />
-        <StatCard label="Na zákazke / sledovaných strojov" value={`${onJob.length} / ${tracked.length}`} />
-        <StatCard label="Rezervácií za obdobie" value={periodReservations.length} delta={reservationsDelta} />
-        <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct}%`} delta={successRateDelta} />
-      </div>
+
+      <StatSection title="Vyťaženosť flotily v čase" hint={`${utilPeriod == null ? "—" : Math.round(utilPeriod)} % · cieľ 60 %`} open>
+        <ChartLegend items={[["Toto obdobie", SERIES[0]], ["Predchádzajúce obdobie", "var(--text-dim)"]]} />
+        <LineTrend labels={buckets.map((b) => b.label)} unit=" %" target={60} max={100}
+          series={[{ name: "Toto obdobie", c: SERIES[0], values: utilTrend }, { name: "Predchádzajúce", c: "var(--text-dim)", values: utilPrev, dashed: true }]} />
+        <ChartNote>% dní, keď boli sledované požičovňové stroje u zákazníka (skutočný vývoz → skutočné vrátenie). Čiarkovaná čiara = cieľ 60 %.</ChartNote>
       </StatSection>
 
-      <StatSection title="Rezervácie podľa obchodníka">
-      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
-        {obchodnikRows.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne rezervácie v tomto období.</div>
-        ) : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Obchodník</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet rezervácií</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Premenené na zákazku</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Úspešnosť</th>
-              </tr>
-            </thead>
-            <tbody>
-              {obchodnikRows.map(([name, count]) => {
-                const converted = convertedByObchodnik[name] || 0;
-                const pct = count ? Math.round((converted / count) * 100) : 0;
-                return (
-                  <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Obchodník">{name}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Počet rezervácií">{count}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Premenené na zákazku">{converted}</td>
-                    <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: pct >= 50 ? "var(--ok)" : "var(--text-dim)" }} data-label="Úspešnosť">{pct}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <StatSection title="Využitie flotily po strojoch" hint={`${plural(fleetRows.filter((r) => r.idle > 30).length, "stroj stojí", "stroje stoja", "strojov stojí")} viac ako 30 dní`} open>
+        <GraphOrTable
+          chart={<>
+            <ChartLegend items={[["Na zákazke", SERIES[0]], ["V servise", SERIES[1]], ["Stojí", C_IDLE]]} />
+            <HBars rows={fleetShown.map((r) => ({ key: r.m.id, label: `${r.m.code || "—"} · ${r.m.type || "—"}`, max: totalDaysInPeriod,
+              segs: [{ v: r.rent, c: SERIES[0], name: "Na zákazke" }, { v: r.srv, c: SERIES[1], name: "V servise" }, { v: r.idle, c: C_IDLE, name: "Stojí" }],
+              valueText: `${pctOf(r.rent, totalDaysInPeriod)} % · stojí ${r.idle} d${r.idle > 30 ? " · zvážiť presun" : ""}` }))}
+              max={totalDaysInPeriod || 1} fmt={(v) => `${v} d`} labelW={200} empty="Žiadne sledované stroje." />
+            {fleetRows.length > 15 && <button type="button" className="btn btn-ghost" style={{ marginTop: 10 }} onClick={() => setFleetAll((v) => !v)}>{fleetAll ? "Zobraziť len 15" : `Zobraziť všetky (${fleetRows.length})`}</button>}
+          </>}
+          table={<StatTable head={["Stroj", "Model", "Depo", "Na zákazke (d)", "V servise (d)", "Stojí (d)"]} rows={fleetRows.map((r) => [r.m.code || "—", r.m.type || "—", r.m.depo || "—", r.rent, r.srv, r.idle])} />} />
+        <ChartNote>Za obdobie {fmtDate(start)} – {fmtDate(endC)}. V servise = deň s otvorenou poruchou stroja, keď nebol u zákazníka. Zoradené od najdlhšie stojaceho.</ChartNote>
       </StatSection>
 
       <StatSection title="Vyťaženosť podľa modelu" hint={"% dní v období u zákazníka"}>
-      <div className="panel table-wrap" style={{ padding: 0 }}>
-        {rentabilityRows.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne sledované stroje.</div>
-        ) : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Model</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Počet strojov</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Dní na zákazke</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Vyťaženosť</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rentabilityRows.map((row, i) => {
-                const showCategoryHeader = i === 0 || rentabilityRows[i - 1].category !== row.category;
-                return (
-                  <React.Fragment key={`${row.category}||${row.model}`}>
-                    {showCategoryHeader && (
-                      <tr>
-                        <td colSpan={4} className="td-plain" style={{ padding: "8px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", background: "var(--bg)", color: "var(--accent)", borderTop: "1px solid var(--border)" }}>
-                          {row.category}
-                        </td>
-                      </tr>
-                    )}
-                    <tr style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Model">{row.model}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Počet strojov">{row.count}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Dní na zákazke">{row.busyDays} / {row.totalDays}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: row.pct < 30 ? "var(--danger)" : row.pct < 60 ? "#b58a00" : "var(--ok)" }} data-label="Vyťaženosť">{row.pct}%</td>
-                    </tr>
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+        <GraphOrTable
+          chart={rentabilityRows.length === 0 ? <div className="chart-empty">Žiadne sledované stroje.</div> : categories.map((cat) => (
+            <div key={cat}>
+              <ChartTitle>{cat}</ChartTitle>
+              <HBars rows={rentabilityRows.filter((r) => r.category === cat).map((r) => ({ key: r.model, label: r.model, value: r.pct, valueText: `${r.pct} % · ${r.count} ks` }))} max={100} target={60} fmt={(v) => `${v} %`} labelW={200} />
+            </div>
+          ))}
+          table={<StatTable head={["Kategória", "Model", "Počet strojov", "Dní na zákazke", "Vyťaženosť"]} rows={rentabilityRows.map((r) => [r.category, r.model, r.count, `${r.busyDays} / ${r.totalDays}`, `${r.pct} %`])} empty="Žiadne sledované stroje." />} />
+        <ChartNote>Čiarka = cieľ 60 %.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Kde chýbajú stroje" hint={`${plural(shortRows.length, "model", "modely", "modelov")} nad 85 %`}>
+        <HBars rows={shortRows.map((r) => ({ key: r.model, label: r.model, value: r.pct, valueText: `${r.pct} % · ${plural(lostByModel[r.model] || 0, "nepremenená rezervácia", "nepremenené rezervácie", "nepremenených rezervácií")}` }))} max={100} fmt={(v) => `${v} %`} labelW={200} empty="Žiadny model nemá v tomto období vyťaženosť nad 85 %." />
+        <ChartNote>Modely vyťažené nad 85 % a koľko rezervácií na ne (založených v období) sa nepremenilo na zákazku — podklad pre nákup strojov.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Obrat stroja" hint={`priemerne ${fmt1(turnAvg)} dňa od vrátenia po ďalší vývoz`}>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Priemerne dní od vrátenia po ďalší vývoz" value={fmt1(turnAvg)} />
+          <StatCard label="Vrátené a znova vyvezené" value={turnDone.length} />
+          <StatCard label="Vrátené, ešte čakajú na ďalší prenájom" value={turn.length - turnDone.length} />
+        </div>
+        <div className="chart-grid">
+          <div className="chart-card"><ChartTitle>Podľa modelu</ChartTitle><HBars rows={turnByModel.map((r) => ({ label: r.label, value: r.value, valueText: `${fmt1(r.value)} d · ${r.n}×` }))} fmt={(v) => `${fmt1(v)} d`} labelW={180} /></div>
+          <div className="chart-card"><ChartTitle>Podľa depa</ChartTitle><HBars rows={turnByDepo.map((r) => ({ label: r.label, value: r.value, valueText: `${fmt1(r.value)} d · ${r.n}×` }))} fmt={(v) => `${fmt1(v)} d`} /></div>
+        </div>
+        <ChartNote>Stroje vrátené v období. Dlhý obrat = stroj čaká na kontrolu, opravu alebo nemá dopyt.</ChartNote>
       </StatSection>
 
       <StatSection title="Zákazky za obdobie" hint={`${js.out} vyvezených · ${js.back} vrátených`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Vyvezené (začaté) zákazky" value={js.out} delta={statDelta(js.out, jsPrev.out)} />
-        <StatCard label="Vrátené (ukončené) zákazky" value={js.back} delta={statDelta(js.back, jsPrev.back)} />
-        <StatCard label="Priemerná dĺžka prenájmu vrátených (dni)" value={js.avg.toFixed(1)} />
-        <StatCard label="Schválené predĺženia z portálu" value={js.ext} delta={statDelta(js.ext, jsPrev.ext)} />
-      </div>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Vyvezené (začaté) zákazky" value={js.out} delta={statDelta(js.out, jsPrev.out)} />
+          <StatCard label="Vrátené (ukončené) zákazky" value={js.back} delta={statDelta(js.back, jsPrev.back)} />
+          <StatCard label="Priemerná dĺžka prenájmu vrátených (dni)" value={js.avg.toFixed(1)} />
+          <StatCard label="Schválené predĺženia z portálu" value={js.ext} delta={statDelta(js.ext, jsPrev.ext)} />
+        </div>
+        <div className="chart-grid">
+          <div className="chart-card">
+            <ChartTitle>Vyvezené a vrátené</ChartTitle>
+            <ChartLegend items={[["Vyvezené", SERIES[0]], ["Vrátené", SERIES[1]]]} />
+            <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: [outB[i], backB[i]] }))} series={[["Vyvezené", SERIES[0]], ["Vrátené", SERIES[1]]]} />
+          </div>
+          <div className="chart-card">
+            <ChartTitle>Schválené predĺženia z portálu</ChartTitle>
+            <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: [extB[i]] }))} series={[["Predĺženia", SERIES[0]]]} />
+          </div>
+        </div>
+      </StatSection>
+
+      <StatSection title="Neskoré vrátenia" hint={`${lateRet.length} z ${returns.length} vrátení po termíne`}>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Vrátené po plánovanom konci" value={`${pctOf(lateRet.length, returns.length)} %`} />
+          <StatCard label="Priemerne dní po termíne" value={fmt1(lateAvg)} />
+          <StatCard label="Schválené predĺženia z portálu" value={js.ext} />
+        </div>
+        <ChartTitle>Podľa zákazníka</ChartTitle>
+        <HBars rows={Object.entries(lateByCust).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([label, value]) => ({ label, value, valueText: `${value}×` }))} labelW={220} empty="Žiadne neskoré vrátenia v tomto období." />
+        <ChartNote>Skutočné vrátenie (protokol) neskôr ako plánovaný koniec zákazky.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Sezónnosť" hint={`vyťaženosť po mesiacoch ${thisYear - 1} a ${thisYear}`}>
+        <ChartLegend items={[[String(thisYear - 1), "var(--text-dim)"], [String(thisYear), SERIES[0]]]} />
+        <Columns buckets={season} series={[[String(thisYear - 1), "var(--text-dim)"], [String(thisYear), SERIES[0]]]} fmt={(v) => `${Math.round(v)} %`} />
+        <ChartNote>Nezávisí od zvoleného obdobia. Počíta so súčasným počtom sledovaných strojov.</ChartNote>
       </StatSection>
 
       <StatSection title="Top zákazníci" hint={"dni prenájmu v období"}>
-      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
-        {customerRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne prenájmy v tomto období.</div> : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Zákazník", "Dni prenájmu", "Zákaziek"].map(th)}</tr></thead>
-            <tbody>{customerRows.map(([name, v]) => <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>{td(name, "Zákazník", true)}{td(v.days, "Dni prenájmu")}{td(v.jobs, "Zákaziek")}</tr>)}</tbody>
-          </table>
-        )}
-      </div>
+        <GraphOrTable
+          chart={<HBars rows={customerRows.map(([name, v]) => ({ label: name, value: v.days, valueText: `${v.days} d · ${v.jobs} zák.` }))} labelW={220} empty="Žiadne prenájmy v tomto období." />}
+          table={<StatTable head={["Zákazník", "Dni prenájmu", "Zákaziek"]} rows={customerRows.map(([name, v]) => [name, v.days, v.jobs])} empty="Žiadne prenájmy v tomto období." />} />
+      </StatSection>
+
+      <StatSection title="Noví a vracajúci sa zákazníci" hint="posledných 12 mesiacov">
+        <ChartLegend items={[["Vracajúci sa", SERIES[0]], ["Noví", SERIES[1]]]} />
+        <Columns buckets={custMonths} series={[["Vracajúci sa", SERIES[0]], ["Noví", SERIES[1]]]} stacked />
+        <ChartNote>Počet zákazníkov so začiatkom zákazky v mesiaci. Nový = prvá zákazka v platforme v tom mesiaci.</ChartNote>
       </StatSection>
 
       <StatSection title="Stroje, ktoré stoja" hint={`${idleRows.length} (dnes)`}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <select value={idleMin} onChange={(e) => setIdleMin(Number(e.target.value))} style={{ fontSize: 12, marginBottom: 8 }} aria-label="Minimálny počet dní bez zákazky">
-          {[7, 14, 30, 60].map((d) => <option key={d} value={d}>aspoň {d} dní</option>)}
-        </select>
-      </div>
-      <div className="panel table-scroll-inner" style={{ padding: 0, marginBottom: 20, maxHeight: 360, overflowY: "auto" }}>
-        {idleRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadny stroj nestojí tak dlho.</div> : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Stroj", "Model", "Depo", "Naposledy vrátený", "Dní bez zákazky"].map(th)}</tr></thead>
-            <tbody>{idleRows.map(({ m, last, days }) => (
-              <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
-                {td(m.code || "—", "Stroj", true)}{td(m.type || "—", "Model")}{td(m.depo || "—", "Depo")}{td(last ? fmtDate(last) : "bez záznamu", "Naposledy vrátený")}{td(days ?? "—", "Dní bez zákazky", true)}
-              </tr>
-            ))}</tbody>
-          </table>
-        )}
-      </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <select value={idleMin} onChange={(e) => setIdleMin(Number(e.target.value))} style={{ fontSize: 12 }} aria-label="Minimálny počet dní bez zákazky">
+            {[7, 14, 30, 60].map((d) => <option key={d} value={d}>aspoň {d} dní</option>)}
+          </select>
+        </div>
+        <GraphOrTable
+          chart={<HBars rows={idleRows.slice(0, 20).map(({ m, last, days }) => ({ key: m.id, label: `${m.code || "—"} · ${m.type || "—"}`, value: days ?? 0, valueText: days == null ? "bez záznamu" : `${days} d · ${m.depo || "—"}`, title: last ? `naposledy vrátený ${fmtDate(last)}` : "bez zákazky v platforme" }))} labelW={200} empty="Žiadny stroj nestojí tak dlho." />}
+          table={<StatTable head={["Stroj", "Model", "Depo", "Naposledy vrátený", "Dní bez zákazky"]} rows={idleRows.map(({ m, last, days }) => [m.code || "—", m.type || "—", m.depo || "—", last ? fmtDate(last) : "bez záznamu", days ?? "—"])} empty="Žiadny stroj nestojí tak dlho." />} />
       </StatSection>
 
       <StatSection title="Prepravy podľa šoféra" hint={`${tSum("sum")} za obdobie`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
-        <StatCard label="Vývozy" value={tSum("vyvoz")} />
-        <StatCard label="Zvozy" value={tSum("zvoz")} />
-        <StatCard label="Prevozy" value={tSum("prevoz")} />
-        <StatCard label="Z toho externí šoféri" value={`${tSum("sum", (r) => r.ext)} / ${tSum("sum")}`} />
-      </div>
-      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
-        {driverRows.length === 0 ? <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne vykonané prepravy v tomto období.</div> : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Šofér", "Typ", "Vývozy", "Zvozy", "Prevozy", "Spolu"].map(th)}</tr></thead>
-            <tbody>{driverRows.map((r) => (
-              <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
-                {td(r.name, "Šofér", true)}{td(r.ext ? "externý" : "interný", "Typ")}{td(r.vyvoz, "Vývozy")}{td(r.zvoz, "Zvozy")}{td(r.prevoz, "Prevozy")}{td(r.sum, "Spolu", true)}
-              </tr>
-            ))}</tbody>
-          </table>
-        )}
-      </div>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Vývozy" value={tSum("vyvoz")} />
+          <StatCard label="Zvozy" value={tSum("zvoz")} />
+          <StatCard label="Prevozy" value={tSum("prevoz")} />
+          <StatCard label="Z toho externí šoféri" value={`${tSum("sum", (r) => r.ext)} / ${tSum("sum")}`} spark={extB2.map((x) => (x.all ? (x.ext / x.all) * 100 : 0))} />
+        </div>
+        <GraphOrTable
+          chart={<>
+            <ChartLegend items={[["Vývoz", SERIES[0]], ["Zvoz", SERIES[1]], ["Prevoz", SERIES[2]]]} />
+            <HBars rows={driverRows.map((r) => ({ key: r.id, label: `${r.name}${r.ext ? " (ext.)" : ""}`, segs: [{ v: r.vyvoz, c: SERIES[0], name: "Vývoz" }, { v: r.zvoz, c: SERIES[1], name: "Zvoz" }, { v: r.prevoz, c: SERIES[2], name: "Prevoz" }] }))} labelW={200} empty="Žiadne vykonané prepravy v tomto období." />
+          </>}
+          table={<StatTable head={["Šofér", "Typ", "Vývozy", "Zvozy", "Prevozy", "Spolu"]} rows={driverRows.map((r) => [r.name, r.ext ? "externý" : "interný", r.vyvoz, r.zvoz, r.prevoz, r.sum])} empty="Žiadne vykonané prepravy v tomto období." />} />
+        <div className="chart-grid" style={{ marginTop: 16 }}>
+          <div className="chart-card">
+            <ChartTitle>Podiel externých šoférov</ChartTitle>
+            <LineTrend labels={buckets.map((b) => b.label)} unit=" %" series={[{ name: "Externí", c: SERIES[0], values: extB2.map((x) => (x.all ? (x.ext / x.all) * 100 : null)) }]} height={160} />
+          </div>
+          <div className="chart-card">
+            <ChartTitle>Naša doprava a zákazník sám</ChartTitle>
+            <div style={{ fontSize: 13, margin: "4px 0 6px" }}>Vývoz</div>
+            <StackBar segs={[{ name: "Naša doprava", v: ourOut, c: SERIES[0] }, { name: "Zákazník si vyzdvihol", v: selfOut, c: SERIES[1] }]} />
+            <div style={{ fontSize: 13, margin: "14px 0 6px" }}>Vrátenie</div>
+            <StackBar segs={[{ name: "Naša doprava", v: ourBack, c: SERIES[0] }, { name: "Zákazník priviezol", v: selfBack, c: SERIES[1] }]} />
+          </div>
+        </div>
+      </StatSection>
+
+      <StatSection title="Presnosť prepráv" hint={`${pctOf(punct.out[0] + punct.back[0], sumOf(punct.out) + sumOf(punct.back))} % v plánovaný deň`}>
+        <div className="chart-grid">
+          <div className="chart-card"><ChartTitle>Vývozy našou dopravou</ChartTitle><StackBar segs={[{ name: "V plánovaný deň", v: punct.out[0], c: SERIES[0] }, { name: "Neskôr", v: punct.out[1], c: SERIES[1] }, { name: "Skôr", v: punct.out[2], c: SERIES[2] }]} /></div>
+          <div className="chart-card"><ChartTitle>Zvozy našou dopravou</ChartTitle><StackBar segs={[{ name: "V plánovaný deň", v: punct.back[0], c: SERIES[0] }, { name: "Neskôr", v: punct.back[1], c: SERIES[1] }, { name: "Skôr", v: punct.back[2], c: SERIES[2] }]} /></div>
+        </div>
+        <ChartNote>Plánovaný deň vývozu/zvozu na zákazke oproti dňu podpisu protokolu. Ak dispečer termín v zákazke posunul, počíta sa posunutý.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Motohodiny za prenájom" hint="podľa modelu">
+        <GraphOrTable
+          chart={<HBars rows={mthRows.map((r) => ({ label: r.label, value: r.perDay, valueText: `${fmt1(r.perDay)} mth/deň · ${fmt1(r.perRent)} na prenájom` }))} fmt={(v) => `${fmt1(v)} mth/deň`} labelW={200} empty="Žiadne vrátenia s motohodinami v tomto období." />}
+          table={<StatTable head={["Model", "Mth za deň", "Mth na prenájom", "Prenájmov"]} rows={mthRows.map((r) => [r.label, fmt1(r.perDay), fmt1(r.perRent), r.n])} empty="Žiadne vrátenia s motohodinami v tomto období." />} />
+        <ChartNote>Rozdiel motohodín pri vrátení a pri odovzdaní (vrátenia v období). Ukazuje, ako intenzívne zákazníci stroje používajú.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Rezervácie podľa obchodníka" hint={`${periodReservations.length} rezervácií · ${successRatePct} % premenených`}>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Rezervácií za obdobie" value={periodReservations.length} delta={reservationsDelta} />
+          <StatCard label="Úspešnosť (premenené na zákazku)" value={`${successRatePct} %`} delta={successRateDelta} />
+        </div>
+        <ChartLegend items={[["Premenené na zákazku", SERIES[0]], ["Nepremenené", C_IDLE]]} />
+        <HBars rows={obchodnikRows.map(([name, count]) => { const c = convertedByObchodnik[name] || 0; return { label: name, segs: [{ v: c, c: SERIES[0], name: "Premenené" }, { v: count - c, c: C_IDLE, name: "Nepremenené" }], valueText: `${pctOf(c, count)} % z ${count}` }; })} labelW={200} empty="Žiadne rezervácie v tomto období." />
+      </StatSection>
+
+      <StatSection title="Potvrdenie protokolu zákazníkom" hint={`${conf.waiting} čaká na potvrdenie`}>
+        <StackBar segs={[{ name: "Podpísal na mieste", v: conf.signed, c: SERIES[0] }, { name: "Potvrdil v portáli", v: conf.confirmed, c: SERIES[2] }, { name: "Nesúhlasí", v: conf.disputed, c: C_BAD }, { name: "Čaká na potvrdenie", v: conf.waiting, c: C_IDLE }]} />
+        <ChartNote>Protokoly o odovzdaní a vrátení v období. {confHours.length ? `Zákazník bez podpisu potvrdil v portáli priemerne za ${fmt1(sumOf(confHours) / confHours.length)} h.` : ""}</ChartNote>
+      </StatSection>
+
+      <StatSection title="Poškodenia po prenájme podľa zákazníka" hint={`${dmgAfterTotal} z ${returns.length} vrátení`}>
+        <HBars rows={dmgAfterRows.map(([label, v]) => ({ label, value: v.n, valueText: `${v.n} z ${v.ret} vrátení` }))} labelW={220} empty="Po vrátení v tomto období nebolo nahlásené žiadne poškodenie." />
+        <ChartNote>Poškodenie stroja nahlásené v deň vrátenia alebo do 2 dní po ňom.</ChartNote>
       </StatSection>
     </div>
   );
 }
 
-function ServisStatistiky({ machines, technicians, protocolLogs, assignments, damages, start, end, prev, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
+function ServisStatistiky({ machines, technicians, protocolLogs, assignments, damages, jobs, handoverProtocols, today, start, end, prev, canEdit, showExclusions, setShowExclusions, onUpdateEmployee }) {
   // % prepadnutých revízií — stav DNES (nie za obdobie): podiel sledovaných
   // strojov, čo majú revíziu po termíne alebo bez dátumu (rovnaké pravidlo ako
   // pri automatickom zakladaní revíznych zákaziek).
@@ -27395,6 +27784,8 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   const trackedTechnicians = activeTechnicians.filter((t) => t.trackStatistics !== false);
   const trackedNames = new Set(trackedTechnicians.map((t) => t.name));
   const technicianNameById = Object.fromEntries(technicians.map((t) => [t.id, t.name]));
+  const buckets = statBuckets(start, end);
+  const d10 = (x) => String(x || "").slice(0, 10);
 
   const localDay = (ts) => toLocalISO(new Date(ts));
   const periodProtocols = (protocolLogs || []).filter((p) => p.createdAt && localDay(p.createdAt) >= start && localDay(p.createdAt) <= end);
@@ -27451,6 +27842,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
     byStatus[key] = (byStatus[key] || 0) + 1;
   });
   const statusRows = Object.entries(byStatus).sort((a, b) => b[1] - a[1]);
+  const statusSegs = [...statusRows.slice(0, 5).map(([name, v], i) => ({ name, v, c: SERIES[i] })), ...(statusRows.length > 5 ? [{ name: "Ostatné", v: sumOf(statusRows.slice(5).map((r) => r[1])), c: C_IDLE }] : [])];
 
   // Porovnanie s predchádzajúcim obdobím (rovnaké dni minulého týždňa / mesiaca).
   const prevPeriodProtocols = (protocolLogs || []).filter((p) => p.createdAt && localDay(p.createdAt) >= prev.start && localDay(p.createdAt) <= prev.end);
@@ -27460,8 +27852,21 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   const prevTotalTravelHours = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.travelHours) || 0) * trackedNamesOf(p).length, 0);
   const prevTotalTravelKm = prevTrackedProtocols.reduce((sum, p) => sum + (Number(p.travelKm) || 0) * trackedNamesOf(p).length, 0);
 
+  // Protokoly v čase podľa technika (top 4 + ostatní).
+  const protoCount = {};
+  periodProtocols.forEach((p) => (p.technicianName || "").split(/,\s*/).map((n) => n.trim()).filter(Boolean).forEach((n) => { protoCount[n] = (protoCount[n] || 0) + 1; }));
+  const topTech = Object.entries(protoCount).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+  const protoSeries = [...topTech.map((n, i) => [n, SERIES[i]]), ["Ostatní", C_IDLE]];
+  const protoB = buckets.map(() => protoSeries.map(() => 0));
+  periodProtocols.forEach((p) => {
+    const bi = bucketOf(buckets, localDay(p.createdAt));
+    if (bi < 0) return;
+    const names = (p.technicianName || "").split(/,\s*/).map((n) => n.trim()).filter(Boolean);
+    const idx = names.length ? (topTech.includes(names[0]) ? topTech.indexOf(names[0]) : topTech.length) : topTech.length;
+    protoB[bi][idx] += 1;
+  });
+
   // Poškodenia: nahlásené a vyriešené v období, priemerný čas od nahlásenia po opravu.
-  const d10 = (x) => String(x || "").slice(0, 10);
   const dmg = (damages || []).filter((d) => d.type === "poskodenie");
   const dmgDone = (d) => d.resolved ? d10(d.opravaDatum || d.resolvedAt) : "";
   const dmgStats = (p0, p1) => {
@@ -27472,6 +27877,82 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   const ds = dmgStats(start, end);
   const dsPrev = dmgStats(prev.start, prev.end);
   const dmgOpen = dmg.filter((d) => !d.resolved).length;
+  const repB = buckets.map((b) => dmg.filter((d) => d10(d.dateReported) >= b.s && d10(d.dateReported) <= b.e).length);
+  const solB = buckets.map((b) => dmg.filter((d) => { const x = dmgDone(d); return x && x >= b.s && x <= b.e; }).length);
+  const openB = buckets.map((b) => (b.s > today ? null : dmg.filter((d) => d10(d.dateReported) && d10(d.dateReported) <= b.e && (!d.resolved || (dmgDone(d) || today) > b.e)).length));
+
+  // Kde sa čaká: nahlásenie → pridelenie (prvé pridelenie v pláne) → oprava; čakanie na diely teraz.
+  const firstAssign = new Map();
+  (assignments || []).forEach((a) => {
+    if (a.kind || !a.damageId || !a.createdAt) return;
+    const day = localDay(a.createdAt);
+    if (!firstAssign.has(a.damageId) || day < firstAssign.get(a.damageId)) firstAssign.set(a.damageId, day);
+  });
+  const ph1 = [], ph2 = [];
+  dmg.forEach((d) => {
+    const done = dmgDone(d);
+    if (!done || done < start || done > end) return;
+    const rep = d10(d.dateReported), as = firstAssign.get(d.id);
+    if (!rep || !as) return;
+    const a1 = daysBetween(rep, as), a2 = daysBetween(as, done);
+    if (a1 >= 0) ph1.push(a1);
+    if (a2 >= 0) ph2.push(a2);
+  });
+  const avg = (a) => (a.length ? sumOf(a) / a.length : 0);
+  const waitParts = dmg.filter((d) => !d.resolved && d.stav === "caka_diely");
+  const waitPartsDays = waitParts.map((d) => (d.stavAt ? daysBetween(localDay(d.stavAt), today) : null)).filter((x) => x != null && x >= 0);
+
+  // Poruchovosť modelov: poruchy na 100 dní prenájmu (v období).
+  const hpByJob = useMemo(() => new Map((handoverProtocols || []).map((h) => [h.jobId, h])), [handoverProtocols]);
+  const busySets = useMemo(() => busyDaySets(jobs || [], hpByJob, today, start), [jobs, hpByJob, today, start]);
+  const endC = end < today ? end : today;
+  const relModel = {};
+  revMachines.forEach((m) => {
+    const k = m.type || "— bez modelu —";
+    if (!relModel[k]) relModel[k] = { busy: 0, n: 0 };
+    relModel[k].busy += countInSet(busySets.get(m.id), start, endC);
+  });
+  const mById = new Map((machines || []).map((m) => [m.id, m]));
+  dmg.forEach((d) => {
+    const r = d10(d.dateReported);
+    const m = mById.get(d.machineId);
+    if (!m || r < start || r > end) return;
+    const k = m.type || "— bez modelu —";
+    if (relModel[k]) relModel[k].n += 1;
+  });
+  const relRows = Object.entries(relModel).filter(([, v]) => v.busy > 0).map(([label, v]) => ({ label, rate: (v.n / v.busy) * 100, ...v })).sort((a, b) => b.rate - a.rate);
+
+  // Opakované poruchy: ten istý stroj znova nahlásený do 30 dní po oprave.
+  const repeats = [];
+  dmg.forEach((d) => {
+    const r = d10(d.dateReported);
+    if (!r || r < start || r > end) return;
+    const prevFix = dmg.filter((x) => x.id !== d.id && x.machineId === d.machineId && dmgDone(x) && dmgDone(x) <= r).map(dmgDone).sort().pop();
+    if (prevFix && daysBetween(prevFix, r) <= 30) repeats.push({ d, prevFix, days: daysBetween(prevFix, r), m: mById.get(d.machineId) });
+  });
+  const repByMachine = {};
+  repeats.forEach((x) => { const k = x.m ? `${x.m.code || "—"} · ${x.m.type || "—"}` : x.d.code || "—"; repByMachine[k] = (repByMachine[k] || 0) + 1; });
+
+  // Revízie a ÚS na 8 týždňov dopredu (dátumy na strojoch).
+  const wk0 = weekRangeFor(today).weekStart;
+  const revWeeks = Array.from({ length: 8 }, (_, i) => { const s = addDaysISO(wk0, i * 7); return { s, e: addDaysISO(s, 6), label: `${Number(s.slice(8))}.${Number(s.slice(5, 7))}.` }; });
+  const revAhead = revWeeks.map((w) => ({
+    label: w.label,
+    values: [
+      revMachines.filter((m) => m.trackRevisions !== false && m.revizia >= w.s && m.revizia <= w.e).length,
+      revMachines.filter((m) => m.trackRevisionsEZ !== false && m.reviziaEZ >= w.s && m.reviziaEZ <= w.e).length,
+      revMachines.filter((m) => m.trackUradnaSkuska !== false && m.uradnaSkuska >= w.s && m.uradnaSkuska <= w.e).length,
+    ],
+  }));
+
+  // Revízie včas: vyriešené tikety revízií/ÚS v období — pred termínom alebo po ňom.
+  const revTickets = (damages || []).filter((d) => (d.type === "revizia" || d.type === "uradnaSkuska") && d.resolved).map((d) => {
+    const done = d10(d.opravaDatum || d.resolvedAt || d.stavAt);
+    const dues = d.type === "revizia" ? [d.revizia, d.reviziaEZ].filter(isRealISODate) : [d.uradnaSkuskaDate].filter(isRealISODate);
+    return { d, done, due: dues.sort()[0] };
+  }).filter((x) => x.done && x.due && x.done >= start && x.done <= end);
+  const revOnTime = revTickets.filter((x) => x.done <= x.due).length;
+  const revLateDays = revTickets.filter((x) => x.done > x.due).map((x) => daysBetween(x.due, x.done));
 
   // Kontroly checkera s termínom v období: urobené, neurobené (preskočené), ešte otvorené.
   const chk = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && d10(a.checkerDate || a.date) >= start && d10(a.checkerDate || a.date) <= end);
@@ -27479,144 +27960,165 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   const chkSkipped = chk.filter((a) => a.skipped).length;
   const chkOpen = chk.filter((a) => !a.resolved).length;
   const chkPct = chkDone + chkSkipped ? Math.round((chkDone / (chkDone + chkSkipped)) * 100) : 0;
+  const skipB = buckets.map((b) => chk.filter((a) => a.skipped && d10(a.checkerDate || a.date) >= b.s && d10(a.checkerDate || a.date) <= b.e).length);
   const protocolsDelta = statDelta(periodProtocols.length, prevPeriodProtocols.length);
   const hoursDelta = statDelta(Math.round(totalHours), Math.round(prevTotalHours));
   const travelHoursDelta = statDelta(Math.round(totalTravelHours), Math.round(prevTotalTravelHours));
   const travelKmDelta = statDelta(Math.round(totalTravelKm), Math.round(prevTotalTravelKm));
 
+  // Vyťaženosť technikov za mesiac: (protokoly + cesta + checklisty) / fond (8 h × pracovné dni bez sviatkov, dovolenky a PN/lekára).
+  const monthOpts = Array.from({ length: 12 }, (_, i) => toLocalISO(new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - i, 1)));
+  const [month, setMonth] = useState(monthOpts[0]);
+  const mEnd = monthEndISO(month);
+  const mEndC = mEnd < today ? mEnd : today;
+  const util = trackedTechnicians.map((t) => {
+    let work = 0, travel = 0;
+    (protocolLogs || []).forEach((p) => {
+      if (!p.createdAt) return;
+      const day = localDay(p.createdAt);
+      if (day < month || day > mEnd) return;
+      if (!(p.technicianName || "").split(/,\s*/).map((n) => n.trim()).includes(t.name)) return;
+      work += Number(p.totalHours) || 0;
+      travel += Number(p.travelHours) || 0;
+    });
+    checklistHours.forEach((c) => { if (c.technicianName === t.name && c.date >= month && c.date <= mEnd) work += c.hours; });
+    const fond = techFond(t.id, month, mEndC, assignments).hours;
+    return { t, work, travel, fond, pct: fond ? ((work + travel) / fond) * 100 : 0 };
+  }).sort((a, b) => b.pct - a.pct);
+  const utilMax = Math.max(120, ...util.map((u) => u.pct));
+
   return (
     <div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
-        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
+        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} spark={protoB.map((x) => sumOf(x))} />
         <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
-        <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
+        <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} spark={openB} />
         <StatCard label="Revízie po termíne" value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger-text)" : undefined} />
       </div>
+
+      <StatSection title="Vyťaženosť technikov za mesiac" hint={plural(util.length, "technik", "technici", "technikov")} open>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Mesiac" style={{ fontSize: 13 }}>
+            {monthOpts.map((m) => <option key={m} value={m}>{`${MONTHS_SK[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`}</option>)}
+          </select>
+          {mEnd > today && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>fond k dnešku</span>}
+        </div>
+        <ChartLegend items={[["Práca", SERIES[0]], ["Cesta", SERIES[1]]]} />
+        <HBars rows={util.map((u) => ({ key: u.t.id, label: u.t.name, segs: u.fond ? [{ v: (u.work / u.fond) * 100, c: SERIES[0], name: "Práca" }, { v: (u.travel / u.fond) * 100, c: SERIES[1], name: "Cesta" }] : [], valueText: `${fmt1(u.work + u.travel)} / ${u.fond} h · ${Math.round(u.pct)} %`, title: `${u.t.name}: práca ${fmt1(u.work)} h, cesta ${fmt1(u.travel)} h, fond ${u.fond} h` }))}
+          max={utilMax} target={100} fmt={(v) => `${Math.round(v)} %`} labelW={160} empty="Žiadni technici v štatistikách." />
+        {util.length > 0 && (
+          <div style={{ fontSize: 13, marginTop: 12, display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
+            <span style={{ color: "var(--text-dim)" }}>Nevykázané hodiny (fond − vykázané):</span>
+            {util.map((u) => <span key={u.t.id} style={{ whiteSpace: "nowrap" }}>{u.t.name} <b className="tnum">{fmt1(Math.max(0, u.fond - u.work - u.travel))} h</b></span>)}
+          </div>
+        )}
+        <ChartNote>Fond = (pracovné dni − sviatky s pracovným pokojom − dovolenka − PN/lekár) × 8 h. Vykázané = hodiny na protokoloch + čas na ceste + hodiny z kontrol stroja. Pohotovosť a nadčasy sa rátajú, preto môže byť viac ako 100 %. Čiarka = 100 % fondu.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Poškodenia" hint={`${ds.reported} nahlásených · ${dmgOpen} otvorených`} open>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Poškodenia nahlásené" value={ds.reported} delta={statDelta(ds.reported, dsPrev.reported)} />
+          <StatCard label="Poškodenia vyriešené" value={ds.resolved} delta={statDelta(ds.resolved, dsPrev.resolved)} />
+          <StatCard label="Priemerne dní do opravy" value={ds.avg.toFixed(1)} />
+          <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
+        </div>
+        <div className="chart-grid">
+          <div className="chart-card">
+            <ChartTitle>Nahlásené a vyriešené</ChartTitle>
+            <ChartLegend items={[["Nahlásené", SERIES[0]], ["Vyriešené", SERIES[1]]]} />
+            <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: [repB[i], solB[i]] }))} series={[["Nahlásené", SERIES[0]], ["Vyriešené", SERIES[1]]]} />
+          </div>
+          <div className="chart-card">
+            <ChartTitle>Otvorené poškodenia</ChartTitle>
+            <LineTrend labels={buckets.map((b) => b.label)} series={[{ name: "Otvorené", c: SERIES[0], values: openB }]} height={170} />
+          </div>
+        </div>
+      </StatSection>
+
+      <StatSection title="Kde sa čaká" hint={`${plural(waitParts.length, "porucha čaká", "poruchy čakajú", "porúch čaká")} na diely`}>
+        <HBars rows={[
+          { label: "Od nahlásenia po pridelenie", value: avg(ph1), valueText: `${fmt1(avg(ph1))} d · ${ph1.length}×` },
+          { label: "Od pridelenia po opravu", value: avg(ph2), valueText: `${fmt1(avg(ph2))} d · ${ph2.length}×` },
+          { label: "Čaká na diely (teraz)", value: avg(waitPartsDays), c: SERIES[1], valueText: `${fmt1(avg(waitPartsDays))} d · ${plural(waitParts.length, "porucha", "poruchy", "porúch")}` },
+        ]} fmt={(v) => `${fmt1(v)} d`} labelW={220} />
+        <ChartNote>Poruchy opravené v období. Pridelenie = prvé zaradenie poruchy do plánu technika. Čakanie na diely = otvorené poruchy v stave „Čaká na diely“, dni od zmeny stavu.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Poruchovosť modelov" hint="poruchy na 100 dní prenájmu">
+        <GraphOrTable
+          chart={<HBars rows={relRows.map((r) => ({ label: r.label, value: r.rate, valueText: `${fmt1(r.rate)} · ${plural(r.n, "porucha", "poruchy", "porúch")} / ${r.busy} d` }))} fmt={fmt1} labelW={200} empty="Žiadne prenájmy v tomto období." />}
+          table={<StatTable head={["Model", "Poruchy na 100 dní", "Porúch", "Dní u zákazníka"]} rows={relRows.map((r) => [r.label, fmt1(r.rate), r.n, r.busy])} empty="Žiadne prenájmy v tomto období." />} />
+        <ChartNote>Poruchy nahlásené v období vydelené dňami, keď boli stroje modelu u zákazníka — férovejšie ako samotný počet porúch.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Opakované poruchy" hint={`${repeats.length} do 30 dní po oprave`}>
+        <GraphOrTable
+          chart={<HBars rows={Object.entries(repByMachine).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([label, value]) => ({ label, value, valueText: `${value}×` }))} labelW={220} empty="Žiadna opakovaná porucha v tomto období." />}
+          table={<StatTable head={["Stroj", "Model", "Opravený", "Znova nahlásené", "Dní", "Popis"]} rows={repeats.map((x) => [x.m?.code || x.d.code || "—", x.m?.type || "—", fmtDate(x.prevFix), fmtDate(d10(x.d.dateReported)), x.days, x.d.popis || "—"])} empty="Žiadna opakovaná porucha v tomto období." />} />
+        <ChartNote>Porucha nahlásená do 30 dní po oprave inej poruchy toho istého stroja — ukazuje kvalitu opráv.</ChartNote>
+      </StatSection>
+
+      <StatSection title="Revízie a úradné skúšky" hint={`${revAll.pct} % revízií po termíne`} open>
+        <div className="chart-grid">
+          <div className="chart-card">
+            <ChartTitle>Na 8 týždňov dopredu</ChartTitle>
+            <ChartLegend items={[["Revízia ZZ", SERIES[0]], ["Revízia EZ", SERIES[1]], ["Úradná skúška", SERIES[2]]]} />
+            <Columns buckets={revAhead} series={[["ZZ", SERIES[0]], ["EZ", SERIES[1]], ["ÚS", SERIES[2]]]} stacked />
+            <ChartNote>Termíny podľa dátumov na strojoch, po týždňoch od tohto týždňa.</ChartNote>
+          </div>
+          <div className="chart-card">
+            <ChartTitle>Po termíne (dnes)</ChartTitle>
+            <ChartLegend items={[["Platné", SERIES[0]], ["Po termíne", C_BAD]]} />
+            <HBars rows={[["Revízia ZZ", revZz], ["Revízia EZ", revEz], ["Úradná skúška", revUs]].map(([label, r]) => ({ label, segs: [{ v: r.total - r.late, c: SERIES[0], name: "Platné" }, { v: r.late, c: C_BAD, name: "Po termíne" }], valueText: `${r.pct} % · ${r.late} z ${r.total}` }))} labelW={130} />
+            <ChartNote>Stroj bez zadaného dátumu sa ráta ako po termíne; nerátajú sa stroje s vypnutým sledovaním.</ChartNote>
+          </div>
+        </div>
+        <ChartTitle>Urobené včas (vyriešené v období)</ChartTitle>
+        <StackBar segs={[{ name: "Pred termínom", v: revOnTime, c: SERIES[0] }, { name: "Po termíne", v: revTickets.length - revOnTime, c: C_BAD }]} />
+        {revLateDays.length > 0 && <ChartNote>Po termíne priemerne o {fmt1(avg(revLateDays))} dňa.</ChartNote>}
+      </StatSection>
+
       <StatSection title="Protokoly" hint={`${periodProtocols.length} za obdobie`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
-        <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
-        <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
-      </div>
-      </StatSection>
-
-      <StatSection title="Revízie a úradné skúšky" hint={`${revAll.pct} % revízií po termíne`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label={`Prepadnuté revízie — spolu (${revAll.late} z ${revAll.total} strojov)`} value={`${revAll.pct} %`} color={revAll.pct > 0 ? "var(--danger)" : undefined} />
-        <StatCard label={`Revízia ZZ po termíne (${revZz.late} z ${revZz.total})`} value={`${revZz.pct} %`} color={revZz.pct > 0 ? "var(--danger)" : undefined} />
-        <StatCard label={`Revízia EZ po termíne (${revEz.late} z ${revEz.total})`} value={`${revEz.pct} %`} color={revEz.pct > 0 ? "var(--danger)" : undefined} />
-        <StatCard label={`Úradná skúška po termíne (${revUs.late} z ${revUs.total})`} value={`${revUs.pct} %`} color={revUs.pct > 0 ? "var(--danger)" : undefined} />
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "-12px 0 20px" }}>Stav dnes. Stroj bez zadaného dátumu sa ráta ako po termíne; nerátajú sa stroje s vypnutým sledovaním.</div>
-      </StatSection>
-
-      <StatSection title="Poškodenia" hint={`${ds.reported} nahlásených · ${dmgOpen} otvorených`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Poškodenia nahlásené" value={ds.reported} delta={statDelta(ds.reported, dsPrev.reported)} />
-        <StatCard label="Poškodenia vyriešené" value={ds.resolved} delta={statDelta(ds.resolved, dsPrev.resolved)} />
-        <StatCard label="Priemerne dní do opravy" value={ds.avg.toFixed(1)} />
-        <StatCard label="Otvorené poškodenia (dnes)" value={dmgOpen} color={dmgOpen > 0 ? "var(--warn)" : undefined} />
-      </div>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Sledovaných technikov" value={trackedTechnicians.length} />
+          <StatCard label="Protokolov za obdobie" value={periodProtocols.length} delta={protocolsDelta} />
+          <StatCard label="Rôznych servisovaných strojov" value={Object.keys(bySerial).length} />
+        </div>
+        <ChartLegend items={protoSeries} />
+        <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: protoB[i] }))} series={protoSeries} stacked />
+        <ChartNote>Spoločný protokol sa ráta prvému uvedenému technikovi.</ChartNote>
       </StatSection>
 
       <StatSection title="Kontroly checkera" hint={`${chkDone} urobených · ${chkSkipped} neurobených`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Kontroly checkera urobené" value={chkDone} />
-        <StatCard label="Neurobené (preskočené)" value={chkSkipped} color={chkSkipped > 0 ? "var(--danger)" : undefined} />
-        <StatCard label="Ešte otvorené" value={chkOpen} />
-        <StatCard label="Urobené z uzavretých" value={`${chkPct} %`} />
-      </div>
+        <StackBar segs={[{ name: "Urobené", v: chkDone, c: SERIES[0] }, { name: "Neurobené", v: chkSkipped, c: C_BAD }, { name: "Ešte otvorené", v: chkOpen, c: C_IDLE }]} />
+        <ChartNote>Urobené z uzavretých: {chkPct} %.</ChartNote>
+        <ChartTitle>Neurobené v čase</ChartTitle>
+        <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: [skipB[i]] }))} series={[["Neurobené", C_BAD]]} height={100} />
       </StatSection>
 
       <StatSection title="Hodiny, cesta a km" hint={`${totalHours.toFixed(1)} h · ${totalTravelKm.toFixed(0)} km`}>
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-        <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
-        <StatCard label="Čas na ceste (hod.)" value={totalTravelHours.toFixed(1)} delta={travelHoursDelta} />
-        <StatCard label="Prejazdené km" value={totalTravelKm.toFixed(0)} delta={travelKmDelta} />
-      </div>
+        <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+          <StatCard label="Odpracované hodiny" value={totalHours.toFixed(1)} delta={hoursDelta} />
+          <StatCard label="Čas na ceste (hod.)" value={totalTravelHours.toFixed(1)} delta={travelHoursDelta} />
+          <StatCard label="Prejazdené km" value={totalTravelKm.toFixed(0)} delta={travelKmDelta} />
+        </div>
+        <GraphOrTable
+          chart={<>
+            <ChartLegend items={[["Práca", SERIES[0]], ["Cesta", SERIES[1]]]} />
+            <HBars rows={technicianRows.map(([name, v]) => ({ label: name, segs: [{ v: v.hours, c: SERIES[0], name: "Práca" }, { v: v.travelHours, c: SERIES[1], name: "Cesta" }], valueText: `${fmt1(v.hours + v.travelHours)} h · ${Math.round(v.travelKm).toLocaleString("sk-SK")} km` }))} fmt={(v) => `${fmt1(v)} h`} labelW={160} empty="Žiadne protokoly v tomto období." />
+          </>}
+          table={<StatTable head={["Technik", "Odpracované hodiny", "Čas na ceste", "Km"]} rows={technicianRows.map(([name, v]) => [name, v.hours.toFixed(1), v.travelHours.toFixed(1), v.travelKm.toFixed(0)])} empty="Žiadne protokoly v tomto období." />} />
       </StatSection>
 
       <StatSection title="Najviac servisované modely a stroje">
-      <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Najviac servisované modely
-          </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            {modelRows.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
-            ) : (
-              modelRows.map(([model, count]) => (
-                <div key={model} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                  <span>{model}</span>
-                  <span style={{ fontWeight: 600 }}>{count}</span>
-                </div>
-              ))
-            )}
-          </div>
+        <div className="chart-grid">
+          <div className="chart-card"><ChartTitle>Modely</ChartTitle><HBars rows={modelRows.map(([label, value]) => ({ label, value }))} labelW={200} empty="Žiadne protokoly v tomto období." /></div>
+          <div className="chart-card"><ChartTitle>Stroje</ChartTitle><HBars rows={serialRows.map(([label, value]) => ({ label, value }))} labelW={160} empty="Žiadne protokoly v tomto období." /></div>
         </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
-            Najčastejšie servisovaný stroj
-          </div>
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            {serialRows.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
-            ) : (
-              serialRows.map(([serial, count]) => (
-                <div key={serial} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                  <span>{serial}</span>
-                  <span style={{ fontWeight: 600 }}>{count}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
       </StatSection>
 
-      <StatSection title="Vyťaženosť podľa technika">
-      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
-        {technicianRows.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
-        ) : (
-          <table className="table-cards" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Technik</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Odpracované hodiny</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Čas na ceste</th>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Km</th>
-              </tr>
-            </thead>
-            <tbody>
-              {technicianRows.map(([name, v]) => (
-                <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600 }} data-label="Technik">{name}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Odpracované hodiny">{v.hours.toFixed(1)}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Čas na ceste">{v.travelHours.toFixed(1)}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 13 }} data-label="Km">{v.travelKm.toFixed(0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      </StatSection>
-
-      <StatSection title="Stav servisu za obdobie">
-      <div className="panel" style={{ padding: 0, overflow: "clip", marginBottom: 20 }}>
-        {statusRows.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 13, color: "var(--text-dim)" }}>Žiadne protokoly v tomto období.</div>
-        ) : (
-          statusRows.map(([status, count]) => (
-            <div key={status} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-              <span>{status}</span>
-              <span style={{ fontWeight: 600 }}>{count}</span>
-            </div>
-          ))
-        )}
-      </div>
+      <StatSection title="Stav servisu za obdobie" hint="podľa stavu na protokole">
+        <StackBar segs={statusSegs} />
       </StatSection>
 
       {canEdit && (
@@ -30451,6 +30953,7 @@ function GlobalStyle() {
         --accent: #E30613;
         --accent-dark: #B5040F;
         --accent-light: #fdf0f0;
+        --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c-bad: #e34948; --c-idle: #c8c8c4;
         /* Nepriehľadná verzia accent-light — pre miesta, kde má farba
            NIEČO PREKRYŤ (roh nad menami strojov v gantte), nie len jemne
            podfarbiť cez existujúci obsah. accent-light je v tmavom režime
@@ -30555,6 +31058,7 @@ function GlobalStyle() {
         --accent: #ff6b74;
         --accent-dark: #ff8a90;
         --accent-light: rgba(227,6,19,.18);
+        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #55585c;
         --ok: #8fd18a;
         --ok-bg: rgba(59,109,17,.28);
         --warn: #e0a858;
@@ -30806,6 +31310,43 @@ function GlobalStyle() {
       .side-foot { position: sticky; bottom: 0; z-index: 5; background: var(--panel-2); border-top: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .side-foot .btn { min-height: 44px; font-size: 14px; }
       /* Segmentovaný prepínač (stav/depo/doprava) — aktívne čierne, ostatné biele. */
+      .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; margin-bottom: 10px; }
+      .chart-legend span, .stack-legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .chart-legend i, .stack-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+      .chart-empty { padding: 10px 0; font-size: 13px; color: var(--text-dim); }
+      .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; margin-bottom: 16px; }
+      .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+      .hbars { display: grid; gap: 8px 10px; align-items: center; font-size: 13px; }
+      .hbar { display: contents; }
+      .hbar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .hbar-t { position: relative; height: 16px; }
+      .hbar-fill { display: flex; gap: 2px; height: 16px; }
+      .hbar-fill > div { min-width: 2px; }
+      .hbar-fill > div:last-child { border-radius: 0 4px 4px 0; }
+      .hbar-target { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--text); }
+      .hbar-v { white-space: nowrap; font-weight: 600; }
+      @media (max-width: 640px) {
+        .hbars { grid-template-columns: minmax(0, 1fr) auto !important; row-gap: 4px; }
+        .hbar-l { grid-column: 1 / -1; margin-top: 4px; }
+        .hbar-v { font-size: 12px; }
+      }
+      .cols-wrap { display: flex; gap: 6px; }
+      .cols-y { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: var(--text-dim); text-align: right; min-width: 24px; }
+      .cols-main { flex: 1; min-width: 0; }
+      .cols { display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid var(--line-strong); }
+      .col { flex: 1; display: flex; align-items: flex-end; gap: 2px; height: 100%; min-width: 0; }
+      .col-bar { flex: 1; border-radius: 4px 4px 0 0; }
+      .col-stack { width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
+      .col-stack > div { flex-basis: 0; min-height: 1px; }
+      .col-stack > div:last-child { border-radius: 4px 4px 0 0; }
+      .cols-x { display: flex; gap: 4px; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+      .cols-x span { flex: 1; min-width: 0; white-space: nowrap; }
+      .line-trend { display: block; max-width: 100%; }
+      .stackbar { display: flex; gap: 2px; height: 24px; }
+      .stackbar > div { min-width: 3px; flex-basis: 0; }
+      .stackbar > div:first-child { border-radius: 4px 0 0 4px; }
+      .stackbar > div:last-child { border-radius: 0 4px 4px 0; }
+      .stack-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin-top: 10px; }
       .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--panel); max-width: 100%; }
       .seg > button { min-height: 40px; padding: 0 14px; border: 0; border-left: 1px solid var(--border); background: transparent; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; flex: 1; }
       .seg > button:first-child { border-left: 0; }
@@ -31608,4 +32149,4 @@ export default function App() {
 }
 
 // Len pre automatické testy (src/logika.test.js) — platforma ich nepoužíva.
-export const _test = { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum };
+export const _test = { statBuckets, techFond, monthEndISO, numMth, isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum };
