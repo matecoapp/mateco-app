@@ -43,6 +43,13 @@ describe("import CSV — dátumy", () => {
     expect(parseImportDate("")).toBe("");
     expect(parseImportDate(undefined)).toBe("");
   });
+  it("čas za dátumom sa ignoruje, neznámy text nie je dátum", () => {
+    expect(parseImportDate("3.11.2026 8:00")).toBe("2026-11-03");
+    expect(parseImportDate("2026-11-03T08:00")).toBe("2026-11-03");
+    expect(parseImportDate("2026-11-03T08:00:00Z")).toBe("2026-11-03");
+    expect(parseImportDate("zajtra")).toBe("");
+    expect(parseImportDate("2026")).toBe("2026-01-01");
+  });
 });
 
 describe("kalendár — kolízie zákaziek", () => {
