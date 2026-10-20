@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.823";
+const APP_VERSION = "1.0.825";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -27082,12 +27082,66 @@ function StatTable({ head, rows, empty = "Žiadne údaje v tomto období." }) {
 const ChartNote = ({ children }) => <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 8 }}>{children}</div>;
 const ChartTitle = ({ children }) => <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 8px" }}>{children}</div>;
 
-// Zbaliteľná sekcia štatistík — predvolene zbalená (open = rozbalená), v hlavičke krátky súhrn.
+// Popis každej štatistiky (ikona i pri nadpise) — čo ukazuje a z čoho sa počíta.
+const STAT_INFO = {
+  "Objednávky dielov v čase": "Koľko položiek náhradných dielov sa objednalo (stav „Objednané“) v jednotlivých dňoch, týždňoch alebo mesiacoch zvoleného obdobia. Počíta sa podľa dátumu objednania.",
+  "Podľa depa a najčastejšie diely": "Objednané položky dielov za obdobie podľa depa, ktoré ich objednalo, a 10 najčastejšie objednávaných dielov (číslo a popis dielu).",
+  "Vyťaženosť flotily v čase": "Aký podiel dní boli sledované požičovňové stroje u zákazníka. Ráta sa od skutočného vývozu (podpísané odovzdanie) po skutočné vrátenie; nerealizované zákazky sa nerátajú. Plná čiara = zvolené obdobie, prerušovaná = predchádzajúce obdobie rovnakej dĺžky, vodorovná čiarkovaná = cieľ 60 %.",
+  "Využitie flotily po strojoch": "Každý sledovaný stroj za zvolené obdobie (do dneška): modrá = dni u zákazníka, oranžová = dni s otvorenou poruchou, keď nebol u zákazníka, sivá = stojí v depe. Zoradené od najdlhšie stojaceho. Pri viac ako 30 dňoch státia sa ukáže „zvážiť presun“ do iného depa.",
+  "Vyťaženosť podľa modelu": "Podiel dní, keď boli stroje modelu u zákazníka, zo všetkých dní obdobia (dni u zákazníka spolu ÷ počet strojov × dni obdobia). Zoskupené podľa kategórie z Modelov strojov. Zvislá čiarka = cieľ 60 %.",
+  "Kde chýbajú stroje": "Modely vyťažené v období nad 85 % a koľko rezervácií na ne (založených v období) sa nepremenilo na zákazku. Vysoká vyťaženosť a nevybavené rezervácie naznačujú, že strojov tohto modelu je málo — podklad pre nákup.",
+  "Obrat stroja": "Koľko dní prejde od vrátenia stroja (protokol o vrátení v období) po jeho ďalší vývoz k zákazníkovi. Priemer podľa modelu a podľa depa stroja. Stroje vrátené a zatiaľ znova nevyvezené sa rátajú zvlášť. Dlhý obrat = stroj čaká na kontrolu, opravu alebo nemá dopyt.",
+  "Zákazky za obdobie": "Vyvezené = zákazky so skutočným vývozom v období, vrátené = s podpísaným protokolom o vrátení v období. Priemerná dĺžka prenájmu ráta vrátené zákazky od vývozu po vrátenie. Predĺženia = žiadosti zákazníkov z portálu, ktoré dispečing schválil.",
+  "Neskoré vrátenia": "Vrátenia v období, pri ktorých bol protokol o vrátení podpísaný neskôr ako plánovaný koniec zákazky (dátum „do“). Ukazuje podiel takých vrátení, priemerný počet dní oneskorenia a zákazníkov, ktorí vracajú neskoro najčastejšie.",
+  "Sezónnosť": "Vyťaženosť flotily po mesiacoch v minulom a tomto roku — kedy je dopyt najväčší. Nezávisí od zvoleného obdobia. Ráta so súčasným počtom sledovaných strojov, aj za minulé mesiace.",
+  "Top zákazníci": "10 zákazníkov s najviac dňami prenájmu v období (súčet dní, keď mali stroj u seba) a počet ich zákaziek.",
+  "Noví a vracajúci sa zákazníci": "Za posledných 12 mesiacov: počet zákazníkov, ktorým v mesiaci začala zákazka. Nový = jeho prvá zákazka v platforme, vracajúci sa = mal zákazku už predtým. Nezávisí od zvoleného obdobia.",
+  "Stroje, ktoré stoja": "Stav dnes: sledované stroje, ktoré práve nie sú u zákazníka a od posledného vrátenia stoja aspoň zvolený počet dní. Stroj bez akejkoľvek zákazky v platforme je na konci zoznamu („bez záznamu“).",
+  "Prepravy podľa šoféra": "Vývozy a zvozy s podpísaným protokolom v období (bez vlastnej dopravy zákazníka) a prevozy medzi depami, ktoré šofér dokončil. Podiel externých šoférov = koľko prepráv urobili externí šoféri. Naša doprava / zákazník sám = ako sa stroje k zákazníkovi a späť dostali.",
+  "Presnosť prepráv": "Vývozy a zvozy našou dopravou v období: či sa protokol podpísal v plánovaný deň zo zákazky, neskôr alebo skôr. Ak dispečer termín v zákazke posunul, porovnáva sa s posunutým.",
+  "Motohodiny za prenájom": "Rozdiel motohodín pri vrátení a pri odovzdaní (z protokolov) pri vráteniach v období — priemer na deň prenájmu a na jeden prenájom, podľa modelu. Ukazuje, ako intenzívne zákazníci stroje naozaj používajú. Neúplné alebo nezmyselné hodnoty sa vynechajú.",
+  "Rezervácie podľa obchodníka": "Rezervácie založené v období podľa obchodníka a koľko z nich sa premenilo na zákazku (úspešnosť).",
+  "Potvrdenie protokolu zákazníkom": "Protokoly o odovzdaní a vrátení v období: zákazník podpísal na mieste, alebo nebol prítomný — potom potvrdil protokol v portáli, nesúhlasil s ním, alebo ešte čaká. Pri potvrdení v portáli aj priemerný čas od protokolu po potvrdenie.",
+  "Poškodenia po prenájme podľa zákazníka": "Poškodenia stroja nahlásené v deň vrátenia alebo do 2 dní po ňom, priradené zákazníkovi, ktorý stroj vrátil. „1 z 15 vrátení“ = pri 1 z jeho 15 vrátení v období sa našlo poškodenie. Podklad pri fakturácii škôd.",
+  "Vyťaženosť technikov za mesiac": "Vykázané hodiny technika v mesiaci voči jeho fondu. Vykázané = hodiny na servisných protokoloch + čas na ceste + hodiny z checklistov kontroly stroja (pred vývozom aj po vrátení, pripíšu sa tomu, kto kontrolu urobil). Fond = (pracovné dni po–pi − sviatky s pracovným pokojom − dovolenka − PN/lekár z Plánu servisu) × 8 h; pri aktuálnom mesiaci k dnešku. Pohotovosť a nadčasy sa rátajú, preto môže byť viac ako 100 %. Nevykázané = fond − vykázané (technik nemal prácu alebo nepísal protokoly). Spoločný protokol sa pripíše každému technikovi na ňom.",
+  "Poškodenia": "Nahlásené = poškodenia s dátumom nahlásenia v období, vyriešené = s dátumom opravy v období. Priemerne dní do opravy = od nahlásenia po opravu pri vyriešených. Graf otvorených ukazuje, koľko poškodení bolo otvorených na konci každého dňa/týždňa — keď rastie, servis nestíha.",
+  "Kde sa čaká": "Kde sa stráca čas pri opravách porúch opravených v období: od nahlásenia po prvé zaradenie poruchy do plánu technika, a od zaradenia po opravu. Čakanie na diely = poruchy, ktoré sú teraz v stave „Čaká na diely“, a koľko dní v ňom sú.",
+  "Poruchovosť modelov": "Počet porúch nahlásených v období na 100 dní, keď boli stroje modelu u zákazníka. Férovejšie ako samotný počet porúch — zohľadní, že niektoré modely sú vonku častejšie. Pomôže rozhodnúť, ktoré stroje vyradiť.",
+  "Opakované poruchy": "Poruchy nahlásené v období do 30 dní po oprave inej poruchy toho istého stroja. Veľa opakovaných porúch na jednom stroji = oprava nevydržala alebo je stroj na konci životnosti.",
+  "Revízie a úradné skúšky": "Na 8 týždňov dopredu = koľko revízií ZZ, EZ a úradných skúšok pripadá na ktorý týždeň podľa dátumov na strojoch (plánovanie technikov). Po termíne = stav dnes; stroj bez zadaného dátumu sa ráta ako po termíne, stroje s vypnutým sledovaním sa nerátajú. Urobené včas = tikety revízií a ÚS vyriešené v období pred termínom alebo po ňom.",
+  "Protokoly": "Servisné protokoly vypísané v období, po dňoch/týždňoch, rozdelené podľa technika (4 najčastejší, ostatní spolu). Spoločný protokol sa ráta prvému uvedenému technikovi.",
+  "Kontroly checkera": "Kontroly stroja s termínom v období: urobené, neurobené (preskočené) a ešte otvorené. Urobené z uzavretých = urobené ÷ (urobené + neurobené).",
+  "Hodiny, cesta a km": "Súčet hodín práce (servisné protokoly + checklisty kontroly stroja), času na ceste a km za obdobie, pri každom technikovi zahrnutom do štatistík. Spoločný protokol sa pripíše každému technikovi na ňom.",
+  "Najviac servisované modely a stroje": "Počet servisných protokolov za obdobie podľa modelu stroja a podľa konkrétneho stroja (sériové číslo / kód).",
+  "Stav servisu za obdobie": "Servisné protokoly za obdobie podľa stavu, ktorý technik zvolil na protokole (napr. opravené, čaká na diely).",
+};
+// Zbaliteľná sekcia štatistík — predvolene zbalená (open = rozbalená), v hlavičke krátky súhrn a (i) s popisom.
 function StatSection({ title, hint, children, open }) {
+  const info = STAT_INFO[title];
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef(null);
+  useEffect(() => {
+    if (!showInfo) return;
+    const close = (e) => { if (e.type === "keydown" ? e.key === "Escape" : !infoRef.current?.contains(e.target)) setShowInfo(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+  }, [showInfo]);
   return (
     <details open={open} style={{ marginBottom: 10 }}>
-      <summary style={{ cursor: "pointer", padding: "10px 12px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
-        {title}{hint != null && <span style={{ fontWeight: 400, color: "var(--text-dim)", marginLeft: 8 }}>{hint}</span>}
+      <summary style={{ cursor: "pointer", padding: "10px 12px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 700, position: "relative" }}>
+        {title}
+        {info && (
+          <span ref={infoRef} className="stat-info">
+            {/* klik na (i) nesmie zbaliť/rozbaliť sekciu */}
+            <button type="button" className="stat-info-btn" aria-label={`Čo ukazuje štatistika ${title}`} aria-expanded={showInfo}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowInfo((v) => !v); }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M8 7.2v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><circle cx="8" cy="4.9" r="0.95" fill="currentColor" /></svg>
+            </button>
+            {showInfo && <span className="stat-info-pop" role="note" onClick={(e) => e.preventDefault()}>{info}</span>}
+          </span>
+        )}
+        {hint != null && <span style={{ fontWeight: 400, color: "var(--text-dim)", marginLeft: 8 }}>{hint}</span>}
       </summary>
       <div style={{ paddingTop: 12 }}>{children}</div>
     </details>
@@ -27592,7 +27646,6 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
         <ChartLegend items={[["Toto obdobie", SERIES[0]], ["Predchádzajúce obdobie", "var(--text-dim)"]]} />
         <LineTrend labels={buckets.map((b) => b.label)} unit=" %" target={60} max={100}
           series={[{ name: "Toto obdobie", c: SERIES[0], values: utilTrend }, { name: "Predchádzajúce", c: "var(--text-dim)", values: utilPrev, dashed: true }]} />
-        <ChartNote>% dní, keď boli sledované požičovňové stroje u zákazníka (skutočný vývoz → skutočné vrátenie). Čiarkovaná čiara = cieľ 60 %.</ChartNote>
       </StatSection>
 
       <StatSection title="Využitie flotily po strojoch" hint={`${plural(fleetRows.filter((r) => r.idle > 30).length, "stroj stojí", "stroje stoja", "strojov stojí")} viac ako 30 dní`} open>
@@ -27606,7 +27659,7 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
             {fleetRows.length > 15 && <button type="button" className="btn btn-ghost" style={{ marginTop: 10 }} onClick={() => setFleetAll((v) => !v)}>{fleetAll ? "Zobraziť len 15" : `Zobraziť všetky (${fleetRows.length})`}</button>}
           </>}
           table={<StatTable head={["Stroj", "Model", "Depo", "Na zákazke (d)", "V servise (d)", "Stojí (d)"]} rows={fleetRows.map((r) => [r.m.code || "—", r.m.type || "—", r.m.depo || "—", r.rent, r.srv, r.idle])} />} />
-        <ChartNote>Za obdobie {fmtDate(start)} – {fmtDate(endC)}. V servise = deň s otvorenou poruchou stroja, keď nebol u zákazníka. Zoradené od najdlhšie stojaceho.</ChartNote>
+        <ChartNote>Za obdobie {fmtDate(start)} – {fmtDate(endC)}.</ChartNote>
       </StatSection>
 
       <StatSection title="Vyťaženosť podľa modelu" hint={"% dní v období u zákazníka"}>
@@ -27618,12 +27671,10 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
             </div>
           ))}
           table={<StatTable head={["Kategória", "Model", "Počet strojov", "Dní na zákazke", "Vyťaženosť"]} rows={rentabilityRows.map((r) => [r.category, r.model, r.count, `${r.busyDays} / ${r.totalDays}`, `${r.pct} %`])} empty="Žiadne sledované stroje." />} />
-        <ChartNote>Čiarka = cieľ 60 %.</ChartNote>
       </StatSection>
 
       <StatSection title="Kde chýbajú stroje" hint={`${plural(shortRows.length, "model", "modely", "modelov")} nad 85 %`}>
         <HBars rows={shortRows.map((r) => ({ key: r.model, label: r.model, value: r.pct, valueText: `${r.pct} % · ${plural(lostByModel[r.model] || 0, "nepremenená rezervácia", "nepremenené rezervácie", "nepremenených rezervácií")}` }))} max={100} fmt={(v) => `${v} %`} labelW={200} empty="Žiadny model nemá v tomto období vyťaženosť nad 85 %." />
-        <ChartNote>Modely vyťažené nad 85 % a koľko rezervácií na ne (založených v období) sa nepremenilo na zákazku — podklad pre nákup strojov.</ChartNote>
       </StatSection>
 
       <StatSection title="Obrat stroja" hint={`priemerne ${fmt1(turnAvg)} dňa od vrátenia po ďalší vývoz`}>
@@ -27636,7 +27687,6 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           <div className="chart-card"><ChartTitle>Podľa modelu</ChartTitle><HBars rows={turnByModel.map((r) => ({ label: r.label, value: r.value, valueText: `${fmt1(r.value)} d · ${r.n}×` }))} fmt={(v) => `${fmt1(v)} d`} labelW={180} /></div>
           <div className="chart-card"><ChartTitle>Podľa depa</ChartTitle><HBars rows={turnByDepo.map((r) => ({ label: r.label, value: r.value, valueText: `${fmt1(r.value)} d · ${r.n}×` }))} fmt={(v) => `${fmt1(v)} d`} /></div>
         </div>
-        <ChartNote>Stroje vrátené v období. Dlhý obrat = stroj čaká na kontrolu, opravu alebo nemá dopyt.</ChartNote>
       </StatSection>
 
       <StatSection title="Zákazky za obdobie" hint={`${js.out} vyvezených · ${js.back} vrátených`}>
@@ -27667,13 +27717,11 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
         </div>
         <ChartTitle>Podľa zákazníka</ChartTitle>
         <HBars rows={Object.entries(lateByCust).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([label, value]) => ({ label, value, valueText: `${value}×` }))} labelW={220} empty="Žiadne neskoré vrátenia v tomto období." />
-        <ChartNote>Skutočné vrátenie (protokol) neskôr ako plánovaný koniec zákazky.</ChartNote>
       </StatSection>
 
       <StatSection title="Sezónnosť" hint={`vyťaženosť po mesiacoch ${thisYear - 1} a ${thisYear}`}>
         <ChartLegend items={[[String(thisYear - 1), "var(--text-dim)"], [String(thisYear), SERIES[0]]]} />
         <Columns buckets={season} series={[[String(thisYear - 1), "var(--text-dim)"], [String(thisYear), SERIES[0]]]} fmt={(v) => `${Math.round(v)} %`} />
-        <ChartNote>Nezávisí od zvoleného obdobia. Počíta so súčasným počtom sledovaných strojov.</ChartNote>
       </StatSection>
 
       <StatSection title="Top zákazníci" hint={"dni prenájmu v období"}>
@@ -27685,7 +27733,6 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
       <StatSection title="Noví a vracajúci sa zákazníci" hint="posledných 12 mesiacov">
         <ChartLegend items={[["Vracajúci sa", SERIES[0]], ["Noví", SERIES[1]]]} />
         <Columns buckets={custMonths} series={[["Vracajúci sa", SERIES[0]], ["Noví", SERIES[1]]]} stacked />
-        <ChartNote>Počet zákazníkov so začiatkom zákazky v mesiaci. Nový = prvá zákazka v platforme v tom mesiaci.</ChartNote>
       </StatSection>
 
       <StatSection title="Stroje, ktoré stoja" hint={`${idleRows.length} (dnes)`}>
@@ -27732,14 +27779,12 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
           <div className="chart-card"><ChartTitle>Vývozy našou dopravou</ChartTitle><StackBar segs={[{ name: "V plánovaný deň", v: punct.out[0], c: SERIES[0] }, { name: "Neskôr", v: punct.out[1], c: SERIES[1] }, { name: "Skôr", v: punct.out[2], c: SERIES[2] }]} /></div>
           <div className="chart-card"><ChartTitle>Zvozy našou dopravou</ChartTitle><StackBar segs={[{ name: "V plánovaný deň", v: punct.back[0], c: SERIES[0] }, { name: "Neskôr", v: punct.back[1], c: SERIES[1] }, { name: "Skôr", v: punct.back[2], c: SERIES[2] }]} /></div>
         </div>
-        <ChartNote>Plánovaný deň vývozu/zvozu na zákazke oproti dňu podpisu protokolu. Ak dispečer termín v zákazke posunul, počíta sa posunutý.</ChartNote>
       </StatSection>
 
       <StatSection title="Motohodiny za prenájom" hint="podľa modelu">
         <GraphOrTable
           chart={<HBars rows={mthRows.map((r) => ({ label: r.label, value: r.perDay, valueText: `${fmt1(r.perDay)} mth/deň · ${fmt1(r.perRent)} na prenájom` }))} fmt={(v) => `${fmt1(v)} mth/deň`} labelW={200} empty="Žiadne vrátenia s motohodinami v tomto období." />}
           table={<StatTable head={["Model", "Mth za deň", "Mth na prenájom", "Prenájmov"]} rows={mthRows.map((r) => [r.label, fmt1(r.perDay), fmt1(r.perRent), r.n])} empty="Žiadne vrátenia s motohodinami v tomto období." />} />
-        <ChartNote>Rozdiel motohodín pri vrátení a pri odovzdaní (vrátenia v období). Ukazuje, ako intenzívne zákazníci stroje používajú.</ChartNote>
       </StatSection>
 
       <StatSection title="Rezervácie podľa obchodníka" hint={`${periodReservations.length} rezervácií · ${successRatePct} % premenených`}>
@@ -27753,12 +27798,11 @@ function PoziciovnaStatistiky({ machines, machineModels, jobs, reservations, han
 
       <StatSection title="Potvrdenie protokolu zákazníkom" hint={`${conf.waiting} čaká na potvrdenie`}>
         <StackBar segs={[{ name: "Podpísal na mieste", v: conf.signed, c: SERIES[0] }, { name: "Potvrdil v portáli", v: conf.confirmed, c: SERIES[2] }, { name: "Nesúhlasí", v: conf.disputed, c: C_BAD }, { name: "Čaká na potvrdenie", v: conf.waiting, c: C_IDLE }]} />
-        <ChartNote>Protokoly o odovzdaní a vrátení v období. {confHours.length ? `Zákazník bez podpisu potvrdil v portáli priemerne za ${fmt1(sumOf(confHours) / confHours.length)} h.` : ""}</ChartNote>
+        <ChartNote>{confHours.length ? `Zákazník bez podpisu potvrdil v portáli priemerne za ${fmt1(sumOf(confHours) / confHours.length)} h.` : ""}</ChartNote>
       </StatSection>
 
       <StatSection title="Poškodenia po prenájme podľa zákazníka" hint={`${dmgAfterTotal} z ${returns.length} vrátení`}>
         <HBars rows={dmgAfterRows.map(([label, v]) => ({ label, value: v.n, valueText: `${v.n} z ${v.ret} vrátení` }))} labelW={220} empty="Po vrátení v tomto období nebolo nahlásené žiadne poškodenie." />
-        <ChartNote>Poškodenie stroja nahlásené v deň vrátenia alebo do 2 dní po ňom.</ChartNote>
       </StatSection>
     </div>
   );
@@ -27799,7 +27843,8 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   // rovnako, ako protokolové hodiny (je to ten istý človek).
   const checklistHours = (assignments || [])
     .filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null)
-    .map((a) => ({ technicianName: technicianNameById[a.technicianId] || "", hours: Number(a.workHours) || 0, date: (a.checkerDate || a.date || "").slice(0, 10) }));
+    // Hodiny patria tomu, kto kontrolu naozaj urobil (zástup) — inak pridelenému technikovi.
+    .map((a) => ({ technicianName: (a.checkerBy && technicians.some((t) => t.name === a.checkerBy) ? a.checkerBy : technicianNameById[a.technicianId]) || "", hours: Number(String(a.workHours).replace(",", ".")) || 0, date: (a.checkerDate || a.date || "").slice(0, 10) }));
   const periodChecklistHours = checklistHours.filter((c) => c.date && c.date >= start && c.date <= end);
   const trackedChecklistHours = periodChecklistHours.filter((c) => trackedNames.has(c.technicianName));
 
@@ -28012,7 +28057,6 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
             {util.map((u) => <span key={u.t.id} style={{ whiteSpace: "nowrap" }}>{u.t.name} <b className="tnum">{fmt1(Math.max(0, u.fond - u.work - u.travel))} h</b></span>)}
           </div>
         )}
-        <ChartNote>Fond = (pracovné dni − sviatky s pracovným pokojom − dovolenka − PN/lekár) × 8 h. Vykázané = hodiny na protokoloch + čas na ceste + hodiny z kontrol stroja. Pohotovosť a nadčasy sa rátajú, preto môže byť viac ako 100 %. Čiarka = 100 % fondu.</ChartNote>
       </StatSection>
 
       <StatSection title="Poškodenia" hint={`${ds.reported} nahlásených · ${dmgOpen} otvorených`} open>
@@ -28041,21 +28085,18 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
           { label: "Od pridelenia po opravu", value: avg(ph2), valueText: `${fmt1(avg(ph2))} d · ${ph2.length}×` },
           { label: "Čaká na diely (teraz)", value: avg(waitPartsDays), c: SERIES[1], valueText: `${fmt1(avg(waitPartsDays))} d · ${plural(waitParts.length, "porucha", "poruchy", "porúch")}` },
         ]} fmt={(v) => `${fmt1(v)} d`} labelW={220} />
-        <ChartNote>Poruchy opravené v období. Pridelenie = prvé zaradenie poruchy do plánu technika. Čakanie na diely = otvorené poruchy v stave „Čaká na diely“, dni od zmeny stavu.</ChartNote>
       </StatSection>
 
       <StatSection title="Poruchovosť modelov" hint="poruchy na 100 dní prenájmu">
         <GraphOrTable
           chart={<HBars rows={relRows.map((r) => ({ label: r.label, value: r.rate, valueText: `${fmt1(r.rate)} · ${plural(r.n, "porucha", "poruchy", "porúch")} / ${r.busy} d` }))} fmt={fmt1} labelW={200} empty="Žiadne prenájmy v tomto období." />}
           table={<StatTable head={["Model", "Poruchy na 100 dní", "Porúch", "Dní u zákazníka"]} rows={relRows.map((r) => [r.label, fmt1(r.rate), r.n, r.busy])} empty="Žiadne prenájmy v tomto období." />} />
-        <ChartNote>Poruchy nahlásené v období vydelené dňami, keď boli stroje modelu u zákazníka — férovejšie ako samotný počet porúch.</ChartNote>
       </StatSection>
 
       <StatSection title="Opakované poruchy" hint={`${repeats.length} do 30 dní po oprave`}>
         <GraphOrTable
           chart={<HBars rows={Object.entries(repByMachine).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([label, value]) => ({ label, value, valueText: `${value}×` }))} labelW={220} empty="Žiadna opakovaná porucha v tomto období." />}
           table={<StatTable head={["Stroj", "Model", "Opravený", "Znova nahlásené", "Dní", "Popis"]} rows={repeats.map((x) => [x.m?.code || x.d.code || "—", x.m?.type || "—", fmtDate(x.prevFix), fmtDate(d10(x.d.dateReported)), x.days, x.d.popis || "—"])} empty="Žiadna opakovaná porucha v tomto období." />} />
-        <ChartNote>Porucha nahlásená do 30 dní po oprave inej poruchy toho istého stroja — ukazuje kvalitu opráv.</ChartNote>
       </StatSection>
 
       <StatSection title="Revízie a úradné skúšky" hint={`${revAll.pct} % revízií po termíne`} open>
@@ -28064,13 +28105,11 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
             <ChartTitle>Na 8 týždňov dopredu</ChartTitle>
             <ChartLegend items={[["Revízia ZZ", SERIES[0]], ["Revízia EZ", SERIES[1]], ["Úradná skúška", SERIES[2]]]} />
             <Columns buckets={revAhead} series={[["ZZ", SERIES[0]], ["EZ", SERIES[1]], ["ÚS", SERIES[2]]]} stacked />
-            <ChartNote>Termíny podľa dátumov na strojoch, po týždňoch od tohto týždňa.</ChartNote>
           </div>
           <div className="chart-card">
             <ChartTitle>Po termíne (dnes)</ChartTitle>
             <ChartLegend items={[["Platné", SERIES[0]], ["Po termíne", C_BAD]]} />
             <HBars rows={[["Revízia ZZ", revZz], ["Revízia EZ", revEz], ["Úradná skúška", revUs]].map(([label, r]) => ({ label, segs: [{ v: r.total - r.late, c: SERIES[0], name: "Platné" }, { v: r.late, c: C_BAD, name: "Po termíne" }], valueText: `${r.pct} % · ${r.late} z ${r.total}` }))} labelW={130} />
-            <ChartNote>Stroj bez zadaného dátumu sa ráta ako po termíne; nerátajú sa stroje s vypnutým sledovaním.</ChartNote>
           </div>
         </div>
         <ChartTitle>Urobené včas (vyriešené v období)</ChartTitle>
@@ -28086,7 +28125,6 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
         </div>
         <ChartLegend items={protoSeries} />
         <Columns buckets={buckets.map((b, i) => ({ label: b.label, values: protoB[i] }))} series={protoSeries} stacked />
-        <ChartNote>Spoločný protokol sa ráta prvému uvedenému technikovi.</ChartNote>
       </StatSection>
 
       <StatSection title="Kontroly checkera" hint={`${chkDone} urobených · ${chkSkipped} neurobených`}>
@@ -31310,6 +31348,10 @@ function GlobalStyle() {
       .side-foot { position: sticky; bottom: 0; z-index: 5; background: var(--panel-2); border-top: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .side-foot .btn { min-height: 44px; font-size: 14px; }
       /* Segmentovaný prepínač (stav/depo/doprava) — aktívne čierne, ostatné biele. */
+      .stat-info { display: inline-block; vertical-align: middle; margin-left: 4px; }
+      .stat-info-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -8px 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-dim); cursor: pointer; }
+      .stat-info-btn:hover, .stat-info-btn[aria-expanded="true"] { color: var(--text); background: var(--panel-2); }
+      .stat-info-pop { position: absolute; z-index: 30; top: calc(100% + 6px); left: 12px; right: 12px; max-width: 560px; padding: 12px 14px; background: var(--panel); color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 13px; font-weight: 400; line-height: 1.5; cursor: auto; white-space: normal; }
       .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; margin-bottom: 10px; }
       .chart-legend span, .stack-legend span { display: inline-flex; align-items: center; gap: 6px; }
       .chart-legend i, .stack-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
