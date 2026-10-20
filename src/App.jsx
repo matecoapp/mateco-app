@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.820";
+const APP_VERSION = "1.0.822";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -4341,6 +4341,7 @@ function DispatcherApp() {
   const [highlightDamageId, setHighlightDamageId] = useState(null); // "rozsvietený" záznam po kliknutí na notifikáciu
   const [sparePartsTargetDepo, setSparePartsTargetDepo] = useState(null); // po kliknutí na notifikáciu o diele — na ktoré depo sa prepne
   const [highlightLocation, setHighlightLocation] = useState(null); // { module, view } — kam sa dá vrátiť z plávajúcej pripomienky
+  const [statDomainTarget, setStatDomainTarget] = useState(null); // {domain, n} — týždenný súhrn otvorí štatistiky svojej časti
   const [plannerTargetDate, setPlannerTargetDate] = useState(null); // ISO dátum, na ktorý sa má Plán servisu odscrollovať (odkaz z notifikácie)
   const [highlightTransportId, setHighlightTransportId] = useState(null); // "<jobId>-vyvoz"/"-zvoz" — zvýraznená preprava po kliknutí na notifikáciu
   const [damageAssignTarget, setDamageAssignTarget] = useState(null); // damage object
@@ -5613,7 +5614,7 @@ function DispatcherApp() {
         const duty = weeklyDuty.filter((w) => w.technicianId === id && (w.weekStart || "") >= weekNow);
         if (duty.length) {
           persistWeeklyDuty((cur) => cur.filter((w) => !duty.some((x) => x.id === w.id)));
-          pushNotification({ kind: "assignment_service", roles: ["veduci_servisu"], title: "Služba na telefóne bez technika", message: `${emp.name || "Technik"} bol archivovaný — v ${duty.length} ${duty.length === 1 ? "týždni" : "týždňoch"} služby na telefóne nikto nie je. Nastavte ju v pláne servisu.`, link: { module: "servis", view: "plan" } });
+          pushNotification({ kind: "assignment_service", roles: ["veduci_servisu"], title: "Služba na telefóne bez technika", message: `${emp.name || "Technik"} bol archivovaný — v ${duty.length} ${duty.length === 1 ? "týždni" : "týždňoch"} služby na telefóne nikto nie je. Nastavte ju v pláne servisu.`, link: { module: "servis", view: "plan", plannerDate: duty.map((w) => w.weekStart).sort()[0] } });
         }
       }
       dropDepoChecker(emp);
@@ -6347,6 +6348,8 @@ function DispatcherApp() {
     }
     if (link.plannerDate) setPlannerTargetDate(link.plannerDate);
     if (link.transportId) setHighlightTransportId(link.transportId);
+    // Súhrn servisu (id „weekly:srv:…“) → štatistiky servisu, inak požičovne.
+    if (notif?.kind === "weekly_summary") setStatDomainTarget({ domain: String(notif.id).startsWith("weekly:srv:") ? "servis" : "poziciovna", n: Date.now() });
   }
   function dismissHighlight() {
     setHighlightDamageId(null);
@@ -9060,7 +9063,7 @@ function DispatcherApp() {
     const job = jobs.find((j) => j.id === jobId);
     assignmentsRef.current.filter((a) => a.jobId === jobId && a.kind === "kontrolaStroja" && a.phase === "vratenie" && !a.resolved).forEach((a) => {
       const tech = technicianByIdTop[a.technicianId];
-      if (tech) pushNotification({ roles: [], userName: tech.name, kind: "checker_inspection", title: "Zrušená kontrola stroja", message: `Zákazka ${job?.customer || "—"} (stroj ${machineById[job?.machineId]?.code || "—"}) ${why}.`, link: { module: "servis", view: "plan" } });
+      if (tech) pushNotification({ roles: [], userName: tech.name, kind: "checker_inspection", title: "Zrušená kontrola stroja", message: `Zákazka ${job?.customer || "—"} (stroj ${machineById[job?.machineId]?.code || "—"}) ${why}.`, link: { module: "servis", view: "plan", plannerDate: a.date } });
     });
   }
   function ensureReturnCheckerAssignment(job, dc = depoCheckers, subs = checkerSubstitutions, afterProtocolId) {
@@ -9074,12 +9077,12 @@ function DispatcherApp() {
       const code = machineById[job.machineId]?.code || "—";
       if (existing && !existing.resolved) {
         const old = technicianByIdTop[existing.technicianId];
-        if (old) pushNotification({ roles: [], userName: old.name, kind: "checker_inspection", title: "Kontrola stroja presunutá", message: `Stroj ${code} (${job.customer || "—"}) sa vráti na depo ${depo || "—"} — kontrolu už nerobíte.`, link: { module: "servis", view: "plan" } });
+        if (old) pushNotification({ roles: [], userName: old.name, kind: "checker_inspection", title: "Kontrola stroja presunutá", message: `Stroj ${code} (${job.customer || "—"}) sa vráti na depo ${depo || "—"} — kontrolu už nerobíte.`, link: { module: "servis", view: "plan", plannerDate: existing.date } });
         assignmentsRef.current = assignments.filter((a) => a.id !== existing.id);
         persistAssignments((cur) => cur.filter((a) => a.id !== existing.id));
       }
       if (!existing?.resolved && currentUser?.role !== "externy_sofer") {
-        pushNotification({ roles: ["veduci_servisu"], kind: "checker_inspection", title: "Depo bez checkera", message: `Stroj ${code} (${job.customer || "—"}) sa vracia na depo ${depo || "—"}, ktoré nemá checkera — kontrolu po vrátení treba prideliť ručne.`, link: { module: "servis", view: "plan" }, afterProtocolId });
+        pushNotification({ roles: ["veduci_servisu"], kind: "checker_inspection", title: "Depo bez checkera", message: `Stroj ${code} (${job.customer || "—"}) sa vracia na depo ${depo || "—"}, ktoré nemá checkera — kontrolu po vrátení treba prideliť ručne.`, link: { module: "servis", view: "plan", plannerDate: date }, afterProtocolId });
       }
       return;
     }
@@ -10684,6 +10687,7 @@ function DispatcherApp() {
         {module === "administrativa" && view === "statistiky" && can(effectiveUser, "statistics_view") && (
           <StatistikyView
             user={effectiveUser}
+            domainTarget={statDomainTarget}
             machines={machines}
             machineModels={machineModels}
             technicians={technicians}
@@ -19103,6 +19107,12 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   const pendingPrep = machineId ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
   // Otvorená porucha zákazku neblokuje (stroj môže byť do vývozu opravený) — len upozorní.
   const openBreakdown = machineId && !pendingPrep ? (damages || []).find((d) => d.machineId === machineId && d.type === "poskodenie" && !d.resolved) : null;
+  // Revízia/ÚS vyprší pred koncom prenájmu (bez konca: pred začiatkom) — len upozorní, rovnaké pravidlo ako panel na Dnes.
+  const revWarn = machine && (machine.objekt || "Požičovňový stroj") === "Požičovňový stroj" && isRealISODate(endDate || startDate)
+    ? [["revizia", "trackRevisions", "revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "úradná skúška"]]
+      .filter(([f, tr]) => machine[tr] !== false && machine[tr] !== "false" && isRealISODate(machine[f]) && machine[f] < (endDate || startDate))
+      .map(([f, , lbl]) => `${lbl} ${machine[f] < todayISO() ? "platila" : "platí"} do ${fmtDate(machine[f])}`)
+    : [];
 
   // Koniec zákazky logicky nemôže byť pred jej začiatkom.
   const departureAfterEnd = !!(endDate && departureDate && departureDate > endDate);
@@ -19311,6 +19321,11 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
       {conflict && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
           ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má už inú zákazku" : "má schválenú nezáväznú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
+        </div>
+      )}
+      {revWarn.length > 0 && (
+        <div role="status" style={{ background: "var(--warn-bg)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
+          ⚠ Stroj nemá platnú revíziu/ÚS na celý prenájom: {revWarn.join(", ")}{endDate ? ` · prenájom do ${fmtDate(endDate)}` : ""}. Overte so servisom.
         </div>
       )}
       {openBreakdown && (
@@ -26925,9 +26940,10 @@ const clipDays = (iv, start, end) => {
   return a > b ? 0 : statDays(a, b);
 };
 
-function StatistikyView({ user, machines, machineModels, technicians, jobs, reservations, protocolLogs, assignments, spareParts, handoverProtocols, transportNotes, damages, portalRequests, employees, today, onUpdateEmployee }) {
+function StatistikyView({ domainTarget, user, machines, machineModels, technicians, jobs, reservations, protocolLogs, assignments, spareParts, handoverProtocols, transportNotes, damages, portalRequests, employees, today, onUpdateEmployee }) {
   const defaultDomain = user?.role === "veduci_servisu" ? "servis" : "poziciovna";
   const [domain, setDomain] = useState(defaultDomain);
+  useEffect(() => { if (domainTarget) setDomain(domainTarget.domain); }, [domainTarget]);
   const [period, setPeriod] = useState("month");
   const [customStart, setCustomStart] = useState(today.slice(0, 8) + "01");
   const [customEnd, setCustomEnd] = useState(today);
