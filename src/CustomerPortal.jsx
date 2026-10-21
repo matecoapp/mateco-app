@@ -5,9 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 // súbor s celou appkou), aby zákazník nemusel sťahovať dispečerský bundle len kvôli
 // prečítaniu stavu jednej zákazky. Vlastný Supabase klient (rovnaký anon kľúč, ktorý
 // je aj v hlavnej appke — nie je to tajomstvo, bezpečnosť rieši RLS/RPC na serveri).
+// Bez prihlásenia: vlastné úložisko a žiadna obnova tokenu — inak by sa bil s klientom platformy (main.jsx načíta oba súbory).
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mateco-portal" } }
 );
 
 // Rovnaký zoznam ako HANDOVER_CHECKLIST_ITEMS v App.jsx — checklist v dátach je
@@ -41,11 +43,12 @@ function fmtDate(iso) {
 // tlač z portálu musí vyzerať identicky s dispečerskou tlačou pre daňovú
 // kontrolu. Ak sa zmenia v App.jsx, treba ich zmeniť aj tu.
 const HANDOVER_LEGAL_RULES = [
-  "Nájomca preberá zariadenie v riadnom technickom stave, spôsobilom na bezpečnú prevádzku, čo potvrdzuje svojím podpisom.",
-  "Nájomca je povinný používať zariadenie výhradne na účel, na ktorý je určené, a v súlade s návodom na obsluhu.",
-  "Akékoľvek poškodenie, poruchu alebo nehodu je nájomca povinný bezodkladne nahlásiť prenajímateľovi.",
-  "Nájomca zodpovedá za škodu spôsobenú na zariadení počas doby nájmu, ak nepreukáže, že škodu nezavinil.",
-  "Zariadenie sa vracia v stave, v akom bolo prevzaté, s prihliadnutím na obvyklé opotrebenie.",
+  "V zmysle vyhlášky MPSVaR SR č. 508/2009, obsluhovať vyhradené zariadenie môžu len oprávnené osoby s príslušným osvedčením.",
+  "Podpisom tohto protokolu prechádza zodpovednosť na nájomcu",
+  "Pravidelne dobíjať akumulátory pracovnej plošiny",
+  "Pravidelne kontrolovať a dopĺňať stav elektrolytu",
+  "Pieskovanie z pracovnej plošiny je prísne zakázané",
+  "Náklady na vyčistenie pracovnej plošiny znáša nájomca!",
 ];
 const FONT_CSS_URL = new URL("fonts/barlow.css", document.baseURI).href; // písmo z platformy, nie z Googlu
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/";
@@ -109,7 +112,7 @@ function buildOfficialProtocolHtml(data) {
   .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 7px; }
   .siglabel { font-size: 11px; color: #666; margin-bottom: 4px; }
   .sigimg { max-width: 100%; height: 64px; }
-  .signone { font-size: 11px; color: #999; height: 64px; display: flex; align-items: center; }
+  .signone { font-size: 11px; color: #999; min-height: 64px; display: flex; align-items: center; overflow-wrap: anywhere; }
   .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
   .legal ol { margin: 4px 0; padding-left: 17px; }
   .legal li { margin-bottom: 2px; }
@@ -336,13 +339,15 @@ function RequestForm({ type, jobLocked, onSubmit }) {
     missing_message: "Popíšte, prosím, čo sa deje.",
     missing_date: "Zvoľte, prosím, dátum.",
     invalid_token: "Tento odkaz už nie je platný.",
-    invalid_date: "Dátum nesmie byť v minulosti ani pred začiatkom prenájmu.",
+    invalid_date: "Dátum nesmie byť v minulosti, pred začiatkom prenájmu ani viac ako rok dopredu.",
     not_realized: "Tento prenájom sa nerealizoval.",
     too_long: "Správa je príliš dlhá (najviac 2000 znakov).",
     already_returned: "Stroj už bol vrátený — žiadosť ani hlásenie už nie je možné.",
   };
 
+  const maxEnd = new Date(Date.now() + 366 * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   async function handleSubmit() {
+    if (type === "extension" && endDate > maxEnd) { setError("Dátum môže byť najviac rok dopredu — dlhší prenájom dohodnite s obchodníkom."); return; }
     setSending(true);
     setError(null);
     const reason = await onSubmit(type === "problem" ? message.trim() : null, type === "extension" ? endDate : null);
@@ -352,7 +357,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
       setMessage("");
       setEndDate("");
     } else {
-      setError(REASON_LABEL[reason] || "Nepodarilo sa odoslať. Skúste to prosím neskôr.");
+      setError(REASON_LABEL[reason] || (navigator.onLine ? "Nepodarilo sa odoslať. Skúste to prosím neskôr." : "Ste bez signálu — skúste to znova po pripojení."));
     }
   }
 
@@ -385,6 +390,7 @@ function RequestForm({ type, jobLocked, onSubmit }) {
           <input
             type="date"
             min={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })}
+            max={maxEnd}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, height: 48, padding: "0 10px", borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
@@ -438,6 +444,7 @@ function RequestHistory({ requests }) {
 export default function CustomerPortal({ token }) {
   const [state, setState] = useState("loading"); // loading | ok | invalid | error
   const [data, setData] = useState(null);
+  useEffect(() => { document.body.style.margin = "0"; }, []); // bez bieleho rámika okolo hlavičky
 
   async function confirmProtocol(phase, agree, name, signature, comment) {
     const { data: result, error } = await supabase.rpc("confirm_portal_protocol", {
@@ -565,8 +572,8 @@ export default function CustomerPortal({ token }) {
             <div style={{ padding: "16px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{!data.code || data.code.includes(" · ") ? "Zákazka" : "Zákazka č."}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || "—"}</div>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{data.code ? (data.code.includes(" · ") ? "Zákazka" : "Zákazka č.") : data.cisloZmluvy ? "Zmluva č." : "Zákazka"}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || "—"}</div>
                 </div>
                 <span
                   style={{

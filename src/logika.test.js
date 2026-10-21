@@ -126,3 +126,21 @@ describe("štatistiky", () => {
     expect(numMth("abc")).toBe(null);
   });
 });
+
+describe("kolo 30", () => {
+  const { findMachineConflict, erpHours, erpTechKey } = _test;
+  it("zákazka po termíne bez vrátenia drží stroj do dnes", () => {
+    const t = new Date().toLocaleDateString("sv-SE");
+    const late = { id: "a", machineId: "m", startDate: "2020-01-01", endDate: "2020-01-10", status: "active" };
+    expect(findMachineConflict([late], [], "m", null, t, t)).toMatch(/po termíne/);
+    expect(findMachineConflict([late], [], "m", null, addDaysISO(t, 1), addDaysISO(t, 3))).toBeNull(); // od zajtra nadväzuje
+    expect(findMachineConflict([{ ...late, status: "completed" }], [], "m", null, t, t)).toBeNull();
+    expect(findMachineConflict([{ ...late, returnDone: true }], [], "m", null, t, t)).toBeNull();
+  });
+  it("ERP hodiny kontroly: čiarka aj bodka, technik = kto ju urobil", () => {
+    expect(erpHours({ workHours: "0,5" }) + erpHours({ workHours: 1.5 })).toBe(2);
+    const techs = { t1: { id: "t1", name: "Tomáš" }, t3: { id: "t3", name: "Ivan" } };
+    expect(erpTechKey({ technicianId: "t1", checkerBy: "Ivan" }, techs)).toBe("t3");
+    expect(erpTechKey({ technicianId: "t1", checkerBy: "Niekto iný" }, techs)).toBe("t1");
+  });
+});
