@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.826";
+const APP_VERSION = "1.0.827";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -1820,9 +1820,39 @@ function photoFolder(machine, job) {
 function safeImgUrl(u) {
   return typeof u === "string" && /^(data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|https:\/\/[^"'<>\s]+)$/.test(u);
 }
+// Prihlásenie podľa času servera: supabase-js porovnáva platnosť tokenu (expires_at, čas servera)
+// s hodinami zariadenia — pri hodinách o hodinu vpred by obnovoval token donekonečna.
+// Pri čítaní z úložiska sa expires_at posunie o zistený rozdiel hodín, pri zápise sa posun vráti.
+// Prihlásený používateľ aj pre listenery zaregistrované raz (zastaraná kópia pushNotification nesmie poslať upozornenie bez autora).
+let _currentUid = null;
+const _authMem = {};
+const authStorage = {
+  getItem(k) {
+    let v = null;
+    try { v = localStorage.getItem(k); } catch { v = _authMem[k] ?? null; }
+    if (!v || !k.endsWith("-auth-token")) return v;
+    try {
+      const o = JSON.parse(v);
+      const shift = Math.abs(_clockOffsetMs) > 30000 ? -Math.round(_clockOffsetMs / 1000) : 0;
+      if (!o || typeof o.expires_at !== "number" || !shift) return v;
+      return JSON.stringify({ ...o, expires_at: o.expires_at + shift, _skew: shift });
+    } catch { return v; }
+  },
+  setItem(k, v) {
+    if (k.endsWith("-auth-token")) {
+      try {
+        const o = JSON.parse(v);
+        if (o && o._skew) { const { _skew, ...rest } = o; v = JSON.stringify({ ...rest, expires_at: rest.expires_at - _skew }); }
+      } catch { /* nie je JSON — uložiť ako je */ }
+    }
+    try { localStorage.setItem(k, v); } catch { _authMem[k] = v; } // súkromný režim — len v pamäti
+  },
+  removeItem(k) { try { localStorage.removeItem(k); } catch { delete _authMem[k]; } },
+};
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { storage: authStorage } }
 );
 
 // Export fotiek priamo z appky do jedného ZIP súboru (záloha zo Storage bez
@@ -2151,6 +2181,9 @@ function officeOffline(table, item, base, isDelete) {
 }
 // Offline zmena termínu zákazky: ak kolega medzitým zmenil niektorý dátum, alebo by nové dátumy
 // kolidovali s inou zákazkou na stroji, platia dátumy z DB (a používateľ dostane hlášku).
+const JOB_FIELD_LABELS = { machineId: "Stroj", customer: "Zákazník", toLocation: "Miesto", startDate: "Začiatok", endDate: "Koniec", departureDate: "Dátum vývozu", pickupDate: "Dátum zvozu",
+  driverId: "Šofér (vývoz)", returnDriverId: "Šofér (zvoz)", obchodnik: "Obchodník", notes: "Poznámka", cisloZmluvy: "Číslo zmluvy", customerEmail: "E-mail zákazníka", customerPhone: "Telefón zákazníka",
+  customerContactName: "Kontaktná osoba", fromDepo: "Depo", returnDepo: "Depo vrátenia", selfPickup: "Vlastná doprava (vývoz)", selfReturn: "Vlastná doprava (zvoz)", machineDisplayName: "Názov stroja" };
 const JOB_DATE_FIELDS = ["startDate", "departureDate", "endDate", "pickupDate"];
 async function guardJobDates(toWrite, fresh, item) {
   const changedByMe = JOB_DATE_FIELDS.some((k) => (toWrite[k] || null) !== (fresh[k] || null));
@@ -3104,6 +3137,7 @@ function clearRecordLock(table, recordId, userId) {
   if (!userId) return;
   deleteRecordRow("record_locks", `${table}:${recordId}:${userId}`);
 }
+const fmtClockSkew = (ms) => { const m = Math.round(ms / 60000); return m >= 120 ? `${Math.round(m / 60)} h` : m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
 // Rozdiel hodín zariadenia voči serveru (lockedAt zapisuje DB, step61) — zlé hodiny
 // inak skryli cudzí zámok alebo nechali spadnutý visieť hodinu.
 async function syncServerClock() {
@@ -4346,6 +4380,7 @@ function DispatcherApp() {
   const [inactiveIdsDb, setInactiveIdsDb] = useState([]);
   _inactiveUserIds = new Set([...profiles.filter((p) => p.active === false || p.role === "nezaradeny").map((p) => p.id), ...inactiveIdsDb]);
   const [session, setSession] = useState(undefined); // undefined = ešte nezistené, null = neprihlásený
+  _currentUid = session?.user?.id || null;
   const [authChecked, setAuthChecked] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
   const [showSetNewPassword, setShowSetNewPassword] = useState(false);
@@ -4478,15 +4513,19 @@ function DispatcherApp() {
     return map;
   }, [damages]);
 
+  const hpDoneByJob = useMemo(() => Object.fromEntries(handoverProtocols.map((h) => [h.jobId, h.returnDone ? "return" : h.handoverDone ? "handover" : ""])), [handoverProtocols]);
   const enrichedMachines = useMemo(() => {
     return machines.map((m) => {
       const cur = currentJobFor(jobs, m.id, today);
       const nxt = nextJobFor(jobs, m.id, today);
       const status = cur ? effectiveStatus(cur, today) : "free";
       const openDamage = openDamagesByMachine[m.id] || null;
-      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage };
+      // Ukončená zákazka, stroj odovzdaný, ale ešte nevrátený (zvoz) — v Dátach požičovne „Čaká na zvoz“, nie „Voľný“.
+      const awaitingPickup = !cur && jobs.find((j) => j.machineId === m.id && j.status === "completed" && !j.notRealized
+        && hpDoneByJob[j.id] === "handover" && (j.pickupDate || j.endDate || "") >= addDaysISO(today, -30)) || null;
+      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage, openDamage, awaitingPickup };
     });
-  }, [machines, jobs, today, openDamagesByMachine]);
+  }, [machines, jobs, today, openDamagesByMachine, hpDoneByJob]);
 
   const enrichedMachineById = useMemo(() => Object.fromEntries(enrichedMachines.map((m) => [m.id, m])), [enrichedMachines]);
 
@@ -4867,12 +4906,16 @@ function DispatcherApp() {
         cacheTable(table, next);
         return next;
       });
+      // Výpadok servera po uložení formulára — formulár sa otvorí znova s tým, čo človek napísal.
+      const ro = reopenFormRef.current;
+      if (ro && ro.table === table && ro.id === id && Date.now() - ro.at < 60000) { reopenFormRef.current = null; ro.open(); }
     });
     return () => { setPermissionDeniedListener(null); setOfficeRevertListener(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Offline podpísaný protokol DB odmietla (zákazka medzičasom pridelená inému) —
   // ostáva v zariadení; šofér aj dispečing sa to dozvedia (raz).
+  const reopenFormRef = useRef(null); // { table, id, at, open } — posledný uložený formulár (výpadok servera → otvoriť znova)
   const dispNotifyRef = useRef({}); // odložené upozornenie „Ste dispečer zákazky“ (šípky v zozname)
   const rejectedProtocolRef = useRef(null);
   rejectedProtocolRef.current = async (item) => {
@@ -6269,12 +6312,12 @@ function DispatcherApp() {
     // upozornenia (zvonček aj push, ten server posiela podľa roles).
     const allRoles = [...(roles || [])];
     Object.entries(ROLE_PERM_ALIAS).forEach(([r, parent]) => { if (allRoles.includes(parent) && !allRoles.includes(r)) allRoles.push(r); });
-    const newNotif = { id: uid(), createdAt: new Date(serverNowMs()).toISOString(), roles: allRoles, userName: userName || null, userId, createdById: system ? null : currentUser?.id || null, ...(system && (currentUser?.id || session?.user?.id) ? { insertedBy: currentUser?.id || session.user.id } : {}), title, message, link: link || null, kind: kind || null, readBy: [], ...(afterProtocolId ? { afterProtocol: `handoverProtocols:${afterProtocolId}` } : {}) };
+    const newNotif = { id: uid(), createdAt: new Date(serverNowMs()).toISOString(), roles: allRoles, userName: userName || null, userId, createdById: system ? null : currentUser?.id || _currentUid || null, ...(system && (currentUser?.id || session?.user?.id || _currentUid) ? { insertedBy: currentUser?.id || session?.user?.id || _currentUid } : {}), title, message, link: link || null, kind: kind || null, readBy: [], ...(afterProtocolId ? { afterProtocol: `handoverProtocols:${afterProtocolId}` } : {}) };
     if (deferred) return newNotif;
     // attachTo: uloží ho databáza spolu so záznamom (step101) — zapíše sa len pri uložení záznamu
     if (attachTo && !afterProtocolId) { if (!_offlineQueueAllowed && typeof navigator !== "undefined" && !navigator.onLine) return null; attachNotify(typeof attachTo === "string" ? attachTo : attachTo.id, newNotif); setNotifications((prev) => [newNotif, ...prev]); return newNotif; }
     if (officeOffline("notifications", newNotif)) return null;
-    // Staré upozornenia (60+ dní) maže denne databáza (step58) — nie hodiny tohto zariadenia.
+    // Staré upozornenia (7+ dní) maže denne databáza (step104) — nie hodiny tohto zariadenia.
     setNotifications((prev) => [newNotif, ...prev]);
     saveRecordRow("notifications", newNotif);
   }
@@ -9445,11 +9488,23 @@ function DispatcherApp() {
       const cur = jobs.find((j) => j.id === snap.id) || snap;
       const J = (x) => JSON.stringify(x === "" || x === undefined ? null : x); // prázdne pole = chýbajúce pole
       const patch = Object.fromEntries(Object.entries(form).filter(([k, v]) => J(v) !== J(snap[k])));
-      if (Object.keys(patch).some((k) => J(cur[k]) !== J(snap[k]) && J(cur[k]) !== J(patch[k]))) {
-        showNotice("Tie isté údaje zákazky medzičasom zmenil niekto iný. Zavrite úpravu a otvorte ju znova, nech sa nič neprepíše.");
-        return;
+      // To isté pole zmenil medzičasom aj kolega — jeho hodnota ostane, ostatné moje zmeny sa uložia (rozhodnutie 22. 10.).
+      const clash = Object.keys(patch).filter((k) => J(cur[k]) !== J(snap[k]) && J(cur[k]) !== J(patch[k]));
+      if (clash.length) {
+        const names = clash.map((k) => JOB_FIELD_LABELS[k] || k).join(", ");
+        if (!window.confirm(`Kolega medzičasom zmenil aj: ${names}.\n\nOK = v týchto poliach ponechať jeho hodnotu a uložiť ostatné vaše zmeny.\nZrušiť = nič neukladať (okno ostane otvorené).`)) return;
+        clash.forEach((k) => delete patch[k]);
       }
       if (Object.keys(patch).length && !updateJob(snap.id, patch)) return; // bez signálu — okno necháme otvorené
+      // Server môže zápis ešte odmietnuť (výpadok) — vtedy sa okno otvorí znova s rozpísaným (pozri office revert).
+      reopenFormRef.current = { table: "jobs", id: snap.id, at: Date.now(), open: () => {
+        // Karta zákazky (otvorená po uložení) by okno zakryla — odloží sa do histórie, po zavretí okna sa vráti.
+        setJobDetail((cur) => {
+          if (cur) setCardHistory((h) => (h.length && h[h.length - 1].type === "job" && h[h.length - 1].data.id === cur.id ? h : [...h, { type: "job", data: cur }]));
+          return null;
+        });
+        setShowAddJob({ existing: snap, draft: form });
+      } };
       setShowAddJob(null);
       showToast("Zákazka bola upravená.");
       markRowSaved("job-row-" + snap.id);
@@ -9507,6 +9562,14 @@ function DispatcherApp() {
       if (job && data.returnDepo) {
         persistMachines((machines) => machines.map((m) => (m.id === job.machineId ? { ...m, depo: data.returnDepo } : m)));
       }
+    }
+    // Obchodník zákazky sa dozvie o nerealizovanej alebo predčasne ukončenej zákazke (rozhodnutie 22. 10.).
+    const early = job && !data.notRealized && job.endDate && data.endDate && data.endDate < job.endDate;
+    if (job && job.status !== "completed" && job.obchodnik && job.obchodnik !== currentUser?.name && (data.notRealized || early)) {
+      pushNotification({ attachTo: jobId, kind: "rental_end", roles: [], userName: job.obchodnik,
+        title: data.notRealized ? "Zákazka sa nerealizovala" : "Zákazka ukončená predčasne",
+        message: `${machine?.code || "—"} · ${job.customer || "—"}: ${data.notRealized ? "zákazka sa nerealizovala (stroj neodišiel)" : `ukončená k ${fmtDate(data.endDate)} (pôvodne do ${fmtDate(job.endDate)})`}.`,
+        link: { module: "poziciovna", view: "jobs", jobId } });
     }
     setCompleteJobTarget(null);
     goBackCard();
@@ -9612,7 +9675,7 @@ function DispatcherApp() {
       (checker ? `Checker: ${checker.name}\n` : "") +
       (job.notes ? `\nPoznámka: ${job.notes}\n` : "") +
       `\nĎakujeme,\nDispečing`;
-    const to = [email, checkerEmail].filter(Boolean).join("; ");
+    const to = [email, checkerEmail].filter(Boolean).join(MAILTO_SEP);
     return { to, subject, body };
   }
   function mailtoCustomer(job) {
@@ -9954,6 +10017,13 @@ function DispatcherApp() {
           >
             Skúsiť znova
           </button>
+        </div>
+      )}
+
+      {Math.abs(_clockOffsetMs) > 10 * 60 * 1000 && (
+        <div className="sync-strip" role="alert">
+          <span>⚠ Hodiny v tomto zariadení idú {_clockOffsetMs < 0 ? "dopredu" : "pozadu"} o {fmtClockSkew(Math.abs(_clockOffsetMs))}.</span>
+          <span className="sync-more">Nastavte v zariadení automatický dátum, čas a časové pásmo (Slovensko). Platforma zatiaľ používa čas servera.</span>
         </div>
       )}
 
@@ -10954,6 +11024,7 @@ function DispatcherApp() {
           prefillStartDate={showAddJob.startDate}
           prefillReservation={showAddJob.prefillReservation}
           existing={showAddJob.existing}
+          draft={showAddJob.draft}
           onClose={() => { setShowAddJob(null); goBackCard(); }}
           onSave={saveJobModal}
           onDelete={(id) => askDelete("túto zákazku", () => deleteJob(id), true)}
@@ -14050,7 +14121,9 @@ function Dashboard({
               };
               const statusPill = m.status === "overdue"
                 ? <span className="spill spill-overdue">⚠ Po termíne +{plural(overdueDays, "deň", "dni", "dní")}</span>
-                : m.status === "active" ? <span className="spill spill-active">Na zákazke</span> : <span className="spill spill-done">Voľný</span>;
+                : m.status === "active" ? <span className="spill spill-active">Na zákazke</span>
+                : m.awaitingPickup ? <span className="spill spill-wait" title={`Ukončené ${fmtDate(m.awaitingPickup.endDate)} · ${m.awaitingPickup.customer || ""}`}>Čaká na zvoz</span>
+                : <span className="spill spill-done">Voľný</span>;
               return (
                 <tr
                   key={m.id}
@@ -15162,7 +15235,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                         const body = lines.length
                           ? `Dobrý deň, ${driver.name},\n\nna ${dayWord} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`
                           : `Dobrý deň, ${driver.name},\n\nna ${dayWord} (${fmtDate(dateVal)}) už nemáte naplánované žiadne prepravy — predchádzajúci zoznam neplatí.\n\nĎakujeme.`;
-                        const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join("; ");
+                        const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join(MAILTO_SEP);
                         composeMail({ to: toAll, subject: `Prepravy na ${dayWord} ${fmtDate(dateVal)}`, body });
                         recordTransportSend(driver.id, dateVal, items.map((t) => t.id));
                       }}
@@ -15249,7 +15322,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                       return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
                     });
                     const body = `Dobrý deň, ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                    const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join("; ");
+                    const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join(MAILTO_SEP);
                     composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
                     recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]);
                   }}
@@ -19067,7 +19140,9 @@ function TransportModeToggle({ selfMode, onChange, disabled }) {
   );
 }
 
-function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, onClose, onSave, onDelete, isDeparted, isReturned, recordLocks, currentUser }) {
+function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, reservations, salespeople, onSaveCustomer, onAddNewContact, prefillMachineId, prefillStartDate, prefillReservation, existing, draft, onClose, onSave, onDelete, isDeparted, isReturned, recordLocks, currentUser }) {
+  // Po výpadku servera sa okno otvorí znova s rozpísanými údajmi (draft) — porovnáva sa stále s uloženou zákazkou (existing).
+  const init = draft ? { ...existing, ...draft } : existing;
   // Mäkký zámok "edituje X" — len pri úprave existujúcej zákazky (nová zákazka
   // ešte nemá s kým kolidovať). Zapíše sa pri otvorení, obnovuje heartbeatom,
   // zmaže pri zatvorení — pozri writeRecordLock/clearRecordLock vyššie.
@@ -19079,17 +19154,17 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   }, [existing?.id]);
   const [saveTried, onSaveTry] = useSaveTry();
   const otherLock = existing ? findOtherLock(recordLocks, "jobs", existing.id, currentUser?.id) : null;
-  const [machineId, setMachineId] = useState(existing?.machineId || prefillReservation?.machineId || prefillMachineId || "");
-  const [driverId, setDriverId] = useState(existing?.driverId || "");
-  const [returnDriverId, setReturnDriverId] = useState(existing?.returnDriverId || "");
+  const [machineId, setMachineId] = useState(init?.machineId || prefillReservation?.machineId || prefillMachineId || "");
+  const [driverId, setDriverId] = useState(init?.driverId || "");
+  const [returnDriverId, setReturnDriverId] = useState(init?.returnDriverId || "");
   const machine = machines.find((m) => m.id === machineId);
-  const [fromDepo, setFromDepo] = useState(existing?.fromDepo ?? (machine?.depo || ""));
-  const [toLocation, setToLocation] = useState(existing?.toLocation || prefillReservation?.toLocation || "");
+  const [fromDepo, setFromDepo] = useState(init?.fromDepo ?? (machine?.depo || ""));
+  const [toLocation, setToLocation] = useState(init?.toLocation || prefillReservation?.toLocation || "");
   // Vlastná doprava zákazníka — volí sa zvlášť pre vývoz a zvoz (zákazník si
   // môže stroj vyzdvihnúť sám a vrátime ho my, alebo naopak).
-  const [selfPickup, setSelfPickup] = useState(!!existing?.selfPickup);
-  const [selfReturn, setSelfReturn] = useState(!!existing?.selfReturn);
-  const [customer, setCustomer] = useState(existing?.customer || prefillReservation?.customer || "");
+  const [selfPickup, setSelfPickup] = useState(!!init?.selfPickup);
+  const [selfReturn, setSelfReturn] = useState(!!init?.selfReturn);
+  const [customer, setCustomer] = useState(init?.customer || prefillReservation?.customer || "");
   // Pri úprave existujúcej zákazky treba selectedCustomerId dopočítať hneď
   // (podľa mena) — inak appka nevie, že zadané meno je už existujúci zákazník
   // v databáze, a nová kontaktná osoba by sa k nemu neuložila.
@@ -19115,38 +19190,38 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
   // sa až pri vytvorení zákazky, spolu so samotným zákazníkom (onSaveCustomer).
   const [pendingContacts, setPendingContacts] = useState([]);
   const blacklistMatch = customer.trim() ? (blacklist || []).find((b) => (b.nazovZakaznika || "").trim().toLowerCase() === customer.trim().toLowerCase()) : null;
-  const [customerEmail, setCustomerEmail] = useState(existing?.customerEmail || "");
-  const [customerPhone, setCustomerPhone] = useState(existing?.customerPhone || "");
-  const [customerContactName, setCustomerContactName] = useState(existing?.customerContactName || "");
-  const [obchodnik, setObchodnik] = useState(existing?.obchodnik || prefillReservation?.obchodnik || "");
-  const [cisloZmluvy, setCisloZmluvy] = useState(existing?.cisloZmluvy || "");
-  const [startDate, setStartDate] = useState(existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
-  const [endDate, setEndDate] = useState(existing?.endDate || prefillReservation?.expectedEnd || "");
+  const [customerEmail, setCustomerEmail] = useState(init?.customerEmail || "");
+  const [customerPhone, setCustomerPhone] = useState(init?.customerPhone || "");
+  const [customerContactName, setCustomerContactName] = useState(init?.customerContactName || "");
+  const [obchodnik, setObchodnik] = useState(init?.obchodnik || prefillReservation?.obchodnik || "");
+  const [cisloZmluvy, setCisloZmluvy] = useState(init?.cisloZmluvy || "");
+  const [startDate, setStartDate] = useState(init?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
+  const [endDate, setEndDate] = useState(init?.endDate || prefillReservation?.expectedEnd || "");
   // Skutočný dátum vývozu/zvozu — nezávislý od zmluvného začiatku/konca nájmu
   // vyššie. Predvyplní sa z nich, ale dá sa kedykoľvek prepísať (tu aj neskôr
   // priamo v Prepravách) — napr. pri prednávoze deň vopred, alebo keď sa zvoz
   // spája s iným dňom.
-  const [departureDate, setDepartureDate] = useState(existing?.departureDate || existing?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
-  const [pickupDate, setPickupDate] = useState(existing?.pickupDate || existing?.endDate || "");
+  const [departureDate, setDepartureDate] = useState(init?.departureDate || init?.startDate || prefillReservation?.expectedStart || prefillStartDate || todayISO());
+  const [pickupDate, setPickupDate] = useState(init?.pickupDate || init?.endDate || "");
   // Dátum vývozu/zvozu sa ťahá so začiatkom/koncom, kým ho niekto ručne
   // nezmení na iný deň (prednávoz, zvoz inokedy) — potom sa už "odpojí".
-  const [departureLinked, setDepartureLinked] = useState(!existing?.departureDate || existing.departureDate === existing.startDate);
-  const [pickupLinked, setPickupLinked] = useState(!existing?.pickupDate || existing.pickupDate === existing.endDate);
+  const [departureLinked, setDepartureLinked] = useState(!init?.departureDate || init.departureDate === init.startDate);
+  const [pickupLinked, setPickupLinked] = useState(!init?.pickupDate || init.pickupDate === init.endDate);
   useEffect(() => {
     if (departureLinked && existing?.status !== "completed" && !isDeparted) setDepartureDate(startDate);
   }, [startDate]);
   useEffect(() => {
     if (pickupLinked && !isReturned) setPickupDate(endDate);
   }, [endDate]);
-  const [notes, setNotes] = useState(existing?.notes || prefillReservation?.notes || "");
+  const [notes, setNotes] = useState(init?.notes || prefillReservation?.notes || "");
   // Depo návratu sa dá opraviť aj po ukončení — kým stroj nie je vrátený (protokol o vrátení).
   const returnDepoEditable = existing?.status === "completed" && !existing.notRealized && !isReturned;
   // Vývoz po protokole o prevzatí (alebo na ukončenej zákazke) je už história — meniť sa dá len to, čo patrí ku zvozu.
   const vyvozLocked = existing?.status === "completed" || !!isDeparted;
   // Zvoz po protokole o vrátení — rovnako.
   const zvozLocked = !!isReturned;
-  const [returnDepo, setReturnDepo] = useState(existing?.returnDepo || existing?.fromDepo || "");
-  const [machineDisplayName, setMachineDisplayName] = useState(existing?.machineDisplayName || "");
+  const [returnDepo, setReturnDepo] = useState(init?.returnDepo || init?.fromDepo || "");
+  const [machineDisplayName, setMachineDisplayName] = useState(init?.machineDisplayName || "");
   const [saveCustomer, setSaveCustomer] = useState(!existing);
 
   useEffect(() => {
@@ -28790,6 +28865,8 @@ function copyWithFeedback(e, text) {
     () => showNotice("Kopírovanie zlyhalo — označte odkaz a skopírujte ho ručne.")
   );
 }
+// Oddeľovač adresátov v mailto: Outlook na PC berie „;“, Outlook v mobile (iOS/Android) len čiarku.
+const MAILTO_SEP = typeof navigator !== "undefined" && /Android|iPhone|iPad/i.test(navigator.userAgent) ? "," : "; ";
 function copyColumn(rows, key, label) {
   const text = rows.map((r) => r[key] || "").join("\n");
   navigator.clipboard.writeText(text).then(
@@ -29397,12 +29474,12 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const isoD = isRealISODate;
     const revExp = [];
     mine.forEach((j) => {
-      if (j.status === "completed" || j.notRealized || !isoD(j.endDate) || j.endDate < today) return;
+      if (j.status === "completed" || j.notRealized || !isoD(j.endDate) || j.endDate < addDaysISO(today, -60)) return; // aj po termíne — stroj je ešte u zákazníka
       const m = machineById[j.machineId];
       if (!m || m.archived === true || m.archived === "true" || (m.objekt || "Požičovňový stroj") !== "Požičovňový stroj") return;
       [["revizia", "trackRevisions", "revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "úradná skúška"]].forEach(([f, tr, lbl]) => {
         const due = m[f];
-        if (m[tr] === false || m[tr] === "false" || !isoD(due) || due >= j.endDate || due > addDaysISO(today, 14)) return;
+        if (m[tr] === false || m[tr] === "false" || !isoD(due) || (j.endDate >= today && due >= j.endDate) || due > addDaysISO(today, 14)) return;
         revExp.push({ j, lbl, due });
       });
     });
@@ -29411,7 +29488,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       <>
         {revExp.length > 0 && (
           <TodayList title="Revízia/ÚS pred koncom prenájmu" limit={8} rows={revExp.map((x, i) => ({ key: "rev" + i, tag: x.due < today ? "PO TERMÍNE" : "DO 14 DNÍ", tone: x.due < today ? "red" : "warn",
-            title: `${mcode(x.j.machineId)} · ${x.lbl}`, sub: `${x.due < today ? "platila" : "platí"} do ${fmtDate(x.due)} · prenájom do ${fmtDate(x.j.endDate)} · ${x.j.customer || "—"}`,
+            title: `${mcode(x.j.machineId)} · ${x.lbl}`, sub: `${x.due < today ? "platila" : "platí"} do ${fmtDate(x.due)} · prenájom do ${fmtDate(x.j.endDate)}${x.j.endDate < today ? " (po termíne)" : ""} · ${x.j.customer || "—"}`,
             actions: [{ label: "Otvoriť", onClick: () => onOpenJob(x.j) }] }))} />
         )}
         <TodayList title="Prepravy dnes" empty="Dnes žiadne prepravy." rows={todayT.map((t) => ({ key: t.id, tag: t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ", tone: t.type === "vyvoz" ? "dim" : "info",
