@@ -31,7 +31,7 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.827";
+const APP_VERSION = "1.0.828";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
@@ -1823,6 +1823,28 @@ function safeImgUrl(u) {
 // Prihlásenie podľa času servera: supabase-js porovnáva platnosť tokenu (expires_at, čas servera)
 // s hodinami zariadenia — pri hodinách o hodinu vpred by obnovoval token donekonečna.
 // Pri čítaní z úložiska sa expires_at posunie o zistený rozdiel hodín, pri zápise sa posun vráti.
+// Široké tabuľky (Náhradné diely, Zamestnanci, Dáta požičovne…): panel, z ktorého tabuľka trčí, sa dá posúvať do strany.
+// Kontroluje sa pri každej zmene obsahu a veľkosti okna (raz za snímku).
+function useTableScrollFit() {
+  useEffect(() => {
+    let raf = 0;
+    const fit = () => {
+      raf = 0;
+      document.querySelectorAll(".jobs-wrap, .table-wrap").forEach((w) => {
+        const t = w.querySelector(":scope > table");
+        if (!t) return;
+        const wide = t.getBoundingClientRect().width > w.clientWidth + 1 || t.scrollWidth > w.clientWidth + 1;
+        if (w.classList.contains("tw-scroll") !== wide) w.classList.toggle("tw-scroll", wide);
+      });
+    };
+    const queue = () => { if (!raf) raf = requestAnimationFrame(fit); };
+    const mo = new MutationObserver(queue);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", queue);
+    queue();
+    return () => { mo.disconnect(); window.removeEventListener("resize", queue); cancelAnimationFrame(raf); };
+  }, []);
+}
 // Prihlásený používateľ aj pre listenery zaregistrované raz (zastaraná kópia pushNotification nesmie poslať upozornenie bez autora).
 let _currentUid = null;
 const _authMem = {};
@@ -4915,6 +4937,7 @@ function DispatcherApp() {
   }, []);
   // Offline podpísaný protokol DB odmietla (zákazka medzičasom pridelená inému) —
   // ostáva v zariadení; šofér aj dispečing sa to dozvedia (raz).
+  useTableScrollFit();
   const reopenFormRef = useRef(null); // { table, id, at, open } — posledný uložený formulár (výpadok servera → otvoriť znova)
   const dispNotifyRef = useRef({}); // odložené upozornenie „Ste dispečer zákazky“ (šípky v zozname)
   const rejectedProtocolRef = useRef(null);
@@ -31863,8 +31886,11 @@ function GlobalStyle() {
       th { text-align: left; font-family: 'Barlow', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); position: sticky; top: var(--header-h, 62px); z-index: 40; }
       /* Tabuľky v paneli: na širokej obrazovke orezané (hlavička tabuľky ostáva prilepená pod lištou),
          na užšej sa dajú posúvať doľava/doprava — vtedy hlavička nie je prilepená (inak by sa posunula). */
-      .table-wrap { overflow: clip; }
-      @media (max-width: 1500px) { .table-wrap { overflow-x: auto; } .table-wrap th { position: static; } }
+      /* Tabuľka širšia ako jej panel: panel dostane .tw-scroll (useTableScrollFit) a dá sa posúvať doľava/doprava —
+         aj hore-dole vo vlastnom okne na výšku obrazovky (vodorovný posuvník je tak vždy na očiach, hlavička ostáva prilepená). */
+      .table-wrap, .jobs-wrap { max-width: 100%; }
+      .tw-scroll { overflow: auto !important; position: relative; max-height: calc(100vh - var(--header-h, 62px) - 24px); }
+      .tw-scroll th { top: 0; }
       /* V okne (Modal) sa nescrolluje celá stránka pod hlavičkou appky, ale
          samotný .modal-overlay — tabuľky vnútri sa preto lepia na vrch OKNA
          (0), nie o výšku hlavičky nižšie (tam by zbytočne visela medzera). */
