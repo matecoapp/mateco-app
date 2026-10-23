@@ -31,13 +31,17 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.835";
+const APP_VERSION = "1.0.836";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.836", items: [
+    { roles: null, text: "Klávesnica: šípky v záložkách a v menu „＋ Nové“; v Kalendári sa dá na stroj dostať Tabom a Enter otvorí kartu. Kalendár má v legende aj prúžok revízie." },
+    { roles: null, text: "Drobnosti: lepší kontrast grafov, väčšie popisy dlaždíc, záložky karty sa zmestia na mobil, pri výpadku servera už nesvieti „Ukladám…“ spolu s hláškou." },
+  ] },
   { v: "1.0.835", items: [
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Nová zákazka: keď na stroj a zákazníka čaká rezervácia, formulár ponúkne založiť zákazku ako jej premenu." },
     { roles: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upozornenie, keď servis zamietne problém, ktorý zákazník nahlásil cez portál." },
@@ -1901,6 +1905,14 @@ const authStorage = {
       try {
         const o = JSON.parse(v);
         if (o && o._skew) { const { _skew, ...rest } = o; v = JSON.stringify({ ...rest, expires_at: rest.expires_at - _skew }); }
+        // Čerstvý token (pri prihlásení) prezradí čas servera — odhad posunu hodín hneď, nie až po server_now
+        // (inak 5–7 obnov tokenu za sebou pri hodinách vpred, kolo 32).
+        else if (o && typeof o.expires_at === "number" && typeof o.expires_in === "number"
+          && (() => { try { return JSON.parse(localStorage.getItem(k) || "null")?.access_token !== o.access_token; } catch { return false; } })()) { // len nový token
+          const est = (o.expires_at - o.expires_in) * 1000 - Date.now();
+          // aj keď hodiny skočia počas otvorenej platformy — inak sa token obnovuje dookola (~200× za 6 s)
+          if (Math.abs(est - _clockOffsetMs) > 60000 && (Math.abs(est) > 60000 || Math.abs(_clockOffsetMs) > 60000)) { _clockOffsetMs = est; setTimeout(() => syncServerClock(), 0); }
+        }
       } catch { /* nie je JSON — uložiť ako je */ }
     }
     try { localStorage.setItem(k, v); } catch { _authMem[k] = v; } // súkromný režim — len v pamäti
@@ -4725,7 +4737,7 @@ function DispatcherApp() {
       if (Date.now() - lastBlocked > 1500) { // jedna akcia = jedna hláška, ďalšia akcia znova
         lastBlocked = Date.now();
         // „✓ uložené“ z tej istej akcie (výpadok sa zistil až pri ukladaní) nesmie ostať svietiť.
-        setToast((t) => (t && t.startsWith("✓") ? null : t));
+        setToast((t) => (t && (t.startsWith("✓") || t === "Ukladám…") ? null : t)); // ani „Ukladám…“ popri hláške o výpadku
         showNotice(navigator.onLine
           ? "Server je dočasne nedostupný — táto zmena sa neuložila.\n\nSkúste to znova o chvíľu. Ak to trvá dlhšie, dajte vedieť správcovi platformy."
           : "Bez signálu sa táto zmena neuloží.\n\nOffline sa dajú vypĺňať len protokoly v teréne (šofér, technik). Skúste to znova, keď budete pripojení.");
@@ -4766,6 +4778,26 @@ function DispatcherApp() {
     });
     refreshOutboxCount();
     return () => setOutboxCountListener(null);
+  }, []);
+  // Šípky v záložkách (role=tab) a v menu (role=menuitem) — jedno miesto pre celú platformu (kolo 32).
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      const role = t?.getAttribute?.("role");
+      if (role === "tab" && ["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) {
+        const tabs = [...(t.closest('[role="tablist"]')?.querySelectorAll('[role="tab"]') || [])];
+        const i = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : tabs.indexOf(t) + (e.key === "ArrowRight" ? 1 : -1);
+        const next = tabs[(i + tabs.length) % tabs.length];
+        if (next) { e.preventDefault(); next.focus(); next.click(); }
+      } else if (role === "menuitem" && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        const items = [...(t.closest('[role="menu"]')?.querySelectorAll('[role="menuitem"]') || [])];
+        const i = items.indexOf(t) + (e.key === "ArrowDown" ? 1 : -1);
+        const next = items[(i + items.length) % items.length];
+        if (next) { e.preventDefault(); next.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
   const [droppedN, setDroppedN] = useState(0);
   _droppedListener = setDroppedN;
@@ -11108,7 +11140,7 @@ function DispatcherApp() {
           onClose={(hide) => { setTourOpen(false); if (hide !== !!currentUser?.tourHidden) updateProfileInfo(currentUser.id, { tourHidden: hide }); }} />
       )}
       {!tourOpen && whatsNew && whatsNew.length > 0 && (
-        <Modal title="Čo je nové v platforme" onClose={() => setWhatsNew(null)}>
+        <Modal title="Čo je nové v platforme" onClose={() => { setWhatsNew(null); setTimeout(() => document.getElementById("obsah")?.focus({ preventScroll: true }), 0); }}>
           <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
             {whatsNew.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}
           </ul>
@@ -12923,7 +12955,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                         )}
                       </div>
                     </div>
-                    {isOpen && <div style={{ paddingLeft: 12, background: "var(--panel-2)" }}>{g.items.map(renderItem)}</div>}
+                    {isOpen && <div style={{ paddingLeft: 12, background: "var(--panel-2)" }}>{g.items.slice(0, bellLimit).map(renderItem)}{g.items.length > bellLimit && <button type="button" className="btn btn-ghost" style={{ width: "100%", margin: "4px 0" }} onClick={() => setBellLimit((n) => n + 100)}>Zobraziť ďalšie ({g.items.length - bellLimit})</button>}</div>}
                   </div>
                 );
               })
@@ -13859,11 +13891,12 @@ function NewMenu({ actions }) {
   }, [open]);
   return (
     <div className="header-new-wrap" ref={ref}>
-      <button className="header-new-btn" onClick={() => setOpen((v) => !v)}>＋ Nové ▾</button>
+      <button className="header-new-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => { if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setTimeout(() => ref.current?.querySelector('[role="menuitem"]')?.focus(), 0); } }}>＋ Nové ▾</button>
       {open && (
-        <div className="header-new-drop">
+        <div className="header-new-drop" role="menu">
           {actions.map((a) => (
-            <button key={a.key} className="kebab-item" onClick={() => { setOpen(false); ref.current?.querySelector(".header-new-btn")?.focus({ preventScroll: true }); a.onClick(); }}>{a.label}</button>
+            <button key={a.key} role="menuitem" className="kebab-item" onClick={() => { setOpen(false); ref.current?.querySelector(".header-new-btn")?.focus({ preventScroll: true }); a.onClick(); }}>{a.label}</button>
           ))}
         </div>
       )}
@@ -14403,7 +14436,7 @@ function Dashboard({
 function StatCard({ label, value, color, delta, spark }) {
   return (
     <div className="panel" style={{ padding: "14px 16px" }}>
-      <div className="label-font" style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
+      <div className="label-font" style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
         <div className="mono" style={{ fontSize: 28, fontWeight: 600, color }}>{value}</div>
         {spark && <Spark values={spark} />}
@@ -21499,6 +21532,10 @@ const CalendarGrid = React.memo(function CalendarGrid({
             >
               <div
                 onClick={() => onOpenCard(m)}
+                tabIndex={0}
+                role="button"
+                aria-label={`${m.code}${m.type ? ` ${m.type}` : ""}${machineRevState(m) ? ` — ${machineRevState(m).text}` : ""}`}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenCard(m); } }}
                 className="gantt-name-wrap"
                 style={{
                   position: "sticky",
@@ -22506,6 +22543,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         <span>⏳ rezervácia čaká na schválenie</span>
         <span>🏢 vlastná doprava zákazníka</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#d0021b", marginRight: 5 }} />porucha (do opravy; prenájom počas poruchy má červený rámik)</span>
+        <span><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--warn)", marginRight: 2, verticalAlign: "middle" }} /><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--danger)", marginRight: 5, verticalAlign: "middle" }} />prúžok pri stroji: revízia/ÚS do 30 dní / po termíne</span>
       </div>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {salespeople.map((s) => (
@@ -31882,7 +31920,7 @@ function GlobalStyle() {
         --accent: #E30613;
         --accent-dark: #B5040F;
         --accent-light: #fdf0f0;
-        --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c-bad: #e34948; --c-idle: #c8c8c4;
+        --c1: #2a78d6; --c2: #eb6834; --c3: #168f64; --c4: #b97f00; --c5: #e87ba4; --c-bad: #e34948; --c-idle: #8e8e89; /* kontrast grafov ≥ 3:1 (kolo 32) */
         /* Nepriehľadná verzia accent-light — pre miesta, kde má farba
            NIEČO PREKRYŤ (roh nad menami strojov v gantte), nie len jemne
            podfarbiť cez existujúci obsah. accent-light je v tmavom režime
@@ -31987,7 +32025,7 @@ function GlobalStyle() {
         --accent: #ff6b74;
         --accent-dark: #ff8a90;
         --accent-light: rgba(227,6,19,.18);
-        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #55585c;
+        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #7c8086;
         --ok: #8fd18a;
         --ok-bg: rgba(59,109,17,.28);
         --warn: #e0a858;
@@ -32132,7 +32170,7 @@ function GlobalStyle() {
       }
       /* sticky bunka stroja má z-index:2 → pri hoveri ju zdvihnúť, inak bublinu prekryjú ďalšie riadky */
       .gantt-name-wrap:hover, .gantt-name-wrap:focus-within { z-index: 60 !important; }
-      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip, .gantt-transport-icon:hover .gantt-tooltip { visibility: visible; opacity: 1; }
+      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip, .gantt-name-wrap:focus .gantt-tooltip, .gantt-transport-icon:hover .gantt-tooltip { visibility: visible; opacity: 1; }
       /* Ťahanie zákazky/rezervácie v Gantte (presun/zmena termínu) — stredná
          časť bloku = kurzor "uchopiť" (presun), tenké 8px pruhy na okrajoch =
          kurzor na zmenu šírky (zmena len začiatku/konca). Samotné ťahanie
@@ -32466,6 +32504,7 @@ function GlobalStyle() {
         table.table-cards td.m-only.td-plain { display: block !important; }
       }
       .utabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-top: 6px; overflow-x: auto; }
+      @media (max-width: 720px) { .utabs { gap: 14px; } .utab { font-size: 14px !important; } } /* „Časová os“ sa zmestí na mobile */
       .utab { padding: 10px 0; border: none; border-bottom: 2px solid transparent; background: transparent; font: inherit; font-size: 15px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
       .utab:hover { color: var(--text); }
       .utab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 700; }
