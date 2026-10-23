@@ -164,3 +164,15 @@ describe("rozhodnutia 23. 10.", () => {
     expect(jobMthPair(as, "j", { handoverMth: 90 })).toEqual([90, 110.5]);
   });
 });
+
+describe("audit 23. 10.", () => {
+  it("prečítané upozornenie bez signálu sa zlúči s kolegom (bez konfliktu)", () => {
+    const base = { id: "n", readBy: [] };
+    const fresh = { id: "n", readBy: ["kolega"] };
+    const mine = { id: "n", readBy: ["ja"] };
+    let conflict = null;
+    const out = mergeOnFresh(fresh, mine, base, (f) => { conflict = f; });
+    expect(out.readBy.sort()).toEqual(["ja", "kolega"]);
+    expect(conflict).toBe(null);
+  });
+});

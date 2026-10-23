@@ -15,7 +15,7 @@
 // CACHE_VERSION sa bumpuje ručne spolu s APP_VERSION v App.jsx (pri každom
 // vydaní appky) — inak by appka po vydaní novej verzie zostala niekomu
 // natrvalo zaseknutá na starej cache aj keď má signál.
-const CACHE_VERSION = "mateco-appshell-v4";
+const CACHE_VERSION = "mateco-appshell-v5";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -45,6 +45,13 @@ self.addEventListener("install", (event) => {
       .catch(() => {})
   );
 });
+// Staré súbory predošlých verzií (/assets/…) — po načítaní novej stránky ostanú len tie, ktoré používa.
+async function pruneOldAssets(cache, html) {
+  const keep = new Set([...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => new URL(m[1], self.registration.scope).href));
+  if (!keep.size) return;
+  const keys = await cache.keys();
+  await Promise.all(keys.filter((r) => r.url.includes("/assets/") && !keep.has(r.url)).map((r) => cache.delete(r)));
+}
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     Promise.all([
@@ -109,7 +116,8 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
-        if (client.url.startsWith(self.registration.scope) && "focus" in client) {
+        // Otvorený zákaznícky portál (?portal=) správu ignoruje — prepnúť len na platformu.
+        if (client.url.startsWith(self.registration.scope) && !client.url.includes("portal=") && "focus" in client) {
           // Appka je už otvorená — pošli jej správu priamo (postMessage),
           // nech si to prepne sama, bez akéhokoľvek načítavania odznova.
           // Meniť adresu (client.navigate) by síce tiež fungovalo, ale vždy
@@ -134,14 +142,27 @@ self.addEventListener("notificationclick", (event) => {
 // sa len potichu dopĺňa popri tom, a použije sa až keď fetch zlyhá (offline).
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  // Kontrola novej verzie (version.json?t=…) vždy naživo a bez ukladania — inak cache rastie pri každom návrate do platformy.
+  if (url.pathname.endsWith("/version.json")) return;
+  // Navigácia (aj ?notif=…, ?portal=…) sa ukladá pod jeden kľúč (scope), nie pod každú adresu zvlášť.
+  const isNav = req.mode === "navigate";
+  const key = isNav ? self.registration.scope : req;
 
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(isNav ? key : req).then((cached) => {
       const networkFetch = fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+          // Len úspešné odpovede (404/503 sa neuložia a neponúknu namiesto živej).
+          if (res.ok) {
+            const copy = res.clone();
+            const htmlCopy = isNav ? res.clone() : null; // klon hneď — neskôr telo už číta stránka
+            caches.open(CACHE_VERSION).then(async (cache) => {
+              await cache.put(key, copy);
+              if (htmlCopy) pruneOldAssets(cache, await htmlCopy.text()).catch(() => {});
+            });
+          }
           return res;
         })
         .catch(() => cached || (req.mode === "navigate" ? caches.match(self.registration.scope) : undefined));
