@@ -31,13 +31,17 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.839";
+const APP_VERSION = "1.0.840";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.840", items: [
+    { roles: null, text: "Kalendár: legenda aj farby obchodníkov sú schované pod tlačidlom „ⓘ Legenda“ — kalendár je vyšší a na mobile ho už nezakrýva spodné menu." },
+    { roles: null, text: "Karta stroja: revízia ZZ, revízia EZ a úradná skúška sú pokope pod Prehľadom. Keď je termín po lehote alebo do 30 dní, kliknutím prejdete na jeho tiket." },
+  ] },
   { v: "1.0.839", items: [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "dispecer_servisu", "veduci_servisu"], text: "Prehľadnejší vzhľad na mobile: dlaždice Dnes sú v dvoch stĺpcoch (prázdne na konci) a filtre v jednom posuvnom riadku." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "„Na vybavenie“: kliknutím na riadok sa otvorí, vpravo je jedno hlavné tlačidlo. Červenou je zvýraznené len to, čo naozaj horí." },
@@ -11744,7 +11748,7 @@ function DispatcherApp() {
               setMachineCard((prev) => (prev ? { ...prev, trackRevisions: true } : prev));
             } else {
               setConfirmAction({
-                message: "Skutočne chcete zastaviť sledovanie revízií pre daný stroj? Systém nebude upozorňovať na platnosť revízií.",
+                message: "Skutočne chcete zastaviť sledovanie revízie ZZ pre daný stroj? Systém nebude upozorňovať na platnosť revízie ZZ.",
                 confirmLabel: "Áno, zastaviť sledovanie",
                 onConfirm: () => {
                   setMachineTrackRevisions(machineCard.id, false);
@@ -12118,7 +12122,7 @@ function DispatcherApp() {
             }}
           >
             <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-              📍 <strong>{hd.code}</strong> čaká na zobrazenie — otvorte záznam, nech sa vypne dočasný filter "Vyriešené".
+              📍 <strong>{hd.code}</strong> {away ? <>čaká na zobrazenie — otvorte záznam, nech sa vypne dočasný filter "Vyriešené".</> : "je zvýraznený v zozname."}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {away && (
@@ -22127,6 +22131,16 @@ const CalendarGrid = React.memo(function CalendarGrid({
 
 function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, drivers, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation, departedJobIds, transportNotes, onAddTransportNote, onConfirmTransportNote, onDeleteTransportNote, onOpenDamage, technicians }) {
   const [breakdownChoice, setBreakdownChoice] = useState(null); // { machineId, date, damage }
+  const [legendOpen, setLegendOpen] = useState(false);
+  const legendRef = useRef(null);
+  useEffect(() => {
+    if (!legendOpen) return;
+    const away = (e) => { if (!legendRef.current?.contains(e.target)) setLegendOpen(false); };
+    const esc = (e) => { if (e.key === "Escape") setLegendOpen(false); };
+    document.addEventListener("pointerdown", away, true); // capture — aj keď ťahanie zákazky zastaví udalosť
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", away, true); document.removeEventListener("keydown", esc); };
+  }, [legendOpen]);
   const technicianNameById = useMemo(() => Object.fromEntries((technicians || []).map((t) => [t.id, t.name])), [technicians]);
   // "Prevoz" — súkromná poznámka dispečera/vedúceho požičovne o plánovanom
   // presune stroja medzi depami, viditeľná len tejto dvojici rolí (aj v DB).
@@ -22155,7 +22169,23 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   const [availH, setAvailH] = useState(null);
   useEffect(() => {
     function measure() {
-      if (rootRef.current) setAvailH(window.innerHeight - rootRef.current.getBoundingClientRect().top - 16);
+      if (!rootRef.current) return;
+      const r = rootRef.current.getBoundingClientRect();
+      // Spodné odsadenie rodičov (na mobile v ňom je miesto pre spodné menu) — nezávisí od výšky okna ani kalendára, takže sedí aj pri zmene veľkosti.
+      // Plus to, čo je v stránke pod kalendárom (napr. pätička „Vytvoril…“), okrem pevne umiestnených prvkov.
+      let pad = 0;
+      for (let el = rootRef.current; el && el !== document.documentElement; el = el.parentElement) {
+        if (el !== rootRef.current) { const cs = getComputedStyle(el); pad += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0); }
+        for (let sib = el.nextElementSibling; sib; sib = sib.nextElementSibling) {
+          const cs = getComputedStyle(sib);
+          if (cs.position !== "fixed" && cs.position !== "absolute" && cs.display !== "none") pad += sib.getBoundingClientRect().height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+        }
+      }
+      const h = window.innerHeight - r.top - pad - 4;
+      // Nízke okno (mobil na šírku): filtre by zabrali celé miesto — samotné riadky strojov dostanú ~75 % výšky okna a stránka sa posunie.
+      const rows = rootRef.current.querySelector(".gantt-scroll");
+      const rest = rows ? r.height - rows.getBoundingClientRect().height : 0;
+      setAvailH(h < 260 ? Math.round(rest + window.innerHeight * 0.75) : h);
     }
     // Pri prechode sem z dlhšej stránky (napr. Stroje) ostáva okno ešte
     // odscrollované dole — meranie top-u by vtedy vyšlo nesprávne (gantt by
@@ -22642,19 +22672,28 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           />
         )}
       </div>
-      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-dim)", marginTop: 12, flexWrap: "wrap", flexShrink: 0 }}>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
-        <span>⏳ rezervácia čaká na schválenie</span>
-        <span>🏢 vlastná doprava zákazníka</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#d0021b", marginRight: 5 }} />porucha (do opravy; prenájom počas poruchy má červený rámik)</span>
-        <span><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--warn)", marginRight: 2, verticalAlign: "middle" }} /><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--danger)", marginRight: 5, verticalAlign: "middle" }} />prúžok pri stroji: revízia/ÚS do 30 dní / po termíne</span>
-      </div>
-      <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 8, flexWrap: "wrap", flexShrink: 0 }}>
-        {salespeople.map((s) => (
-          <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
-        ))}
+      {/* Legenda zbalená za tlačidlom — značky aj farby obchodníkov (rozhodnutie 23. 10.) */}
+      <div ref={legendRef} style={{ marginTop: 10, flexShrink: 0, fontSize: 12, color: "var(--text-dim)" }}>
+        <button type="button" className="btn btn-ghost" style={{ minHeight: 32, padding: "4px 10px", fontSize: 13 }} aria-expanded={legendOpen} aria-controls="cal-legend" onClick={() => setLegendOpen((o) => !o)}>ⓘ Legenda {legendOpen ? "▴" : "▾"}</button>
+        {legendOpen && (
+          <div id="cal-legend" role="region" aria-label="Legenda kalendára" className="panel" style={{ marginTop: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
+              <span>⏳ rezervácia čaká na schválenie</span>
+              <span>🏢 vlastná doprava zákazníka</span>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#d0021b", marginRight: 5 }} />porucha (do opravy; prenájom počas poruchy má červený rámik)</span>
+              <span><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--warn)", marginRight: 2, verticalAlign: "middle" }} /><span style={{ display: "inline-block", width: 3, height: 11, borderRadius: 1, background: "var(--danger)", marginRight: 5, verticalAlign: "middle" }} />prúžok pri stroji: revízia/ÚS do 30 dní / po termíne</span>
+            </div>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+              <span style={{ fontWeight: 600 }}>Obchodníci:</span>
+            {salespeople.map((s) => (
+              <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
+            ))}
+            </div>
+          </div>
+        )}
       </div>
       </>
     </div>
@@ -22905,11 +22944,10 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
       onBack={onBack}
       side
       headerExtra={
-        <div className="side-summary">
+        <div className="side-summary s3">
           <div><span>Depo</span><b>{m.depo || "—"}</b></div>
           <div><span>Aktuálna zákazka</span><b>{m.currentJob ? `${m.currentJob.customer || m.currentJob.toLocation}` : "— voľný —"}</b></div>
           <div><span>Servisný stav</span><b style={m.hasOpenDamage ? { color: "var(--danger)" } : undefined}>{m.hasOpenDamage ? "⚠ V servisnom stave" : (m.servisStav || "Bez problémov")}</b></div>
-          <div><span>Revízia ZZ</span><b className="tnum" style={reviziaOverdue ? { color: "var(--danger)" } : undefined}>{notTracked ? "Nesledované" : m.revizia ? `${reviziaOverdue ? "⚠ " : ""}${fmtDate(m.revizia)}` : "⚠ chýba dátum"}</b></div>
         </div>
       }
       footer={
@@ -22946,12 +22984,26 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         main={<>
       <NextStepBar items={nextSteps} />
       <dl className="side-dl" style={{ marginBottom: 16 }}>
-        {/* v1.0.806: model, číslo, servisný stav, revízia ZZ, depo a zákazka sú v nadpise a súhrne hore — tu len ostatné. */}
+        {/* Model, číslo, servisný stav, depo a zákazka sú v nadpise a súhrne hore; revízie ZZ/EZ a ÚS pokope tu (rozhodnutie 23. 10.). */}
         {(() => { const lm = lastMachineMth(assignments, m.id); return lm ? <><dt>Motohodiny (posledná kontrola)</dt><dd className="tnum">{`${lm.noMth ? "bez počítadla" : `${fmtMth(lm.value)} MTH`} · ${lm.date ? fmtDate(String(lm.date).slice(0, 10)) : "—"}${lm.by ? ` · ${lm.by}` : ""}`}</dd></> : null; })()}
-        <dt>Platnosť revízie EZ</dt>
-        <dd className={`tnum${reviziaEZOverdue ? " warn" : ""}`}>{reviziaEZOverdue ? "⚠ " : ""}{notTrackedEZ ? "Nesledované" : (m.reviziaEZ ? (reviziaEZOverdue ? `${fmtDate(m.reviziaEZ)} — po termíne` : fmtDate(m.reviziaEZ)) : "chýba dátum — po termíne")}</dd>
-        <dt>Dátum najbližšej úradnej skúšky</dt>
-        <dd className={`tnum${skuskaOverdue ? " warn" : ""}`}>{skuskaOverdue ? "⚠ " : ""}{skuskaNotTracked ? "Nesledované" : (m.uradnaSkuska ? (skuskaOverdue ? `${fmtDate(m.uradnaSkuska)} — po termíne` : fmtDate(m.uradnaSkuska)) : "chýba dátum — po termíne")}</dd>
+        {[
+          ["Platnosť revízie ZZ", m.revizia, notTracked, reviziaOverdue, (d) => d.type === "revizia" && String(d.revizeType || "").includes("ZZ")],
+          ["Platnosť revízie EZ", m.reviziaEZ, notTrackedEZ, reviziaEZOverdue, (d) => d.type === "revizia" && String(d.revizeType || "").includes("EZ")],
+          ["Dátum najbližšej úradnej skúšky", m.uradnaSkuska, skuskaNotTracked, skuskaOverdue, (d) => d.type === "uradnaSkuska"],
+        ].map(([label, date, off, overdue, isTicket]) => {
+          const soon = !off && !overdue && date && daysBetween(todayISO(), date) <= 30;
+          const text = `${overdue ? "⚠ " : ""}${off ? "Nesledované" : date ? `${fmtDate(date)}${overdue ? " — po termíne" : soon ? (daysBetween(todayISO(), date) === 0 ? " — dnes" : ` — o ${plural(daysBetween(todayISO(), date), "deň", "dni", "dní")}`) : ""}` : "chýba dátum — po termíne"}`;
+          // Problém (po termíne / do 30 dní) s otvoreným tiketom → klik otvorí tiket.
+          const ticket = (overdue || soon) && (history || []).find((d) => !d.resolved && isTicket(d));
+          return (
+            <React.Fragment key={label}>
+              <dt>{label}</dt>
+              <dd className={`tnum${overdue ? " warn" : ""}`} style={soon ? { color: "var(--warn)", fontWeight: 600 } : undefined}>
+                {ticket ? <button type="button" onClick={() => onOpenDamage(ticket)} style={{ border: 0, background: "none", padding: 0, font: "inherit", color: "inherit", textDecoration: "underline", cursor: "pointer", textAlign: "left" }} title="Otvoriť tiket">{text} ›</button> : text}
+              </dd>
+            </React.Fragment>
+          );
+        })}
       </dl>
       {modelParams.length > 0 && (
         <div style={{ marginBottom: 18 }}>
@@ -32410,6 +32462,7 @@ function GlobalStyle() {
       .side-summary span { display: block; font-size: 13px; color: var(--text-dim); }
       .side-summary b { display: block; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
       .side-summary b a { color: inherit; }
+      .side-summary.s3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .tnum { font-variant-numeric: tabular-nums; }
       .side-body { flex: 1; padding: 0 28px 20px; }
       .side-foot { position: sticky; bottom: 0; z-index: 5; background: var(--panel-2); border-top: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -32958,7 +33011,9 @@ function GlobalStyle() {
         .side-foot .btn { min-height: 48px; }
         .side-foot-btns { flex: 1 1 0; min-width: 0; }
         .side-foot-btns .btn { flex: 1 1 100%; }
-        .side-summary { grid-template-columns: 1fr 1fr; }
+        .side-summary, .side-summary.s3 { grid-template-columns: 1fr 1fr; }
+        .side-summary.s3 > div:last-child { grid-column: 1 / -1; }
+        html:has(.mnav-bar) { scroll-padding-bottom: 84px; } /* fokus klávesnicou sa nezastaví pod spodným menu */
         .side-summary > div:nth-child(2) { border-right: none; }
         .side-summary > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
         .side-dl { grid-template-columns: 1fr; }
