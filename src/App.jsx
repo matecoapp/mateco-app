@@ -31,13 +31,17 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.840";
+const APP_VERSION = "1.0.841";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.841", items: [
+    { roles: null, text: "Kalendár: Normálny/Kompaktný a zoradenie sú pod ozubeným kolieskom ⚙, legenda pod ikonou ⓘ. Kalendár siaha až po spodok obrazovky; na užšej obrazovke je vyhľadávanie len lupa." },
+    { roles: ["admin"], text: "maSKot je úchytka na pravom okraji obrazovky — klik ho vysunie sprava na celú výšku, ďalší klik zasunie. Už nezakrýva spodok stránok." },
+  ] },
   { v: "1.0.840", items: [
     { roles: null, text: "Kalendár: legenda aj farby obchodníkov sa otvárajú tlačidlom „ⓘ Legenda“ v hornej lište (na mobile pod ozubeným kolieskom) — kalendár vyplní celú obrazovku." },
     { roles: null, text: "Karta stroja: revízia ZZ, revízia EZ a úradná skúška sú pokope pod Prehľadom. Keď je termín po lehote alebo do 30 dní, kliknutím prejdete na jeho tiket." },
@@ -3462,10 +3466,24 @@ function GearPopover({ children, className }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [alignRight, setAlignRight] = useState(false);
+  const [shift, setShift] = useState(0); // posun, keď by panel vytŕčal z obrazovky (úzky mobil)
+  const panelRef = useRef(null);
   useLayoutEffect(() => {
-    if (!open || !btnRef.current) return;
+    if (!open || !btnRef.current) { setShift(0); return; }
     const rect = btnRef.current.getBoundingClientRect();
     setAlignRight(window.innerWidth - rect.left < 260);
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !panelRef.current) return;
+    const pr = panelRef.current.getBoundingClientRect();
+    if (pr.left < 8) setShift((x) => x + (8 - pr.left));
+    else if (pr.right > window.innerWidth - 8) setShift((x) => x - (pr.right - (window.innerWidth - 8)));
+  }, [open, alignRight]);
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e) => { if (e.key === "Escape") { setOpen(false); btnRef.current?.querySelector("button")?.focus(); } };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
   }, [open]);
   return (
     <div className={className} style={{ position: "relative", display: className ? "none" : "inline-block" }} ref={btnRef}>
@@ -3484,9 +3502,11 @@ function GearPopover({ children, className }) {
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
           <div
             className="panel"
+            ref={panelRef}
             onClick={(e) => { if (e.target.closest("button")) setOpen(false); }} // voľba urobená (napr. Legenda otvorí vlastné okno) — panel sa zavrie
             style={{
               position: "absolute",
+              transform: shift ? `translateX(${shift}px)` : undefined,
               top: "calc(100% + 6px)",
               left: alignRight ? "auto" : 0,
               right: alignRight ? 0 : "auto",
@@ -12487,7 +12507,7 @@ function DispatcherApp() {
           />
         );
       })()}
-      <div style={{ textAlign: "center", padding: "16px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+      <div className="app-footer" style={{ textAlign: "center", padding: "16px 12px", fontSize: 11, color: "var(--text-dim)" }}>
         Vytvoril Radoslav Podušel, 2026. Všetky práva vyhradené.
       </div>
     </div>
@@ -16875,7 +16895,8 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
         const rawText = await resp.text().catch(() => "");
         setMessages((m) => {
           const copy = [...m];
-          copy[copy.length - 1] = { role: "assistant", text: `⚠️ Neočakávaná odpoveď (HTTP ${resp.status}): ${rawText.slice(0, 200) || "(prázdne telo)"}` };
+          copy[copy.length - 1] = { role: "assistant", text: resp.status >= 500 ? "⚠️ maSKot je teraz nedostupný — skúste to o chvíľu." : `⚠️ Neočakávaná odpoveď (HTTP ${resp.status}): ${rawText.slice(0, 200) || "(prázdne telo)"}` };
+          console.warn("maSKot", resp.status, rawText.slice(0, 300));
           return copy;
         });
         return;
@@ -16998,6 +17019,12 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
   }
   const prevAskTrigger = useRef(askTrigger);
   useEffect(() => {
+    if (!open) return;
+    const esc = (e) => { if (e.key === "Escape" && !document.body.classList.contains("has-open-modal")) { setOpen(false); document.querySelector(".maskot-fab")?.focus(); } };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [open]);
+  useEffect(() => {
     if (!askTrigger || askTrigger === prevAskTrigger.current) return;
     prevAskTrigger.current = askTrigger;
     askDaily();
@@ -17006,53 +17033,30 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
 
   return (
     <>
+      {/* Úchytka na pravom okraji (rozhodnutie 24. 10.) — nezakrýva spodok stránok; panel sa vysunie sprava na celú výšku. */}
       <button
-        className="maskot-fab"
+        className={`maskot-fab${open ? " open" : ""}`}
         onClick={() => setOpen((v) => !v)}
         title="maSKot — AI asistent (beta verzia)"
-        style={{
-          position: "fixed",
-          right: 20,
-          bottom: 20,
-          zIndex: 200,
-          width: 52,
-          height: 52,
-          borderRadius: 14,
-          background: "#1a1a1a",
-          color: "#e6392e",
-          border: "none",
-          padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(0,0,0,.12)",
-        }}
+        aria-label={open ? "Zasunúť maSKota" : "Otvoriť maSKota"}
+        aria-expanded={open}
       >
-        <ChatBubbleIcon size={26} />
+        <ChatBubbleIcon size={13} />
+        <span>maSKot</span>
       </button>
       {open && (
         <div
           className="maskot-panel"
           style={{
             position: "fixed",
-            right: 20,
-            bottom: 82,
-            zIndex: 200,
-            width: 440,
-            maxWidth: "90vw",
-            height: 520,
-            maxHeight: "75vh",
-            minWidth: 320,
-            minHeight: 300,
-            // "resize" — natívny CSS handle vpravo dole, appka je ukotvená
-            // cez right/bottom (nie left/top), takže rastie smerom hore/vľavo
-            // preč od bublinového tlačidla, nie cez neho.
-            resize: "both",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 260,
+            width: "min(400px, calc(100vw - 24px))",
             background: "var(--panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,.12)",
+            borderLeft: "1px solid var(--border)",
+            boxShadow: "-8px 0 30px rgba(0,0,0,.22)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -17094,7 +17098,7 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
                 </span>
               )}
               {/* Rozhovor (hands-free) a mikrofón vypnuté 8. 10. — hlasový vstup cez prehliadač/klávesnicu; vrátiť s ElevenLabs. */}
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
+              <button onClick={() => setOpen(false)} aria-label="Zavrieť maSKota" title="Zavrieť" style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 }}>✕</button>
             </div>
           </div>
           {conversationMode && (
@@ -17147,6 +17151,8 @@ function MaskotChatWidget({ session, machines, onOpenCard, askTrigger, navModule
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
               placeholder="Opýtaj sa maSKota..."
+              aria-label="Otázka pre maSKota"
+              autoFocus={!window.matchMedia?.("(pointer: coarse)").matches} // na dotyku by hneď vyskočila klávesnica a zakryla rozhovor
               style={{ flex: 1, fontSize: 13 }}
               disabled={sending}
             />
@@ -22174,10 +22180,10 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         }
       }
       const h = window.innerHeight - r.top - pad - 4;
-      // Nízke okno (mobil na šírku): filtre by zabrali celé miesto — samotné riadky strojov dostanú ~75 % výšky okna a stránka sa posunie.
+      // Nízke okno (mobil na šírku): filtre by zabrali celé miesto — keď by riadkom strojov ostalo < 200 px, dostanú ~75 % výšky okna a stránka sa posunie.
       const rows = rootRef.current.querySelector(".gantt-scroll");
       const rest = rows ? r.height - rows.getBoundingClientRect().height : 0;
-      setAvailH(h < 260 ? Math.round(rest + window.innerHeight * 0.75) : h);
+      setAvailH(h - rest < 200 ? Math.round(rest + window.innerHeight * 0.75) : h);
     }
     // Pri prechode sem z dlhšej stránky (napr. Stroje) ostáva okno ešte
     // odscrollované dole — meranie top-u by vtedy vyšlo nesprávne (gantt by
@@ -22191,7 +22197,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
-  const [sortMode, setSortMode] = useState("category"); // code | category
+  const [sortMode, setSortMode] = useState(() => { try { return localStorage.getItem("mateco_calendar_sort") === "code" ? "code" : "category"; } catch { return "category"; } }); // code | category — zapamätané ako hustota
+  useEffect(() => { try { localStorage.setItem("mateco_calendar_sort", sortMode); } catch { /* súkromné okno */ } }, [sortMode]);
   // Kompaktný/bežný pohľad — každý si to nastaví sám (uložené v localStorage
   // v tomto prehliadači, nie za celú appku/účet), zostáva to zapamätané aj po
   // obnovení stránky.
@@ -22578,7 +22585,6 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         <option value="code">↕ Sériové číslo</option>
         <option value="category">↕ Kategória a výška</option>
       </select>
-      <button type="button" className="btn btn-ghost" style={{ minHeight: 40 }} onClick={() => setLegendOpen(true)}>ⓘ Legenda</button>
     </>
   );
   const navBtn = { minWidth: 40, minHeight: 40, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" };
@@ -22598,7 +22604,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             ))}
           </div>
           <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
-          <GearPopover className="gantt-mobile-settings">{settingsControls}</GearPopover>
+          <GearPopover>{settingsControls}</GearPopover>
+          <button type="button" className="btn btn-ghost header-icon-btn tip-now" data-tip="Legenda" aria-label="Legenda" onClick={() => setLegendOpen(true)} style={{ color: "var(--text-dim)" }}>ⓘ</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", margin: "0 auto" }}>
           <button type="button" aria-label="Predošlý mesiac" style={navBtn} onClick={() => setMonthOffset((o) => o - 1)}>‹</button>
@@ -22607,9 +22614,6 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
             <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--line-strong)", marginLeft: 4 }} onClick={goToToday}>Dnes</button>
           )}
-        </div>
-        <div className="gantt-desktop-settings" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {settingsControls}
         </div>
       </div>
 
@@ -32454,6 +32458,8 @@ function GlobalStyle() {
       .side-summary b { display: block; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
       .side-summary b a { color: inherit; }
       .side-summary.s3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .tip-now { position: relative; }
+      .tip-now:hover::after, .tip-now:focus-visible::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--panel); font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; white-space: nowrap; z-index: 50; pointer-events: none; }
       .tnum { font-variant-numeric: tabular-nums; }
       .side-body { flex: 1; padding: 0 28px 20px; }
       .side-foot { position: sticky; bottom: 0; z-index: 5; background: var(--panel-2); border-top: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -32796,8 +32802,6 @@ function GlobalStyle() {
            s tlačidlami pre technikov (keby mal daný účet aj tie práva) a
            prekrývala by ich. Posunutá vyššie vždy, nech je to jednoduché a
            spoľahlivé aj keď lišta zrovna nie je zobrazená. */
-        .maskot-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
-        .maskot-panel { bottom: calc(82px + 76px + env(safe-area-inset-bottom)) !important; }
 
         /* To isté pre bublinu "čaká na zobrazenie" (skok na zvýraznené poškodenie). */
         .damage-toast-fab { bottom: calc(20px + 76px + env(safe-area-inset-bottom)) !important; }
@@ -33072,10 +33076,23 @@ function GlobalStyle() {
       /* Bublina maSKota zakrývala spodné tlačidlá karty/okna — kým je okno otvorené, schová sa. */
       body.has-open-modal .maskot-fab, body:has(.fullscreen-overlay) .maskot-fab { display: none !important; }
       /* plávajúce maSKot tlačidlo nezakryje posledné tlačidlo v zozname */
-      body:has(.maskot-fab) .app-main { padding-bottom: 88px; }
-      body:has(.maskot-fab) .app-main:has(.cal-bar) { padding-bottom: 16px; } /* Kalendár vypĺňa obrazovku — bez rezervy pre maSKot */
-      @media (max-width: 768px) { body:has(.maskot-fab) .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + 72px + env(safe-area-inset-bottom)) !important; }
-        body:has(.maskot-fab) .app-main.has-mobile-tech-bar:has(.cal-bar) { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; } }
+      .maskot-fab { position: fixed; right: 0; top: 66%; transform: translateY(-50%); z-index: 261; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 9px 3px; border: 0; border-radius: 7px 0 0 7px; background: var(--accent-fill); color: #fff; font: 600 11px Barlow, sans-serif; cursor: pointer; box-shadow: -2px 2px 8px rgba(0,0,0,.16); }
+      .maskot-fab span { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .04em; }
+      .maskot-fab.open { right: min(400px, calc(100vw - 24px)); }
+      body.has-open-modal .maskot-panel { display: none !important; } /* otvorené okno (karta) má prednosť; panel sa vráti po jeho zatvorení */
+      @media (max-width: 768px) { .maskot-fab.open { display: none !important; } } /* na mobile otvorený panel zatvára × (úzka úchytka je na dotyk malá) */
+      .maskot-fab:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+      /* Kalendár vypĺňa obrazovku až po pätičku; na mobile je pätička pod spodným menu — na Kalendári sa skryje. */
+      @media (min-width: 769px) { .app-main:has(.cal-bar) { padding-bottom: 0 !important; } .app-shell:has(.cal-bar) .app-footer { padding: 6px 12px !important; } }
+      @media (max-width: 768px), (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) { .app-shell:has(.cal-bar) .app-footer { display: none; } }
+      /* Užšie okno (tablet, malý notebook): vyhľadávanie Kalendára len ako lupa, nech sa lišta zmestí do 1–2 riadkov. */
+      @media (min-width: 769px) and (max-width: 1100px) {
+        .cal-bar .list-search-mobile-trigger { display: flex !important; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; }
+        .cal-bar .list-search-input-wrap { display: none; }
+        .cal-bar .list-search-box:not(.list-search-mobile-open) { min-width: 0 !important; width: auto !important; }
+        .cal-bar .list-search-box.list-search-mobile-open .list-search-mobile-trigger { display: none !important; }
+        .cal-bar .list-search-box.list-search-mobile-open .list-search-input-wrap { display: block !important; }
+      }
       /* Pásy v pláne servisu majú biely text na farbe stavu — v tmavom režime sú tie farby svetlé, preto tu plné tmavšie. */
       .app-shell.dark .gantt-scroll .gantt-cell { --danger: #c62f36; --info: #2b6cb0; --ok: #3d7a28; --warn: #9a5f0c; }
       .app-shell.dark .global-search-input-wrap input { background: var(--bg) !important; }
