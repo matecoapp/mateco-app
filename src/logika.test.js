@@ -144,3 +144,23 @@ describe("kolo 30", () => {
     expect(erpTechKey({ technicianId: "t1", checkerBy: "Niekto iný" }, techs)).toBe("t1");
   });
 });
+
+describe("rozhodnutia 23. 10.", () => {
+  const { jobStillOut, machineRevDueBy, jobMthPair } = _test;
+  const today = new Date().toISOString().slice(0, 10);
+  it("stroj po termíne nevrátený ostáva vonku", () => {
+    expect(jobStillOut({ startDate: addDaysISO(today, -20), endDate: addDaysISO(today, -3), status: "active" })).toBe(true);
+    expect(jobStillOut({ startDate: addDaysISO(today, -20), endDate: addDaysISO(today, -3), status: "completed" })).toBe(false);
+    expect(jobStillOut({ startDate: addDaysISO(today, -20), endDate: addDaysISO(today, 3), status: "active" })).toBe(false);
+  });
+  it("revízia, ktorá vyprší počas prenájmu", () => {
+    const m = { revizia: addDaysISO(today, 10), trackRevisions: true };
+    expect(machineRevDueBy(m, addDaysISO(today, 12))?.lbl).toBe("Revízia ZZ");
+    expect(machineRevDueBy(m, addDaysISO(today, 5))).toBe(null);
+  });
+  it("motohodiny z kontroly checkera, protokol má prednosť", () => {
+    const as = [{ kind: "kontrolaStroja", resolved: true, jobId: "j", phase: "vyvoz", mth: 100 }, { kind: "kontrolaStroja", resolved: true, jobId: "j", phase: "vratenie", mth: "110,5" }];
+    expect(jobMthPair(as, "j", null)).toEqual([100, 110.5]);
+    expect(jobMthPair(as, "j", { handoverMth: 90 })).toEqual([90, 110.5]);
+  });
+});

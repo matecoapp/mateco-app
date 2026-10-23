@@ -226,7 +226,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
     setSending(true); setError(null);
     const res = await onSubmit(mode === "agree", name.trim(), sig, comment.trim());
     setSending(false);
-    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : res === "invalid_token" ? "Tento odkaz už nie je platný." : "Nepodarilo sa odoslať — skúste to znova.");
+    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : res === "invalid_token" ? "Tento odkaz už nie je platný." : !navigator.onLine ? "Ste bez signálu — skúste to znova po pripojení." : "Nepodarilo sa odoslať — skúste to znova.");
   }
   return (
     <div style={{ background: "#FFF8E1", border: "1px solid #E6C25A", borderRadius: 8, padding: 12, marginTop: 10 }}>
@@ -289,11 +289,11 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
         })}
       </div>
       <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
-        <div style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
           {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
@@ -450,7 +450,12 @@ export default function CustomerPortal({ token }) {
     const { data: result, error } = await supabase.rpc("confirm_portal_protocol", {
       p_token: token, p_phase: phase, p_agree: agree, p_name: name, p_signature: agree ? signature : null, p_comment: comment || null,
     });
-    if (error || !result?.ok) { console.error("confirm_portal_protocol zlyhalo", error, result); return result?.reason || "error"; }
+    if (error || !result?.ok) {
+      console.error("confirm_portal_protocol zlyhalo", error, result);
+      // Iná karta / niekto iný už potvrdil — načítať aktuálny stav, nech formulár zmizne.
+      if (result?.reason === "already_done") { const { data: fresh } = await supabase.rpc("get_portal_job", { p_token: token }); if (fresh) setData(fresh); }
+      return result?.reason || "error";
+    }
     const { data: fresh } = await supabase.rpc("get_portal_job", { p_token: token });
     if (fresh) setData(fresh);
     return true;
