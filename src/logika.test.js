@@ -130,7 +130,7 @@ describe("štatistiky", () => {
 describe("kolo 30", () => {
   const { findMachineConflict, erpHours, erpTechKey } = _test;
   it("zákazka po termíne bez vrátenia drží stroj do dnes", () => {
-    const t = new Date().toLocaleDateString("sv-SE");
+    const t = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" }); // ako todayISO v platforme — CI beží v UTC
     const late = { id: "a", machineId: "m", startDate: "2020-01-01", endDate: "2020-01-10", status: "active" };
     expect(findMachineConflict([late], [], "m", null, t, t)).toMatch(/po termíne/);
     expect(findMachineConflict([late], [], "m", null, addDaysISO(t, 1), addDaysISO(t, 3))).toBeNull(); // od zajtra nadväzuje
