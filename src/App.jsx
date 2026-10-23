@@ -39,7 +39,7 @@ const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
   { v: "1.0.840", items: [
-    { roles: null, text: "Kalendár: legenda aj farby obchodníkov sú schované pod tlačidlom „ⓘ Legenda“ — kalendár je vyšší a na mobile ho už nezakrýva spodné menu." },
+    { roles: null, text: "Kalendár: legenda aj farby obchodníkov sa otvárajú tlačidlom „ⓘ Legenda“ v hornej lište (na mobile pod ozubeným kolieskom) — kalendár vyplní celú obrazovku." },
     { roles: null, text: "Karta stroja: revízia ZZ, revízia EZ a úradná skúška sú pokope pod Prehľadom. Keď je termín po lehote alebo do 30 dní, kliknutím prejdete na jeho tiket." },
   ] },
   { v: "1.0.839", items: [
@@ -3484,6 +3484,7 @@ function GearPopover({ children, className }) {
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
           <div
             className="panel"
+            onClick={(e) => { if (e.target.closest("button")) setOpen(false); }} // voľba urobená (napr. Legenda otvorí vlastné okno) — panel sa zavrie
             style={{
               position: "absolute",
               top: "calc(100% + 6px)",
@@ -22132,15 +22133,6 @@ const CalendarGrid = React.memo(function CalendarGrid({
 function CalendarView({ machines, jobs, reservations, damages, salespeople, today, driverById, drivers, user, machineModels, onOpenCard, onOpenJob, onOpenReservation, onAddJob, onUpdateJob, onUpdateReservation, departedJobIds, transportNotes, onAddTransportNote, onConfirmTransportNote, onDeleteTransportNote, onOpenDamage, technicians }) {
   const [breakdownChoice, setBreakdownChoice] = useState(null); // { machineId, date, damage }
   const [legendOpen, setLegendOpen] = useState(false);
-  const legendRef = useRef(null);
-  useEffect(() => {
-    if (!legendOpen) return;
-    const away = (e) => { if (!legendRef.current?.contains(e.target)) setLegendOpen(false); };
-    const esc = (e) => { if (e.key === "Escape") setLegendOpen(false); };
-    document.addEventListener("pointerdown", away, true); // capture — aj keď ťahanie zákazky zastaví udalosť
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("pointerdown", away, true); document.removeEventListener("keydown", esc); };
-  }, [legendOpen]);
   const technicianNameById = useMemo(() => Object.fromEntries((technicians || []).map((t) => [t.id, t.name])), [technicians]);
   // "Prevoz" — súkromná poznámka dispečera/vedúceho požičovne o plánovanom
   // presune stroja medzi depami, viditeľná len tejto dvojici rolí (aj v DB).
@@ -22586,6 +22578,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         <option value="code">↕ Sériové číslo</option>
         <option value="category">↕ Kategória a výška</option>
       </select>
+      <button type="button" className="btn btn-ghost" style={{ minHeight: 40 }} onClick={() => setLegendOpen(true)}>ⓘ Legenda</button>
     </>
   );
   const navBtn = { minWidth: 40, minHeight: 40, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" };
@@ -22672,12 +22665,12 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           />
         )}
       </div>
-      {/* Legenda zbalená za tlačidlom — značky aj farby obchodníkov (rozhodnutie 23. 10.) */}
-      <div ref={legendRef} style={{ marginTop: 10, flexShrink: 0, fontSize: 12, color: "var(--text-dim)" }}>
-        <button type="button" className="btn btn-ghost" style={{ minHeight: 32, padding: "4px 10px", fontSize: 13 }} aria-expanded={legendOpen} aria-controls="cal-legend" onClick={() => setLegendOpen((o) => !o)}>ⓘ Legenda {legendOpen ? "▴" : "▾"}</button>
-        {legendOpen && (
-          <div id="cal-legend" role="region" aria-label="Legenda kalendára" className="panel" style={{ marginTop: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      </>
+    </div>
+    {legendOpen && (
+      <Modal title="Legenda kalendára" onClose={() => setLegendOpen(false)}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 14, color: "var(--text)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: NO_SALESPERSON_COLOR, marginRight: 5 }} />zákazka bez obchodníka</span>
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px solid var(--danger)", marginRight: 5 }} />po termíne</span>
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, border: "2px dashed var(--text-dim)", marginRight: 5 }} />📋 nezáväzná rezervácia</span>
@@ -22692,11 +22685,9 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
               <span key={s.name}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: salespersonColor(s.name, salespeople) || NO_SALESPERSON_COLOR, marginRight: 5 }} />{s.name}</span>
             ))}
             </div>
-          </div>
-        )}
-      </div>
-      </>
-    </div>
+        </div>
+      </Modal>
+    )}
     {breakdownChoice && (
       <Modal title={breakdownChoice.damage.prepCheck ? "⚠ Príprava do požičovne" : "⚠ Porucha"} onClose={() => setBreakdownChoice(null)}>
         <div style={{ fontSize: 13, marginBottom: 6 }}>
@@ -33082,7 +33073,9 @@ function GlobalStyle() {
       body.has-open-modal .maskot-fab, body:has(.fullscreen-overlay) .maskot-fab { display: none !important; }
       /* plávajúce maSKot tlačidlo nezakryje posledné tlačidlo v zozname */
       body:has(.maskot-fab) .app-main { padding-bottom: 88px; }
-      @media (max-width: 768px) { body:has(.maskot-fab) .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + 72px + env(safe-area-inset-bottom)) !important; } }
+      body:has(.maskot-fab) .app-main:has(.cal-bar) { padding-bottom: 16px; } /* Kalendár vypĺňa obrazovku — bez rezervy pre maSKot */
+      @media (max-width: 768px) { body:has(.maskot-fab) .app-main.has-mobile-tech-bar { padding-bottom: calc(76px + 72px + env(safe-area-inset-bottom)) !important; }
+        body:has(.maskot-fab) .app-main.has-mobile-tech-bar:has(.cal-bar) { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; } }
       /* Pásy v pláne servisu majú biely text na farbe stavu — v tmavom režime sú tie farby svetlé, preto tu plné tmavšie. */
       .app-shell.dark .gantt-scroll .gantt-cell { --danger: #c62f36; --info: #2b6cb0; --ok: #3d7a28; --warn: #9a5f0c; }
       .app-shell.dark .global-search-input-wrap input { background: var(--bg) !important; }
