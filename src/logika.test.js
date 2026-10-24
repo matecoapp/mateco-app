@@ -176,3 +176,20 @@ describe("audit 23. 10.", () => {
     expect(conflict).toBe(null);
   });
 });
+
+describe("rozhodnutia 24. 10.", () => {
+  it("IČO sa porovnáva bez medzier a veľkosti písmen", () => {
+    expect(_test.icoKey(" 12 345 678 ")).toBe("12345678");
+    expect(_test.icoKey("sk 2020")).toBe("SK2020");
+    expect(_test.icoKey(null)).toBe("");
+  });
+  it("„Čo je nové“ — skupiny po verziách, najnovšia prvá, len položky pre rolu", () => {
+    const g = _test.whatsNewFor("technik", "1.0.841");
+    expect(g.length).toBeGreaterThan(0);
+    expect(g.map((x) => _test._verNum(x.v))).toEqual([...g.map((x) => _test._verNum(x.v))].sort((a, b) => b - a));
+    expect(g.every((x) => _test._verNum(x.v) > _test._verNum("1.0.841") && x.items.length)).toBe(true);
+    expect(g[0].items).toContain("Kontrolu stroja dokončí len technik, ktorému je pridelená; kontrolu bez technika dokončí servis.");
+    expect(g.flatMap((x) => x.items)).not.toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
+    expect(_test.whatsNewFor("admin", "1.0.841").flatMap((x) => x.items)).toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
+  });
+});
