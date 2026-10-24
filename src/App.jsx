@@ -31,13 +31,16 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.842";
+const APP_VERSION = "1.0.843";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.843", items: [
+    { roles: null, text: "Rýchlejšie načítanie dát po prihlásení (najmä pri veľa strojoch a tiketoch)." },
+  ] },
   { v: "1.0.842", items: [
     { roles: ["sofer", "externy_sofer"], text: "Keď ten istý protokol uložíte z dvoch zariadení, druhé už nehlási chybu — napíše, že protokol bol uložený z iného zariadenia." },
     { roles: ["technik", "veduci_technik_ba"], text: "„Môj týždeň“ ukazuje cez víkend aj dnešný deň a meškajúce úlohy." },
@@ -3203,6 +3206,16 @@ function deleteRecordRow(table, id, base) {
 // jednotlivé žiadosti pri veľkom počte vedeli časť tichých zlyhaní
 // (nesprávne sa javilo, že sa vymazalo všetko, no po obnovení stránky sa
 // nevymazaný zvyšok vrátil naspäť). Dávka má zabudovaný retry aj chunkovanie.
+// .in("id", …) po dávkach — tisíce id v jednej URL server odmietne (431).
+async function selectByIds(table, cols, ids, chunk = 150) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += chunk) {
+    const { data, error } = await supabase.from(table).select(cols).in("id", ids.slice(i, i + chunk));
+    if (error) return { data: null, error };
+    out.push(...(data || []));
+  }
+  return { data: out, error: null };
+}
 async function deleteRecordRowsWithRetry(table, ids, attempt = 1) {
   if (ids.length === 0) return true;
   try {
@@ -7046,7 +7059,7 @@ function DispatcherApp() {
     if (Object.keys(updates).length) {
       // Úpravy zapísať nad ČERSTVÝ riadok z DB, nie nad lokálnu kópiu — inak iné
       // otvorené okno (realtime ešte nedorazil) prepíše práve dokončenú revíziu.
-      supabase.from("damages").select("id, data, updated_at").in("id", Object.keys(updates)).then(async ({ data, error }) => {
+      selectByIds("damages", "id, data, updated_at", Object.keys(updates)).then(async ({ data, error }) => {
         if (error) return; // offline — skúsi sa pri ďalšom prepočte
         const closedIds = [];
         for (const row of data || []) {
@@ -7078,7 +7091,7 @@ function DispatcherApp() {
         .then(async ({ error }) => {
           if (error) { console.error("Automatické tikety revízií sa neuložili", error); return; }
           // Načítať, čo v DB naozaj je (mohla vyhrať verzia iného zariadenia).
-          const { data } = await supabase.from("damages").select("id, data").in("id", additions.map((x) => x.id));
+          const { data } = await selectByIds("damages", "id, data", additions.map((x) => x.id));
           const rows = (data || []).map((r) => ({ ...r.data, id: r.id }));
           setDamages((prev) => [...prev.filter((d) => !rows.some((r) => r.id === d.id)), ...rows]);
         });
