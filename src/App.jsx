@@ -31,13 +31,19 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.841";
+const APP_VERSION = "1.0.842";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.842", items: [
+    { roles: ["sofer", "externy_sofer"], text: "Keď ten istý protokol uložíte z dvoch zariadení, druhé už nehlási chybu — napíše, že protokol bol uložený z iného zariadenia." },
+    { roles: ["technik", "veduci_technik_ba"], text: "„Môj týždeň“ ukazuje cez víkend aj dnešný deň a meškajúce úlohy." },
+    { roles: null, text: "Hláška „Kolega práve ukladá…“ a „Server je dočasne nedostupný“ ostanú, kým sa záznam naozaj neuloží, a potom samé zmiznú. Dlhé texty (napr. odkazy) už nerozťahujú zoznam na mobile." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"], text: "Odkaz pre zákazníka sa po vydaní už nedá zmeniť ani zmazať — zákazníkovi vždy funguje; zneplatniť ho ide ako doteraz." },
+  ] },
   { v: "1.0.841", items: [
     { roles: null, text: "Kalendár: Normálny/Kompaktný a zoradenie sú pod ozubeným kolieskom ⚙, legenda pod ikonou ⓘ. Kalendár siaha až po spodok obrazovky; na užšej obrazovke je vyhľadávanie len lupa." },
     { roles: ["admin"], text: "maSKot je úchytka na pravom okraji obrazovky — klik ho vysunie sprava na celú výšku, ďalší klik zasunie. Už nezakrýva spodok stránok." },
@@ -2214,6 +2220,9 @@ const FIELD_LABELS = {
   customerPhone: "Telefón", cisloZmluvy: "Číslo zmluvy", status: "Stav", stav: "Stav", popis: "Popis", poznamkaDispecera: "Poznámka dispečera", dispatcherId: "Dispečer zákazky",
   technicianIds: "Technici", revizia: "Revízia ZZ", reviziaEZ: "Revízia EZ", uradnaSkuska: "Úradná skúška", depo: "Depo",
   protocolNumber: "Číslo protokolu", checklist: "Kontrolný zoznam",
+  // karta zamestnanca a auta
+  name: "Meno", role: "Rola", phone: "Telefón", email: "E-mail", skratka: "Skratka", color: "Farba", alsoObchodnik: "Aj obchodník",
+  alsoEzTechnik: "Revízny technik EZ", alsoVeduciDispecer: "Vedúci dispečer", spz: "ŠPZ", znacka: "Značka", stkEkDate: "STK/EK",
 };
 // Šofér/externý šofér (nastavuje App pri každom vykreslení).
 let _fieldRole = false;
@@ -2228,6 +2237,7 @@ function setOfflineBlockedListener(fn) {
 // Kancelária bez signálu — každý zápis (aj vedľajší: upozornenie, nastavenie) sa zastaví hneď,
 // nie až po opakovaní (inak by po návrate signálu odišlo upozornenie k akcii, ktorá sa nevykonala).
 let _lastOfflineBlockAt = 0;
+let _busyKey = null; // záznam, pri ktorom svieti „Kolega práve ukladá…“ (zmaže sa len po uložení toho istého)
 let _officeSaveFailAt = 0; // posledný neuložený zápis kancelárie pri výpadku (nie upozornenie)
 // Bežiace zápisy — „✓ uložené“ sa ukáže až po ich dokončení (nie hneď po kliknutí).
 const _inflightSaves = new Set();
@@ -2316,10 +2326,29 @@ function setRejectedRecordListener(fn) { _rejectedRecordListener = fn; }
 // protokolu iným zápisom) — nie je to „neuložený protokol“, nič nehlásiť.
 async function protocolAlreadySaved(item) {
   const { data: fr, error } = await supabase.from("handoverProtocols").select("data").eq("id", item.id).maybeSingle();
-  if (error || !fr) return false;
-  const d = fr.data || {};
-  const same = (p) => !item[p + "Done"] || (!!d[p + "Done"] && (d[p + "DriverSignature"] || "") === (item[p + "DriverSignature"] || "") && (d[p + "CustomerSignature"] || "") === (item[p + "CustomerSignature"] || ""));
-  return same("handover") && same("return");
+  const phasesDone = (d) => !!d && (!item.handoverDone || !!d.handoverDone) && (!item.returnDone || !!d.returnDone);
+  let od = null;
+  if (!error && fr) {
+    const d = fr.data || {};
+    const same = (p) => !item[p + "Done"] || (!!d[p + "Done"] && (d[p + "DriverSignature"] || "") === (item[p + "DriverSignature"] || "") && (d[p + "CustomerSignature"] || "") === (item[p + "CustomerSignature"] || ""));
+    if (same("handover") && same("return")) return true;
+    // Ten istý záznam (napr. zvoz do protokolu z prevzatia), fáza už uzavretá z iného zariadenia s inými podpismi.
+    if (phasesDone(d)) od = d;
+  }
+  // Ten istý protokol medzitým uložený z iného zariadenia (iné id, tá istá zákazka) — step109 druhý odmietne.
+  // Kópia sa nepoužije, nie je to „neuložený protokol“ (žiadny poplach dispečerovi).
+  if (!od) {
+    if (!item.jobId) return false;
+    const { data: other } = await supabase.from("handoverProtocols").select("id, data").eq("data->>jobId", item.jobId).neq("id", item.id).maybeSingle();
+    if (!phasesDone(other?.data)) return false;
+  }
+  showNotice("Protokol k tejto zákazke už bol uložený z iného zariadenia — táto kópia sa nepoužila.");
+  // Čo čaká na túto kópiu (upozornenia, odkaz, kontrola po vrátení) poslalo už prvé zariadenie — nezdvojovať.
+  const key = `handoverProtocols:${item.id}`;
+  for (const x of await idbGetAll("outbox")) {
+    if (x?.table && x.item?.afterProtocol === key) await idbDelete("outbox", `${x.table}:${x.item.id}`); // zatvorenie kontroly je opakovateľné — ostáva
+  }
+  return true;
 }
 function setRejectedProtocolListener(fn) {
   _rejectedProtocolListener = fn;
@@ -3025,6 +3054,7 @@ function saveRecordRow(table, item, base) {
     let toSend = item;
     let condOk = false; // zapísané podmienene (nikto iný medzitým riadok nezmenil)
     let busy = false; // 3× niekto iný zapísal skôr — neprepísať, človek to skúsi znova
+    let conflictShown = false;
     if (!fieldRow && base && MERGE_ON_SAVE.has(table)) {
       // Prečítať → zlúčiť → zapísať len ak sa riadok medzitým nezmenil (updated_at); inak znova (audit 23. 10.: súbeh ~200 ms).
       for (let tryN = 0; tryN < 3 && !condOk; tryN++) {
@@ -3034,7 +3064,7 @@ function saveRecordRow(table, item, base) {
         if (fErr) break;
         if (!fresh) { _mergeConflictListener?.(table, item, null, "onlineDeleted"); _saveStatusListener?.("ok", table); return; }
         const freshObj = { ...fresh.data, id: fresh.id };
-        const merged = mergeOnFresh(freshObj, item, base, (fields) => { if (tryN === 0) _mergeConflictListener?.(table, item, fields, "online"); });
+        const merged = mergeOnFresh(freshObj, item, base, (fields) => { if (!conflictShown) { conflictShown = true; _mergeConflictListener?.(table, item, fields, "online"); } }); // aj keď súbeh zistí až 2./3. pokus
         toSend = merged ? { ...merged, ...(item._rev !== undefined ? { _rev: item._rev !== base._rev ? (freshObj._rev || 0) + 1 : freshObj._rev } : {}) } : item;
         if (pendingN && !toSend._notify) toSend = { ...toSend, _notify: pendingN };
         if (!fresh.updated_at) break;
@@ -3055,7 +3085,7 @@ function saveRecordRow(table, item, base) {
     if (ok === "denied") {
       delete _retryActions[table];
       if (table === "handoverProtocols" && _offlineQueueAllowed) {
-        if (await protocolAlreadySaved(item)) { _saveStatusListener?.("ok", table); return; }
+        if (await protocolAlreadySaved(item)) { await idbDelete("outbox", qKey); refreshOutboxCount(); _saveStatusListener?.("ok", table); return; }
         // Podpísaný protokol sa nezahadzuje (preradenie šoféra, deaktivácia) — ostáva vo fronte ako pri flushi.
         await queueIt();
         if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true })); _rejectedProtocolListener?.(item); }
@@ -3074,7 +3104,8 @@ function saveRecordRow(table, item, base) {
       _permissionDeniedListener?.(table, item.id);
     } else if (ok) {
       delete _retryActions[table];
-      document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text?.startsWith("Kolega práve ukladá")) b.remove(); }); // uložené na 2. pokus — stará hláška preč
+      if (!fieldRow && table !== "record_locks") document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text?.startsWith("Server je dočasne nedostupný") || b.dataset.text?.startsWith("Bez signálu sa táto zmena neuloží")) b.remove(); }); // spojenie je späť — stará hláška o výpadku preč
+      if (_busyKey === qKey) { _busyKey = null; document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text?.startsWith("Kolega práve ukladá")) b.remove(); }); } // ten istý záznam uložený na 2. pokus — stará hláška preč
       SAVED_ROW_PREFIX[table]?.forEach((pre) => markRowSaved(pre + item.id)); // potvrdené serverom → riadok v zozname krátko zazelená
       await idbDelete("outbox", `${table}:${item.id}`);
       refreshOutboxCount();
@@ -3100,6 +3131,7 @@ function saveRecordRow(table, item, base) {
         // Upozornenia zaradené tesne pred tým patria k tejto (neuloženej) akcii — preč.
         idbGetAll("outbox").then((all) => Promise.all(all.filter((x) => x?.table === "notifications" && x.queuedAt && Date.now() - x.queuedAt < 30000)
           .map((x) => idbDelete("outbox", `notifications:${x.item?.id}`)))).then(refreshOutboxCount);
+        if (busy) _busyKey = qKey;
         _offlineBlockedListener?.(table, busy ? "busy" : undefined);
         return;
       }
@@ -10162,7 +10194,7 @@ function DispatcherApp() {
           <div className="label-font" style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginBottom: 12, textTransform: "lowercase" }}>mateco</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Účet čaká na schválenie</div>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 20 }}>
-            Ste úspešne prihlásený ako <strong>{currentUser.name}</strong>, ale administrátor vám ešte nepridelil rolu. Kým sa tak nestane, platforma vám neukáže žiadne dáta. Ozvite sa prosím administrátorovi, nech vám v platforme (👤 Používatelia) pridelí rolu.
+            Prihlásenie prebehlo úspešne — účet <strong>{currentUser.name}</strong>, administrátor vám však ešte nepridelil rolu. Kým sa tak nestane, platforma vám neukáže žiadne dáta. Ozvite sa prosím administrátorovi, nech vám v platforme (👤 Používatelia) pridelí rolu.
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
             <button className="btn btn-accent" onClick={() => { try { sessionStorage.removeItem("mateco_last_module"); sessionStorage.removeItem("mateco_last_view"); } catch { /* bez úložiska */ } window.location.reload(); }}>Skontrolovať znova</button>{/* nové načítanie: dáta podľa novej roly a úvod na Dnes */}
@@ -10445,6 +10477,7 @@ function DispatcherApp() {
             onRetryBlocked={async () => {
               await flushOutbox();
               const still = (await idbGetAll("outbox")).filter((x) => x?.rejectedNotified).length;
+              document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text?.startsWith("Stále sa nedá uložiť")) b.remove(); });
               showNotice(still ? "Stále sa nedá uložiť — kancelária musí najprv upraviť pridelenie alebo prístup.\n\nZáznam ostáva v telefóne a odošle sa sám, keď to bude možné." : "✓ Uložené.");
             }}
             user={effectiveUser}
@@ -13219,7 +13252,7 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
       )}
       <FormFoot>
         <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-          Importovať {rows.length} záznamov
+          Importovať {plural(rows.length, "záznam", "záznamy", "záznamov")}
         </button>
       </FormFoot>
     </Modal>
@@ -20298,7 +20331,7 @@ function ImportCustomersModal({ customers, onClose, onImport }) {
       )}
       <FormFoot>
         <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-          Importovať {rows.length} zákazníkov
+          Importovať {plural(rows.length, "zákazníka", "zákazníkov", "zákazníkov")}
         </button>
       </FormFoot>
     </Modal>
@@ -20313,7 +20346,7 @@ function CsvFilePick({ onChange, fileName, count }) {
         Vybrať CSV súbor…
         <input type="file" accept=".csv" onChange={onChange} style={{ display: "none" }} />
       </label>
-      {fileName && <span className="tnum" style={{ fontSize: 14 }}>{fileName} · {count} riadkov</span>}
+      {fileName && <span className="tnum" style={{ fontSize: 14 }}>{fileName} · {plural(count, "riadok", "riadky", "riadkov")}</span>}
     </div>
   );
 }
@@ -20799,7 +20832,7 @@ function ImportModal({ onClose, onImport }) {
 
       <FormFoot>
         <button className="btn btn-accent" disabled={!canImport} onClick={doImport}>
-          Importovať {rows.length > 0 ? `(${rows.length} strojov)` : ""}
+          Importovať {rows.length > 0 ? `(${plural(rows.length, "stroj", "stroje", "strojov")})` : ""}
         </button>
       </FormFoot>
     </Modal>
@@ -29745,7 +29778,7 @@ const TODAY_TAG = {
 function TechWeekStrip({ assignments, myId, today, onGo, lateN = 0, isWork = (a) => !a.kind || a.kind === "kontrolaStroja" }) {
   if (!myId) return null;
   const days = [];
-  for (let d = today; days.length < 5; d = addDaysISO(d, 1)) { const w = new Date(d + "T00:00:00").getDay(); if (w !== 0 && w !== 6) days.push(d); }
+  for (let d = today; days.length < 5; d = addDaysISO(d, 1)) { const w = new Date(d + "T00:00:00").getDay(); if ((w !== 0 && w !== 6) || d === today) days.push(d); } // cez víkend aj dnešok (práca/meškajúce)
   const mine = (assignments || []).filter((a) => a.technicianId === myId && days.includes(a.date));
   const info = { dovolenka: "dovolenka", pn: "PN", pohotovost: "pohotovosť" };
   return (
@@ -29759,14 +29792,15 @@ function TechWeekStrip({ assignments, myId, today, onGo, lateN = 0, isWork = (a)
           const day = mine.filter((a) => a.date === d), work = day.filter(isWork);
           const off = day.find((a) => a.kind === "dovolenka" || a.kind === "pn"), duty = day.some((a) => a.kind === "pohotovost");
           const isToday = d === today, h = holidayInfo(d)?.rest;
+          const lateHere = d === days[0] ? lateN : 0; // meškajúce patria k prvému pracovnému dňu (cez víkend pondelok)
           const name = new Date(d + "T00:00:00").toLocaleDateString("sk-SK", { weekday: "short" });
           return (
-            <button key={d} onClick={() => onGo?.({ module: "servis", view: "plan", plannerDate: d })} aria-label={`${fmtDate(d)}: ${off ? info[off.kind] : plural(work.length + (isToday ? lateN : 0), "úloha", "úlohy", "úloh")}${isToday && lateN ? `, ${lateN} mešká` : ""}`}
+            <button key={d} onClick={() => onGo?.({ module: "servis", view: "plan", plannerDate: d })} aria-label={`${fmtDate(d)}: ${off ? info[off.kind] : plural(work.length + lateHere, "úloha", "úlohy", "úloh")}${lateHere ? `, ${lateHere} mešká` : ""}`}
               style={{ border: isToday ? "0" : "1px solid var(--border)", background: isToday ? "var(--text)" : off ? "var(--panel-2)" : "var(--panel)", color: isToday ? "var(--panel)" : off ? "var(--text-dim)" : "var(--text)", borderRadius: 10, padding: "6px 0", minHeight: 76, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, font: "inherit", cursor: "pointer" }}>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{name} {Number(d.slice(8))}.</span>
-              <span className="tnum" style={{ fontSize: 20, fontWeight: 700 }}>{off ? "–" : work.length + (isToday ? lateN : 0)}</span>
+              <span className="tnum" style={{ fontSize: 20, fontWeight: 700 }}>{off ? "–" : work.length + lateHere}</span>
               <span aria-hidden="true" style={{ display: "flex", gap: 2 }}>{!off && work.slice(0, 5).map((a) => <i key={a.id} style={{ width: 8, height: 5, borderRadius: 2, background: a.kind === "kontrolaStroja" ? "var(--c4)" : "var(--c1)", display: "block" }} />)}</span>
-              <span style={{ fontSize: 11 }}>{off ? info[off.kind] : h ? "sviatok" : duty ? "pohotovosť" : isToday ? (lateN ? <b>{lateN} mešká</b> : "dnes") : ""}</span>
+              <span style={{ fontSize: 11 }}>{off ? info[off.kind] : h ? "sviatok" : duty ? "pohotovosť" : lateHere ? <b>{lateHere} mešká</b> : isToday ? "dnes" : ""}</span>
             </button>
           );
         })}
@@ -30135,11 +30169,11 @@ function TodayList({ title, rows: allRows, empty, total, limit }) {
               {problem && <span aria-hidden="true" style={{ color: "var(--danger)", fontSize: 16 }}>⚠</span>}
               <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: r.block ? "var(--panel)" : TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
               <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-                <div className={r.block ? "today-problem-title" : undefined} style={{ fontWeight: 600, fontSize: 14 }}>{r.title}</div>
-                {r.sub && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{r.sub}</div>}
+                <div className={r.block ? "today-problem-title" : undefined} style={{ fontWeight: 600, fontSize: 14, overflowWrap: "anywhere" }}>{r.title}</div>
+                {r.sub && <div style={{ fontSize: 13, color: "var(--text-dim)", overflowWrap: "anywhere" }}>{r.sub}</div>}
               </div>
               {r.load > 0 && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
-              <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
                 {shown.map((a, k) => (
                   a.href
                     ? <a key={k} className={`btn ${k === 0 && a !== openA ? "btn-outline" : "btn-ghost"}`} href={a.href} style={{ textDecoration: "none" }}>{a.label}</a>
@@ -31641,7 +31675,7 @@ function SparePartsImportButton({ depo, onImport, onClose }) {
                   </Field>
                 ))}
               </div>
-              <button className="btn btn-accent" disabled={!mapCisloDielu} onClick={doImport}>Importovať {rows.length} riadkov do {depo}</button>
+              <button className="btn btn-accent" disabled={!mapCisloDielu} onClick={doImport}>Importovať {plural(rows.length, "riadok", "riadky", "riadkov")} do depa {depo}</button>
             </>
           )}
         </Modal>

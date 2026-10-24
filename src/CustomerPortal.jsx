@@ -314,8 +314,8 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
 }
 
 const PORTAL_REQUEST_STATUS_LABEL = {
-  pending: { label: "Čaká na vybavenie", color: "#b07e00", bg: "#fff8e1" },
-  in_progress: { label: "V riešení", color: "#b07e00", bg: "#fff8e1" },
+  pending: { label: "Čaká na vybavenie", color: "#7a5600", bg: "#fff8e1" },
+  in_progress: { label: "V riešení", color: "#7a5600", bg: "#fff8e1" },
   approved: { label: "Schválené", color: "#27500A", bg: "#eaf3de" },
   resolved: { label: "Vyriešené", color: "#27500A", bg: "#eaf3de" },
   rejected: { label: "Zamietnuté", color: "#c62828", bg: "#fdecea" },
