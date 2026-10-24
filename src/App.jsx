@@ -31,13 +31,16 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.844";
+const APP_VERSION = "1.0.845";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.845", items: [
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Flotila: „V príprave“ má tmavšiu farbu — už sa nepletie s poruchou ani rezerváciami." },
+  ] },
   { v: "1.0.844", items: [
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Tiket obnovený z Koša má späť aj pridelenie technikovi a prepojené protokoly — hotová úloha sa nevráti ako otvorená." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Stroj s otvorenou kontrolou pred vydaním je v Dátach požičovne, v kalendári, na karte stroja, vo Flotile aj pri výbere stroja „V príprave“ (oranžovo) — už sa neráta medzi stroje v poruche." },
@@ -30560,7 +30563,7 @@ function FleetOutlook({ jobs, reservations, damages, machineById, today, myEmplo
       <div className="chart-legend" style={{ marginBottom: 8 }}>
         <span><i style={{ background: "var(--c1)" }} aria-hidden="true" />Vonku</span>
         <span><i style={{ background: "var(--c-bad)" }} aria-hidden="true" />Porucha</span>
-        {data.some((x) => x.prep) && <span><i style={{ background: "var(--c2)" }} aria-hidden="true" />V príprave</span>}
+        {data.some((x) => x.prep) && <span><i style={{ background: "var(--c-prep)" }} aria-hidden="true" />V príprave</span>}
         <span><i style={{ background: "var(--c4)" }} aria-hidden="true" />Rezervácie</span>
         <span><i style={{ background: "var(--c-idle)" }} aria-hidden="true" />Voľné</span>
       </div>
@@ -30571,7 +30574,7 @@ function FleetOutlook({ jobs, reservations, damages, machineById, today, myEmplo
             style={{ border: 0, padding: 0, background: "transparent", height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", cursor: "pointer", minWidth: 0 }}>
             <span className="tnum" style={{ fontSize: 12, fontWeight: 700, marginBottom: 3, color: x.free <= Math.max(1, Math.round(total * 0.1)) ? "var(--danger)" : "var(--text)" }}>{x.free}</span>
             <span style={{ display: "flex", flexDirection: "column", height: "calc(100% - 20px)", borderRadius: "4px 4px 0 0", overflow: "hidden" }}>
-              {seg(x.free, "var(--c-idle)")}{seg(x.res, "var(--c4)")}{seg(x.prep, "var(--c2)")}{seg(x.broken, "var(--c-bad)")}{seg(x.out, "var(--c1)")}
+              {seg(x.free, "var(--c-idle)")}{seg(x.res, "var(--c4)")}{seg(x.prep, "var(--c-prep)")}{seg(x.broken, "var(--c-bad)")}{seg(x.out, "var(--c1)")}
             </span>
           </button>
         ))}
@@ -32234,7 +32237,7 @@ function GlobalStyle() {
         --accent: #E30613;
         --accent-dark: #B5040F;
         --accent-light: #fdf0f0;
-        --c1: #2a78d6; --c2: #eb6834; --c3: #168f64; --c4: #b97f00; --c5: #e87ba4; --c-bad: #e34948; --c-idle: #8e8e89; /* kontrast grafov ≥ 3:1 (kolo 32) */
+        --c1: #2a78d6; --c2: #eb6834; --c3: #168f64; --c4: #b97f00; --c5: #e87ba4; --c-bad: #e34948; --c-idle: #8e8e89; --c-prep: #92400e; /* V príprave: odlíšiteľné od poruchy aj rezervácií */ /* kontrast grafov ≥ 3:1 (kolo 32) */
         /* Nepriehľadná verzia accent-light — pre miesta, kde má farba
            NIEČO PREKRYŤ (roh nad menami strojov v gantte), nie len jemne
            podfarbiť cez existujúci obsah. accent-light je v tmavom režime
@@ -32350,7 +32353,7 @@ function GlobalStyle() {
         --accent: #ff6b74;
         --accent-dark: #ff8a90;
         --accent-light: rgba(227,6,19,.18);
-        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #7c8086;
+        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #7c8086; --c-prep: #d95926;
         --ok: #8fd18a;
         --ok-bg: rgba(59,109,17,.28);
         --warn: #e0a858;
