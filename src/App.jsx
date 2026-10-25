@@ -31,13 +31,64 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.846";
+const APP_VERSION = "1.0.847";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.847", items: [
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Revízie a úradné skúšky: karty sa dajú zaškrtnúť ako v Poškodeniach a „Prideliť vybrané“ pridelí technika na viac tiketov naraz. „Prideliť technikovi“ je plné červené len pri tiketoch po termíne." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Plán servisu: štítok úlohy ukazuje aj krátky popis (napr. „S-115 · Nefunguje…“), riadky sú vyššie a pod plánom je zoznam nepridelených tiketov (najstaršie navrchu) s tlačidlom „Prideliť“." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba", "technik"], text: "Plán servisu: hotová servisná úloha (s protokolom) má ✓ a je stlmená; úloha v deň PN alebo dovolenky technika je orámovaná červeno s ⚠." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Okno Prideliť: „už má N úloh“ ráta len nehotové úlohy technika." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Poškodenia: tiket prípravy do požičovne má oranžový štítok „V príprave do požičovne“ namiesto červeného „Nové“; dlhý popis tiketu sa skráti na 2 riadky (celý je v detaile)." },
+    { roles: ["veduci_technik_ba"], text: "„Prideliť technikovi“ / „Zmeniť pridelenie“ sa pri tiketoch mimo Bratislavy a Nitry už neukazuje." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Revízie na mobile: depá v jednom posuvnom riadku (aj „Všetky“), hľadanie v riadku so stavom — prvá karta je vyššie." },
+    { roles: ["dispecer_servisu", "veduci_servisu"], text: "Dnes – Technici dnes: tlačidlo „Plán ›“ je vždy vpravo, ukazovateľ vyťaženosti je pod menom." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podklady – Servisné protokoly: km s desatinnou čiarkou a jednotky ani čísla dielov sa už nelámu na dva riadky." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Náhradné diely: tabuľky Objednané a Čaká na objednanie sa zmestia na obrazovku bez posúvania do strany." },
+    { roles: ["admin"], text: "Používatelia: hľadanie, nové účty bez roly navrchu so štítkom „čaká na rolu“, po zmene roly „Späť“. Rola Administrátor (pridanie aj odobratie) sa najprv opýta." },
+    { roles: ["admin"], text: "Používatelia: pri prvej role nového účtu platforma ponúkne založiť kartu zamestnanca s predvyplneným menom, rolou a prepojeným účtom." },
+    { roles: ["admin", "veduci_pozicovne", "veduci_servisu"], text: "Zamestnanci: filtre „Všetky roly“ a „Všetky depá“; stĺpec Stav len pri „Zobraziť archivovaných“." },
+    { roles: ["admin"], text: "Zamestnanci: klik na prepojený účet otvorí Používateľov rovno na ňom; oranžový štítok „rola účtu: …“, keď sa rola účtu líši od karty." },
+    { roles: ["admin"], text: "Audit log: „Skryť systémové“ (zapnuté), automatické tikety revízií v jednom riadku, stĺpec „Zmena“ (napr. stav: Nové → Pridelené), filtre Kto a Od–do, klik na kód otvorí kartu. Zapisujú sa aj zmeny zamestnancov a rola/prístup účtov." },
+    { roles: ["admin"], text: "Stav platformy: dlaždica s číslom otvorí príslušný zoznam, nuly sú sivé; nový prehľad účtov, ktorých rola sa líši od karty zamestnanca." },
+    { roles: ["admin", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"], text: "Kôš: pod kódom krátky popis (stroj · zákazník · popis), posledné 3 dni oranžovo." },
+    { roles: ["dispecer_servisu"], text: "Kôš v menu Servis — zmazané tikety (poškodenia, externé zákazky, revízie) si viete sami obnoviť." },
+    { roles: ["admin", "veduci_pozicovne", "veduci_servisu"], text: "Checkeri podľa depa: „Uložiť“ až po zmene, pri zmenenom depe „● neuložené“, odchod s neuloženou zmenou sa opýta." },
+    { roles: ["admin"], text: "Export dát: upozornenie, že záloha neobsahuje používateľov (účty a roly) ani audit log." },
+    { roles: ["sofer", "externy_sofer", "technik"], text: "Karta zákazky už neukazuje požiadavky zákazníka z portálu (predĺženie, nahlásený problém) — rieši ich kancelária." },
+    { roles: ["sofer", "externy_sofer"], text: "Prepravy: hotový vývoz s protokolom je jeden riadok „✓ Vývoz S-… · zákazník — protokol / QR“ na konci dňa, bez tlačidla Navigovať." },
+    { roles: ["sofer", "externy_sofer"], text: "Problém s prepravou: rýchle dôvody jedným ťuknutím (Zákazník neprítomný, Meškám, Nedá sa prísť ku stroju, Porucha stroja), text sa dá dopísať; počítadlo znakov do 300." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne"], text: "Protokol o prevzatí/vrátení: po „✓ Všetko v poriadku“ sa checklist zbalí na jeden riadok (ťuk = upraviť) a obrazovka prejde na fotky. Zásady prenájmu sú rozbaľovacie; pri podpise je napísané, že ich nájomca podpisom potvrdzuje. V tlači a PDF ostávajú celé." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Neuložené — v zariadení: pri každom zázname je dôvod (napr. „Zákazka je pridelená inému šoférovi“), čas uloženia a tlačidlo 📞 Dispečer / 📞 Servis. Kým čaká neuložený protokol, Dnes píše „Čaká 1 neuložený protokol“ namiesto „Všetko na dnes je hotové“." },
+    { roles: ["sofer", "externy_sofer"], text: "Keď ten istý protokol uloží skôr iný telefón, okno sa zavrie — už neukazuje „✓ Protokol bol odoslaný“." },
+    { roles: ["externy_sofer", "veduci_pozicovne", "dispecer_pozicovne", "admin"], text: "Výkaz prepráv externého šoféra sa otvorí na „Tento mesiac“ a v nadpise je obdobie (napr. „Október 2026“)." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Prepravy: dátum vývozu/zvozu je text s ✎ — mení sa až po ťuknutí, pri posúvaní sa nezmení omylom." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Prepravy na mobile: Rýchly prehľad sú 3 dlaždice (↑ vývozy, ↓ zvozy, počet bez šoféra červeno); ťuk posunie na karty bez šoféra alebo na daný deň." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Prepravy: klik na číslo v Rýchlom prehľade posunie na príslušné karty a zvýrazní ich (namiesto okna). Na kartách bez šoféra je výber „Prideliť šoféra…“ výrazný." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Zákazky a Dáta požičovne: zákazka, ktorá podľa dátumu už beží, ale stroj ešte neodišiel (bez protokolu o prevzatí), má sivomodrý stav „Čaká na vývoz“ namiesto „Na zákazke“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Nová zákazka: upozornenie „Stroj na tento termín nie je voľný“ je hneď pod poľom Stroj." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Karta zákazky: Kam a Obchodník sú navrchu. Ak zákazka nemá vlastný kontakt, ukáže sa telefón a email firmy (dajú sa ťuknúť). Prázdne polia sú v jednom riadku „Doplniť“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Dnes: pri zákazkách „PO KONCI“ vidno, kto a kedy robí zvoz, alebo červené „zvoz bez šoféra“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Dáta požičovne: klik na dlaždicu (Na zákazke, Voľné, V poruche, V príprave, Po termíne) vyfiltruje stroje, druhý klik filter zruší. Filter stavu má aj „V poruche“ a „V príprave“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Výber stroja: pri veľkom počte strojov zoznam povie, koľko ďalších nezobrazil — spresnite hľadanie." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Nezáväzná rezervácia upozorní na stroj v poruche alebo v príprave." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "„Ukončiť zákazku“ po termíne predvolí zvoz na dnešný deň." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "IČO zákazníka sa ukladá bez medzier; import zákaziek nájde zákazníka podľa IČO aj vtedy, keď je zapísané s medzerami, a zákazke dá jeho meno." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Tablet: Zákazky, Dáta požičovne a ERP podklady sa pod 900 px šírky zobrazia ako karty — tlačidlá sú vždy na obrazovke." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Kalendár na mobile otočenom na šírku: lišta je v jednom riadku (depá ako výber), kalendár má viac miesta." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Tmavý režim: „V príprave“ vo Flotile má tmavšiu farbu." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Odkaz pre zákazníka: pod odkazom je, odkedy a dokedy platí. „Zneplatniť odkaz“ a „Vydať nový odkaz“ sú v menu ⋯ („Odkaz unikol alebo ho treba vypnúť?“). Výmena, zneplatnenie aj obnovenie odkazu sa zapíše do „História odkazu“ (kto a kedy)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Schválenie zmeny termínu z portálu ukáže doterajší aj nový koniec a o koľko dní sa prenájom skráti alebo predĺži. Keď dátum už prešiel, platforma upozorní a zvoz predvyplní na dnes." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu"], text: "Dnes: dlhé hlásenie zákazníka z portálu sa v zozname skráti na 2 riadky, celé je na karte zákazky." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "dispecer_servisu", "veduci_servisu"], text: "Portál pre zákazníka: zákazka po termíne má štítok „Po termíne“ a výzvu dohodnúť vrátenie alebo predĺženie. Pri zmene dátumu vrátenia vidno súčasný koniec. Pri žiadostiach je dátum odoslania a odpoveď mateco je zvýraznená. Bez signálu portál napíše, že sa stav načíta po pripojení." },
+    { text: "Prihlásenie: heslo sa dá zobraziť (👁) a pribudol odkaz „Zabudnuté heslo“ — na email príde odkaz na nastavenie nového hesla." },
+    { text: "Upozornenia (zvonček) na mobile sú na celú obrazovku s tlačidlom ×; neprečítané označuje bodka, skupinu označíte ako prečítanú ikonou ✓." },
+    { roles: ["admin", "veduci_pozicovne", "veduci_servisu"], text: "Štatistiky na mobile: obdobie sa vyberá z jedného zoznamu („Tento mesiac ▾“)." },
+  ] },
   { v: "1.0.846", items: [
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Zmazanie tiketu odstráni všetky jeho dnešné úlohy, aj keď už niekto vypísal protokol (protokol ostane medzi nepriradenými) — nikomu neostane „Vypísať protokol“ k neexistujúcemu tiketu. Obnova z Koša ich vráti." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Import zákaziek spáruje zákazníka podľa IČO aj keď je zapísané s medzerami — nevznikne druhý zákazník s tým istým IČO." },
@@ -256,6 +307,22 @@ function whatsNewFor(role, seen) {
     .map((c) => ({ v: c.v, items: c.items.filter((i) => !i.roles || role === "admin" || i.roles.includes(role)).map((i) => i.text) }))
     .filter((g) => g.items.length);
 }
+// Oblasť položky „Čo je nové“ podľa rolí, ktorým je určená (na zoskupenie dlhého zoznamu).
+function whatsNewAreas(group) {
+  const ORDER = ["Pre všetkých", "Požičovňa", "Prepravy a terén", "Servis", "Administrácia"];
+  const area = (r) => {
+    if (!r) return "Pre všetkých";
+    if (r.every((x) => ["admin", "veduci_pozicovne", "veduci_servisu"].includes(x))) return "Administrácia";
+    if (r.some((x) => x === "sofer" || x === "externy_sofer") && !r.includes("obchodnik")) return "Prepravy a terén";
+    if (r.some((x) => ["dispecer_servisu", "veduci_servisu", "fakturant_servis", "veduci_technik_ba", "technik"].includes(x)) && !r.includes("dispecer_pozicovne")) return "Servis";
+    if (r.some((x) => ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"].includes(x))) return "Požičovňa";
+    return "Administrácia";
+  };
+  const src = CHANGELOG.find((c) => c.v === group.v)?.items || [];
+  const out = {};
+  group.items.forEach((t) => { const a = area(src.find((i) => i.text === t)?.roles); (out[a] = out[a] || []).push(t); });
+  return ORDER.filter((a) => out[a]).map((a) => [a, out[a]]);
+}
 // Odkaz zákazníka na portál (?portal=<token>) nesmie odísť do hlásenia chýb — v adrese, breadcrumboch ani názve stránky.
 function scrubPortalToken(event) {
   try { return JSON.parse(JSON.stringify(event).replace(/(portal=)[^&"#\s\\]+/g, "$1[skryté]")); } catch { return event; }
@@ -407,6 +474,11 @@ function PrivacyNote() {
 function myAssignableDepos(user) {
   return LEAD_TECHNICIAN_DEPOS[user?.role] || null;
 }
+// Vedúci technik BA: tiket stroja (externá zákazka: zvoleného depa) mimo jeho dep neprideľuje (DB to odmietne).
+function damageInDeposOf(user, d, machineById) {
+  const allowed = myAssignableDepos(user);
+  return !allowed || allowed.includes(d.type === "externa" ? d.assignedDepo : machineById?.[d.machineId]?.depo);
+}
 // Ktorý modul sa má otvoriť ako prvý hneď po prihlásení, podľa role.
 const ROLE_DEFAULT_MODULE = {}; // všetci začínajú na „Dnes“ (etapa 2) — fallback nižšie
 function roleLabel(roleId) {
@@ -459,7 +531,7 @@ const PERM = {
   // Kôš — kto smie vidieť obrazovku "Kôš" vôbec (appka mu vnútri ešte navyše
   // ukáže len tie záznamy, čo patria do jeho vlastného segmentu — viď
   // canSeeTrashEntry nižšie).
-  trash_view: ["veduci_pozicovne", "veduci_servisu"],
+  trash_view: ["veduci_pozicovne", "veduci_servisu", "dispecer_servisu"], // dispečer servisu len tikety (rozhodnutie 25. 10.)
   reservation_add: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne"],
   reservation_convert: ["dispecer_pozicovne", "veduci_pozicovne"],
   reservation_delete: ["dispecer_pozicovne", "veduci_pozicovne"],
@@ -1387,13 +1459,13 @@ function damageDisplayStav(d) {
 }
 function damageColor(d) {
   const s = damageDisplayStav(d);
-  if (s === "nove") return "var(--danger)";
+  if (s === "nove") return d.prepCheck ? "var(--warn)" : "var(--danger)"; // príprava do požičovne nie je porucha
   if (s === "pridelene") return "var(--info)";
   return DAMAGE_STAV_META[s]?.color || "var(--text-dim)";
 }
 function damageLabel(d) {
   const s = damageDisplayStav(d);
-  if (s === "nove") return "Nové";
+  if (s === "nove") return d.prepCheck ? "V príprave do požičovne" : "Nové";
   if (s === "pridelene") return "Pridelené";
   return DAMAGE_STAV_META[s]?.label || s;
 }
@@ -1401,7 +1473,7 @@ function damageLabel(d) {
 // vzhľad štítkov stavu v celej appke namiesto ručne skladaného background/color).
 function damageBadgeCls(d) {
   const s = damageDisplayStav(d);
-  if (s === "nove") return "badge-danger";
+  if (s === "nove") return d.prepCheck ? "badge-warn" : "badge-danger";
   if (s === "pridelene") return "badge-info";
   if (s === "opravene") return "badge-ok";
   return "badge-warn";
@@ -2228,7 +2300,7 @@ async function refreshOutboxCount() {
   const blockedKeys = new Set(items.filter((x) => x?.rejectedNotified).map((x) => `${x.table}:${x.item?.id}`));
   const isBlocked = (x) => x?.rejectedNotified || blockedKeys.has(x?.item?.afterProtocol || x?.afterProtocol);
   const blocked = items.filter(isBlocked).length;
-  _outboxCountListener?.(items.length, blocked, userChangeCount(items.filter((x) => !isBlocked(x))), items.filter((x) => x?.rejectedNotified && REJECTED_LABEL[x.table]).map((x) => ({ table: x.table, item: x.item })));
+  _outboxCountListener?.(items.length, blocked, userChangeCount(items.filter((x) => !isBlocked(x))), items.filter((x) => x?.rejectedNotified && REJECTED_LABEL[x.table]).map((x) => ({ table: x.table, item: x.item, msg: x.rejectedMsg, at: x.savedAt })));
 }
 // Počet zmien, ako ich vidí človek: upozornenie, fotka a odkaz portálu k protokolu
 // sú súčasťou protokolu (vo fronte ostávajú, len sa nerátajú zvlášť).
@@ -2369,6 +2441,7 @@ async function protocolAlreadySaved(item) {
     if (!phasesDone(other?.data)) return false;
   }
   showNotice("Protokol k tejto zákazke už bol uložený z iného zariadenia — táto kópia sa nepoužila.");
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mateco-protocol-dup", { detail: item.id })); // okno protokolu nesmie ostať na „✓ odoslaný“
   // Čo čaká na túto kópiu (upozornenia, odkaz, kontrola po vrátení) poslalo už prvé zariadenie — nezdvojovať.
   const key = `handoverProtocols:${item.id}`;
   for (const x of await idbGetAll("outbox")) {
@@ -2464,7 +2537,7 @@ async function flushOutboxOnce() {
           if (await protocolAlreadySaved(item)) { await idbDelete("outbox", qKey); _saveStatusListener?.("ok", table); return; }
           if (!it.rejectedNotified && !_rejectedNotified.has(qKey)) {
             _rejectedNotified.add(qKey); // dva súbežné flushe (online + interval) → len raz
-            await idbPut("outbox", qKey, { ...it, rejectedNotified: true });
+            await idbPut("outbox", qKey, { ...it, rejectedNotified: true, rejectedMsg: _deniedMsg.get(qKey) });
             _rejectedProtocolListener?.(item);
           }
           return;
@@ -2472,7 +2545,7 @@ async function flushOutboxOnce() {
         if (keepOnDeny(table, item)) {
           if (!it.rejectedNotified && !_rejectedNotified.has(qKey)) {
             _rejectedNotified.add(qKey);
-            await idbPut("outbox", qKey, { ...it, rejectedNotified: true });
+            await idbPut("outbox", qKey, { ...it, rejectedNotified: true, rejectedMsg: _deniedMsg.get(qKey) });
             _rejectedRecordListener?.(table, item, _deniedMsg.get(qKey));
           }
           refreshOutboxCount();
@@ -3048,7 +3121,7 @@ function saveRecordRow(table, item, base) {
   const queueIt = () => idbGet("outbox", qKey)
     .then((queued) => {
       const qn = mergeNotify(queued?.item?._notify, item._notify); // novší zápis toho istého záznamu nezahodí upozornenie z fronty
-      return idbPut("outbox", qKey, { table, item: qn.length ? { ...item, _notify: qn } : item, base: queued && "base" in queued ? queued.base : base || null });
+      return idbPut("outbox", qKey, { table, item: qn.length ? { ...item, _notify: qn } : item, base: queued && "base" in queued ? queued.base : base || null, savedAt: Date.now() });
     })
     .then(refreshOutboxCount);
   const next = prev.then(async () => {
@@ -3114,14 +3187,14 @@ function saveRecordRow(table, item, base) {
         if (await protocolAlreadySaved(item)) { await idbDelete("outbox", qKey); refreshOutboxCount(); _saveStatusListener?.("ok", table); return; }
         // Podpísaný protokol sa nezahadzuje (preradenie šoféra, deaktivácia) — ostáva vo fronte ako pri flushi.
         await queueIt();
-        if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true })); _rejectedProtocolListener?.(item); }
+        if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true, rejectedMsg: _deniedMsg.get(qKey) })); _rejectedProtocolListener?.(item); }
         _retryActions[table] = flushOutbox;
         _saveStatusListener?.("ok", table);
         return;
       }
       if (fieldRow && keepOnDeny(table, item)) {
         await queueIt();
-        if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true }).then(refreshOutboxCount)); _rejectedRecordListener?.(table, item, _deniedMsg.get(qKey)); }
+        if (!_rejectedNotified.has(qKey)) { _rejectedNotified.add(qKey); idbGet("outbox", qKey).then((q) => q && idbPut("outbox", qKey, { ...q, rejectedNotified: true, rejectedMsg: _deniedMsg.get(qKey) }).then(refreshOutboxCount)); _rejectedRecordListener?.(table, item, _deniedMsg.get(qKey)); }
         _retryActions[table] = flushOutbox;
         _saveStatusListener?.("ok", table);
         return;
@@ -3609,10 +3682,10 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = options.find((o) => o.value === value);
-  const filtered = (query
+  const matched = query
     ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
-    : options
-  ).slice(0, 60);
+    : options;
+  const filtered = matched.slice(0, 60);
   const [act, setAct] = useState(-1); // zvýraznená možnosť pre šípky
   const listId = useId();
   // Klik mimo zoznam ho zavrie a zároveň prejde ďalej (predtým ho zachytila priehľadná vrstva cez celé okno).
@@ -3717,6 +3790,9 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
                 ) : o.label}
               </div>
             ))}
+            {matched.length > filtered.length && (
+              <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 13 }}>… a {plural(matched.length - filtered.length, "ďalší", "ďalšie", "ďalších")} — spresnite hľadanie</div>
+            )}
           </div>
         </>
       )}
@@ -3756,6 +3832,7 @@ function TabSwitcher({ options, active, onSelect, children }) {
 function StatusBadge({ status }) {
   const map = {
     active: { cls: "badge-info", label: "Na zákazke" },
+    awaitingOut: { cls: "spill-out", label: "Čaká na vývoz" },
     planned: { cls: "badge-warn", label: "Naplánovaná" },
     overdue: { cls: "badge-danger", label: "Po termíne" },
     completed: { cls: "badge-ok", label: "Dokončená" },
@@ -3767,7 +3844,7 @@ function StatusBadge({ status }) {
 
 // Stav zákazky ako pilulka (zoznam zákaziek) — farby podľa základu dizajnu.
 function JobStatusPill({ status }) {
-  const m = { active: ["spill-active", "Na zákazke"], planned: ["spill-planned", "Naplánovaná"], overdue: ["spill-overdue", "⚠ Po termíne"], completed: ["spill-done", "Dokončená"] }[status] || ["spill-planned", status];
+  const m = { active: ["spill-active", "Na zákazke"], awaitingOut: ["spill-out", "Čaká na vývoz"], planned: ["spill-planned", "Naplánovaná"], overdue: ["spill-overdue", "⚠ Po termíne"], completed: ["spill-done", "Dokončená"] }[status] || ["spill-planned", status];
   return <span className={`spill ${m[0]}`}>{m[1]}</span>;
 }
 
@@ -4805,7 +4882,9 @@ function DispatcherApp() {
         && hpDoneByJob[j.id] === "handover" && (j.pickupDate || j.endDate || "") >= addDaysISO(today, -30)) || null;
       // „V príprave“ (príprava do požičovne) je samostatný stav, nie porucha (rozhodnutie 24. 10.).
       const inPrep = !!openDamage?.prepCheck;
-      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage && !inPrep, inPrep, openDamage, awaitingPickup };
+      // Zákazka beží podľa dátumu, ale stroj ešte neodišiel (bez protokolu o prevzatí) — len zobrazenie „Čaká na vývoz“, stav sa nemení.
+      const awaitingOut = status === "active" && !cur.notRealized && !hpDoneByJob[cur.id];
+      return { ...m, currentJob: cur, nextJob: nxt, status, hasOpenDamage: !!openDamage && !inPrep, inPrep, openDamage, awaitingPickup, awaitingOut };
     });
   }, [machines, jobs, today, openDamagesByMachine, hpDoneByJob]);
 
@@ -5908,8 +5987,8 @@ function DispatcherApp() {
     setProfiles((prev) => prev.map((p) => (p.id === profileId ? { ...p, role } : p)));
   }
   function updateProfileInfo(id, patch) {
-    if (officeOffline("profiles")) return;
-    supabase
+    if (officeOffline("profiles")) return Promise.resolve(false);
+    return supabase
       .from("profiles")
       .update(patch)
       .eq("id", id)
@@ -5919,9 +5998,18 @@ function DispatcherApp() {
         if (error || !data?.length) {
           showNotice("Údaje účtu sa nepodarilo uložiť" + (error ? " (" + (error.message || "chyba") + ")." : " — nemáte oprávnenie."));
           console.error("Update profile failed", error);
-          return;
+          return false;
         }
+        const before = profiles.find((p) => p.id === id);
         setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+        // Nový účet dostal prvú rolu a kartu ešte nemá — ponúknuť ju (jeden účet = jedna karta).
+        if (before?.role === "nezaradeny" && patch.role && !["admin", "nezaradeny"].includes(patch.role) && !employees.some((e) => e.linkedUserId === id)) {
+          setConfirmAction({
+            message: `Založiť účtu ${before.name || before.email || ""} aj kartu zamestnanca (${roleLabel(patch.role)})? Meno, rola a prepojený účet budú predvyplnené — doplníte depo.`,
+            confirmLabel: "Založiť kartu",
+            onConfirm: () => setShowAddEmployee({ draft: { name: before.name || "", role: patch.role, linkedUserId: id, email: before.email || "" } }),
+          });
+        }
         // Rola účtu a karta zamestnanca sa nesmú rozísť (šofér/technik filtre, checkeri).
         const emp = employees.find((e) => e.linkedUserId === id && !e.archived) || employees.find((e) => e.linkedUserId === id);
         if (emp && patch.role && patch.role !== emp.role && !["admin", "nezaradeny"].includes(patch.role)) {
@@ -5939,6 +6027,7 @@ function DispatcherApp() {
         if (emp && !emp.archived && (patch.role === "nezaradeny" || patch.active === false) && window.confirm(`Účet je teraz bez prístupu. Archivovať aj kartu zamestnanca ${emp.name}? (vypadne z výberov a jeho úlohy sa upracú)`)) {
           setEmployeeArchived(emp.id, true, "Iné", "Účet bez prístupu (Správa používateľov)");
         }
+        return true;
       });
   }
   function deleteProfile(id) {
@@ -6497,7 +6586,7 @@ function DispatcherApp() {
             ? {
                 ...c,
                 cisloOdberatela: cisloOdberatela || c.cisloOdberatela,
-                ico: ico || c.ico,
+                ico: icoKey(ico) || c.ico,
                 // Všeobecný kontakt firmy sa z formulára zákazky len dopĺňa (údaje kontaktnej osoby ho neprepíšu).
                 kontakt: c.kontakt || kontakt || "",
                 email: c.email || email || "",
@@ -6514,7 +6603,7 @@ function DispatcherApp() {
           id: uid(),
           firma: name,
           cisloOdberatela: cisloOdberatela || "",
-          ico: ico || "",
+          ico: icoKey(ico),
           kontakt: kontakt || "",
           email: email || "",
           telefon: telefon || "",
@@ -6532,7 +6621,7 @@ function DispatcherApp() {
       const firma = (row.firma || "").trim();
       if (!firma) return;
       const cisloOdberatela = (row.cisloOdberatela || "").trim();
-      const ico = (row.ico || "").trim();
+      const ico = icoKey(row.ico);
       const idx = next.findIndex((c) => c.firma.toLowerCase() === firma.toLowerCase());
       if (idx >= 0) {
         next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela, ico: ico || next[idx].ico };
@@ -6552,7 +6641,7 @@ function DispatcherApp() {
         id,
         firma: (data.firma || "").trim(),
         cisloOdberatela: data.cisloOdberatela || "",
-        ico: data.ico || "",
+        ico: icoKey(data.ico),
         kontakt: data.kontakt || "",
         email: data.email || "",
         telefon: data.telefon || "",
@@ -6892,6 +6981,7 @@ function DispatcherApp() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showNotice("Záloha je stiahnutá. Neobsahuje používateľov (prihlasovacie účty a ich roly) ani audit log.");
   }
 
   function importBackup(file) {
@@ -8455,11 +8545,8 @@ function DispatcherApp() {
     return protocolLogs.some((p) => p.assignmentId === a.id
       || (p.damageId && p.damageId === a.damageId && techName && (p.technicianName || "").split(/,\s*/).map((n) => n.trim()).includes(techName) && p.createdAt && toLocalISO(new Date(p.createdAt)) === a.date));
   }
-  // Vedúci technik BA: tiket stroja (externá zákazka: zvoleného depa) mimo jeho dep neprideľuje (DB to odmietne).
   function damageInMyDepos(d) {
-    const allowed = myAssignableDepos(effectiveUser);
-    if (!allowed) return true;
-    return allowed.includes(d.type === "externa" ? d.assignedDepo : machineById[d.machineId]?.depo);
+    return damageInDeposOf(effectiveUser, d, machineById);
   }
   // Súbeh dvoch dispečerov: technici, ktorých pridelenie ostáva (cudzie čerstvé — nemažeme ho) alebo ktorých
   // tiket má, no ich pridelenie ešte nedorazilo — ostávajú na tikete, nech tiket sedí s pridelenými.
@@ -9075,7 +9162,9 @@ function DispatcherApp() {
 
   const filteredMachines = useMemo(() => {
     let list = enrichedMachines;
-    if (statusFilter !== "all") list = list.filter((m) => m.status === statusFilter && (statusFilter !== "free" || (!m.hasOpenDamage && !m.inPrep && !m.awaitingPickup)));
+    // V poruche / V príprave rovnako ako dlaždice (stats nižšie).
+    if (statusFilter !== "all") list = list.filter((m) => statusFilter === "broken" ? m.status === "free" && m.hasOpenDamage : statusFilter === "prep" ? m.status === "free" && m.inPrep
+      : m.status === statusFilter && (statusFilter !== "free" || (!m.hasOpenDamage && !m.inPrep && !m.awaitingPickup)));
     if (dashboardDepoFilter) list = list.filter((m) => (m.depo || "").toLowerCase() === dashboardDepoFilter.toLowerCase());
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -10389,7 +10478,7 @@ function DispatcherApp() {
 
 
   const navModules = buildNavModules(effectiveUser, damages.filter((d) => d.type !== "revizia" && d.type !== "uradnaSkuska" && d.type !== "externa" && !d.resolved && !d.technicianId).length, myEmployee, navCounts);
-  const navGo = (m, v) => { setModule(m); setView(v); };
+  const navGo = (m, v) => { if (_leaveGuard && !_leaveGuard()) return; setModule(m); setView(v); };
   const navPickDoc = (m, st) => { if (!st.url) setModule(m); pickDocumentsSubView(st); };
   const hasMobileBar = !!effectiveUser && effectiveUser.role !== "nezaradeny";
   const quickActions = [
@@ -10443,6 +10532,7 @@ function DispatcherApp() {
         <UserAdminModal
           profiles={profiles}
           currentUser={currentUser}
+          initialSearch={typeof showUserAdmin === "string" ? showUserAdmin : ""}
           onClose={() => setShowUserAdmin(false)}
           onUpdate={updateProfileInfo}
           onDelete={(id) => {
@@ -10545,6 +10635,7 @@ function DispatcherApp() {
         {module === "dnes" && DNES_ROLES.includes(effectiveUser?.role) && (
           <TodayView
             blockedItems={outboxBlockedList}
+            jobDispatcher={jobDispatcher}
             onRetryBlocked={async () => {
               await flushOutbox();
               const still = (await idbGetAll("outbox")).filter((x) => x?.rejectedNotified).length;
@@ -10580,6 +10671,7 @@ function DispatcherApp() {
               <TransportsOverview
                 assignments={assignments}
                 dnes
+                unsavedProtocols={outboxBlockedList.filter((x) => x.table === "handoverProtocols").length}
                 jobs={jobs}
                 drivers={drivers}
                 jobDispatcher={jobDispatcher}
@@ -10677,6 +10769,7 @@ function DispatcherApp() {
             reservations={reservations}
             machineById={machineById}
             driverById={driverById}
+            hpDoneByJob={hpDoneByJob}
             today={today}
             user={effectiveUser}
             myEmployee={myEmployee}
@@ -10885,6 +10978,7 @@ function DispatcherApp() {
                 plannerTargetDate={plannerTargetDate}
                 onPlannerTargetDateConsumed={() => setPlannerTargetDate(null)}
                 hasServiceProtocol={hasServiceProtocol}
+                onAssignDamage={(d) => setDamageAssignTarget(d)}
               />
             ) : (<>
               <div className="quick-filters" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>{techFilters}</div>
@@ -11196,6 +11290,9 @@ function DispatcherApp() {
                 onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
                 highlightDamageId={highlightDamageId}
                 onClearAll={() => askDelete("VŠETKY revízie", clearAllRevisions)}
+                onBulkAssign={assignDamagesBulk}
+                assignments={assignments}
+                today={today}
               />
             )}
             {view === "uradne_skusky" && (
@@ -11219,6 +11316,8 @@ function DispatcherApp() {
                 onOpenDetail={(d) => { setServiceEventDetail(d); if (d.id === highlightDamageId) dismissHighlight(); }}
                 highlightDamageId={highlightDamageId}
                 onClearAll={() => askDelete("VŠETKY úradné skúšky", clearAllUradneSkusky)}
+                onBulkAssign={assignDamagesBulk}
+                assignments={assignments}
               />
             )}
           </TabSwitcher>
@@ -11317,6 +11416,7 @@ function DispatcherApp() {
             user={effectiveUser}
             onAdd={() => setShowAddEmployee({})}
             onEdit={(e) => setShowAddEmployee({ existing: e })}
+            onOpenUser={isAdminUser(effectiveUser) ? (p) => setShowUserAdmin(p.email || p.name || true) : undefined}
             onArchive={(e) =>
               e.archived
                 ? setEmployeeArchived(e.id, false)
@@ -11355,7 +11455,7 @@ function DispatcherApp() {
             onDelete={(v) => askDelete(`auto ${v.spz || ""}`, () => deleteVehicle(v.id), true)}
           />
         )}
-        {module === "administrativa" && view === "kos" && can(effectiveUser, "trash_view") && (<>
+        {(module === "administrativa" || module === "servis") && view === "kos" && can(effectiveUser, "trash_view") && (<>
           <h1 className="page-h1">Kôš</h1>
           <p className="page-intro">Zmazané záznamy sa tu automaticky natrvalo vymažú po 30 dňoch.</p>
           <TrashView
@@ -11367,9 +11467,9 @@ function DispatcherApp() {
           />
         </>)}
         {module === "administrativa" && view === "audit" && isAdminUser(effectiveUser) && (
-          <AuditLogView profiles={profiles} />
+          <AuditLogView profiles={profiles} employees={employees} machines={machines} onOpen={handleSearchNavigate} />
         )}
-        {module === "administrativa" && view === "stav" && isAdminUser(effectiveUser) && <PlatformStatusView />}
+        {module === "administrativa" && view === "stav" && isAdminUser(effectiveUser) && <PlatformStatusView profiles={profiles} employees={employees} onGo={navGo} onOpenUser={(p) => setShowUserAdmin(p.email || p.name || true)} />}
       </div>
       </div>
 
@@ -11379,9 +11479,21 @@ function DispatcherApp() {
       )}
       {!tourOpen && whatsNew && whatsNew.length > 0 && (
         <Modal title="Čo je nové v platforme" onClose={() => { setWhatsNew(null); setTimeout(() => document.getElementById("obsah")?.focus({ preventScroll: true }), 0); }}>
+          {whatsNew[0].items.length > 8 ? (
+            // Dlhý zoznam (admin vidí všetko) — po oblastiach a zbalené, nech je „Rozumiem“ hneď na očiach.
+            <div style={{ marginBottom: 14 }}>
+              {whatsNewAreas(whatsNew[0]).map(([area, items]) => (
+                <details key={area} style={{ borderBottom: "1px solid var(--border)", padding: "6px 0" }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 14 }}>{area} <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>· {plural(items.length, "zmena", "zmeny", "zmien")}</span></summary>
+                  <ul style={{ margin: "6px 0 4px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>{items.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}</ul>
+                </details>
+              ))}
+            </div>
+          ) : (
           <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
             {whatsNew[0].items.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}
           </ul>
+          )}
           {whatsNew.length > 1 && (whatsNewOlder ? whatsNew.slice(1).map((g, gi) => (
             <div key={g.v}>
               <div id={gi === 0 ? "whatsnew-older" : undefined} tabIndex={gi === 0 ? -1 : undefined} style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", margin: "4px 0" }}>Verzia {g.v}</div>
@@ -12121,6 +12233,7 @@ function DispatcherApp() {
           user={effectiveUser}
           assignments={assignments}
           today={today}
+          hasServiceProtocol={hasServiceProtocol}
           onClose={() => { setDamageAssignTarget(null); setCardHistory([]); }}
           onSave={(technicianIds, date) => assignDamage(damageAssignTarget.id, technicianIds, date, damageAssignTarget.technicianIds || (damageAssignTarget.technicianId ? [damageAssignTarget.technicianId] : []))}
           onBack={cardHistory.length > 0 ? () => { goBackCard(); setDamageAssignTarget(null); } : null}
@@ -12296,6 +12409,7 @@ function DispatcherApp() {
           key={liveJob.id + ":" + jobCardNonce}
           job={liveJob}
           machine={machineById[liveJob.machineId]}
+          customerRec={customers.find((c) => c.id === liveJob.customerId) || customers.find((c) => (c.firma || "").trim().toLowerCase() === (liveJob.customer || "").trim().toLowerCase())}
           driverById={driverById}
           drivers={drivers}
           dispatchers={dispatchers}
@@ -12374,7 +12488,7 @@ function DispatcherApp() {
           onTogglePortalRevoked={() => {
             const next = !liveJob.portalRevoked;
             const go = () => {
-              updateJob(liveJob.id, { portalRevoked: next });
+              updateJob(liveJob.id, { portalRevoked: next, portalLinkLog: [...(liveJob.portalLinkLog || []), { action: next ? "revoked" : "restored", by: currentUser?.name || "", at: new Date(serverNowMs()).toISOString() }].slice(-10) });
               setJobDetail((prev) => (prev ? { ...prev, portalRevoked: next } : prev));
             };
             // Zneplatnenie s potvrdením (rozhodnutie 24. 10.), obnovenie hneď.
@@ -12392,6 +12506,8 @@ function DispatcherApp() {
                 if (error || !data) { showNotice(`Nový odkaz sa nevydal${error?.message ? ` — ${error.message}` : ""}.`); return; }
                 setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, publicToken: data } : j)));
                 setJobDetail((prev) => (prev ? { ...prev, publicToken: data } : prev));
+                // História odkazu na karte (Zákazník) — dispečer hneď vidí, prečo zákazníkovi starý odkaz nefunguje.
+                persistJobs((list) => list.map((j) => (j.id === jobId ? { ...j, portalLinkLog: [...(j.portalLinkLog || []), { action: "rotated", by: currentUser?.name || "", at: new Date(serverNowMs()).toISOString() }].slice(-10), _rev: (j._rev || 0) + 1 } : j)));
                 showToast("Nový odkaz je vydaný — pošlite ho zákazníkovi.");
               },
             });
@@ -12469,6 +12585,13 @@ function DispatcherApp() {
           user={effectiveUser}
           canDelete={isAdminUser(effectiveUser)}
           forcePhase={handoverDirectPhase}
+          onEnsurePortalLink={() => {
+            const jobId = showHandoverProtocol.id;
+            if (jobs.find((j) => j.id === jobId)?.publicToken) return;
+            claimJobPublicToken(jobId, crypto.randomUUID()).then((real) => {
+              if (real) setJobs((prev) => prev.map((j) => (j.id === jobId && !j.publicToken ? { ...j, publicToken: real } : j)));
+            });
+          }}
           checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz")}
           assignments={assignments}
           onClose={() => { setShowHandoverProtocol(null); setHandoverDirectPhase(null); goBackCard(); }}
@@ -12860,7 +12983,7 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
                   👤 Používatelia
                 </button>
                 {canExport && (
-                  <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onExportBackup(); setOpen(false); }}>
+                  <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onExportBackup(); setOpen(false); }} title="Záloha všetkých dát platformy — bez používateľov (účty a roly) a bez audit logu">
                     ⬇ Export dát
                   </button>
                 )}
@@ -12947,6 +13070,7 @@ function canSeeTrashEntry(entry, user) {
     if (entry.recordType === "employee" && ["technik", "dispecer_servisu", "fakturant_servis", "veduci_technik_ba"].includes(entry.originalData?.role)) return true;
     return false;
   }
+  if (role === "dispecer_servisu") return entry.recordType === "damage";
   return false;
 }
 
@@ -13131,7 +13255,9 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setOpen(false)} />
           <div
-            className="panel dropdown-panel"
+            className="panel dropdown-panel bell-panel"
+            role="dialog"
+            aria-label="Upozornenia"
             style={{
               position: "absolute",
               top: "calc(100% + 8px)",
@@ -13144,17 +13270,18 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
               padding: 0,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
-              <span className="label-font" style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Upozornenia</span>
+            <div className="bell-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+              <span className="label-font bell-title" style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Upozornenia</span>
               {unreadCount > 0 && (
                 <button
                   className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: "3px 8px" }}
+                  style={{ fontSize: 11, padding: "3px 8px", marginLeft: "auto" }}
                   onClick={() => onMarkAllRead(sorted.map((n) => n.id))}
                 >
                   Označiť všetky ako prečítané
                 </button>
               )}
+              <button type="button" className="btn btn-ghost bell-x" aria-label="Zavrieť upozornenia" onClick={() => setOpen(false)}>×</button>
             </div>
             {sorted.length === 0 ? (
               <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>Zatiaľ žiadne upozornenia.</div>
@@ -13176,6 +13303,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                         setOpen(false);
                       }
                     }}
+                    className={isUnread ? "bell-unread" : undefined}
                     style={{
                       padding: "10px 14px",
                       borderBottom: "1px solid var(--border)",
@@ -13188,7 +13316,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                       <span style={{ fontSize: 12, fontWeight: 700 }}>{n.title}</span>
                       {n.link && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent-dark)" }}>zobraziť →</span>}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{n.message}</div>
+                    <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3, overflowWrap: "anywhere" }}>{n.message}</div>
                     <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
                   </div>
                 );
@@ -13204,6 +13332,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                       aria-expanded={isOpen}
                       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }}
                       onClick={() => setExpanded((prev) => { const next = new Set(prev); if (next.has(g.key)) next.delete(g.key); else next.add(g.key); return next; })}
+                      className={unreadIds.length ? "bell-unread" : undefined}
                       style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", background: unreadIds.length ? "var(--accent-light)" : "transparent", cursor: "pointer" }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
@@ -13211,12 +13340,12 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                         <span style={{ fontSize: 12, fontWeight: 700 }}>{g.items[0].title} ({g.items.length})</span>
                         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent-dark)" }}>{isOpen ? "skryť ▲" : "rozbaliť ▼"}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3 }}>{g.items[0].message}{g.items.length > 1 ? " …" : ""}</div>
+                      <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 3, overflowWrap: "anywhere" }}>{g.items[0].message}{g.items.length > 1 ? " …" : ""}</div>
                       <div style={{ fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 8 }}>
                         <span>{fmtWhen(g.items[0].createdAt)}</span>
                         {unreadIds.length > 0 && (
-                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "0 6px", marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); onMarkAllRead(unreadIds); }}>
-                            Označiť ako prečítané
+                          <button className="btn btn-ghost bell-check" aria-label="Označiť ako prečítané" title="Označiť ako prečítané" onClick={(e) => { e.stopPropagation(); onMarkAllRead(unreadIds); }}>
+                            ✓
                           </button>
                         )}
                       </div>
@@ -13360,6 +13489,13 @@ function GenericCsvImportModal({ title, fields, onClose, onImport }) {
 
 // Kôš — zoznam zmazaného, obmedzený podľa segmentu role (viď
 // canSeeTrashEntry vyššie), s tým, kedy sa to samé natrvalo zmaže (30 dní).
+// Krátky popis pod kódom v Koši — nech sa podobné záznamy dajú rozlíšiť (stroj · zákazník · popis).
+function trashSubline(t) {
+  const d = t.originalData || {};
+  const popis = d.popis || d.description || d.note || "";
+  const term = d.startDate ? `${fmtDate(d.startDate)}–${fmtDate(d.endDate || d.startDate)}` : ""; // zákazka: termín a miesto
+  return [d.model, d.customer || d.location, term, d.toLocation, popis.length > 40 ? `${popis.slice(0, 40).trim()}…` : popis].filter((x) => x && x !== t.label).join(" · ");
+}
 function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete }) {
   const [typeFilter, setTypeFilter] = useState("all");
   const visible = useMemo(() => {
@@ -13416,13 +13552,16 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
               const left = daysLeft(t.deletedAt);
               const leftTxt = plural(left, "deň", "dni", "dní");
               return (
-              <tr key={t.id} className={left <= 3 ? "row-problem" : ""}>
+              <tr key={t.id}>
                 <td data-label="Typ">{TRASH_TYPE_LABELS[t.recordType] || t.recordType}</td>
-                <td className="td-plain" style={{ fontWeight: 600 }}>{t.label || "—"}</td>
+                <td className="td-plain" style={{ fontWeight: 600 }}>
+                  {t.label || "—"}
+                  {trashSubline(t) && <div className="cell-sub" style={{ fontWeight: 400 }}>{trashSubline(t)}</div>}
+                </td>
                 <td data-label="Kto zmazal">{t.deletedByName || "—"}</td>
                 <td data-label="Kedy" className="tnum">{fmtDate(t.deletedAt)}</td>
                 <td data-label="Zostáva" className="tnum">
-                  {left <= 3 ? <span className="spill spill-problem">⚠ {leftTxt}</span> : leftTxt}
+                  {left <= 3 ? <span className="spill spill-warn">{leftTxt}</span> : leftTxt}
                 </td>
                 <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <button className="btn btn-outline" onClick={() => onRestore(t)}>
@@ -13850,6 +13989,8 @@ function buildNavModules(effectiveUser, damageAlertCount, myEmployee, counts = {
     { id: "diely", label: "Náhradné diely", group: ["diely", "vydaj"] },
     { id: "poskodenia", label: "Poškodenia", group: ["poskodenia", "externe"] },
     { id: "revizie", label: "Revízie/Úradné skúšky", group: ["revizie", "uradne_skusky"] },
+    // Dispečer servisu nemá Administratívu — Kôš (len tikety) má v Servise.
+    ...(!can(effectiveUser, "employee_manage") && can(effectiveUser, "trash_view") ? [{ id: "kos", label: "Kôš" }] : []),
     ...(podkladySubs.length > 0
       ? [{ id: podkladySubs[0], key: "podklady", label: podkladySubs.length > 1 ? "Podklady" : podkladySubs[0] === "ez_merania" ? "Revízie EZ" : "ERP — kontroly", group: podkladySubs }]
       : []),
@@ -14566,16 +14707,19 @@ function Dashboard({
     setDepoFilter(null);
     setShowArchived(false);
   }
+  const STATUS_LABELS = { free: "Voľné", active: "Na zákazke", broken: "V poruche", prep: "V príprave", overdue: "Po termíne" };
+  const tileFilter = (id) => ({ on: statusFilter === id, onClick: () => setStatusFilter(statusFilter === id ? "all" : id) });
 
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
         <StatCard label="Strojov celkom" value={stats.total} />
-        <StatCard label="Na zákazke" value={stats.onJob} />
-        <StatCard label="Voľné" value={stats.free} />
-        {stats.broken > 0 && <StatCard label="V poruche" value={stats.broken} color="var(--danger)" />}
-        {stats.prep > 0 && <StatCard label="V príprave" value={stats.prep} color="var(--warn)" />}
-        <StatCard label="⚠ Po termíne" value={stats.overdue} color={stats.overdue > 0 ? "var(--warn)" : undefined} />
+        {/* Klik na dlaždicu = filter tabuľky, druhý klik ho vypne (návrh z6). */}
+        <StatCard label="Na zákazke" value={stats.onJob} {...tileFilter("active")} />
+        <StatCard label="Voľné" value={stats.free} {...tileFilter("free")} />
+        {stats.broken > 0 && <StatCard label="V poruche" value={stats.broken} color="var(--danger)" {...tileFilter("broken")} />}
+        {stats.prep > 0 && <StatCard label="V príprave" value={stats.prep} color="var(--warn)" {...tileFilter("prep")} />}
+        <StatCard label="⚠ Po termíne" value={stats.overdue} color={stats.overdue > 0 ? "var(--warn)" : undefined} {...tileFilter("overdue")} />
       </div>
 
       <div className="tbar">
@@ -14587,6 +14731,8 @@ function Dashboard({
               <option value="all">Všetky stavy</option>
               <option value="free">Voľné</option>
               <option value="active">Na zákazke</option>
+              <option value="broken">V poruche</option>
+              <option value="prep">V príprave</option>
               <option value="overdue">Po termíne</option>
             </select>
           </div>
@@ -14605,6 +14751,10 @@ function Dashboard({
             Zobraziť archivované
           </label>
         </FilterPopover>
+        {statusFilter !== "all" && <>
+          <span className="fchip on">{STATUS_LABELS[statusFilter]}<button type="button" className="fchip-x" aria-label={`Zrušiť filter ${STATUS_LABELS[statusFilter]}`} onClick={() => setStatusFilter("all")}>×</button></span>
+          <span role="status" style={{ fontSize: 14, color: "var(--text-dim)" }}>{visibleMachines.length} z {plural(stats.total, "stroja", "strojov", "strojov")}</span>
+        </>}
         <div style={{ flex: 1 }} />
         {can(user, "machine_import_csv") && (
           <button className="btn btn-outline who-hide-mobile" onClick={onImport}>Import CSV</button>
@@ -14630,7 +14780,7 @@ function Dashboard({
       </div>
 
       <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
-        <table className="table-cards jobs-table">
+        <table className="table-cards jobs-table tc900">
           <thead>
             <tr>
               <th>Stroj</th>
@@ -14660,7 +14810,7 @@ function Dashboard({
               };
               const statusPill = m.status === "overdue"
                 ? <span className="spill spill-overdue">⚠ Po termíne +{plural(overdueDays, "deň", "dni", "dní")}</span>
-                : m.status === "active" ? <span className="spill spill-active">Na zákazke</span>
+                : m.status === "active" ? (m.awaitingOut ? <span className="spill spill-out">Čaká na vývoz</span> : <span className="spill spill-active">Na zákazke</span>)
                 : m.awaitingPickup ? <span className="spill spill-wait" title={`Ukončené ${fmtDate(m.awaitingPickup.endDate)} · ${m.awaitingPickup.customer || ""}`}>Čaká na zvoz</span>
                 : m.hasOpenDamage ? <span className="spill spill-problem">V poruche</span>
                 : m.inPrep ? <span className="spill spill-wait">V príprave</span>
@@ -14702,10 +14852,11 @@ function Dashboard({
   );
 }
 
-function StatCard({ label, value, color, delta, spark }) {
+function StatCard({ label, value, color, delta, spark, onClick, on }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="panel" style={{ padding: "14px 16px" }}>
-      <div className="label-font" style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
+    <Tag type={onClick ? "button" : undefined} className={`panel${onClick ? " stat-click" : ""}${on ? " on" : ""}`} aria-pressed={onClick ? !!on : undefined} onClick={onClick} style={{ padding: "14px 16px" }}>
+      <div className="label-font" style={{ fontSize: 13, color: on ? "var(--text)" : "var(--text-dim)", marginBottom: 4 }}>{label}{onClick && <span aria-hidden="true">{on ? " ✓" : " ›"}</span>}</div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
         <div className="mono" style={{ fontSize: 28, fontWeight: 600, color }}>{value}</div>
         {spark && <Spark values={spark} />}
@@ -14715,14 +14866,14 @@ function StatCard({ label, value, color, delta, spark }) {
           {delta.direction === "up" ? "▲" : delta.direction === "down" ? "▼" : "–"} {delta.text}
         </div>
       )}
-    </div>
+    </Tag>
   );
 }
 
 /* ---------------------------------------------------------
    Jobs board
 --------------------------------------------------------- */
-function JobsBoard({ jobs, reservations, machineById, driverById, today, user, myEmployee, salespeople, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onComplete, onEdit, onOpenJob, onOpenReservation, onClearAll }) {
+function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, today, user, myEmployee, salespeople, initialQuickCategory, onQuickCategoryConsumed, onAddJob, onImportJobs, onComplete, onEdit, onOpenJob, onOpenReservation, onClearAll }) {
   const [shown, setShown] = useState(200); // veľa dokončených zákaziek naraz zamrazí stránku → po 200
   const [search, setSearch] = useState("");
   const [depoFilter, setDepoFilter] = useState(null);
@@ -14881,7 +15032,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
         </div>
       ) : (
         <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
-          <table className="table-cards jobs-table">
+          <table className="table-cards jobs-table tc900">
             <thead>
               <tr><th>Stroj</th><th>Zákazník · Kam</th><th>Obdobie</th><th>Šofér</th><th>Stav</th><th><span className="sr-only">Akcie</span></th></tr>
             </thead>
@@ -14906,7 +15057,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, today, user, m
                     <td data-label="Šofér">{j.selfPickup ? "Vlastná doprava" : driverById[j.driverId]?.name || <span style={{ color: "var(--text-dim)" }}>— neurčený —</span>}</td>
                     <td data-label="Stav">
                       <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <JobStatusPill status={st} />
+                        <JobStatusPill status={st === "active" && !j.notRealized && !hpDoneByJob?.[j.id] ? "awaitingOut" : st} />
                         {!j.endDate && j.status !== "completed" && <span className="spill spill-wait" title="Zákazka nemá zadaný dátum ukončenia">⚠ Bez konca</span>}
                       </span>
                     </td>
@@ -15056,7 +15207,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
+function DriverTransportsList({ dnes, unsavedProtocols = 0, items, doneZvozCount = 0, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -15102,6 +15253,8 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
     </div>
   );
 
+  // Vývoz s vyplneným protokolom je hotový — nie je „ďalšia“ úloha, ostáva dole (QR, protokol pre zákazníka).
+  const isDone = (t) => t.type === "vyvoz" && handoverProtocols.some((h) => h.jobId === t.jobId);
   // „Dnes“ šoféra: prvá preprava (po termíne / dnes) ako veľká karta, ostatné ako kompaktné riadky (ťuk = celá karta).
   if (dnes) {
     const card = (t, hero) => (
@@ -15113,8 +15266,6 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
         title={`${t.type === "vyvoz" ? "Vývoz" : "Zvoz"} · ${machineById[t.machineId]?.code || "—"}`}
         sub={[t.customer, t.date !== today ? fmtDate(t.date) : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
     );
-    // Vývoz s vyplneným protokolom je hotový — nie je „ďalšia“ úloha, ostáva dole (QR, protokol pre zákazníka).
-    const isDone = (t) => t.type === "vyvoz" && handoverProtocols.some((h) => h.jobId === t.jobId);
     const nowAll = items.filter((t) => t.overdue || t.date === today);
     const doneNow = nowAll.filter(isDone);
     const [first, ...restNow] = nowAll.filter((t) => !isDone(t));
@@ -15122,7 +15273,7 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
     return (
       <div>
         {transportNotesPanel}
-        {first ? card(first, true) : <EmptyLift text={doneNow.length || doneZvozCount ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."} />}
+        {first ? card(first, true) : <EmptyLift text={unsavedProtocols ? `${unsavedProtocols > 1 && unsavedProtocols < 5 ? "Čakajú" : "Čaká"} ${plural(unsavedProtocols, "neuložený protokol", "neuložené protokoly", "neuložených protokolov")}.` : doneNow.length || doneZvozCount ? "Všetko na dnes je hotové." : "Na dnes žiadne prepravy."} />}
         {/* Rovnako ako u technika: pod hlavnou kartou vždy „Ďalej dnes“ (v1.0.805). */}
         {first && <div className="today-sec">Ďalej dnes · {restNow.length}</div>}
         {restNow.map(row)}
@@ -15173,7 +15324,13 @@ function DriverTransportsList({ dnes, items, doneZvozCount = 0, machineById, han
             {b.label}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 720 }}>
-            {b.items.map((t) => (
+            {/* hotový vývoz len jedným riadkom na konci dňa (návrh terénu k34) */}
+            {[...b.items.filter((t) => !isDone(t)), ...b.items.filter(isDone)].map((t) => isDone(t) ? (
+              <button key={t.id} id={`transport-${t.id}`} type="button" className="today-row" style={{ display: "block", minHeight: 52, padding: "14px 16px", marginBottom: 0, outline: t.id === highlightTransportId ? "2px solid var(--accent)" : "none" }}
+                onClick={() => { if (t.id === highlightTransportId) onDismissTransportHighlight?.(); onOpenJob?.(t.jobId, t.type); }}>
+                <span style={{ color: "var(--ok)", fontWeight: 700 }}>✓</span> Vývoz <strong className="tnum">{machineById[t.machineId]?.code || "—"}</strong>{t.customer ? ` · ${t.customer}` : ""} <span style={{ color: "var(--text-dim)" }}>— protokol / QR</span>
+              </button>
+            ) : (
               <DriverTransportCard
                 key={t.id}
                 t={t}
@@ -15221,7 +15378,7 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
         <div className="today-hero-sub">{t.customer && <>{t.customer}<br /></>}{t.from} → {t.to}</div>
         {t.issue && <div style={{ fontSize: 14, color: "var(--danger-text)", fontWeight: 600, whiteSpace: "pre-line" }}>🚨 {t.issue}</div>}
         <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : "btn-accent"} today-main`} onClick={open}>{statusLabel}</button>
-        {t.site && <a className="btn btn-ghost today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer"><NavIcon id="navigovat" size={20} /> Navigovať</a>}
+        {t.site && !(isVyvoz && hp) && <a className="btn btn-ghost today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer"><NavIcon id="navigovat" size={20} /> Navigovať</a>}
         {(t.customerPhone || t.dispatcher?.phone || onReportIssue) && (
           <div className="today-hero-more">
             {t.customerPhone && <a className="btn btn-ghost" href={`tel:${t.customerPhone}`}><PhoneIcon size={16} /> Zavolať</a>}
@@ -15266,7 +15423,7 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
       {t.issue && <div style={{ fontSize: 12, color: "var(--danger)", fontWeight: 600, marginBottom: 10, whiteSpace: "pre-line" }}>🚨 {t.issue}</div>}
       {/* Rovnaké poradie ako karta na Dnes: hlavná akcia → Navigovať → Dispečer / Zavolať / Problém (návrh dizajnu 23. 10.) */}
       <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : isPreview ? "btn-outline" : "btn-accent"}`} style={{ width: "100%", minHeight: 46, marginBottom: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, ...(isVyvoz && hp ? { color: statusColor } : {}) }} onClick={(e) => { e.stopPropagation(); open(); }}>{statusLabel}</button>
-      {t.site && (
+      {t.site && !(isVyvoz && hp) && (
         <a className="btn btn-ghost" onClick={(e) => e.stopPropagation()} style={{ width: "100%", minHeight: 46, marginBottom: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, fontWeight: 700, border: "2px solid var(--text)" }} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer">
           <NavIcon id="navigovat" size={20} /> Navigovať
         </a>
@@ -15298,6 +15455,11 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
 // Dátum prepravy sa uloží až po dopísaní (opustenie poľa / Enter), nie po každom
 // klávese — inak sa uložil napr. rok 0005 a preprava zmizla zo zoznamu.
 function TransportDateInput({ date, onSave, title, check }) {
+  // Dátum ako text s ✎ — pole až po ťuknutí, nech sa pri posúvaní nezmení omylom (návrh dizajnu k34/5).
+  const [editing, setEditing] = useState(false);
+  const ref = useRef(null);
+  // Dotyk: rovno kalendár; PC: len fokus (dátum sa dá písať klávesnicou, Enter/Esc ako doteraz).
+  useEffect(() => { if (!editing) return; ref.current?.focus(); try { if (window.matchMedia?.("(pointer: coarse)").matches) ref.current?.showPicker?.(); } catch { /* bez showPicker */ } }, [editing]);
   const commit = (el) => {
     const v = el.value;
     const ok = /^\d{4}-\d{2}-\d{2}$/.test(v) && v >= addDaysISO(todayISO(), -366) && v <= addDaysISO(todayISO(), 366);
@@ -15310,21 +15472,32 @@ function TransportDateInput({ date, onSave, title, check }) {
     if (ok && v !== date && onSave(v) !== false) return;
     el.value = date;
   };
+  if (!editing) {
+    return (
+      <button type="button" className="tr-date tnum" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title={title} aria-label={`${title}: ${fmtDate(date)}`}>
+        {fmtDate(date)} <span aria-hidden="true">✎</span>
+      </button>
+    );
+  }
   return (
     <input
+      ref={ref}
       key={date}
       type="date"
       defaultValue={date}
       onClick={(e) => e.stopPropagation()}
-      onBlur={(e) => commit(e.target)}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }}
+      onBlur={(e) => { commit(e.target); setEditing(false); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.target.value = date; e.target.blur(); }
+      }}
       style={{ fontSize: 11, padding: "3px 5px", width: 130 }}
       title={title}
       aria-label={title}
     />
   );
 }
-function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey, assignments }) {
+function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey, assignments, unsavedProtocols = 0 }) {
   // Šoférovi patriace "Prevoz" dlaždice — poznámky o presune stroja medzi
   // depami, ktoré mu priradil dispečer/vedúci požičovne, ešte nenahlásené
   // ako hotové. Tabuľka "transportNotes" ostáva v DB prísne zamknutá len na
@@ -15402,7 +15575,6 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
   const [driverFilter, setDriverFilterRaw] = useState(() => (isMyselfSofer ? myEmployee?.id || "__none__" : isLockedExternalSofer ? myEmployee?.id || "__none__" : ""));
   const setDriverFilter = isLockedExternalSofer ? () => {} : setDriverFilterRaw;
   const effectiveDriverFilter = isLockedExternalSofer ? myEmployee?.id || "__none__" : driverFilter;
-  const [quickFilter, setQuickFilter] = useState(null); // { key, dateVal, type, label, driverName } — recomputed live, never frozen
   const depoOptions = DEPO_OPTIONS;
 
   const allTransports = useMemo(() => {
@@ -15559,6 +15731,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
     return (
       <DriverTransportsList
         dnes={dnes}
+        unsavedProtocols={unsavedProtocols}
         items={filtered}
         doneZvozCount={dnes ? jobs.filter((j) => j.returnDriverId && j.returnDriverId === effectiveDriverFilter && (handoverProtocols || []).some((h) => h.jobId === j.id && h.returnDone && String(h.returnDate || "").slice(0, 10) === today)).length : 0}
         machineById={machineById}
@@ -15631,9 +15804,9 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
               aria-label="Šofér"
               value={t.driverId || ""}
               onChange={(e) => (isVyvoz ? assignDriver(t.jobId, e.target.value) : assignReturnDriver(t.jobId, e.target.value))}
-              style={{ borderColor: t.driverId ? undefined : "var(--danger)" }}
+              className={t.driverId ? undefined : "tr-assign"}
             >
-              <option value="">— neurčený —</option>
+              <option value="">{t.driverId ? "— neurčený —" : "Prideliť šoféra…"}</option>
               {driverOptionsGrouped(drivers)}
             </select>
           ) : (
@@ -15740,7 +15913,22 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", marginBottom: 8 }}>
             Rýchly prehľad — dnes a 2 pracovné dni{effectiveDriverFilter ? " (len vybraný šofér)" : ""} · ↑ vývoz · ↓ zvoz
           </div>
-          <table className="qs-table">
+          {/* Mobil: 3 dlaždice (dnes a 2 pracovné dni) namiesto tabuľky, ktorej stĺpce sa nezmestia. */}
+          <div className="qs-tiles">
+            {summaryDays.map((d) => {
+              const c = summaryDriverIds.reduce((a, k) => ({ v: a.v + (summary[k]?.[d]?.vyvoz || 0), z: a.z + (summary[k]?.[d]?.zvoz || 0) }), { v: 0, z: 0 });
+              const un = summaryDriverIds.includes("unassigned") ? (summary.unassigned?.[d]?.vyvoz || 0) + (summary.unassigned?.[d]?.zvoz || 0) : 0;
+              const go = () => (un ? transports.filter((t) => !t.driverId && t.date === d && matchesDepoAndSearch(t)).map((t) => `transport-${t.id}`) : [`tr-day-${d}`]).reverse().forEach(flashById);
+              return (
+                <button key={d} type="button" className={`qs-tile${un ? " red" : ""}`} onClick={go}>
+                  <b>{dayHead(d)}</b>
+                  <span className="qs-tile-n tnum"><span className={c.v ? "" : "qs-n"}>↑{c.v}</span> <span className={c.z ? "" : "qs-n"}>↓{c.z}</span></span>
+                  <span className="qs-tile-s">{un ? `${un} bez šoféra` : c.v + c.z ? "všetko pridelené" : "bez prepráv"}</span>
+                </button>
+              );
+            })}
+          </div>
+          <table className="qs-table qs-wide">
             <thead>
               <tr>
                 <th>Šofér</th>
@@ -15750,8 +15938,10 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
             <tbody>
               {summaryDriverIds.map((key) => {
                 const driver = key === "unassigned" ? null : drivers.find((d) => d.id === key);
-                const cellClick = (dateVal, type, label) => {
-                  setQuickFilter({ key, dateVal, type, label, driverName: driver ? driver.name : "Nepridelené" });
+                // Klik na číslo posunie na príslušné karty a zvýrazní ich (ako dlaždice na Dnes).
+                const cellClick = (dateVal, type) => {
+                  const ids = transports.filter((t) => (key === "unassigned" ? !t.driverId : t.driverId === key) && t.date === dateVal && t.type === type && matchesDepoAndSearch(t)).map((t) => `transport-${t.id}`);
+                  ids.reverse().forEach(flashById);
                 };
 
                 function sendCell(dateVal) {
@@ -15830,7 +16020,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
         const items = filtered.filter((t) => t.date === d);
         return (
           <section key={d}>
-            <h2 className={`day-sec${d < today ? " red" : ""}`}>{dayLabel(d)} · {items.length}</h2>
+            <h2 id={`tr-day-${d}`} className={`day-sec${d < today ? " red" : ""}`}>{dayLabel(d)} · {items.length}</h2>
             {items.length === 0 ? (
               <div className="panel" style={{ boxShadow: "none", border: "1px dashed var(--line-strong)", borderRadius: 12, padding: "14px 20px", color: "var(--text-dim)" }}>
                 {filterDesc ? <>Žiadne prepravy nezodpovedajú filtru ({filterDesc}). <button type="button" className="btn btn-outline" style={{ marginLeft: 8 }} onClick={clearFilters}>Zrušiť filter</button></> : "Žiadne prepravy."}
@@ -15841,57 +16031,6 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
           </section>
         );
       })}
-      {quickFilter && (() => {
-        // Recomputed live from the current `transports` on every render — never a frozen snapshot,
-        // so reassigning a driver from inside this modal is reflected immediately.
-        const liveItems = transports.filter((t) => {
-          const matchesDriver = quickFilter.key === "unassigned" ? !t.driverId : t.driverId === quickFilter.key;
-          return matchesDriver && t.date === quickFilter.dateVal && t.type === quickFilter.type;
-        });
-        const driver = quickFilter.key !== "unassigned" ? drivers.find((d) => d.id === quickFilter.key) : null;
-        const sendStatus = driver ? getTransportSendStatus(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]) : null;
-        return (
-          <Modal eyebrow={quickFilter.label} title={`${quickFilter.driverName} (${liveItems.length})`} onClose={() => setQuickFilter(null)} wide>
-            {driver && liveItems.length > 0 && can(user, "transport_assign_driver") && (
-              <div style={{ marginBottom: 14 }}>
-                <button
-                  className="btn btn-accent"
-                  style={{ fontSize: 12 }}
-                  title={!driver.email ? "Šofér nemá vyplnený email v karte — adresu doplníte priamo v maile" : ""}
-                  onClick={() => {
-                    const checkerEmails = new Set();
-                    const lines = liveItems.map((t) => {
-                      const m = machineById[t.machineId];
-                      const kind = t.type === "vyvoz" ? "VÝVOZ" : "ZVOZ";
-                      const checkerId = checkerIdOf(t);
-                      const checker = checkerId ? technicianById?.[checkerId] : null;
-                      if (checker) checkerEmails.add(checker.email || nameToEmail(checker.name));
-                      return `${kind}: ${m?.code || "—"} — ${t.from} → ${t.to}${t.customer ? " (" + t.customer + ")" : ""}${checker ? ` · checker: ${checker.name}` : ""}`;
-                    });
-                    const body = `Dobrý deň, ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
-                    const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join(MAILTO_SEP);
-                    composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
-                    recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]);
-                  }}
-                >
-                  {!sendStatus.sent
-                    ? <><MailIcon size={14} /> Odoslať email</>
-                    : sendStatus.newCount > 0
-                    ? <><MailIcon size={14} /> Odoslať znova (zmeny: {sendStatus.newCount})</>
-                    : `✓ Odoslané ${sentWhen(sendStatus.sentAt)}`}
-                </button>
-              </div>
-            )}
-            <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
-              {liveItems.length === 0 ? (
-                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Žiadne prepravy.</div>
-              ) : (
-                liveItems.map(transportLine)
-              )}
-            </div>
-          </Modal>
-        );
-      })()}
     </div>
   );
 }
@@ -15904,13 +16043,19 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
    dispečeri...), viditeľné len pre vedúceho požičovne/servisu a admina.
    Každý vidí a spravuje len role z vlastnej oblasti (okrem admina).
 --------------------------------------------------------- */
-function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchive, onDelete }) {
+// Rola účtu ≠ rola jeho karty (Zamestnanci, Stav platformy). Admin účet môže mať kartu inej roly zámerne.
+const accountRoleDiffers = (p, e) => !!p && !!e && !isAdminUser(p) && p.role !== e.role;
+function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchive, onDelete, onOpenUser }) {
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [depoFilter, setDepoFilter] = useState("");
   const manageableRoles = manageableEmployeeRoles(user);
   const q = search.trim().toLowerCase();
-  const visible = employees.filter(
-    (e) => manageableRoles.includes(e.role) && (showArchived || !e.archived) && (!q || e.name.toLowerCase().includes(q))
+  const mine = employees.filter((e) => manageableRoles.includes(e.role) && (showArchived || !e.archived));
+  const depoOptions = [...new Set(mine.map((e) => e.depo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "sk"));
+  const visible = mine.filter(
+    (e) => (!q || e.name.toLowerCase().includes(q)) && (!roleFilter || e.role === roleFilter) && (!depoFilter || e.depo === depoFilter)
   );
   const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
 
@@ -15946,6 +16091,14 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Zobraziť archivovaných
         </label>
+        <select aria-label="Rola" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ minHeight: 40 }}>
+          <option value="">Všetky roly</option>
+          {ROLES.filter((r) => manageableRoles.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+        <select aria-label="Depo" value={depoFilter} onChange={(e) => setDepoFilter(e.target.value)} style={{ minHeight: 40 }}>
+          <option value="">Všetky depá</option>
+          {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
         <button className="btn btn-accent" style={{ marginLeft: "auto" }} onClick={onAdd}>+ Pridať zamestnanca</button>
       </div>
       <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
@@ -15958,13 +16111,13 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
             <th>Telefón</th>
             <th>Email</th>
             <th>Prepojený účet</th>
-            <th>Stav</th>
+            {showArchived && <th>Stav</th>}
             <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
           {visible.length === 0 && (
-            <tr><td className="td-plain" colSpan={8} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni zamestnanci.</td></tr>
+            <tr><td className="td-plain" colSpan={showArchived ? 8 : 7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>{roleFilter || depoFilter || q ? "Žiadny zamestnanec nezodpovedá filtru." : "Zatiaľ žiadni zamestnanci."}</td></tr>
           )}
           {visible.map((e) => {
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
@@ -15982,9 +16135,10 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
                         </span>
                       )}
                     </span>
-                    <span className="m-only">{statusPill}</span>
+                    {showArchived && <span className="m-only">{statusPill}</span>}
                   </span>
                   <div className="cell-sub m-only">{[roleLabel(e.role), e.depo].filter(Boolean).join(" · ")}</div>
+                  {!e.archived && accountRoleDiffers(linkedProfile, e) && <span className="spill spill-warn m-only" style={{ marginLeft: 6 }}>rola účtu: {roleLabel(linkedProfile.role)}</span>}
                 </td>
                 <td data-label="Rola" className="who-hide-mobile">{roleLabel(e.role)}{e.alsoObchodnik && <span className="spill spill-active" style={{ marginLeft: 6 }}>aj obchodník</span>}{e.alsoEzTechnik && <span className="spill spill-active" style={{ marginLeft: 6 }}>EZ technik</span>}{e.alsoVeduciDispecer && <span className="spill spill-active" style={{ marginLeft: 6 }}>vedúci dispečer</span>}</td>
                 <td data-label="Depo" className="who-hide-mobile">{e.depo || "—"}</td>
@@ -15992,12 +16146,13 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
                 <td data-label="Email" className="who-hide-mobile">{e.email || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
                 <td data-label="Prepojený účet" className="who-hide-mobile">
                   {linkedProfile ? (
-                    <span>✓ {linkedProfile.name}</span>
+                    onOpenUser ? <button type="button" className="btn-link" title="Otvoriť v Správe používateľov" onClick={() => onOpenUser(linkedProfile)}>✓ {linkedProfile.name}</button> : <span>✓ {linkedProfile.name}</span>
                   ) : (
                     <span className="spill spill-wait">Nepriradený</span>
                   )}
+                  {!e.archived && accountRoleDiffers(linkedProfile, e) && <span className="spill spill-warn" style={{ marginLeft: 6 }} title="Rola prihlasovacieho účtu sa líši od roly tejto karty">rola účtu: {roleLabel(linkedProfile.role)}</span>}
                 </td>
-                <td data-label="Stav" className="who-hide-mobile">{statusPill}</td>
+                {showArchived && <td data-label="Stav" className="who-hide-mobile">{statusPill}</td>}
                 <td className="td-actions" style={{ textAlign: "right" }}>
                   <KebabMenu
                     label="⋯"
@@ -16644,7 +16799,7 @@ function CustomerDetailModal({
               disabled={!firma.trim()}
               onClick={() => {
                 // Len zmenené polia — otvorená karta inak ticho prepísala zmenu kolegu.
-                const mine = { firma: firma.trim(), ico, cisloOdberatela, email, telefon };
+                const mine = { firma: firma.trim(), ico: icoKey(ico), cisloOdberatela, email, telefon }; // IČO bez medzier (import páruje podľa neho)
                 const snap = infoSnapRef.current || {};
                 const patch = Object.fromEntries(Object.entries(mine).filter(([k, v]) => (v || "") !== (snap[k] || "")));
                 const clash = Object.keys(patch).filter((k) => (customer[k] || "") !== (snap[k] || "") && (customer[k] || "") !== (patch[k] || ""));
@@ -17774,12 +17929,22 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, conflict
   // Dátum zvozu sa ťahá s koncom, kým ho dispečer ručne nezmení. Už ručne
   // nastavený zvoz (iný než koniec, napr. z Prepráv) sa zachová.
   const manualPickup = job.pickupDate && job.pickupDate !== job.endDate ? job.pickupDate : "";
-  const [pickupDate, setPickupDate] = useState(manualPickup);
+  // Po termíne sa zvoz predvolí na dnes, nie do minulosti (návrh k34).
+  const lateDefault = job.endDate && job.endDate < today && (!manualPickup || manualPickup < today) ? today : manualPickup;
+  const [pickupDate, setPickupDate] = useState(lateDefault);
   const [returnDepo, setReturnDepo] = useState(job.returnDepo || job.fromDepo || machine?.depo || "");
   // Vopred pridelený šofér zvozu len ak ešte pracuje (archivovaný by sa uložil späť).
   const [returnDriverId, setReturnDriverId] = useState(drivers.some((d) => d.id === job.returnDriverId && !d.archived) ? job.returnDriverId : "");
   const [selfReturn, setSelfReturn] = useState(!!job.selfReturn);
-  const [returnDate, setReturnDate] = useState(manualPickup);
+  const [returnDate, setReturnDate] = useState(lateDefault);
+  // Koniec posunutý za predvolený dnešný zvoz — zvoz sa znova ťahá s koncom (inak „zvoz pred koncom“ a neaktívne Uložiť).
+  useEffect(() => {
+    if (!lateDefault || !endDate) return;
+    // Späť do minulosti → znova dnešný zvoz (nie zvoz v minulosti).
+    const fix = (d) => (endDate > lateDefault ? (d === lateDefault ? "" : d) : (d ? d : lateDefault));
+    setPickupDate(fix);
+    setReturnDate(fix);
+  }, [endDate]); // eslint-disable-line react-hooks/exhaustive-deps
   const effPickup = (selfReturn ? returnDate : pickupDate) || endDate;
   const dateError = endDate && job.startDate && endDate < job.startDate
     ? "Koniec zákazky je pred jej začiatkom."
@@ -18086,7 +18251,7 @@ function HandoverProtocolChecklistRecap({ checklist, statusKey, noteKey }) {
 // checkera. Tlačidlá majú min. 40 px (prsty v teréne, rukavice). „Všetko v
 // poriadku“ len naraz vyplní nevyplnené body — tie s Problémom nechá tak a
 // jednotlivé body sa dajú ďalej prepnúť. Tlačová verzia ostáva po bodoch.
-function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
+function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange, onAllOk }) {
   // Vždy plná dĺžka podľa HANDOVER_CHECKLIST_ITEMS (staršie/neúplné záznamy).
   const checklist = HANDOVER_CHECKLIST_ITEMS.map((_, i) => raw[i] || {});
   const setItem = (i, patch) => onChange(checklist.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -18099,7 +18264,7 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange }) {
             type="button"
             className="btn btn-outline"
             style={{ minHeight: 48, color: "var(--s-done)", borderColor: "#9CCBA9" }}
-            onClick={() => onChange(checklist.map((it) => (it[statusKey] === "problem" ? it : { ...it, [statusKey]: "ok" })))}
+            onClick={() => { onChange(checklist.map((it) => (it[statusKey] === "problem" ? it : { ...it, [statusKey]: "ok" }))); onAllOk?.(); }}
           >
             ✓ Všetko v poriadku
           </button>
@@ -18154,7 +18319,7 @@ function PhotoPickButtons({ onFiles, miss }) {
   );
 }
 
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, assignments }) {
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, assignments, onEnsurePortalLink }) {
   // Problém s prepravou — v záhlaví vedľa krížika (šofér), nech padne do oka.
   const issueBtn = onReportTransportIssue && can(user, "transport_issue_report") ? (
     <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
@@ -18182,6 +18347,13 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const forcePhaseAllowed = !!forcePhase && !forcePhaseDone && canFillHandoverPhase(job, myEmployee, forcePhase, user, assignments);
   const forcePhaseBlocked = !!forcePhase && !forcePhaseDone && !forcePhaseAllowed && !!existing;
   const [screen, setScreen] = useState(forcePhaseAllowed ? "edit" : existing ? "view" : "edit");
+  // „✓ Všetko v poriadku“ zbalí checklist na jeden riadok a posunie na fotky (návrh terénu k34).
+  const [cklCollapsed, setCklCollapsed] = useState(false);
+  const photosStepRef = useRef(null);
+  // Náhľad hotového prevzatia bez odkazu (napr. protokol uložený pred zavedením QR) — odkaz sa vytvorí, nech QR vie šofér ukázať aj neskôr.
+  useEffect(() => {
+    if (screen === "view" && existing?.handoverDone && !portalLink && navigator.onLine !== false) onEnsurePortalLink?.();
+  }, [screen, existing?.handoverDone, portalLink]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!portalLink || (screen !== "sent" && screen !== "view")) return;
     let cancelled = false;
@@ -18383,6 +18555,14 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [screen, existing, job, machine, portalLink]);
+  // Tú istú zákazku medzitým uložil iný telefón — táto kópia sa nepoužila, „✓ odoslaný“ by klamal.
+  const [dupSaved, setDupSaved] = useState(false);
+  useEffect(() => {
+    const onDup = (e) => { if (e.detail === newProtocolId) setDupSaved(true); };
+    window.addEventListener("mateco-protocol-dup", onDup);
+    return () => window.removeEventListener("mateco-protocol-dup", onDup);
+  }, [newProtocolId]);
+  useEffect(() => { if (dupSaved && (screen === "sent" || screen === "sentReturn")) onClose(); }, [dupSaved, screen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poistka do hlbky (presunuta AZ za vsetky hooky vyssie — pred nou v ranom
   // "return" tu predtym boli useMemo/useEffect volane iba niekedy, co pri
@@ -18556,8 +18736,20 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       )}
 
       <FormStep n={1} title="Predmet kontroly" right={<span className="spill tnum">{checklist.filter((it) => it?.[statusKey] === "ok" || it?.[statusKey] === "problem").length} / {HANDOVER_CHECKLIST_ITEMS.length}</span>} />
-      <ChecklistEditor checklist={checklist} statusKey={statusKey} noteKey={noteKey} onChange={setChecklist} />
+      {cklCollapsed && checklistComplete ? (() => {
+        const probN = checklist.filter((it) => it?.[statusKey] === "problem").length;
+        return (
+          <button type="button" className="today-row" style={{ minHeight: 52, marginBottom: 10 }} onClick={() => setCklCollapsed(false)}>
+            <span style={{ flex: 1 }}><strong style={{ color: "var(--ok)" }}>✓ {HANDOVER_CHECKLIST_ITEMS.length - probN}/{HANDOVER_CHECKLIST_ITEMS.length} v poriadku</strong>{probN > 0 && <strong style={{ color: "var(--danger-text)" }}> · {plural(probN, "problém", "problémy", "problémov")}</strong>}</span>
+            <span style={{ color: "var(--text-dim)" }}>upraviť ›</span>
+          </button>
+        );
+      })() : (
+        <ChecklistEditor checklist={checklist} statusKey={statusKey} noteKey={noteKey} onChange={setChecklist}
+          onAllOk={() => { setCklCollapsed(true); setTimeout(() => photosStepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} />
+      )}
 
+      <div ref={photosStepRef} style={{ scrollMarginTop: 60 }} />
       <FormStep n={2} title={`Fotky stavu stroja pri ${isReturnPhase ? "zvoze" : "vývoze"}`} right={<span className="fhint" style={{ marginTop: 0 }}>{isCorrection ? (customerAbsent ? "povinné" : "") : photosRequired ? `povinné, aspoň ${MIN_MACHINE_PHOTOS}` : "nepovinné"}</span>} />
       <div className="fphotos">
         {returnPhotos.map((url, i) => (
@@ -18577,9 +18769,13 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       )}
 
       <FormStep n={3} title="Zásady prenájmu pracovnej plošiny" />
-      <ol style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 6px", paddingLeft: 20, lineHeight: 1.45 }}>
-        {HANDOVER_LEGAL_RULES.map((rule, i) => <li key={i} style={{ marginBottom: 2 }}>{rule}</li>)}
-      </ol>
+      {/* Zbalené (návrh terénu k34) — v tlači/PDF protokolu ostávajú celé. */}
+      <details className="fdisc">
+        <summary>Zásady prenájmu <span className="fdisc-a" aria-hidden="true">›</span><span className="fhint" style={{ margin: "0 0 0 auto" }}>{HANDOVER_LEGAL_RULES.length} bodov</span></summary>
+        <ol style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 6px", paddingLeft: 20, lineHeight: 1.45 }}>
+          {HANDOVER_LEGAL_RULES.map((rule, i) => <li key={i} style={{ marginBottom: 2 }}>{rule}</li>)}
+        </ol>
+      </details>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>{HANDOVER_VOP_NOTE}</div>
 
       <FormStep n={4} title={`Podpisy — ${isReturnPhase ? "vrátenie" : "prevzatie"}`} />
@@ -18615,7 +18811,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} /><PrivacyNote /></div>}
+        {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} /><div className="fhint">Podpisom nájomca potvrdzuje {isReturnPhase ? "vrátenie" : "prevzatie"} stroja v uvedenom stave a zásady prenájmu (bod 3) vrátane VOP.</div><PrivacyNote /></div>}
         <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} />
       </div>
 
@@ -19057,15 +19253,24 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
 function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onConfirm }) {
   // Zvoz nikdy pred novým koncom; samostatne posunutý neskorší zvoz ostane.
   const newEnd = request.requestedEndDate;
+  const today = todayISO();
+  const pastEnd = !!newEnd && newEnd < today; // zákazník požiadal o skorší koniec, ktorý medzitým prešiel
   const defaultPickup =
-    !job?.pickupDate || job.pickupDate === job.endDate || job.pickupDate < newEnd ? newEnd : job.pickupDate;
+    !job?.pickupDate || job.pickupDate === job.endDate || job.pickupDate < newEnd ? (pastEnd ? today : newEnd) : job.pickupDate;
   const [pickupDate, setPickupDate] = useState(defaultPickup || "");
+  const diff = isRealISODate(job?.endDate) && isRealISODate(newEnd) ? Math.round((Date.parse(newEnd) - Date.parse(job.endDate)) / 864e5) : null;
   const conflict = conflictFor(pickupDate && pickupDate > newEnd ? pickupDate : newEnd);
   return (
     <Modal title="Schváliť zmenu termínu vrátenia" onClose={onClose}>
       <div style={{ fontSize: 14, marginBottom: 16 }}>
-        Nový zmluvný koniec zákazky: <strong>{fmtDate(request.requestedEndDate)}</strong>
+        {isRealISODate(job?.endDate) && <>Doteraz do {fmtDate(job.endDate)} → </>}nový koniec <strong>{fmtDate(request.requestedEndDate)}</strong>
+        {diff ? ` (${diff < 0 ? "skrátenie" : "predĺženie"} o ${plural(Math.abs(diff), "deň", "dni", "dní")})` : ""}
       </div>
+      {pastEnd && (
+        <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn)", color: "var(--warn)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 12 }}>
+          Dátum už prešiel — zvoz sa nastaví na dnes.
+        </div>
+      )}
       <Field label="Dátum zvozu">
         <input type="date" value={pickupDate} min={request.requestedEndDate} onChange={(e) => setPickupDate(e.target.value)} style={{ width: "100%" }} />
       </Field>
@@ -19091,7 +19296,7 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
     </Modal>
   );
 }
-function JobDetailModal({ job, machine, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, onRotatePortalToken, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage, onResolveDispute}) {
+function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, onRotatePortalToken, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage, onResolveDispute}) {
   const [binderTab, setBinderTab, forgetBinder] = useBinderTab("job:" + job.id); // null | "kontroly" | "protokol" | "zakaznik"
   const showPortalPanel = binderTab === "zakaznik";
   const [confirmDispute, setConfirmDispute] = useState(null); // "handover" | "return" — potvrdenie „Vybavené“ pri nesúhlase zákazníka
@@ -19175,7 +19380,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         <>
           {machine?.code || job.machineDisplayName || machine?.type || ""}
           {machine?.code && (job.machineDisplayName || machine?.type) && <span className="side-title-sub">{job.machineDisplayName || machine?.type}</span>}
-          <StatusBadge status={st} />
+          <StatusBadge status={st === "active" && !job.notRealized && !handoverProtocol?.handoverDone && !handoverProtocol?.returnDone ? "awaitingOut" : st} />
         </>
       }
       onClose={() => { forgetBinder(); onClose(); }}
@@ -19292,13 +19497,28 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         ) : binderTab === "zakaznik" ? (
         <div>
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
-            Odkaz pre zákazníka (bez prihlásenia) — platný od vývozu stroja do 14 dní po jeho vrátení.
+            Odkaz pre zákazníka (bez prihlásenia)
           </div>
           {portalLink ? (
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
               <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12 }} />
               <button className="btn btn-ghost" onClick={(e) => copyWithFeedback(e, portalLink)}>Kopírovať</button>
             </div>
+            {!job.portalRevoked && (() => {
+              // Rovnaké pravidlo ako get_portal_job: od skoršieho zo začiatku/vývozu do 14 dní po vrátení.
+              const today = todayISO();
+              const from = [job.startDate, job.departureDate].filter(isRealISODate).sort()[0];
+              const back = handoverProtocol?.returnDone ? [handoverProtocol.returnDate, job.endDate].find(isRealISODate) : null;
+              const until = back ? addDaysISO(back, 14) : null;
+              return (
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+                  {until && until < today ? `Platnosť skončila ${fmtDate(until)}.`
+                    : `Platný${from ? ` od ${fmtDate(from)}` : ""} ${until ? `do ${fmtDate(until)}` : `do 14 dní po vrátení${isRealISODate(job.endDate) && job.endDate >= today ? ` (pri vrátení ${fmtDate(job.endDate)} do ${fmtDate(addDaysISO(job.endDate, 14))})` : ""}`}`}
+                </div>
+              );
+            })()}
+            </>
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
               {panelOnline && navigator.onLine ? "Generujem odkaz…" : "Bez signálu sa odkaz zatiaľ nevytvorí — vytvorí sa sám po pripojení."}
@@ -19310,17 +19530,30 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
               <button className="btn btn-ghost" onClick={onEmailCustomer}>✉ Poslať zákazníkovi emailom</button>
             )}
           </div>
-          {onTogglePortalRevoked && (portalLink || job.portalRevoked) && (
-            <button className="btn btn-ghost" style={{ color: job.portalRevoked ? "var(--ok)" : "var(--danger)" }} onClick={onTogglePortalRevoked}>
-              {job.portalRevoked ? "Obnoviť odkaz" : "Zneplatniť odkaz"}
-            </button>
+          {onTogglePortalRevoked && job.portalRevoked && (
+            <button className="btn btn-ghost" style={{ color: "var(--ok)" }} onClick={onTogglePortalRevoked}>Obnoviť odkaz</button>
           )}
-          {onTogglePortalRevoked && onRotatePortalToken && portalLink && !job.portalRevoked && (
-            <button className="btn btn-ghost" onClick={onRotatePortalToken} title="Keď sa odkaz dostal k niekomu, kto ho nemá mať">Vydať nový odkaz</button>
+          {/* Zriedkavé bezpečnostné akcie v ⋯, nie vedľa Kopírovať (návrh N7, k34). */}
+          {onTogglePortalRevoked && portalLink && !job.portalRevoked && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)" }}>
+              Odkaz unikol alebo ho treba vypnúť?
+              <KebabMenu name="Zneplatniť alebo vymeniť odkaz" label="⋯" actions={[
+                onRotatePortalToken && { label: "Vydať nový odkaz", onClick: onRotatePortalToken },
+                { label: "Zneplatniť odkaz", danger: true, onClick: onTogglePortalRevoked },
+              ]} />
+            </div>
           )}
           {job.portalRevoked && (
             <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
               Odkaz je momentálne ručne zneplatnený — zákazník cez neho nič neuvidí.
+            </div>
+          )}
+          {(job.portalLinkLog || []).length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>História odkazu</div>
+              {[...job.portalLinkLog].reverse().map((e, i) => (
+                <div key={i}>{fmtDate(toLocalISO(new Date(e.at)))} {new Date(e.at).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bratislava" })} · {{ rotated: "vydaný nový odkaz", revoked: "odkaz zneplatnený", restored: "odkaz obnovený" }[e.action] || e.action} · {e.by || "—"}</div>
+              ))}
             </div>
           )}
         </div>
@@ -19382,7 +19615,7 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
       )}
       {(portalRequests || []).map((r) => (
         <div key={r.id} style={{ background: "var(--warn-bg, #fff8e1)", color: "var(--warn, #b07e00)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span>
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
             📩 <strong>{r.type === "problem" ? "Zákazník nahlásil problém" : "Žiadosť o zmenu termínu vrátenia"}</strong>
             {r.status === "in_progress" ? " (v riešení)" : ""}:{" "}
             {r.type === "problem" ? r.message : `nový termín ${fmtDate(r.requestedEndDate)}`}
@@ -19427,15 +19660,25 @@ function JobDetailModal({ job, machine, driverById, drivers, dispatchers, acting
         </div>
       ))}
       <dl className="side-dl">
-        <dt>Kontaktná osoba</dt><dd>{job.customerContactName || "—"}</dd>
-        <dt>Telefón zákazníka</dt><dd className="tnum">{job.customerPhone ? <a href={`tel:${job.customerPhone}`}>{job.customerPhone}</a> : "—"}</dd>
-        <dt>Email zákazníka</dt><dd>{job.customerEmail ? <a href={`mailto:${job.customerEmail}`}>{job.customerEmail}</a> : "—"}</dd>
         <dt>Kam</dt><dd>{job.toLocation || "—"}</dd>
-        {/* Šofér vývozu je v súhrne hore — tu len zvoz/dispečer, ak sa nedajú meniť (v1.0.805). */}
-        {!zvozEditable && <><dt>Šofér (zvoz)</dt><dd>{job.selfReturn ? "Vlastná doprava — vráti sám do depa" : job.returnDriverId ? driverById[job.returnDriverId]?.name || "—" : "— neurčený —"}</dd></>}
         <dt>Obchodník</dt>
         <dd>{job.obchodnik ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{salespersonColor(job.obchodnik, salespeople) && <span style={{ width: 9, height: 9, borderRadius: 3, background: salespersonColor(job.obchodnik, salespeople), flexShrink: 0 }} />}{job.obchodnik}</span> : "—"}</dd>
-        <dt>Číslo zmluvy</dt><dd>{job.cisloZmluvy || "—"}</dd>
+        {(() => {
+          // Bez vlastného kontaktu na zákazke ukáže kontakt firmy (sivou); prázdne polia nie ako „—“, ale v jednom riadku „Doplniť“ (návrhy k34).
+          const firm = (own, f) => (own ? { v: own } : f ? { v: f, firm: true } : null);
+          const phone = firm(job.customerPhone, customerRec?.telefon), email = firm(job.customerEmail, customerRec?.email);
+          const firmTag = <span style={{ color: "var(--text-dim)", fontSize: 13 }}> · firma</span>;
+          const missing = [!job.customerContactName && "kontakt", !phone && "telefón", !email && "email", !job.cisloZmluvy && "číslo zmluvy"].filter(Boolean);
+          return <>
+            {job.customerContactName && <><dt>Kontaktná osoba</dt><dd>{job.customerContactName}</dd></>}
+            {phone && <><dt>Telefón zákazníka</dt><dd className="tnum"><a href={`tel:${phone.v}`} style={phone.firm ? { color: "var(--text-dim)" } : undefined}>{phone.v}</a>{phone.firm && firmTag}</dd></>}
+            {email && <><dt>Email zákazníka</dt><dd><a href={`mailto:${email.v}`} style={email.firm ? { color: "var(--text-dim)" } : undefined}>{email.v}</a>{email.firm && firmTag}</dd></>}
+            {job.cisloZmluvy && <><dt>Číslo zmluvy</dt><dd>{job.cisloZmluvy}</dd></>}
+            {missing.length > 0 && <><dt>Doplniť</dt><dd>{can(user, "job_edit") ? <button type="button" onClick={onEdit} style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "var(--text)", textDecoration: "underline", cursor: "pointer", textAlign: "left" }}>{missing.join(", ")}</button> : <span style={{ color: "var(--text-dim)" }}>{missing.join(", ")}</span>}</dd></>}
+          </>;
+        })()}
+        {/* Šofér vývozu je v súhrne hore — tu len zvoz/dispečer, ak sa nedajú meniť (v1.0.805). */}
+        {!zvozEditable && <><dt>Šofér (zvoz)</dt><dd>{job.selfReturn ? "Vlastná doprava — vráti sám do depa" : job.returnDriverId ? driverById[job.returnDriverId]?.name || "—" : "— neurčený —"}</dd></>}
         {dispatchers && !dispEditable && <><dt>Dispečer zákazky</dt><dd>{dispD ? `${dispD.name}${dispSubNote}` : "— podľa depa —"}</dd></>}
         {job.notes && <><dt>Poznámka</dt><dd>{job.notes}</dd></>}
       </dl>
@@ -19522,6 +19765,8 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
     return null;
   }, [machineId, expectedStart, expectedEnd, jobs, reservations, existing]);
 
+  const pendingPrep = machineId ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
+  const openBreakdown = machineId && !pendingPrep ? (damages || []).find((d) => d.machineId === machineId && d.type === "poskodenie" && !d.resolved) : null;
   // Predpokladaný koniec logicky nemôže byť pred predpokladaným začiatkom.
   const dateOrderInvalid = expectedEnd && expectedEnd < expectedStart;
 
@@ -19538,6 +19783,9 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
           <legend>REZERVÁCIA</legend>
         <Field label="Stroj *">
           <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!prefillMachineId} />
+          {/* Rezerváciu to neblokuje — len upozorní, rovnako ako Nová zákazka a import. */}
+          {pendingPrep ? <div role="status" className="fnote fnote-y" style={{ marginTop: 6 }}>⚠ Stroj je v príprave do požičovne — zákazku naň nepôjde vytvoriť, kým sa príprava nedokončí.</div>
+            : openBreakdown && <div role="status" className="fnote fnote-y" style={{ marginTop: 6 }}>⚠ Stroj má otvorenú poruchu (nahlásená {fmtDate(openBreakdown.dateReported)}{openBreakdown.popis ? `: ${openBreakdown.popis}` : ""}) — overte termín opravy so servisom.</div>}
         </Field>
         <Field label="Zákazník *">
           <CustomerAutocomplete
@@ -19931,6 +20179,12 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
             {(isDeparted || vyvozLocked) && (
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{existing?.status === "completed" ? "Zákazka je ukončená — stroj sa už nemení." : "Stroj už odišiel — pri výmene ukončite zákazku a založte novú na nový stroj."}</div>
             )}
+            {/* Konflikt hneď pri výbere stroja, nie až pod formulárom (návrh k34). */}
+            {conflict && (
+              <div role="alert" style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 6 }}>
+                ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má už inú zákazku" : "má schválenú nezáväznú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
+              </div>
+            )}
           </Field>
           {machine?.objekt === "Externý stroj" && (
             <div><Field label="Názov stroja pre túto zákazku">
@@ -20099,11 +20353,6 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
         </fieldset>
       </div>
 
-      {conflict && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
-          ⚠ Stroj na tento termín nie je voľný — {conflict.type === "job" ? "má už inú zákazku" : "má schválenú nezáväznú rezerváciu"} ({conflict.label}). Zmeňte stroj alebo termín.
-        </div>
-      )}
       {!conflict && machineId && startDate && (() => {
         const r = (reservations || []).find((x) => x.machineId === machineId && x.status === "pending" && x.id !== prefillReservation?.id
           && rangesOverlap(jobFrom({ startDate, endDate, departureDate, pickupDate }), jobTo({ startDate, endDate, departureDate, pickupDate }), x.expectedStart, x.expectedEnd || x.expectedStart));
@@ -20139,7 +20388,7 @@ function AddJobModal({ machines, drivers, customers, blacklist, jobs, damages, r
       )}
       {pendingPrep && (
         <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 14 }}>
-          ⚠ Stroj ešte nemá dokončenú „Prípravu do požičovne" — kým sa toto poškodenie neoznačí ako vyriešené, nedá sa naň vytvoriť zákazka.
+          ⚠ Stroj ešte nemá dokončenú „Prípravu do požičovne“ — kým sa toto poškodenie neoznačí ako vyriešené, nedá sa naň vytvoriť zákazka.
         </div>
       )}
       {customer.trim() && (
@@ -21061,15 +21310,13 @@ function ImportJobsModal({ machines, customers, jobs: existingJobs, reservations
       ].filter(Boolean);
       if (why.length) outW.push(`${codeRaw} (${fmtDate(startDate)}: ${why.join(", ")})`);
       const customerName = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
-      const ico = mapIco ? (r[mapIco] || "").toString().trim() : "";
-      let jobCustomer = customerName;
+      const ico = mapIco ? icoKey(r[mapIco]) : "";
+      // Nespoliehaj sa len na presné meno - ak sa nájde podľa IČO, použi
+      // presne to meno, čo už appka o zákazníkovi eviduje (zjednotí drobné
+      // rozdiely v zápise, napr. "s.r.o." vs "spol. s r.o.") — aj na zákazke.
+      const matched = customerName ? (ico && customerByIco[ico]) || customerByName[customerName.toLowerCase()] : null;
       if (customerName) {
-        // Nespoliehaj sa len na presné meno - ak sa nájde podľa IČO, použi
-        // presne to meno, čo už appka o zákazníkovi eviduje (zjednotí drobné
-        // rozdiely v zápise, napr. "s.r.o." vs "spol. s r.o.").
-        const matched = (icoKey(ico) && customerByIco[icoKey(ico)]) || customerByName[customerName.toLowerCase()];
-        if (matched) jobCustomer = matched.firma; // zákazka sa so zákazníkom spája podľa mena
-        customerUpserts.push({ firma: jobCustomer, ico });
+        customerUpserts.push({ firma: matched ? matched.firma : customerName, ico });
       }
       jobs.push({
         id: uid(),
@@ -21077,7 +21324,7 @@ function ImportJobsModal({ machines, customers, jobs: existingJobs, reservations
         driverId: null,
         fromDepo: machine.depo || "",
         toLocation: mapToLocation ? (r[mapToLocation] || "").toString().trim() : "",
-        customer: jobCustomer,
+        customer: matched ? matched.firma : customerName,
         customerEmail: "",
         startDate,
         endDate: mapEnd ? parseImportDate(r[mapEnd]) || startDate : startDate,
@@ -21605,7 +21852,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
       const pendingPrep = (damages || []).find((dm) => dm.machineId === job.machineId && dm.prepCheck && !dm.resolved);
       if (pendingPrep) {
         resetDragVisual(d);
-        showNotice(`⚠ Stroj ešte nemá dokončenú „Prípravu do požičovne" — kým sa toto poškodenie neoznačí ako vyriešené, presun sa nevykoná.`);
+        showNotice(`⚠ Stroj ešte nemá dokončenú „Prípravu do požičovne“ — kým sa toto poškodenie neoznačí ako vyriešené, presun sa nevykoná.`);
         return;
       }
       // Rovnaká pravidlo predvyplnenia vývozu/zvozu ako v AddJobModal: dátum
@@ -22337,10 +22584,10 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         }
       }
       const h = window.innerHeight - r.top - pad - 4;
-      // Nízke okno (mobil na šírku): filtre by zabrali celé miesto — keď by riadkom strojov ostalo < 200 px, dostanú ~75 % výšky okna a stránka sa posunie.
+      // Nízke okno (mobil na šírku): filtre by zabrali celé miesto — keď by riadkom strojov ostalo < 150 px, dostanú ~75 % výšky okna a stránka sa posunie.
       const rows = rootRef.current.querySelector(".gantt-scroll");
       const rest = rows ? r.height - rows.getBoundingClientRect().height : 0;
-      setAvailH(h - rest < 200 ? Math.round(rest + window.innerHeight * 0.75) : h);
+      setAvailH(h - rest < 150 ? Math.round(rest + window.innerHeight * 0.75) : h);
     }
     // Pri prechode sem z dlhšej stránky (napr. Stroje) ostáva okno ešte
     // odscrollované dole — meranie top-u by vtedy vyšlo nesprávne (gantt by
@@ -22760,6 +23007,11 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
               </button>
             ))}
           </div>
+          {/* Mobil na šírku: depá ako jeden výber (návrh p8), inak skryté. */}
+          <select className="cal-depo-sel" aria-label="Depo" value={depoFilter || ""} onChange={(e) => setDepoFilter(e.target.value || null)}>
+            <option value="">Všetky depá</option>
+            {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
           <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
           <GearPopover>{settingsControls}</GearPopover>
           <button type="button" className="btn btn-ghost header-icon-btn tip-now" data-tip="Legenda" aria-label="Legenda" onClick={() => setLegendOpen(true)} style={{ color: "var(--text-dim)" }}>ⓘ</button>
@@ -23089,7 +23341,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <>
           {m.code}
           {m.type && <span className="side-title-sub">{m.type}</span>}
-          {m.archived ? <span className="spill">Archivovaný</span> : !m.currentJob ? (m.hasOpenDamage ? <span className="spill spill-problem">V poruche</span> : m.inPrep ? <span className="spill spill-wait">V príprave</span> : <span className="spill spill-done">Voľný stroj</span>) : <span className="spill spill-active">Na zákazke</span>}
+          {m.archived ? <span className="spill">Archivovaný</span> : !m.currentJob ? (m.hasOpenDamage ? <span className="spill spill-problem">V poruche</span> : m.inPrep ? <span className="spill spill-wait">V príprave</span> : <span className="spill spill-done">Voľný stroj</span>) : m.awaitingOut ? <span className="spill spill-out">Čaká na vývoz</span> : <span className="spill spill-active">Na zákazke</span>}
           {brokenCount >= 3 && <span className="spill spill-problem">⚠ Často sa kazí ({brokenCount} za 90 dní)</span>}
         </>
       }
@@ -23653,7 +23905,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
   const stavText = isSimple ? (d.resolved ? "Vyriešené" : (techIds.length ? "Pridelené" : "Nové")) : damageLabel(d);
   const stavProblem = !isSimple && damageDisplayStav(d) === "zavazna_porucha";
   const showAttach = !isSimple && !d.machineId && !isExterna && onAttachMachine && can(user, isExterna ? "external_assign" : "damage_assign");
-  const showAssign = !isSimple && (!!d.machineId || isExterna) && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign");
+  const showAssign = !isSimple && (!!d.machineId || isExterna) && !d.resolved && onAssign && can(user, isExterna ? "external_assign" : "damage_assign") && damageInDeposOf(user, d, machineById);
   const showComplete = !isSimple && onComplete && can(user, isExterna ? "external_status" : "damage_status");
   const showEdit = isExterna && can(user, "external_add");
   // Jedno hlavné (červené) tlačidlo: doplniť SČ › prideliť nepridelené › ukončiť/upraviť stav.
@@ -24035,7 +24287,7 @@ function reopenableTicketIds(tickets) {
 // Meranie VTZ EZ sa ponúka len pri revízii s EZ časťou (inak je tu rýchla akcia).
 const isEzRevision = (d) => d?.type === "revizia" && (d.revizeType === "EZ" || d.revizeType === "ZZ+EZ");
 
-function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenDetail, onResolve, onUndoPartial, onComplete, onProtocol, onAttachMachine, onMarkInvoiced, onUnmarkInvoiced, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
+function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onUndoPartial, onComplete, onProtocol, onAttachMachine, onMarkInvoiced, onUnmarkInvoiced, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
   const cardRef = useRef(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -24078,7 +24330,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
               style={{ marginTop: 4, flexShrink: 0, cursor: "pointer" }}
             />
           )}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
             {onOpenDetail ? (
               <button type="button" className="tnum" onClick={() => onOpenDetail(d)} title="Otvoriť detail"
@@ -24113,12 +24365,12 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
               d.resolved ? (
                 <span className={pill("badge-ok")}>Vykonaná</span>
               ) : assignedTech ? (
-                <span className={pill("badge-info")}>Pridelené — {assignedTechNames} · {fmtDate(d.assignedDate)}</span>
+                <span className={pill("badge-info")} style={{ whiteSpace: "normal" }}>Pridelené — {assignedTechNames} · {fmtDate(d.assignedDate)}</span>
               ) : (
                 <span className={pill("badge-warn")}>Nové</span>
               )
             ) : (
-              <span className={pill(damageBadgeCls(d))}>
+              <span className={pill(damageBadgeCls(d))} style={{ whiteSpace: "normal" }}>
                 {damageLabel(d)}{damageDisplayStav(d) === "pridelene" ? ` — ${assignedTechNames} · ${fmtDate(d.assignedDate)}` : ""}
               </span>
             )}
@@ -24127,7 +24379,7 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
           {isSimple && d.overdue && !d.resolved && d.popis ? (
             <div className="spill spill-problem" style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "6px 10px", margin: "2px 0 4px" }}>⚠ {d.popis}</div>
           ) : (
-            d.popis && <div style={{ fontSize: 15, fontWeight: isSimple ? 400 : 600, marginBottom: 2 }}>{d.popis}</div>
+            d.popis && <div title={d.popis.length > 120 ? d.popis : undefined} style={{ fontSize: 15, fontWeight: isSimple ? 400 : 600, marginBottom: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{d.popis}</div>
           )}
           <div className="tnum" style={{ fontSize: 13, color: "var(--text-dim)" }}>
             {locationLabel ? `${locationLabel} · ` : ""}Nahlásené {fmtDate(d.dateReported)}{(d.currentJobLabel || d.customer) ? ` · ${d.currentJobLabel || d.customer}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
@@ -24175,8 +24427,8 @@ function ServiceEventCard({ d, technicianById, user, onAssign, onDelete, onOpenD
               </button>
             )
           ) : (
-            !isDone && can(user, perm.assign) && (
-              <button className={assignedTech ? "btn btn-outline" : "btn btn-accent"} style={{ fontSize: 14, minHeight: 40, fontWeight: 600, ...(assignedTech ? { borderColor: "var(--line-strong)" } : {}) }} onClick={() => onAssign(d)}>
+            !isDone && can(user, perm.assign) && damageInDeposOf(user, d, machineById) && (
+              <button className={assignedTech || (isSimple && !d.overdue) ? "btn btn-outline" : "btn btn-accent"} style={{ fontSize: 14, minHeight: 40, fontWeight: 600, ...(assignedTech || (isSimple && !d.overdue) ? { borderColor: "var(--line-strong)" } : {}) }} onClick={() => onAssign(d)}>
                 {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
               </button>
             )
@@ -24360,10 +24612,10 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
         ))}
       </div>
       {canBulkAssign && sorted.some((d) => selectedIds.has(d.id)) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6 }}>
+        <div className="bulk-bar" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "linear-gradient(var(--accent-light), var(--accent-light)), var(--panel)", border: "1px solid var(--accent)", borderRadius: 6, position: "sticky", top: "calc(var(--header-h, 62px) + 8px)", zIndex: 5 }}>
           <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {sorted.filter((d) => selectedIds.has(d.id) && !d.resolved).length}</span>
           <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
-            Prideliť vybraným →
+            Prideliť vybrané →
           </button>
           <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
             Zrušiť výber
@@ -24390,9 +24642,10 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
             onComplete={onComplete}
             onProtocol={onProtocol}
             onAttachMachine={onAttachMachine}
+            machineById={machineById}
             locationLabel={locationLabel(d)}
             highlighted={d.id === highlightDamageId}
-            selectable={canBulkAssign && !!d.machineId && !d.resolved}
+            selectable={canBulkAssign && !!d.machineId && !d.resolved && damageInDeposOf(user, d, machineById)}
             selected={selectedIds.has(d.id)}
             onToggleSelect={toggleSelect}
           />
@@ -24583,10 +24836,10 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
         })}
       </div>
       {canBulkAssign && sorted.some((d) => selectedIds.has(d.id)) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "var(--accent-light)", border: "1px solid var(--accent)", borderRadius: 6 }}>
+        <div className="bulk-bar" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "linear-gradient(var(--accent-light), var(--accent-light)), var(--panel)", border: "1px solid var(--accent)", borderRadius: 6, position: "sticky", top: "calc(var(--header-h, 62px) + 8px)", zIndex: 5 }}>
           <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {sorted.filter((d) => selectedIds.has(d.id) && !d.resolved).length}</span>
           <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
-            Prideliť vybraným →
+            Prideliť vybrané →
           </button>
           <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
             Zrušiť výber
@@ -25275,8 +25528,14 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
 /* ---------------------------------------------------------
    Revisions view — auto-generated revision service events
 --------------------------------------------------------- */
-function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onUndoPartial, onProtocol, onOpenDetail, onClearAll, highlightDamageId, onDedupe }) {
+function RevisionsView({ damages, technicians, machineById, user, onAssign, onComplete, onResolve, onUndoPartial, onProtocol, onOpenDetail, onClearAll, highlightDamageId, onDedupe, onBulkAssign, assignments, today }) {
   const [search, setSearch] = useState("");
+  // Hromadné pridelenie — zaškrtávanie ako v Poškodeniach (napr. celé depo v jednom výjazde).
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const canBulkAssign = onBulkAssign && can(user, "revision_assign");
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const depoOptions = DEPO_OPTIONS;
@@ -25343,6 +25602,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   const revDate = (d) => [d.revizia, d.reviziaEZ].filter(Boolean).sort()[0] || "";
   const overdue = filtered.filter((d) => d.overdue).sort((a, b) => (revDate(a) < revDate(b) ? -1 : 1));
   const soon = filtered.filter((d) => !d.overdue).sort((a, b) => (revDate(a) < revDate(b) ? -1 : 1));
+  const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
@@ -25355,7 +25615,9 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
             </button>
           ))}
         </div>
-        <div className="seg" role="group" aria-label="Depo">
+        {/* Návrh 12: na mobile depá v jednom posuvnom riadku (aj „Všetky“), hľadanie a ⋯ v riadku so stavom */}
+        <div className="seg chip-scroll rev-depo" role="group" aria-label="Depo">
+          <button type="button" className={!depoFilter ? "on" : ""} aria-pressed={!depoFilter} onClick={() => setDepoFilter(null)}>Všetky</button>
           {depoOptions.map((d) => (
             <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
               <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
@@ -25369,6 +25631,17 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
           can(user, "revision_clear_all") && { label: "Vymazať všetky revízie", danger: true, onClick: onClearAll },
         ]} />
       </div>
+      {canBulkAssign && picked.length > 0 && (
+        <div className="bulk-bar" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "linear-gradient(var(--accent-light), var(--accent-light)), var(--panel)", border: "1px solid var(--accent)", borderRadius: 6, flexWrap: "wrap", position: "sticky", top: "calc(var(--header-h, 62px) + 8px)", zIndex: 5 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {picked.length}</span>
+          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
+            Prideliť vybrané →
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
+            Zrušiť výber
+          </button>
+        </div>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <h2 className={`today-sec${overdue.length ? " red" : ""}`} style={{ marginTop: 0 }}>
@@ -25395,6 +25668,10 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 variant="revizia"
                 locationLabel={locationLabel(d)}
                 highlighted={d.id === highlightDamageId}
+                machineById={machineById}
+                selectable={canBulkAssign && !d.resolved && damageInDeposOf(user, d, machineById)}
+                selected={selectedIds.has(d.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
@@ -25424,11 +25701,31 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
                 variant="revizia"
                 locationLabel={locationLabel(d)}
                 highlighted={d.id === highlightDamageId}
+                machineById={machineById}
+                selectable={canBulkAssign && !d.resolved && damageInDeposOf(user, d, machineById)}
+                selected={selectedIds.has(d.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
         </div>
       </div>
+      {showBulkAssign && (
+        <BulkAssignModal
+          damages={picked}
+          technicians={technicians}
+          assignments={assignments}
+          user={user}
+          today={today}
+          onClose={() => setShowBulkAssign(false)}
+          onSave={(technicianIds, date) => {
+            // Len to, čo je v zozname práve viditeľné (skryté filtrom/vyhľadávaním sa nepriradí).
+            if (onBulkAssign(picked.map((d) => d.id), technicianIds, date) === false) return; // bez signálu — výber ostáva
+            setSelectedIds(new Set());
+            setShowBulkAssign(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -25616,14 +25913,15 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
             const diff = erpProtocolDiff(p);
             return (
               <tr key={p.id}>
-                <td className="td-plain"><strong className="tnum">{p.machineSerial || "—"}</strong><div className="cell-sub">{p.machineModel || "—"}</div></td>
+                {/* Jednotky a čísla dielov sa nelámu („6 m“, „0,75 h“, „(G-101)“). */}
+                <td className="td-plain"><strong className="tnum">{p.machineSerial || "—"}</strong><div className="cell-sub">{(p.machineModel || "—").replace(/(\d) (?=\S{1,2}$)/, "$1\u00a0")}</div></td>
                 <td data-label="Zákazník">{p.clientName || "—"}</td>
                 <td data-label="Technik">{p.technicianName || "—"}</td>
-                <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + String(w.hours).replace(".", ",") + " h)" : ""}`).join(", ") || "—"}</td>
-                <td data-label="Hodiny">{String(p.totalHours ?? "—").replace(".", ",")} h</td>
-                <td data-label="Materiál">{(p.materialItems || []).map((mi) => `${mi.desc}${mi.pn ? " (" + mi.pn + ")" : ""}${mi.qty ? " × " + mi.qty : ""}`).join(", ") || "—"}</td>
-                <td data-label="Km">{p.travelKm ? Number(p.travelKm).toLocaleString("sk-SK") : "—"}</td>
-                <td data-label="Čas na ceste">{p.travelHours ? String(p.travelHours).replace(".", ",") + " h" : "—"}</td>
+                <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + String(w.hours).replace(".", ",") + "\u00a0h)" : ""}`).join(", ") || "—"}</td>
+                <td data-label="Hodiny" style={{ whiteSpace: "nowrap" }}>{String(p.totalHours ?? "—").replace(".", ",")} h</td>
+                <td data-label="Materiál">{(p.materialItems || []).length ? p.materialItems.map((mi, i) => <React.Fragment key={i}>{i ? ", " : ""}{mi.desc}{mi.pn ? <> <span style={{ whiteSpace: "nowrap" }}>({mi.pn})</span></> : ""}{mi.qty ? <span style={{ whiteSpace: "nowrap" }}> × {mi.qty}</span> : ""}</React.Fragment>) : "—"}</td>
+                <td data-label="Km" style={{ whiteSpace: "nowrap" }}>{p.travelKm ? Number(p.travelKm).toLocaleString("sk-SK") : "—"}</td>
+                <td data-label="Čas na ceste" style={{ whiteSpace: "nowrap" }}>{p.travelHours ? String(p.travelHours).replace(".", ",") + " h" : "—"}</td>
                 {showHistory && <td data-label="Objednávka/výkaz">{p.erpOrderNumber || "—"}</td>}
                 <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {diff && !showHistory && (
@@ -26029,7 +26327,7 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
         </div>
       ) : (
         <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
-        <table className="table-cards jobs-table">
+        <table className="table-cards jobs-table tc900 tc1280">
           <thead>
             <tr>
               <th>Stroj</th>
@@ -26110,8 +26408,13 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
 /* ---------------------------------------------------------
    Úradné skúšky view — same mechanics as revisions, year-based
 --------------------------------------------------------- */
-function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId }) {
+function UradneSkuskyView({ damages, technicians, machineById, today, user, onAssign, onComplete, onResolve, onProtocol, onOpenDetail, onClearAll, highlightDamageId, onBulkAssign, assignments }) {
   const [search, setSearch] = useState("");
+  // Hromadné pridelenie — zaškrtávanie ako v Poškodeniach (napr. celé depo v jednom výjazde).
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const canBulkAssign = onBulkAssign && can(user, "uradnaskuska_assign");
+  const toggleSelect = (id) => setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const [depoFilter, setDepoFilter] = useState(null);
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const depoOptions = DEPO_OPTIONS;
@@ -26175,6 +26478,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
   }
   const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
   const thisYear = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
+  const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
@@ -26187,7 +26491,9 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
             </button>
           ))}
         </div>
-        <div className="seg" role="group" aria-label="Depo">
+        {/* Návrh 12: na mobile depá v jednom posuvnom riadku (aj „Všetky“), hľadanie a ⋯ v riadku so stavom */}
+        <div className="seg chip-scroll rev-depo" role="group" aria-label="Depo">
+          <button type="button" className={!depoFilter ? "on" : ""} aria-pressed={!depoFilter} onClick={() => setDepoFilter(null)}>Všetky</button>
           {depoOptions.map((d) => (
             <button key={d} type="button" className={depoFilter === d ? "on" : ""} aria-pressed={depoFilter === d} onClick={() => setDepoFilter(depoFilter === d ? null : d)}>
               <span className="depo-chip-full">{d}</span><span className="depo-chip-short">{DEPO_SHORT_LABELS[d] || d}</span>
@@ -26200,6 +26506,17 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
           can(user, "uradnaskuska_clear_all") && { label: "Vymazať všetky úradné skúšky", danger: true, onClick: onClearAll },
         ]} />
       </div>
+      {canBulkAssign && picked.length > 0 && (
+        <div className="bulk-bar" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "8px 12px", background: "linear-gradient(var(--accent-light), var(--accent-light)), var(--panel)", border: "1px solid var(--accent)", borderRadius: 6, flexWrap: "wrap", position: "sticky", top: "calc(var(--header-h, 62px) + 8px)", zIndex: 5 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Vybraných: {picked.length}</span>
+          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setShowBulkAssign(true)}>
+            Prideliť vybrané →
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
+            Zrušiť výber
+          </button>
+        </div>
+      )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <h2 className={`today-sec${overdue.length ? " red" : ""}`} style={{ marginTop: 0 }}>
@@ -26225,6 +26542,10 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 variant="uradnaSkuska"
                 locationLabel={locationLabel(d)}
                 highlighted={d.id === highlightDamageId}
+                machineById={machineById}
+                selectable={canBulkAssign && !d.resolved && damageInDeposOf(user, d, machineById)}
+                selected={selectedIds.has(d.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
@@ -26253,11 +26574,31 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
                 variant="uradnaSkuska"
                 locationLabel={locationLabel(d)}
                 highlighted={d.id === highlightDamageId}
+                machineById={machineById}
+                selectable={canBulkAssign && !d.resolved && damageInDeposOf(user, d, machineById)}
+                selected={selectedIds.has(d.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
         </div>
       </div>
+      {showBulkAssign && (
+        <BulkAssignModal
+          damages={picked}
+          technicians={technicians}
+          assignments={assignments}
+          user={user}
+          today={today}
+          onClose={() => setShowBulkAssign(false)}
+          onSave={(technicianIds, date) => {
+            // Len to, čo je v zozname práve viditeľné (skryté filtrom/vyhľadávaním sa nepriradí).
+            if (onBulkAssign(picked.map((d) => d.id), technicianIds, date) === false) return; // bez signálu — výber ostáva
+            setSelectedIds(new Set());
+            setShowBulkAssign(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -26265,7 +26606,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
 /* ---------------------------------------------------------
    Damage assign modal (assign a damage report to a technician/day)
 --------------------------------------------------------- */
-function DamageAssignModal({ damage, technicians, user, assignments, today, onClose, onSave, onBack }) {
+function DamageAssignModal({ damage, technicians, user, assignments, today, hasServiceProtocol, onClose, onSave, onBack }) {
   // "Vedúci technik" role smie prideľovať len technikom z vlastných depí.
   const allowedDepos = myAssignableDepos(user);
   const assignableTechnicians = allowedDepos ? technicians.filter((t) => allowedDepos.includes(t.depo)) : technicians;
@@ -26298,6 +26639,7 @@ function DamageAssignModal({ damage, technicians, user, assignments, today, onCl
   function workloadOn(technicianId) {
     return (assignments || []).filter(
       (a) => a.technicianId === technicianId && a.date === date && a.damageId !== damage.id && (!a.kind || a.kind === "kontrolaStroja") // len práca, nie pohotovosť/udalosť
+        && (a.kind === "kontrolaStroja" ? !a.resolved : !hasServiceProtocol?.(a)) // hotové (s protokolom) technika nevyťažujú
     ).length;
   }
 
@@ -26886,12 +27228,13 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
 /* ---------------------------------------------------------
    Technician service planner (Gantt, click day → assign)
 --------------------------------------------------------- */
-function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
+function TechnicianPlanner({ hasServiceProtocol, onAssignDamage, extraFilters, technicians, assignments, machines, damages, weeklyDuty, today, user, onCellClick, onQuickAssign, onQuickEventNote, onQuickWeeklyDuty, onQuickVacationWithSubstitute, onOpenTechnician, technicianFilter, depoFilter, setDepoFilter, depoCheckers, checkerSubstitutions, showArchived, onOpenCheckerInspection, ezMeasurements, onOpenEzDay, plannerTargetDate, onPlannerTargetDateConsumed }) {
   const [checksDay, setChecksDay] = useState(null); // { technician, date, ids } — zoznam zbalených kontrol v bunke
   const [monthOffset, setMonthOffset] = useState(0);
   const [quickMode, setQuickMode] = useState(null); // null | 'udalost' | 'pohotovost' | 'dovolenka' | 'pn' | 'sluzba'
   const [pendingEventCell, setPendingEventCell] = useState(null); // { technicianId, date } — čaká na text poznámky pri "Udalosť"
   const [pendingVacationCell, setPendingVacationCell] = useState(null); // { technician, date, depos, kind } — technik-checker ide na dovolenku/PN, treba náhradu
+  const [showAllUnassigned, setShowAllUnassigned] = useState(false);
   const QUICK_KINDS = [
     { id: "udalost", label: "Udalosť", color: "#0EA5E9", freeText: true },
     { id: "pohotovost", label: "Pohotovosť", color: "var(--danger)" },
@@ -27054,7 +27397,10 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
       if (!container || !cell) return;
       const containerRect = container.getBoundingClientRect();
       const cellRect = cell.getBoundingClientRect();
-      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + containerRect.width / 2);
+      // Prilepený stĺpec mien zakrýva ľavú časť — centrovať len vo viditeľnej ploche dní.
+      const nameCol = cell.parentElement?.firstElementChild;
+      const stick = nameCol && nameCol !== cell && getComputedStyle(nameCol).position === "sticky" ? nameCol.offsetWidth : 0;
+      const delta = (cellRect.left + cellRect.width / 2) - (containerRect.left + stick + (containerRect.width - stick) / 2);
       container.scrollLeft = container.scrollLeft + delta;
     } catch (e) {
       // ignore — purely a convenience scroll
@@ -27276,7 +27622,7 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
                           onClick={handleClick}
                           title={withHoliday(iso, clickTitle)}
                           style={{
-                            height: 26,
+                            height: 40,
                             borderRadius: 4,
                             background: isWeekend ? "var(--warn-bg)" : "var(--gantt-cell-bg)",
                             border: "1px solid var(--gantt-cell-border)",
@@ -27311,8 +27657,12 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
                           const ezAllDone = isEz && ezOpen.length === 0;
                           const ezLate = isEz && !ezAllDone && a.date < today;
                           const isReturnInspection = isCheckerInspection && a.phase === "vratenie";
+                          // Hotová servisná úloha (s protokolom) ✓ a stlmená; otvorená práca v deň PN/dovolenky ⚠ — treba ju presunúť.
+                          const serviceDone = !a.kind && !!hasServiceProtocol?.(a);
+                          const away = dayAssignments.find((x) => x.kind === "pn" || x.kind === "dovolenka");
+                          const awayWarn = !!away && ((!a.kind && !serviceDone) || (isCheckerInspection && !a.resolved && !a.skipped));
                           const bg = isEz ? "#6366f1" : isCheckerInspection ? (isReturnInspection ? "#0f766e" : "#6d28d9") : quickKind ? quickKind.color : linkedDamage ? damageColor(linkedDamage) : "var(--info)";
-                          const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.skipped ? "⊘ " : a.resolved ? "✓ " : ""}${a.self ? "🏢 " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : (machine?.code || a.stroj || a.firma || "•");
+                          const label = isEz ? `${ezAllDone ? "✓ " : ""}EZ · ${a.ezItems.length > 1 ? `×${a.ezItems.length}` : (a.ezItems[0].machineCode || "—")}` : a.kind === "udalost" ? (a.poznamka || a.stroj || "Udalosť") : isCheckerInspection ? `${a.skipped ? "⊘ " : a.resolved ? "✓ " : ""}${a.self ? "🏢 " : ""}${machine?.code || "Kontrola stroja"}` : quickKind ? quickKind.label : `${serviceDone ? "✓ " : ""}${machine?.code || a.stroj || a.firma || "•"}${linkedDamage?.popis ? " · " + linkedDamage.popis.split(/[,.;:\n]/)[0] : ""}`;
                           const tooltip = isEz
                             ? `Spracovanie meraní EZ (${ezOpen.length} z ${a.ezItems.length} čaká)${ezLate ? " — po termíne" : ""}: ${a.ezItems.map((x) => x.machineCode || "—").join(", ")}`
                             : a.kind === "udalost"
@@ -27321,24 +27671,24 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
                             ? `${a.self ? (isReturnInspection ? "Osobné vrátenie v depe (protokol + kontrola)" : "Osobný odber v depe (kontrola + odovzdanie)") : `Kontrola stroja ${isReturnInspection ? "po vrátení" : "pred vývozom"}`} — ${machine?.code || "—"}${machine?.type ? " · " + machine.type : ""}`
                             : quickKind
                             ? quickKind.label
-                            : `${machine?.code || a.stroj || "—"} · ${machineCurrentLocation(machine) || a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}`;
+                            : `${machine?.code || a.stroj || "—"} · ${machineCurrentLocation(machine) || a.umiestnenie || "—"} · ${a.firma || "—"}${linkedDamage ? " · " + damageLabel(linkedDamage) : ""}${serviceDone ? " · hotové (protokol)" : ""}`;
                           return (
                             <div
                               key={a.id}
                               onClick={isEz && !quickMode ? () => onOpenEzDay(a.technicianId, a.date) : isCheckerInspection && !quickMode ? () => onOpenCheckerInspection(a) : handleClick}
-                              title={tooltip}
+                              title={awayWarn ? `${tooltip} — technik je ${away.kind === "pn" ? "na PN" : "na dovolenke"}, úlohu presuňte` : tooltip}
                               style={{
-                                height: 22,
+                                height: 24,
+                                lineHeight: "24px",
                                 borderRadius: 4,
                                 background: bg,
                                 color: "#fff",
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: 600,
-                                opacity: (isCheckerInspection && a.resolved) || ezAllDone ? 0.9 : 1,
-                                outline: ezLate ? "2px solid var(--danger)" : undefined,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
+                                opacity: serviceDone ? 0.5 : (isCheckerInspection && a.resolved) || ezAllDone ? 0.9 : 1,
+                                outline: ezLate || awayWarn ? "2px solid var(--danger)" : undefined,
+                                outlineOffset: awayWarn ? 1 : undefined,
+                                textAlign: "center",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -27347,7 +27697,7 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
                               }}
                               className="gantt-cell"
                             >
-                              {label}
+                              {awayWarn && "⚠ "}{label}
                             </div>
                           );
                         })
@@ -27393,6 +27743,31 @@ function TechnicianPlanner({ hasServiceProtocol, extraFilters, technicians, assi
           </div>
         </div>
       </div>
+      {onAssignDamage && (() => {
+        // Nepridelené tikety (rovnaké ako na Dnes), najstaršie navrchu — prideliť priamo z plánu cez okno Prideliť.
+        const list = (damages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa") && !d.technicianId && !(d.technicianIds || []).length
+          && (d.machineId || d.type === "externa") && can(user, d.type === "externa" ? "external_assign" : "damage_assign") && damageInDeposOf(user, d, machineById))
+          .sort((x, y) => (x.dateReported || "").localeCompare(y.dateReported || ""));
+        if (!list.length) return null;
+        return (
+          <div className="panel" style={{ padding: "14px 16px", marginTop: 16 }}>
+            <h2 className="today-sec" style={{ margin: "0 0 6px" }}>Nepridelené tikety · {list.length} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>· najstaršie navrchu</span></h2>
+            {(showAllUnassigned ? list : list.slice(0, 10)).map((d, i) => (
+              <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                <b className="tnum" style={{ flex: "0 0 56px" }}>{d.code || (d.type === "externa" ? "Externá" : "—")}</b>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="tnum" style={{ fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[d.model, d.type === "externa" ? d.assignedDepo : machineById[d.machineId]?.depo, d.dateReported && `nahlásené ${fmtDate(d.dateReported)}`].filter(Boolean).join(" · ")}</div>
+                  <div style={{ fontSize: 13, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.popis || "—"}</div>
+                </div>
+                <button className="btn btn-accent" onClick={() => onAssignDamage(d)}>Prideliť</button>
+              </div>
+            ))}
+            {list.length > 10 && (
+              <button className="btn btn-ghost" onClick={() => setShowAllUnassigned((v) => !v)}>{showAllUnassigned ? "Zobraziť menej" : `Zobraziť všetky (${list.length})`}</button>
+            )}
+          </div>
+        );
+      })()}
       {checksDay && (
         <Modal eyebrow="Kontroly stroja" title={`${checksDay.technician.name} — ${fmtDate(checksDay.date)}`} onClose={() => setChecksDay(null)}>
           {assignments.filter((x) => checksDay.ids.includes(x.id)).sort((x, y) => (!!x.resolved - !!y.resolved) || (machineById[x.machineId]?.code || "").localeCompare(machineById[y.machineId]?.code || "")).map((x) => {
@@ -27834,6 +28209,19 @@ function LoginScreen({ onLogin, onSignUp }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [showPw, setShowPw] = useState(false);
+
+  async function handleForgot() {
+    setError(""); setInfo("");
+    if (!email.trim()) { setError("Zadajte email, na ktorý vám pošleme odkaz na nastavenie nového hesla."); return; }
+    setBusy(true);
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin + window.location.pathname });
+    setBusy(false);
+    // Rovnaká hláška pre existujúci aj neexistujúci účet — neprezradí, či účet existuje.
+    if (err && !navigator.onLine) setError("Ste bez signálu — skúste to znova po pripojení.");
+    else if (err?.status === 429) setError("Príliš veľa pokusov — skúste to o chvíľu znova.");
+    else setInfo("Ak k tomuto emailu existuje účet, poslali sme naň odkaz na nastavenie nového hesla. Skontrolujte aj priečinok nevyžiadanej pošty.");
+  }
 
   async function handleLogin() {
     setError(""); setInfo("");
@@ -27890,18 +28278,27 @@ function LoginScreen({ onLogin, onSignUp }) {
           </Field>
         )}
         <Field label="Heslo">
-          <input
-            type="password"
-            name="password"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%" }}
-          />
+          <div className="pw-wrap">
+            <input
+              type={showPw ? "text" : "password"}
+              name="password"
+              aria-label="Heslo"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ width: "100%" }}
+            />
+            <button type="button" className="pw-eye" aria-label={showPw ? "Skryť heslo" : "Zobraziť heslo"} aria-pressed={showPw} onClick={() => setShowPw((v) => !v)}>{showPw ? "🙈" : "👁"}</button>
+          </div>
         </Field>
+        {mode === "login" && (
+          <div style={{ textAlign: "right", margin: "-6px 0 12px" }}>
+            <button type="button" disabled={busy} onClick={handleForgot} style={{ background: "none", border: "none", padding: "0 4px", minHeight: 44, color: "var(--text)", textDecoration: "underline", fontFamily: "inherit", fontSize: 14, cursor: "pointer" }}>Zabudnuté heslo</button>
+          </div>
+        )}
         {mode === "signup" && (
           <Field label="Zopakovať heslo">
-            <input type="password" name="password2" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
+            <input type={showPw ? "text" : "password"} name="password2" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
           </Field>
         )}
 
@@ -28269,13 +28666,18 @@ function StatistikyView({ domainTarget, user, machines, machineModels, technicia
 
   const canEditServis = can(user, "statistics_edit_servis");
 
+  const STAT_PERIODS = [["week", "Tento týždeň"], ["month", "Tento mesiac"], ["quarter", "Posledné 3 mesiace"], ["year", "Tento rok"], ["custom", "Vlastný rozsah"]];
   const periodPicker = (
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
-      <div className="seg" role="group" aria-label="Obdobie">
-        {[["week", "Tento týždeň"], ["month", "Tento mesiac"], ["quarter", "Posledné 3 mesiace"], ["year", "Tento rok"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
+      <div className="seg stat-period-seg" role="group" aria-label="Obdobie">
+        {STAT_PERIODS.map(([id, label]) => (
           <button key={id} type="button" className={period === id ? "on" : ""} aria-pressed={period === id} onClick={() => setPeriod(id)}>{label}</button>
         ))}
       </div>
+      {/* Na mobile jeden výber namiesto 5 tlačidiel (návrh 10, k34). */}
+      <select className="stat-period-sel" aria-label="Obdobie" value={period} onChange={(e) => setPeriod(e.target.value)}>
+        {STAT_PERIODS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
       {period === "custom" && (
         <>
           <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
@@ -29631,9 +30033,24 @@ function ReportTransportIssueModal({ job, machine, onClose, onConfirm }) {
   return (
     <Modal eyebrow="⚠ Problém s prepravou" title={machine?.code || job.customer || ""} onClose={onClose} elevated form>
       {machine && job.customer && <div className="fintro">{job.customer}</div>}
+      {/* Rýchle dôvody — šofér na stavbe nemusí písať celé vety; text sa dá dopísať. */}
+      <div role="group" aria-label="Rýchle dôvody" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        {["Zákazník neprítomný", "Meškám", "Nedá sa prísť ku stroju", ...(machine ? ["Porucha stroja"] : [])].map((r) => (
+          <button key={r} type="button" className="fchip" aria-pressed={note.split(/,\s*/).includes(r)} style={note.split(/,\s*/).includes(r) ? { borderColor: "var(--accent)", fontWeight: 700 } : undefined}
+            onClick={() => {
+              const parts = note.split(/,\s*/).map((x) => x.trim()).filter(Boolean);
+              // Druhé ťuknutie dôvod odoberie; dôvod, ktorý by sa nezmestil do 300 znakov, sa nepridá vôbec (nie odrezaný).
+              const next = parts.includes(r) ? parts.filter((x) => x !== r).join(", ") : [...parts, r].join(", ");
+              if (next.length > 300) return;
+              setNote(next);
+              if (r === "Porucha stroja") setIsDamage(!parts.includes(r));
+            }}>{r}</button>
+        ))}
+      </div>
       <Field label="Čo sa deje (dispečer to uvidí hneď) *">
         <input maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný, porucha stroja" style={{ width: "100%" }} />
       </Field>
+      <div className="fhint tnum" style={{ textAlign: "right", margin: "-8px 0 10px" }}>{note.length} / 300</div>
       {machine && (
         <label className={`fck${isDamage ? " fnote fnote-r" : ""}`}>
           <input type="checkbox" checked={isDamage} onChange={(e) => setIsDamage(e.target.checked)} />
@@ -29813,6 +30230,14 @@ function WhoIsWherePanel({ employees, dsp, depoCheckers, checkerSubstitutions, t
   );
 }
 
+// Prečo databáza záznam odmietla — ľudskou rečou. Hláška RLS je bez textu, vtedy podľa toho, komu práca teraz patrí.
+function rejectedReason(table, item, msg, job, assignments, myId) {
+  if (table === "handoverProtocols" && (!job || (item?.returnDone ? job.returnDriverId : job.driverId) !== myId)) return "Zákazka je pridelená inému šoférovi";
+  const a = table === "assignments" && (assignments || []).find((x) => x.id === item?.id);
+  if (a && myId && a.technicianId !== myId) return "Kontrolu medzitým pridelili inému technikovi";
+  if (msg) return msg.replace(/\s*\([^)]*\)$/, "").replace(/\.$/, "");
+  return "Prácu medzitým preradili alebo sa zmenil váš prístup";
+}
 // Karta úlohy na „Dnes“ — všetky akcie obrysové; plné červené tlačidlo má len veľká karta (TodayHero) navrchu.
 function TodayCard({ id, tag, tagColor, tagBg, title, sub, problem, actions, children }) {
   return (
@@ -29942,7 +30367,7 @@ function TechWeekStrip({ assignments, myId, today, onGo, lateN = 0, isWork = (a)
     </section>
   );
 }
-function TodayView({ blockedItems, onRetryBlocked, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
+function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
   onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo, onDriverReport }) {
   const role = user?.role;
   const isDriver = role === "sofer" || role === "externy_sofer";
@@ -29974,11 +30399,25 @@ function TodayView({ blockedItems, onRetryBlocked, user, myEmployee, today, tomo
     <>
       <div className="today-sec red">Neuložené — v zariadení · {blockedItems.length}</div>
       <div className="panel" style={{ padding: "10px 12px", marginBottom: 14, fontSize: 14 }}>
-        {blockedItems.map(({ table, item }) => {
-          const code = machineById[item?.machineId]?.code || item?.machineSerial || item?.stroj || item?.customer || "";
-          return <div key={table + item?.id} style={{ padding: "3px 0" }}>{REJECTED_LABEL[table]}{code ? ` · ${code}` : ""}</div>;
+        {blockedItems.map(({ table, item, msg, at }) => {
+          const job = (jobs || []).find((j) => j.id === item?.jobId);
+          const code = machineById[item?.machineId || job?.machineId]?.code || item?.machineSerial || item?.stroj || item?.customer || "";
+          // Komu volať: protokol šoféra → dispečer zákazky, ostatné (práca technika) → dispečer servisu (najprv z môjho depa).
+          const srv = (employees || []).filter((e) => !e.archived && e.role === "dispecer_servisu" && e.phone);
+          // Zákazku už nevidno (externému šoférovi ju preradili) → dispečer požičovne môjho depa.
+          const poz = (employees || []).filter((e) => !e.archived && e.role === "dispecer_pozicovne" && e.phone);
+          const call = table === "handoverProtocols" ? (job && jobDispatcher?.(job)) || poz.find((e) => e.depo === myEmployee?.depo) || poz[0] : srv.find((e) => e.depo === myEmployee?.depo) || srv[0];
+          return (
+            <div key={table + item?.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <strong>{REJECTED_LABEL[table]}{code ? ` · ${code}` : ""}</strong>
+                <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{rejectedReason(table, item, msg, job, assignments, myId)}{at ? ` · uložené ${sentWhen(at)}` : ""}</span>
+              </span>
+              {call?.phone && <a className="btn btn-ghost" href={`tel:${call.phone}`} title={call.name}>📞 {table === "handoverProtocols" ? "Dispečer" : "Servis"}</a>}
+            </div>
+          );
         })}
-        <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "6px 0 8px" }}>Databáza záznam odmietla (napr. prácu medzitým preradili). Odošle sa sám, keď kancelária upraví pridelenie. Nič nemažte.</div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "8px 0" }}>Odošle sa sám, keď kancelária upraví pridelenie. Nič nemažte.</div>
         <button type="button" className="btn btn-ghost" onClick={onRetryBlocked}>Skúsiť odoslať znova</button>
       </div>
     </>
@@ -30299,10 +30738,10 @@ function TodayList({ title, rows: allRows, empty, total, limit }) {
               {problem && <span aria-hidden="true" style={{ color: "var(--danger)", fontSize: 16 }}>⚠</span>}
               <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: r.block ? "var(--panel)" : TONE_BG[r.tone], color: TONE[r.tone], whiteSpace: "nowrap" }}>{r.tag}</span>
               <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-                <div className={r.block ? "today-problem-title" : undefined} style={{ fontWeight: 600, fontSize: 14, overflowWrap: "anywhere" }}>{r.title}</div>
+                <div className={[r.block && "today-problem-title", r.clamp && "today-clamp2"].filter(Boolean).join(" ") || undefined} title={r.clamp ? r.title : undefined} style={{ fontWeight: 600, fontSize: 14, overflowWrap: "anywhere" }}>{r.title}</div>
                 {r.sub && <div style={{ fontSize: 13, color: "var(--text-dim)", overflowWrap: "anywhere" }}>{r.sub}</div>}
+                {r.load > 0 && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
               </div>
-              {r.load > 0 && <span className="today-load" aria-hidden="true"><span style={{ width: `${Math.min(100, r.load * 25)}%` }} /></span>}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
                 {shown.map((a, k) => (
                   a.href
@@ -30392,7 +30831,9 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     mismatch.forEach((n) => rows.push({ key: n.id, tag: "NESÚLAD DEPA", tone: "red", title: n.message, actions: [{ label: "Vyriešiť", onClick: () => { onReadNotification(n.id); onGo(n.link); } }, { label: "Hotovo", onClick: () => onReadNotification(n.id) }] }));
     portal.forEach((r) => { const j = jobById[r.jobId]; rows.push({ key: r.id, tag: "PORTÁL", tone: "warn", title: `${j.customer || "—"} — ${r.type === "extension" ? `zmena vrátenia na ${fmtDate(r.requestedEndDate)}` : "žiadosť"}`, sub: `${mcode(j.machineId)} · ${r.createdAt ? fmtDate(toLocalISO(new Date(r.createdAt))) : ""}`, actions: [{ label: "Otvoriť", onClick: () => onOpenJob(j) }] }); });
     ending.forEach((j) => rows.push({ key: j.id + "-end", tag: j.endDate < today ? "PO KONCI" : j.endDate === today ? "KONČÍ DNES" : "KONČÍ ZAJTRA", tone: j.endDate < today ? "red" : "info",
-      title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: `koniec ${fmtDate(j.endDate)}${j.obchodnik ? ` · ${j.obchodnik}` : ""}`,
+      title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: <>koniec {fmtDate(j.endDate)}{j.obchodnik ? ` · ${j.obchodnik}` : ""}{j.endDate < today && !j.selfReturn && (j.returnDriverId
+        ? ` · zvoz: ${driverById[j.returnDriverId]?.name || "—"} · ${fmtDate(j.pickupDate || j.endDate)}` /* stav zvozu ako pri obchodníkovom „KONČÍ“ (návrh k34) */
+        : <> · <span style={{ color: "var(--danger-text)", fontWeight: 600 }}>zvoz bez šoféra</span></>)}</>,
       actions: [can(user, "job_complete") && { label: "Ukončiť", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
     resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
     // Revízia/ÚS stroja vyprší ešte počas prenájmu (rovnaké pravidlo ako upozornenie a „Teraz treba“, step97).
@@ -30467,7 +30908,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       ] : []),
       { n: toBill.length, label: "Výdaje dielov na fakturáciu", tone: "info", onClick: () => onGo({ module: "servis", view: "vydaj" }) },
     );
-    portalProblems.forEach((r) => rows.push({ key: r.id, tag: "PORTÁL", tone: "red", title: `${mcode(r.machineId)} · ${r.customer || "—"}: „${r.message}“`, sub: r.createdAt ? fmtDate(toLocalISO(new Date(r.createdAt))) : "",
+    portalProblems.forEach((r) => rows.push({ key: r.id, tag: "PORTÁL", tone: "red", clamp: true, title: `${mcode(r.machineId)} · ${r.customer || "—"}: „${r.message}“`, sub: r.createdAt ? fmtDate(toLocalISO(new Date(r.createdAt))) : "",
       actions: [can(user, "damage_status") && { label: "Založiť ako poškodenie", onClick: () => onConvertPortalProblem(r) },
         can(user, "damage_status") && onRejectPortalRequest && { label: "Zamietnuť", onClick: () => {
           const note = window.prompt("Dôvod zamietnutia (uvidí ho zákazník na portáli):", "");
@@ -30476,7 +30917,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
           onRejectPortalRequest(r, note.trim());
         } },
         jobById[r.jobId] && { label: "Zákazka", onClick: () => onOpenJob(jobById[r.jobId]) }] }));
-    unassigned.forEach((d) => rows.push({ key: d.id, tag: d.type === "externa" ? "EXTERNÁ" : "TIKET", tone: "red", title: `${d.code || "bez stroja"} — ${d.popis || "—"}`,
+    unassigned.forEach((d) => rows.push({ key: d.id, tag: d.type === "externa" ? "EXTERNÁ" : "TIKET", tone: "red", title: `${d.code || "bez stroja"} — ${(d.popis || "—").length > 140 ? d.popis.slice(0, 140).trimEnd() + "…" : d.popis || "—"}`, // dlhý popis celý v detaile
       sub: [d.customer, d.location, d.dateReported ? `nahlásené ${fmtDate(d.dateReported)}` : ""].filter(Boolean).join(" · "),
       actions: [can(user, "damage_assign") && d.machineId && { label: "Prideliť", onClick: () => onAssignDamage(d) }, { label: "Detail", onClick: () => onOpenDamage(d) }] }));
     toCheck.forEach((p) => rows.push({ key: p.id, tag: "VÝDAJ DIELOV", tone: "warn", title: `${p.customer} — ${plural((p.items || []).length, "položka", "položky", "položiek")}`,
@@ -30749,8 +31190,8 @@ function DriverReportModal({ drivers, selfOnly, selfId, issuedBy, onClose }) {
     ["Minulý mesiac", monthStart(prevMonthEnd), prevMonthEnd],
   ];
   const [driverId, setDriverId] = useState(selfOnly ? "" : drivers[0]?.id || "");
-  const [from, setFrom] = useState(presets[3][1]);
-  const [to, setTo] = useState(presets[3][2]);
+  const [from, setFrom] = useState(presets[2][1]);
+  const [to, setTo] = useState(presets[2][2]);
   const [rep, setRep] = useState(null);
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -30765,8 +31206,11 @@ function DriverReportModal({ drivers, selfOnly, selfId, issuedBy, onClose }) {
     return () => { live = false; };
   }, [selfOnly, driverId, from, to]);
   const rows = rep?.rows || [];
+  // Celý mesiac → „Október 2026“, inak rozsah dátumov.
+  const monthName = from ? new Date(from + "T12:00:00").toLocaleDateString("sk-SK", { month: "long" }) : "";
+  const period = from && to && from.slice(8) === "01" && to === addDaysISO(monthStart(addDaysISO(from, 31)), -1) ? `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${from.slice(0, 4)}` : from && to ? `${fmtDate(from)} – ${fmtDate(to)}` : "";
   return (
-    <Modal eyebrow="Výkaz" title="Výkaz prepráv externého šoféra" onClose={onClose} wide>
+    <Modal eyebrow="Výkaz prepráv externého šoféra" title={period || "Výkaz prepráv externého šoféra"} onClose={onClose} wide>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: selfOnly ? "1fr 1fr" : "2fr 1fr 1fr", gap: "0 12px" }}>
         {!selfOnly && (
           <Field label="Šofér">
@@ -31343,6 +31787,8 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   // Kopírovanie stĺpca — malá sivá ikona priamo pri názve stĺpca.
   const CP_BTN = { minHeight: 0, padding: "0 4px", fontSize: 13, border: "none", background: "transparent", color: "var(--text-dim)", fontWeight: 400 };
   function renderGroupTable(groupRows, groupLabel, groupColor, showDodavatelFilter) {
+    // Dátum objednania len ak ho niektorý riadok má/potrebuje — tabuľka sa tak zmestí na 1360 px.
+    const showDate = groupRows.some((p) => p.stav === SPAREPART_STAV.OBJEDNANE || p.datumObjednania);
     return (
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 8px" }}>
@@ -31360,16 +31806,16 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
           )}
         </div>
         <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
-          <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table-cards jobs-table sp-table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {columns.map((c) => (
-                  <th key={c.key} style={{ whiteSpace: "nowrap" }}>
+                  <th key={c.key} style={{ whiteSpace: "normal" }}>
                     {c.label}
                     {c.key === "dodavatel" && showDodavatelFilter && (
                       <ColumnFilterButton label="Dodávateľ" options={dodavatelOptions} selected={selectedDodavatelia} onChange={setDodavatelFilter} />
                     )}
-                    {" "}
+                    {"\u00a0"}
                     <button className="btn" style={CP_BTN} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
                   </th>
                 ))}
@@ -31377,10 +31823,10 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                   Určenie {" "}
                   <button className="btn" style={CP_BTN} title="Kopírovať stĺpec Určenie" onClick={() => copyColumn(groupRows.map((p) => ({ urcenieText: urcenieLabel(p.urcenie) })), "urcenieText", "Určenie")}>⧉</button>
                 </th>
-                <th style={{ whiteSpace: "nowrap" }}>Stav objednania</th>
-                <th style={{ whiteSpace: "nowrap" }}>Dátum objednania</th>
-                <th style={{ whiteSpace: "nowrap" }}>
-                  Nákupná objednávka {" "}
+                <th style={{ whiteSpace: "normal" }}>Stav objednania</th>
+                {showDate && <th style={{ whiteSpace: "normal" }}>Dátum objednania</th>}
+                <th style={{ whiteSpace: "normal" }}>
+                  Nákupná objednávka{"\u00a0"}
                   <button className="btn" style={CP_BTN} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(groupRows, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
                 </th>
                 {canManage && <th></th>}
@@ -31400,7 +31846,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                             value={String(p[c.key] ?? "")}
                             aria-label={c.label}
                             onCommit={(v) => onUpdate(p.id, { [c.key]: v })}
-                            style={{ fontSize: 13, width: c.key === "popisDielu" ? 160 : c.key === "pocetKusov" ? 60 : 100 }}
+                            style={{ fontSize: 13, width: "100%", minWidth: c.key === "pocetKusov" ? 48 : 72, maxWidth: c.key === "popisDielu" ? 160 : c.key === "pocetKusov" ? 60 : 100 }}
                           />
                         </td>
                       ) : (
@@ -31434,16 +31880,16 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                         </span>
                       )}
                     </td>
-                    <td data-label="Dátum objednania">
+                    {showDate && <td data-label="Dátum objednania">
                       {canManage ? (
                         <input type="date" aria-label="Dátum objednania" value={p.datumObjednania || ""} onChange={(e) => onUpdate(p.id, { datumObjednania: e.target.value })} style={{ fontSize: 12 }} />
                       ) : (
                         <span className="tnum">{p.datumObjednania ? fmtDate(p.datumObjednania) : "—"}</span>
                       )}
-                    </td>
+                    </td>}
                     <td data-label="Nákupná objednávka">
                       {canManage ? (
-                        <BlurInput value={p.nakupnaObjednavka || ""} aria-label="Nákupná objednávka" onCommit={(v) => onUpdate(p.id, { nakupnaObjednavka: v })} style={{ fontSize: 12, width: 110 }} />
+                        <BlurInput value={p.nakupnaObjednavka || ""} aria-label="Nákupná objednávka" onCommit={(v) => onUpdate(p.id, { nakupnaObjednavka: v })} style={{ fontSize: 12, width: "100%", minWidth: 80, maxWidth: 110 }} />
                       ) : (
                         <span className="tnum">{p.nakupnaObjednavka || "—"}</span>
                       )}
@@ -31816,6 +32262,9 @@ function SparePartsImportButton({ depo, onImport, onClose }) {
   );
 }
 
+// Stránka s neuloženou zmenou (Checkeri) — menu sa pred odchodom opýta (ako okno s rozpísanými údajmi).
+// shortcut: stráži len prechod cez menu (navGo), nie skok z vyhľadávania/upozornenia; rozšíriť, ak to bude treba aj inde.
+let _leaveGuard = null;
 function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutions, onDeleteSubstitution, onSave }) {
   const [values, setValues] = useState(depoCheckers || {});
   // Stav pri otvorení — uloží sa len to, čo zmenil tento človek (kolega mohol medzitým nastaviť iné depo).
@@ -31833,6 +32282,15 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
     setValues(next);
   }, [depoCheckers]);
   const technicianName = (id) => technicians.find((t) => t.id === id)?.name || "—";
+  const changed = (d) => (values[d] || "") !== (initialRef.current[d] || "");
+  const dirty = DEPO_OPTIONS.some(changed);
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    _leaveGuard = () => window.confirm("Odísť zo stránky? Zmenení checkeri sa neuložia.");
+    return () => { window.removeEventListener("beforeunload", onBeforeUnload); _leaveGuard = null; };
+  }, [dirty]);
 
   return (
     <div>
@@ -31849,7 +32307,10 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
             <tbody>
               {DEPO_OPTIONS.map((depo) => (
                 <tr key={depo}>
-                  <td className="td-plain" style={{ fontWeight: 600 }}>{depo}</td>
+                  <td className="td-plain" style={{ fontWeight: 600 }}>
+                    {depo}
+                    {changed(depo) && <span title="Neuložená zmena" style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: "var(--warn)" }}>● neuložené</span>}
+                  </td>
                   <td className="td-plain">
                     <select
                       aria-label={`Checker — ${depo}`}
@@ -31869,6 +32330,7 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
         <button
           className="btn btn-accent"
           style={{ marginBottom: 20 }}
+          disabled={!dirty}
           onClick={() => {
             // vyčistí prázdne hodnoty, nech sa v databáze nehromadí "undefined"
             const cleaned = {};
@@ -31878,7 +32340,7 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
             // Ďalšie uloženie v tom istom okne porovnáva s tým, čo sa práve uložilo;
             // zablokované (bez signálu) sa vráti na uložený stav, nech sa dá zopakovať.
             if (onSave(cleaned, initialRef.current) === false) setValues(depoCheckers || {});
-            else initialRef.current = cleaned;
+            else { initialRef.current = cleaned; setValues(cleaned); }
           }}
         >
           Uložiť
@@ -31920,8 +32382,28 @@ const AUDIT_TABLE_LABELS = {
   machines: "Stroje",
   spareParts: "Náhradné diely",
   handoverProtocols: "Protokoly o odovzdaní",
+  employees: "Zamestnanci",
+  profiles: "Účty (rola, prístup)",
 };
 const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
+const AUDIT_FIELD_LABELS = { assignedDate: "dátum pridelenia", assignmentId: "úloha", archived: "archivovaný", archivedDate: "dátum archivácie", archivedReason: "dôvod archivácie", archivedNote: "poznámka k archivácii", linkedUserId: "prepojený účet", active: "aktívny", stav: "stav", status: "stav", resolved: "vyriešené", technicianId: "technik", technicianIds: "technici", popis: "popis", customer: "zákazník", machineId: "stroj", driverId: "šofér", returnDriverId: "šofér zvozu", startDate: "od", endDate: "do", depo: "depo", role: "rola", active: "prístup", archived: "archivovaný", name: "meno", phone: "telefón", email: "email", linkedUserId: "prepojený účet", note: "poznámka" };
+// Čo sa zmenilo pri úprave: old_data = staré hodnoty zmenených polí (step113), inak predošlý načítaný zápis záznamu.
+function auditChange(e, prevData, nameOf) {
+  if (e.action !== "update") return "";
+  const now = e.new_data || {};
+  if (!e.old_data && !prevData) return "";
+  const was = e.old_data ? { ...now, ...e.old_data } : prevData;
+  const fmt = (k, v) => (v === null || v === undefined || v === "" ? "—" : typeof v === "boolean" ? (v ? "áno" : "nie") : k === "role" ? roleLabel(v) : (nameOf[v] || String(v)).slice(0, 30));
+  const out = [];
+  const stav = e.table_name === "damages" && damageLabel(was) !== damageLabel(now);
+  if (stav) out.push(`stav: ${damageLabel(was)} → ${damageLabel(now)}`);
+  const keys = [...new Set([...Object.keys(was), ...Object.keys(now)])].filter((k) => !k.startsWith("_") && !/At$/.test(k) && !(stav && ["stav", "resolved"].includes(k)) && JSON.stringify(was[k] ?? null) !== JSON.stringify(now[k] ?? null));
+  // Zoznamy a vnorené údaje (fotky, checklist) len názvom poľa.
+  keys.forEach((k) => { const lbl = AUDIT_FIELD_LABELS[k] || (FIELD_LABELS[k] || k).toLowerCase(); out.push(typeof (now[k] ?? was[k]) === "object" ? `${lbl} (zmenené)` : `${lbl}: ${fmt(k, was[k])} → ${fmt(k, now[k])}`); });
+  return out.length > 3 ? `${out.slice(0, 3).join(" · ")} · +${out.length - 3}` : out.join(" · ");
+}
+const AUDIT_OPEN_TYPE = { damages: "damage", jobs: "job", machines: "machine" };
+export const _testAdmin = { auditChange, trashSubline, accountRoleDiffers }; // admin.test.js
 // Úvodný sprievodca — prechádza skutočné obrazovky platformy (prepne modul/záložku) a vysvetlí ich kartičkou dole.
 // Krok s obrazovkou sa ukáže len tomu, kto ju v menu má; roles: null = všetkým.
 const FIELD_ROLES = ["sofer", "externy_sofer", "technik", "veduci_technik_ba"];
@@ -31972,7 +32454,7 @@ function PlatformTour({ role, modules, hasActions, hidden, onGo, onClose, bottom
   );
 }
 // Stav platformy (admin): nočné úlohy, chyby push/webhookov, staré kontroly, platforma u ľudí — step89.
-function PlatformStatusView() {
+function PlatformStatusView({ profiles = [], employees = [], onGo, onOpenUser }) {
   const [st, setSt] = useState(null);
   const [err, setErr] = useState(null);
   const load = useCallback(() => {
@@ -31995,9 +32477,9 @@ function PlatformStatusView() {
   const td = { padding: "10px 12px", fontSize: 14, borderTop: "1px solid var(--border)" };
   // Nevyhovujúci stav (nedostupné, chyba) — ⚠ s podfarbením, nech sa odlíši od „v poriadku“.
   const bad = (t) => <div className="spill spill-problem" style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "8px 12px", fontSize: 14 }}>⚠ {t}</div>;
-  const box = (title, children) => (
+  const box = (title, children, id) => (
     <>
-      <h2 className="today-sec">{title}</h2>
+      <h2 className="today-sec" id={id} style={{ scrollMarginTop: 80 }}>{title}</h2>
       <div className="panel" style={{ padding: 14, marginBottom: 14, boxShadow: "none", borderRadius: 12 }}>
         {children}
       </div>
@@ -32009,6 +32491,18 @@ function PlatformStatusView() {
   const clients = st.clients || [];
   const old = clients.filter((c) => c.version && c.version !== APP_VERSION);
   const queued = clients.filter((c) => c.queued > 0);
+  const toBox = (id) => () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const roleDiff = profiles.map((p) => [p, employees.find((e) => e.linkedUserId === p.id && !e.archived)]).filter(([p, e]) => accountRoleDiffers(p, e));
+  const nQueued = queued.reduce((n, c) => n + c.queued, 0);
+  const nErr = st.httpErrors ? st.httpErrors.length : 0;
+  // Číslo > 0 vedie na zoznam, kde sa to rieši; odmietnuté zmeny rieši dispečing (Prepravy).
+  const tiles = [
+    { label: "Čakajúce zmeny bez signálu", n: nQueued, onClick: nQueued ? (queued.some((c) => c.blocked) ? () => onGo("poziciovna", "prepravy") : toBox("stav-ludia")) : undefined },
+    { label: "Staršia verzia platformy", n: old.length, onClick: old.length ? toBox("stav-ludia") : undefined },
+    { label: "Kontroly stroja z minulých dní", n: st.oldInspections || 0, tone: "red", onClick: st.oldInspections ? () => onGo("servis", "plan") : undefined },
+    { label: "Chyby push / webhookov", n: nErr, tone: "red", onClick: nErr ? toBox("stav-chyby") : undefined },
+    { label: "Rola účtu ≠ rola karty", n: roleDiff.length, tone: "red", onClick: roleDiff.length ? toBox("stav-roly") : undefined },
+  ].map((t) => ({ ...t, always: true }));
   return (
     <div>
       {H1}
@@ -32016,12 +32510,7 @@ function PlatformStatusView() {
         <span className="tnum" style={{ fontSize: 14, color: "var(--text-dim)" }}>Stav k {when(st.now)} · táto verzia {APP_VERSION}</span>
         <button className="btn btn-outline" onClick={load}>Obnoviť</button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 6 }}>
-        <StatCard label="Čakajúce zmeny bez signálu" value={queued.reduce((n, c) => n + c.queued, 0)} color={queued.length ? "var(--warn)" : undefined} />
-        <StatCard label="Staršia verzia platformy" value={old.length} color={old.length ? "var(--warn)" : undefined} />
-        <StatCard label="Kontroly stroja z minulých dní" value={st.oldInspections} color={st.oldInspections ? "var(--danger)" : undefined} />
-        <StatCard label="Chyby push / webhookov" value={st.httpErrors ? st.httpErrors.length : "—"} color={st.httpErrors?.length ? "var(--danger)" : undefined} />
-      </div>
+      <TodayTiles tiles={tiles} />
       {box("Nočné úlohy (databáza)", st.cron ? (
         <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={head}>Úloha</th><th style={head}>Kedy (UTC)</th><th style={head}>Posledný beh</th><th style={head}>Výsledok</th></tr></thead>
@@ -32035,6 +32524,16 @@ function PlatformStatusView() {
           ))}</tbody>
         </table></div>
       ) : bad("Plánovač úloh (pg_cron) nie je dostupný."))}
+      {box("Účty, kde sa rola účtu líši od roly aktívnej karty", roleDiff.length ? (
+        <div style={{ fontSize: 14 }}>
+          {roleDiff.map(([p, e], i) => (
+            <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}>
+              <span><strong>{p.name || p.email}</strong> · účet: {roleLabel(p.role)} · karta: {roleLabel(e.role)}</span>
+              {onOpenUser && <button className="btn btn-outline" style={{ minHeight: 34 }} onClick={() => onOpenUser(p)}>Otvoriť účet</button>}
+            </div>
+          ))}
+        </div>
+      ) : <div style={{ fontSize: 14, color: "var(--ok)" }}>✓ Rola každého účtu sa zhoduje s jeho kartou zamestnanca.</div>, "stav-roly")}
       {box("Platforma u ľudí", (
         <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={head}>Meno</th><th style={head}>Rola</th><th style={head}>Verzia</th><th style={head}>Čaká na odoslanie</th><th style={head}>Odmietnuté upozornenia</th><th style={head}>Naposledy online</th></tr></thead>
@@ -32054,7 +32553,7 @@ function PlatformStatusView() {
             ))}
           </tbody>
         </table></div>
-      ))}
+      ), "stav-ludia")}
       {box("Automatické zálohy (každú noc, 14 dní)", st.backups ? (st.backups.length ? (
         <div style={{ fontSize: 13 }}>
           {(Date.now() - new Date(st.backups[0].at).getTime()) / 3600000 > 26 && <div style={{ marginBottom: 6 }}>{bad("Posledná záloha je staršia ako deň — skontrolujte nočnú úlohu mateco-backup.")}</div>}
@@ -32069,23 +32568,32 @@ function PlatformStatusView() {
       ) : <div style={{ fontSize: 14, color: "var(--text-dim)" }}>Zatiaľ žiadna — prvá vznikne v noci.</div>) : bad("Nedostupné (spustený step91?)."))}
       {box("Chyby push / webhookov (posledných ~6 h)", st.httpErrors ? (st.httpErrors.length ? (
         <div style={{ fontSize: 14 }}>{st.httpErrors.map((h, i) => <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid var(--border)" : 0 }}><strong>{when(h.at)}</strong> · {h.status || "bez odpovede"} · {h.error || ""}</div>)}</div>
-      ) : <div style={{ fontSize: 14, color: "var(--ok)" }}>✓ Bez chýb.</div>) : bad("Nedostupné."))}
+      ) : <div style={{ fontSize: 14, color: "var(--ok)" }}>✓ Bez chýb.</div>) : bad("Nedostupné."), "stav-chyby")}
       <div className="page-intro">Kontroly z minulých dní ráno presúva databáza (cez víkend nie) — číslo nad 0 v pracovný deň po 6:00 znamená, že ranný presun neprebehol. Čakajúce zmeny u človeka sa ukážu, keď je online; „odmietnuté“ treba vyriešiť v dispečingu.</div>
     </div>
   );
 }
-function AuditLogView({ profiles }) {
+function AuditLogView({ profiles, employees = [], machines = [], onOpen }) {
   const [entries, setEntries] = useState(null); // null = ešte sa načítava
   const [tableFilter, setTableFilter] = useState("");
+  const [hideSystem, setHideSystem] = useState(true);
+  const [who, setWho] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [error, setError] = useState(null);
   const profileById = useMemo(() => Object.fromEntries(profiles.map((p) => [p.id, p])), [profiles]);
+  const nameOf = useMemo(() => Object.fromEntries([...machines.map((m) => [m.id, m.code]), ...employees.map((x) => [x.id, x.name]), ...profiles.map((p) => [p.id, p.name])]), [machines, employees, profiles]);
 
   useEffect(() => {
     let cancelled = false;
-    supabase
-      .from("audit_log")
-      .select("*")
-      .order("changed_at", { ascending: false })
+    setEntries(null);
+    let q = supabase.from("audit_log").select("*");
+    // Filtre na serveri — inak by sa hľadalo len v posledných 300 zmenách.
+    if (who) q = q.eq("changed_by", who);
+    else if (hideSystem) q = q.not("changed_by", "is", null);
+    if (from) q = q.gte("changed_at", new Date(`${from}T00:00`).toISOString());
+    if (to) q = q.lt("changed_at", new Date(`${addDaysISO(to, 1)}T00:00`).toISOString()); // polnoc nasledujúceho dňa (deň zmeny času má 25 h)
+    q.order("changed_at", { ascending: false })
       .limit(300)
       .then(({ data, error: err }) => {
         if (cancelled) return;
@@ -32097,17 +32605,38 @@ function AuditLogView({ profiles }) {
         setEntries(data || []);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [who, from, to, hideSystem]);
 
-  const filtered = tableFilter ? (entries || []).filter((e) => e.table_name === tableFilter) : entries || [];
+  // Systémové = bez autora (databáza) alebo automatický tiket revízie/ÚS, ktorý založila platforma u prihláseného.
+  const auto = (e) => !e.changed_by || (e.table_name === "damages" && e.action === "insert" && /^(rev|us)-/.test(e.record_id));
+  const filtered = (entries || []).filter((e) => (!tableFilter || e.table_name === tableFilter) && !(hideSystem && !who && auto(e)));
+  // Hromadné systémové zápisy za sebou (napr. automatické tikety revízií) — jeden riadok.
+  const rows = [];
+  filtered.forEach((e) => {
+    const last = rows[rows.length - 1];
+    if (auto(e) && last && auto(last) && last.changed_by === e.changed_by && last.table_name === e.table_name && last.action === e.action) last.group.push(e);
+    else rows.push({ ...e, group: [e] });
+  });
 
   return (
     <div>
       <h1 className="page-h1">Audit log</h1>
       <p className="page-intro">
         Posledných {entries?.length || 0} zmien v citlivých tabuľkách (poškodenia/servis, zákazky, stroje, náhradné
-        diely, protokoly o odovzdaní) — zaznamenáva sa priamo v databáze, nedá sa obísť z platformy.
+        diely, protokoly o odovzdaní, zamestnanci, roly a prístup účtov) — zaznamenáva sa priamo v databáze, nedá sa obísť z platformy.
       </p>
+      <div className="tbar">
+        <select aria-label="Kto" value={who} onChange={(e) => setWho(e.target.value)} style={{ minHeight: 40 }}>
+          <option value="">Všetci</option>
+          {[...profiles].sort((a, b) => (a.name || "").localeCompare(b.name || "", "sk")).map((p) => <option key={p.id} value={p.id}>{p.name || p.email}</option>)}
+        </select>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>Od <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ minHeight: 40 }} /></label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>do <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ minHeight: 40 }} /></label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+          <input type="checkbox" checked={hideSystem} disabled={!!who} onChange={(e) => setHideSystem(e.target.checked)} />
+          Skryť systémové
+        </label>
+      </div>
       <div className="tbar">
         <div className="seg chip-scroll" role="group" aria-label="Tabuľka" style={{ flexWrap: "wrap" }}>
           <button type="button" className={!tableFilter ? "on" : ""} aria-pressed={!tableFilter} onClick={() => setTableFilter("")}>Všetko</button>
@@ -32136,27 +32665,37 @@ function AuditLogView({ profiles }) {
                 <th>Tabuľka</th>
                 <th>Akcia</th>
                 <th>Záznam</th>
+                <th>Zmena</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
-                <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Žiadne zmeny v tomto filtri.</td></tr>
+              {rows.length === 0 && (
+                <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Žiadne zmeny v tomto filtri.</td></tr>
               )}
-              {filtered.map((e) => {
-                const who = e.changed_by ? profileById[e.changed_by]?.name || "— neznámy účet —" : "— systém —";
+              {rows.map((e) => {
+                const whoName = e.changed_by ? profileById[e.changed_by]?.name || "— neznámy účet —" : "— systém —";
                 const data = e.action === "delete" ? e.old_data : e.new_data;
                 const label = data?.code || data?.name || data?.customer || data?.cisloDielu || e.record_id;
+                const n = e.group.length;
+                const revs = e.table_name === "damages" && e.action === "insert" && e.group.every((x) => ["revizia", "uradnaSkuska"].includes(x.new_data?.type));
+                const at = filtered.findIndex((x) => x.id === e.id);
+                const prev = e.action === "update" && !e.old_data ? filtered.slice(at + 1).find((x) => x.table_name === e.table_name && x.record_id === e.record_id)?.new_data : null;
+                const openType = n === 1 && e.action !== "delete" && onOpen && AUDIT_OPEN_TYPE[e.table_name];
                 return (
                   <tr key={e.id}>
                     <td className="tnum" style={{ whiteSpace: "nowrap" }} data-label="Kedy">{new Date(e.changed_at).toLocaleString("sk-SK")}</td>
-                    <td data-label="Kto" style={e.changed_by ? undefined : { color: "var(--text-dim)" }}>{who}</td>
+                    <td data-label="Kto" style={e.changed_by ? undefined : { color: "var(--text-dim)" }}>{whoName}</td>
                     <td data-label="Tabuľka">{AUDIT_TABLE_LABELS[e.table_name] || e.table_name}</td>
                     <td data-label="Akcia">
                       <span className={`spill ${e.action === "delete" ? "spill-problem" : e.action === "insert" ? "spill-done" : "spill-active"}`}>
                         {AUDIT_ACTION_LABELS[e.action] || e.action}
                       </span>
                     </td>
-                    <td className="tnum" style={{ fontWeight: 700 }} data-label="Záznam">{label}</td>
+                    <td className="tnum" style={{ fontWeight: 700 }} data-label="Záznam">
+                      {n > 1 ? (revs ? `Systém vytvoril ${plural(n, "tiket revízie", "tikety revízií", "tiketov revízií")}` : plural(n, "záznam", "záznamy", "záznamov"))
+                        : openType ? <button type="button" className="btn-link" style={{ fontWeight: 700 }} onClick={() => onOpen({ type: openType, id: e.record_id })}>{label}</button> : label}
+                    </td>
+                    <td data-label="Zmena" style={{ fontSize: 13 }}>{n > 1 ? "" : auditChange(e, prev, nameOf)}</td>
                   </tr>
                 );
               })}
@@ -32168,13 +32707,43 @@ function AuditLogView({ profiles }) {
   );
 }
 
-function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, onResetPassword }) {
+function UserAdminModal({ profiles, currentUser, initialSearch, onClose, onUpdate, onDelete, onResetPassword }) {
+  const [search, setSearch] = useState(initialSearch || "");
+  const [adminAsk, setAdminAsk] = useState(null); // { p, role } — zmena z/na Administrátora čaká na potvrdenie
+  const [undo, setUndo] = useState(null); // { id, name, prev, role } — posledná zmena roly
+  const q = search.trim().toLowerCase();
+  // Nové účty bez roly navrch (inak sa medzi ostatnými stratia).
+  const shown = profiles
+    .filter((p) => !q || (p.name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q))
+    .sort((a, b) => (b.role === "nezaradeny") - (a.role === "nezaradeny"));
+  const setRole = (p, role) => { Promise.resolve(onUpdate(p.id, { role })).then((ok) => { if (ok !== false) setUndo({ id: p.id, name: p.name, prev: p.role, role }); }); }; // „Späť“ len po úspešnom uložení
+  const pickRole = (p, role) => (role === "admin" || p.role === "admin" ? setAdminAsk({ p, role }) : setRole(p, role));
+  const instant = (e) => e.stopPropagation(); // hľadanie a rola (ukladá sa hneď) nie sú rozpísané údaje — Esc sa nepýta
   return (
     <Modal title="Správa používateľov" onClose={onClose} xwide>
       <div className="fhint" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
         Noví ľudia sa registrujú sami na prihlasovacej obrazovke — tu im len prideľte rolu, prípadne ich deaktivujte/zmažte.
       </div>
-      <div style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+      <div className="tbar" onInput={instant} onChange={instant}>
+        <input type="search" aria-label="Hľadať používateľa" placeholder="Hľadať meno alebo email…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ minHeight: 40, flex: "1 1 240px", maxWidth: 360 }} />
+      </div>
+      {undo && (
+        <div role="status" className="fnote fnote-g" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <span>✓ Rola účtu {undo.name} zmenená: {roleLabel(undo.prev)} → {roleLabel(undo.role)}</span>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 36 }} onClick={() => { pickRole({ id: undo.id, name: undo.name, role: undo.role }, undo.prev); if (undo.prev !== "admin" && undo.role !== "admin") setUndo(null); }}>Späť</button>
+        </div>
+      )}
+      {adminAsk && (
+        <ConfirmActionModal
+          message={adminAsk.role === "admin"
+            ? `Dať účtu ${adminAsk.p.name} rolu Administrátor? Získa plný prístup ku všetkému vrátane správy používateľov.`
+            : `Odobrať účtu ${adminAsk.p.name} rolu Administrátor (nová rola: ${roleLabel(adminAsk.role)})?`}
+          confirmLabel={adminAsk.role === "admin" ? "Áno, dať rolu Administrátor" : "Áno, odobrať"}
+          onClose={() => setAdminAsk(null)}
+          onConfirm={() => setRole(adminAsk.p, adminAsk.role)}
+        />
+      )}
+      <div style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }} onInput={instant} onChange={instant}>
       <table className="table-cards jobs-table">
         <thead>
           <tr>
@@ -32186,12 +32755,12 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
           </tr>
         </thead>
         <tbody>
-          {profiles.length === 0 && (
-            <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadni používatelia.</td></tr>
+          {shown.length === 0 && (
+            <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>{q ? "Nikto nezodpovedá hľadaniu." : "Zatiaľ žiadni používatelia."}</td></tr>
           )}
-          {profiles.map((p) => (
+          {shown.map((p) => (
             <tr key={p.id}>
-              <td className="td-plain" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}</td>
+              <td className="td-plain" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}{p.id === currentUser?.id ? " (vy)" : ""}{p.role === "nezaradeny" && <span className="spill spill-wait" style={{ marginLeft: 8 }}>čaká na rolu</span>}</td>
               <td data-label="Email" style={{ whiteSpace: "nowrap" }}>{p.email || (p.id === currentUser?.id ? currentUser.email : "—")}</td>
               <td data-label="Rola">
                 {p.id === currentUser?.id ? (
@@ -32205,7 +32774,7 @@ function UserAdminModal({ profiles, currentUser, onClose, onUpdate, onDelete, on
                   <select
                     value={p.role}
                     aria-label={`Rola — ${p.name}`}
-                    onChange={(e) => onUpdate(p.id, { role: e.target.value })}
+                    onChange={(e) => pickRole(p, e.target.value)}
                     style={{ minHeight: 40, minWidth: 190 }}
                   >
                     {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
@@ -32271,7 +32840,7 @@ function GlobalStyle() {
         --warn-bg: #faeeda;
         --gantt-name-col: 150px;
         --gantt-day-col: 72px;
-        --gantt-plan-day-col: 72px;
+        --gantt-plan-day-col: 96px; /* štítok úlohy s krátkym popisom („S-115 · hydraulika“) */
         --danger: #C4040F;
         --danger-bg: #FDF1F1;
         --danger-text: #8E0A12;
@@ -32288,6 +32857,7 @@ function GlobalStyle() {
         --line-strong: #CFCFCF;
         --s-neutral-bg: #EFEFEF; --s-neutral: #3A3A3A;
         --s-active-bg: #E7EEF9; --s-active: #1F4E99;
+        --s-out-bg: #E8EDF2; --s-out: #3E5368;
         --s-done-bg: #E6F4EA; --s-done: #1E6B34;
         --s-wait-bg: #FFF4DB; --s-wait: #6B4A00;
         --control-bg: #fff;
@@ -32312,6 +32882,9 @@ function GlobalStyle() {
       .today-tile-n.problem { color: var(--danger-text); }
       .today-tile.zero .today-tile-n, .today-tile.zero .today-tile-go { color: var(--text-dim); }
       .today-tile.zero { background: transparent; }
+      .panel.stat-click { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; }
+      .panel.stat-click:hover { border-color: var(--text-dim); }
+      .panel.stat-click.on { border-color: var(--accent-fill); box-shadow: 0 0 0 1px var(--accent-fill); background: var(--accent-light); }
       @media (max-width: 640px) {
         .today-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
         .panel.today-tile { padding: 10px 28px 10px 12px; }
@@ -32321,7 +32894,8 @@ function GlobalStyle() {
       }
       .today-problem { background: var(--danger-bg) !important; }
       .today-problem-title { color: var(--danger-text); }
-      .today-load { flex: 0 0 120px; height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+      .today-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* dlhé hlásenie z portálu — celé na karte zákazky */
+      .today-load { display: block; width: 120px; max-width: 100%; height: 6px; margin-top: 5px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
       .today-load > span { display: block; height: 100%; background: var(--info); }
       .today-hero { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
       .today-hero-tag { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
@@ -32372,7 +32946,7 @@ function GlobalStyle() {
         --accent: #ff6b74;
         --accent-dark: #ff8a90;
         --accent-light: rgba(227,6,19,.18);
-        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #7c8086; --c-prep: #d95926;
+        --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c-bad: #e66767; --c-idle: #7c8086; --c-prep: #b45309;
         --ok: #8fd18a;
         --ok-bg: rgba(59,109,17,.28);
         --warn: #e0a858;
@@ -32392,6 +32966,7 @@ function GlobalStyle() {
         --line-strong: #737c85;
         --s-neutral-bg: #30363c; --s-neutral: #dfe3e6;
         --s-active-bg: #1c3350; --s-active: #a9c8f5;
+        --s-out-bg: #26303a; --s-out: #b4c3d2;
         --s-done-bg: #1b3a25; --s-done: #93d6a3;
         --s-wait-bg: #3d3113; --s-wait: #f0c869;
         --control-bg: var(--panel-2);
@@ -32426,6 +33001,8 @@ function GlobalStyle() {
       .header-new-wrap { position: relative; }
       /* iPhone/iPad (iOS 26 rozmazáva pás pod stavovou lištou): odznak zvončeka vpravo dole. */
       @supports (-webkit-touch-callout: none) { .bell-badge { top: auto !important; bottom: -5px !important; } }
+      .bell-x { font-size: 22px; line-height: 1; padding: 0 !important; width: 36px; min-height: 36px !important; flex: 0 0 auto; }
+      .bell-check { font-size: 14px; padding: 0 10px !important; min-height: 28px !important; margin-left: auto; }
       .header-new-btn { background: #fff; color: var(--accent-fill); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
       .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
       .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
@@ -32472,6 +33049,36 @@ function GlobalStyle() {
         /* Riadkové akcie (Zmazať a pod.) v karte — väčšie dotykové pole než
            na desktope, nech sa na mobile dá bezpečne trafiť prstom. */
         table.table-cards td.td-actions button { min-height: 36px; padding: 6px 14px !important; }
+      }
+      /* Tablet a úzke okno (návrh p9 A): Zákazky, Dáta požičovne a ERP podklady ako karty pod 1100 px — tabuľka by inak išla mimo obrazovky; bočné menu ostáva. */
+      @media (max-width: 1100px) {
+        table.tc900 thead { display: none; }
+        table.tc900, table.tc900 tbody { display: block; width: 100%; }
+        table.tc900 tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--panel); }
+        table.tc900 td, table.tc900 td.m-only { display: flex !important; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0 !important; border: none; text-align: right; font-size: 14px; position: static; box-shadow: none; background: transparent; }
+        table.tc900 td[data-label]::before { content: attr(data-label); font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
+        table.tc900 td.td-plain { display: block !important; text-align: left; }
+        table.tc900 td.td-actions { justify-content: flex-end; }
+        table.tc900 tr.row-problem { background: var(--danger-bg); }
+        table.tc900 tr.row-problem td { background: transparent; }
+        table.tc900 .who-hide-mobile { display: none !important; }
+        table.tc900 .m-only { display: inline-flex !important; }
+        .jobs-wrap:has(> table.tc900) { background: transparent !important; border: 0 !important; }
+      }
+      /* ERP podklady majú viac stĺpcov — karty už pod 1280 px (iPad na šírku). */
+      @media (max-width: 1280px) {
+        table.tc1280 thead { display: none; }
+        table.tc1280, table.tc1280 tbody { display: block; width: 100%; }
+        table.tc1280 tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--panel); }
+        table.tc1280 td, table.tc1280 td.m-only { display: flex !important; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0 !important; border: none; text-align: right; font-size: 14px; position: static; box-shadow: none; background: transparent; }
+        table.tc1280 td[data-label]::before { content: attr(data-label); font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
+        table.tc1280 td.td-plain { display: block !important; text-align: left; }
+        table.tc1280 td.td-actions { justify-content: flex-end; }
+        table.tc1280 tr.row-problem { background: var(--danger-bg); }
+        table.tc1280 tr.row-problem td { background: transparent; }
+        table.tc1280 .who-hide-mobile { display: none !important; }
+        table.tc1280 .m-only { display: inline-flex !important; }
+        .jobs-wrap:has(> table.tc1280) { background: transparent !important; border: 0 !important; }
       }
 
       /* Položka v kebab (⋮) menu — riadkové akcie skryté za jedným tlačidlom
@@ -32644,6 +33251,11 @@ function GlobalStyle() {
       .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; margin-bottom: 16px; }
       .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
       .hbars { display: grid; gap: 8px 10px; align-items: center; font-size: 13px; }
+      .stat-period-sel { display: none; }
+      @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
+        .seg.stat-period-seg { display: none !important; }
+        .stat-period-sel { display: block; flex: 1 1 100%; height: 44px; font-size: 16px; }
+      }
       .hbar { display: contents; }
       .hbar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .hbar-t { position: relative; height: 16px; }
@@ -32688,13 +33300,16 @@ function GlobalStyle() {
       .fchip-x { margin-left: 6px; border: 0; background: transparent; font: inherit; font-weight: 700; color: inherit; cursor: pointer; padding: 0 2px; }
       .spill { display: inline-block; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--s-neutral-bg); color: var(--s-neutral); }
       .spill-active { background: var(--s-active-bg); color: var(--s-active); }
+      .spill-out { background: var(--s-out-bg); color: var(--s-out); } /* Čaká na vývoz — sivomodrá */
       .spill-done { background: var(--s-done-bg); color: var(--s-done); }
       .spill-wait { background: var(--s-wait-bg); color: var(--s-wait); }
       /* Farby stavov (jednotne): červená = blokuje, oranžová = treba riešiť, modrá = prebieha, zelená = v poriadku, sivá = neaktívne */
       .spill-problem { background: var(--danger-bg); color: var(--danger-text); }
       .spill-overdue { background: var(--warn-bg); color: var(--warn); } /* len „Po termíne“ (v1.0.816) */
+      .spill-warn { background: var(--warn-bg); color: var(--warn); } /* oranžová mimo „Po termíne“: rola účtu ≠ karta, Kôš ≤ 3 dni */
       .btn-outline { background: var(--panel); border: 1px solid var(--text); color: var(--text); }
       .btn-outline:hover { background: var(--panel-2); }
+      .btn-link { border: 0; background: none; padding: 0; min-height: 32px; font: inherit; color: var(--text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
       .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       .cell-sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
       .jobs-table th { position: static; }
@@ -32702,12 +33317,14 @@ function GlobalStyle() {
       .jobs-table td { font-size: 15px; padding: 12px; vertical-align: middle; }
       .jobs-table th:first-child, .jobs-table td:first-child { padding-left: 20px; }
       .jobs-table th:last-child, .jobs-table td:last-child { padding-right: 20px; }
+      @media (min-width: 900px) { .sp-table th, .sp-table td { padding-left: 8px; padding-right: 8px; } } /* Náhradné diely: 11 stĺpcov na 1360 px */
       .jobs-table tr.row-problem td { background: var(--danger-bg); }
       .jobs-table .btn { min-height: 36px; font-size: 14px; }
       .day-sec { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 8px; font-variant-numeric: tabular-nums; }
       .day-sec.red { color: var(--danger-text); }
       .tr-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 200px 150px; gap: 12px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); cursor: pointer; }
       .tr-row:first-child { border-top: 0; }
+      .tr-row { outline-offset: -2px; } /* zvýraznenie (klik v Rýchlom prehľade) — panel má overflow: hidden */
       .tr-row.row-problem { background: var(--danger-bg); }
       .tr-row select { width: 100%; max-width: 200px; }
       .job-form-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); margin: 0 -20px; border-top: 1px solid var(--border); }
@@ -32739,6 +33356,8 @@ function GlobalStyle() {
         .chip-scroll > * { flex-shrink: 0; white-space: nowrap; }
         .seg.chip-scroll { display: flex !important; }
         .seg.chip-scroll > button { flex: 0 0 auto; white-space: nowrap; }
+        .tbar > .rev-depo { order: 1; } /* Revízie: hľadanie a ⋯ v riadku so stavom, depá pod nimi */
+        .seg.rev-depo > button { padding: 0 14px; }
       }
       .jobs-table tr.row-click:not(.row-problem):hover td { background: var(--panel-2); }
       .jc-report-m { display: none; }
@@ -32749,6 +33368,17 @@ function GlobalStyle() {
       .qs-send-btn { font-size: 13px; padding: 4px 10px; min-height: 34px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
       .qs-n { color: var(--text-dim); }
       .qs-n.on { color: var(--text); font-weight: 700; }
+      .qs-tiles { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .qs-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 76px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+      .qs-tile b { font-size: 13px; }
+      .qs-tile-n { font-size: 18px; font-weight: 700; }
+      .qs-tile-s { font-size: 12px; color: var(--text-dim); }
+      .qs-tile.red { border-color: var(--danger); background: var(--danger-bg); }
+      .qs-tile.red .qs-tile-s { color: var(--danger-text); font-weight: 700; }
+      .tr-date { border: 0; background: none; padding: 4px 6px; margin-left: -6px; min-height: 36px; border-radius: 6px; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
+      .tr-date span { color: var(--text-dim); }
+      .tr-date:hover { background: var(--panel-2); }
+      .tr-row select.tr-assign { min-height: 44px; border: 2px solid var(--danger); font-weight: 700; color: var(--text); }
       /* Formuláre (v1.0.794): popisky 14 px, polia 44 px (mobil 48 px), spodná lišta FormFoot, rámiky, kroky, checklist. */
       .fld { margin-bottom: 14px; min-width: 0; }
       .fld-l { display: block; font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
@@ -32776,6 +33406,10 @@ function GlobalStyle() {
       .fstep-n { width: 26px; height: 26px; border-radius: 50%; background: var(--text); color: var(--panel); font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
       .fstep-t { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
       .fstep .spill { text-transform: none; }
+      .fdisc > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--text); }
+      .fdisc > summary::-webkit-details-marker { display: none; }
+      .fdisc-a { display: inline-block; transition: transform .15s; }
+      .fdisc[open] .fdisc-a { transform: rotate(90deg); }
       .flegend { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 10px; }
       .fsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
       .fsum > div { background: var(--panel-2); border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
@@ -32816,6 +33450,8 @@ function GlobalStyle() {
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         .tr-row { grid-template-columns: 70px minmax(0, 1fr); padding: 12px 14px; }
         .tr-row > :nth-child(n+3) { grid-column: 2; }
+        .qs-tiles { display: grid; }
+        .qs-wide { display: none; }
         .job-form-cols > fieldset + fieldset { border-left: 0; border-top: 1px solid var(--border); }
         .seg { display: flex; width: 100%; }
         .jobs-table tr.row-problem { background: var(--danger-bg); }
@@ -32846,6 +33482,10 @@ function GlobalStyle() {
       .auth-body input { height: 48px; font-size: 16px; }
       .auth-body .btn { min-height: 48px; font-size: 16px; border-radius: 8px; }
       .auth-body > div[style] { font-size: 14px !important; }
+      .pw-wrap { position: relative; }
+      .pw-wrap input { padding-right: 52px; }
+      .pw-eye { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none; background: transparent; color: var(--text-dim); font-size: 18px; cursor: pointer; border-radius: 6px; }
+      .pw-eye[aria-pressed="true"] { color: var(--text); }
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         .auth-body { padding: 20px 18px 24px; }
         .auth-body input { height: 52px; font-size: 16px !important; }
@@ -32887,6 +33527,8 @@ function GlobalStyle() {
       :is(input, select, textarea):focus-visible { outline-offset: 1px; }
       body.dark :is(button, a, summary, label.btn, [tabindex]:not([tabindex="-1"]), input, select, textarea):focus-visible,
       .header-topbar :focus-visible, .header-topbar :is(button, a, input, [tabindex]):focus-visible { outline-color: #F2F2F2; }
+      #whatsnew-older:focus-visible { outline: 2px solid #1A1A1A; outline-offset: 2px; } /* hlavička verzie po „Staršie zmeny“ má tabindex -1 */
+      body.dark #whatsnew-older:focus-visible { outline-color: #F2F2F2; }
       label.btn:has(input:focus-visible) { outline: 2px solid #1A1A1A; outline-offset: 2px; }
       body.dark label.btn:has(input:focus-visible) { outline-color: #F2F2F2; }
       .modal-panel [data-miss-auto]:focus-visible, .modal-panel:has(.ff-tried) [data-miss]:focus-visible { outline-color: var(--danger); }
@@ -32917,6 +33559,8 @@ function GlobalStyle() {
          MOBILE — telefóny a malé tablety
          (aj telefón na šírku — viď vysvetlenie pri prvom @media vyššie)
          ══════════════════════════════════════════════════════ */
+      /* Úzke okno PC (hlavička sa zalomí, zvonček je vľavo) — panel pod hlavičku k pravému okraju, nie mimo obrazovky. */
+      @media (min-width: 721px) and (max-width: 1000px) { .dropdown-panel { position: fixed !important; left: auto !important; right: 8px !important; top: calc(var(--header-h, 62px) + 4px) !important; } }
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none) {
         /* iOS "gumové" posúvanie stránky mimo obrazovku (najmä šikmým ťahom prsta) —
            len na mobile, na PC by to blokovalo bežné rolovanie kolieskom/scrollbarom. */
@@ -32925,6 +33569,11 @@ function GlobalStyle() {
         /* To isté pre servisný protokol — len na mobile, nech na PC ide bežné
            rolovanie kolieskom myši (predtým sa toto omylom aplikovalo vždy). */
         .protocol-overlay { overscroll-behavior: none; touch-action: pan-y; }
+
+        /* Lišta „Prideliť vybrané“ — na mobile je posuvný body, sticky by nefungoval; nad spodnou lištou. */
+        .bulk-bar { position: fixed !important; left: 8px; right: 8px; top: auto !important; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 150; margin: 0 !important; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+        .bulk-bar { flex-wrap: nowrap !important; gap: 6px !important; padding: 6px 8px !important; }
+        .bulk-bar .btn { white-space: nowrap; padding: 6px 8px !important; }
 
         /* Zvonček a menu používateľa — na mobile sa pripnú k okraju obrazovky
            namiesto malej ikonky, nech sa nikdy nezobrazia mimo viditeľnej plochy. */
@@ -32936,6 +33585,11 @@ function GlobalStyle() {
           width: auto !important;
           max-width: none !important;
         }
+        /* Zvonček na mobile na celú výšku pod hlavičkou (návrh 4, k34) — pod ním nepresvitá Dnes. */
+        .dropdown-panel.bell-panel { left: 0 !important; right: 0 !important; bottom: 0 !important; max-height: none !important; border-radius: 16px 16px 0 0; padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; } /* posledné upozornenie nad spodnou lištou */
+        .bell-panel .bell-head { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+        .bell-panel .bell-title { font-size: 17px !important; }
+        .bell-panel .bell-unread { background: transparent !important; }
 
         /* Tlačidlá pre technikov (Vypísať protokol, VTZ EZ...) — na mobile
            naťahovali hlavičku a zalamovali sa nečitateľne. Namiesto toho sa
@@ -33251,8 +33905,17 @@ function GlobalStyle() {
       @media (max-width: 768px) { .maskot-fab.open { display: none !important; } } /* na mobile otvorený panel zatvára × (úzka úchytka je na dotyk malá) */
       .maskot-fab:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
       /* Kalendár vypĺňa obrazovku až po pätičku; na mobile je pätička pod spodným menu — na Kalendári sa skryje. */
-      @media (min-width: 769px) { .app-main:has(.cal-bar) { padding-bottom: 0 !important; } .app-shell:has(.cal-bar) .app-footer { padding: 6px 12px !important; } }
+      @media (min-width: 1001px), (min-width: 769px) and (hover: hover) { .app-main:has(.cal-bar) { padding-bottom: 0 !important; } .app-shell:has(.cal-bar) .app-footer { padding: 6px 12px !important; } }
       @media (max-width: 768px), (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) { .app-shell:has(.cal-bar) .app-footer { display: none; } }
+      /* Kalendár na mobile na šírku (návrh p8): lišta v jednom riadku — depá ako výber, ikony a mesiac vedľa. */
+      .cal-depo-sel { display: none; }
+      @media (max-width: 1000px) and (pointer: coarse) and (hover: none) and (orientation: landscape) {
+        .cal-bar { margin-bottom: 8px !important; gap: 8px !important; }
+        .cal-bar .seg { display: none !important; }
+        .cal-bar .cal-depo-sel { display: block; width: 150px; }
+        .cal-bar > div { width: auto !important; }
+        .cal-bar > div:last-child { margin: 0 0 0 auto !important; }
+      }
       /* Užšie okno (tablet, malý notebook): vyhľadávanie Kalendára len ako lupa, nech sa lišta zmestí do 1–2 riadkov. */
       @media (min-width: 769px) and (max-width: 1100px) {
         .cal-bar .list-search-mobile-trigger { display: flex !important; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; }

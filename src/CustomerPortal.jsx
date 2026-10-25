@@ -32,6 +32,10 @@ const HANDOVER_CHECKLIST_ITEMS = [
   "aDBlue - regenerácia motora",
 ];
 
+const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
+// Čas z databázy (ISO) → DD.MM.RRRR v čase firmy.
+const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
+
 function fmtDate(iso) {
   if (!iso) return "—";
   const [y, m, d] = String(iso).split("-");
@@ -321,20 +325,15 @@ const PORTAL_REQUEST_STATUS_LABEL = {
   rejected: { label: "Zamietnuté", color: "#c62828", bg: "#fdecea" },
 };
 
-function RequestForm({ type, jobLocked, onSubmit }) {
+function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
 
-  if (jobLocked) {
-    return (
-      <div style={{ fontSize: 14, color: "#5A5A5A", padding: "8px 0" }}>
-        {type === "problem" ? "Problém je už nahlásený, čaká na vybavenie." : "Žiadosť o zmenu termínu vrátenia už čaká na vybavenie."}
-      </div>
-    );
-  }
+  // Čakajúca žiadosť je hneď nad formulárom vo „Vaše žiadosti“ — druhý text by ju len opakoval.
+  if (jobLocked) return null;
 
   const REASON_LABEL = {
     already_open: "Už máte odoslanú žiadosť, ktorá čaká na vybavenie.",
@@ -366,8 +365,8 @@ function RequestForm({ type, jobLocked, onSubmit }) {
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
-        style={{ ...BTN, border: type === "problem" ? "1px solid #C4040F" : "1px solid #1A1A1A", color: type === "problem" ? "#C4040F" : "#1A1A1A" }}
+        onClick={() => { setOpen(true); if (type === "extension") setEndDate(currentEnd && currentEnd >= todayBA() ? currentEnd : todayBA()); }} // po termíne — prešlý koniec sa vybrať nedá, predvyplní sa dnešok
+        style={primary ? { ...BTN, border: "none", background: "#E30613", color: "#fff" } : { ...BTN, border: type === "problem" ? "1px solid #C4040F" : "1px solid #1A1A1A", color: type === "problem" ? "#C4040F" : "#1A1A1A" }}
       >
         {type === "problem" ? "⚠ Nahlásiť problém so strojom" : "Zmeniť dátum vrátenia"}
       </button>
@@ -389,10 +388,12 @@ function RequestForm({ type, jobLocked, onSubmit }) {
           <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 6 }}>
             Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.
           </div>
+          {currentEnd && <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Teraz do {fmtDate(currentEnd)}</div>}
           <input
             type="date"
-            min={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })}
+            min={todayBA()}
             max={maxEnd}
+            aria-label="Nový dátum vrátenia"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, height: 48, padding: "0 10px", borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
@@ -403,8 +404,8 @@ function RequestForm({ type, jobLocked, onSubmit }) {
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
-          disabled={sending || (type === "problem" ? !message.trim() : !endDate)}
-          style={{ ...BTN, flex: 1, border: "none", background: "#E30613", color: "#fff", opacity: sending ? 0.6 : 1 }}
+          disabled={sending || (type === "problem" ? !message.trim() : !endDate || endDate === currentEnd)}
+          style={{ ...BTN, flex: 1, border: "none", ...(type === "extension" && (!endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
           {sending ? "Odosielam…" : "Odoslať"}
         </button>
@@ -429,13 +430,19 @@ function RequestHistory({ requests }) {
         return (
           <div key={i} style={{ border: "1px solid #eee", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>
                 {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o zmenu termínu vrátenia na ${fmtDate(r.requestedEndDate)}`}
               </span>
               <span style={{ fontSize: 13, fontWeight: 600, color: st.color, background: st.bg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{st.label}</span>
             </div>
-            {r.type === "problem" && <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 2 }}>{r.message}</div>}
-            {r.responseNote && <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 2 }}>{r.responseNote}</div>}
+            {r.createdAt && <div style={{ fontSize: 13, color: "#5A5A5A", marginTop: 2 }}>Odoslané {fmtTs(r.createdAt)}</div>}
+            {r.type === "problem" && <div style={{ fontSize: 14, color: "#3A3A3A", marginTop: 2, overflowWrap: "anywhere" }}>{r.message}</div>}
+            {r.responseNote && (
+              <div style={{ fontSize: 14, color: "#1A1A1A", marginTop: 6, borderLeft: `3px solid ${st.color}`, background: "#F7F7F7", borderRadius: "0 6px 6px 0", padding: "6px 10px", overflowWrap: "anywhere" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#5A5A5A" }}>Odpoveď mateco{r.resolvedAt ? ` · ${fmtTs(r.resolvedAt)}` : ""}:</div>
+                {r.responseNote}
+              </div>
+            )}
           </div>
         );
       })}
@@ -497,14 +504,14 @@ export default function CustomerPortal({ token }) {
     // začiatku (namiesto čakania na 20-sekundový interval nižšie) tento
     // bežný prípad prekryje a "naozaj neplatný" odkaz ukáže len o pár sekúnd neskôr.
     function refetch(showLoading, attemptsLeft = 0) {
-      if (showLoading) setState("loading");
+      if (showLoading) setState((s) => (s === "verifying" ? s : "loading"));
       supabase
         .rpc("get_portal_job", { p_token: token })
         .then(({ data: result, error }) => {
           if (cancelled) return;
           if (error) {
             console.error("get_portal_job zlyhalo", error);
-            if (showLoading) setState("error");
+            if (showLoading) setState(navigator.onLine ? "error" : "offline");
             return;
           }
           // Odkaz ešte nie je aktívny (pred vývozom stroja) — step58.
@@ -515,6 +522,7 @@ export default function CustomerPortal({ token }) {
           }
           if (!result) {
             if (showLoading && attemptsLeft > 0) {
+              setState("verifying");
               setTimeout(() => { if (!cancelled) refetch(true, attemptsLeft - 1); }, 1500);
               return;
             }
@@ -525,18 +533,25 @@ export default function CustomerPortal({ token }) {
           setState("ok");
         });
     }
-    refetch(true, 4);
+    refetch(true, 2);
     const interval = setInterval(() => refetch(false), 20000);
     function onVisible() {
       if (document.visibilityState === "visible") refetch(false);
     }
+    // Štart bez signálu (stavba) — po pripojení načítať hneď, nečakať na interval.
+    const onOnline = () => refetch(false);
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
     return () => {
       cancelled = true;
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
     };
   }, [token]);
+
+  // Po termíne: stroj je u zákazníka po zmluvnom konci — zákazník má vedieť, že sa od neho niečo čaká (N2, k34).
+  const overdue = !!data && !data.returnDone && !data.notRealized && !!data.handoverDone && !!data.endDate && data.endDate < todayBA();
 
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F2", color: "#1A1A1A", fontFamily: "'Barlow', Arial, sans-serif" }}>
@@ -549,8 +564,13 @@ export default function CustomerPortal({ token }) {
         </div>
       </header>
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "16px 14px 40px" }}>
-        {state === "loading" && (
-          <div style={{ textAlign: "center", padding: 40, color: "#5A5A5A" }}>Načítavam…</div>
+        {(state === "loading" || state === "verifying") && (
+          <div role="status" style={{ textAlign: "center", padding: 40, color: "#5A5A5A" }}>{state === "verifying" ? "Overujem odkaz…" : "Načítavam…"}</div>
+        )}
+        {state === "offline" && (
+          <div role="status" style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
+            Ste bez signálu — stav zákazky sa načíta po pripojení.
+          </div>
         )}
         {state === "invalid" && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
@@ -580,12 +600,12 @@ export default function CustomerPortal({ token }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
                   <div style={{ fontSize: 13, color: "#5A5A5A" }}>{data.code ? (data.code.includes(" · ") ? "Zákazka" : "Zákazka č.") : data.cisloZmluvy ? "Zmluva č." : "Zákazka"}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || "—"}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || data.customer || (data.startDate ? `Zákazka od ${fmtDate(data.startDate)}` : "—")}</div>
                 </div>
                 <span
                   style={{
-                    background: data.returnDone || data.notRealized ? "#EFEFEF" : "#E7EEF9",
-                    color: data.returnDone || data.notRealized ? "#3A3A3A" : "#1F4E99",
+                    background: data.returnDone || data.notRealized ? "#EFEFEF" : overdue ? "#FDEBD3" : "#E7EEF9",
+                    color: data.returnDone || data.notRealized ? "#3A3A3A" : overdue ? "#8A4100" : "#1F4E99",
                     fontSize: 13,
                     fontWeight: 600,
                     padding: "4px 12px",
@@ -593,7 +613,7 @@ export default function CustomerPortal({ token }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {data.notRealized ? "Nerealizovaná" : data.returnDone ? "Ukončené" : "Aktívny prenájom"}
+                  {data.notRealized ? "Nerealizovaná" : data.returnDone ? "Ukončené" : overdue ? "Po termíne" : "Aktívny prenájom"}
                 </span>
               </div>
 
@@ -625,6 +645,11 @@ export default function CustomerPortal({ token }) {
                   <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.endDate)}</div>
                 </div>
               </div>
+              {overdue && (
+                <div style={{ background: "#FDEBD3", color: "#8A4100", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+                  Prenájom skončil {fmtDate(data.endDate).slice(0, 6)} — dohodnite vrátenie alebo predĺženie.
+                </div>
+              )}
 
               <div>
                 <RequestHistory requests={data.requests} />
@@ -635,7 +660,7 @@ export default function CustomerPortal({ token }) {
                   </div>
                 )}
                 {!data.returnDone && !data.notRealized && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                  <div style={{ display: "flex", flexDirection: overdue ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
                     <RequestForm
                       type="problem"
                       jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
@@ -644,6 +669,8 @@ export default function CustomerPortal({ token }) {
                     <RequestForm
                       type="extension"
                       jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
+                      currentEnd={data.endDate}
+                      primary={overdue}
                       onSubmit={submitRequest}
                     />
                   </div>
