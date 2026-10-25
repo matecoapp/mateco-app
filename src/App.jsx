@@ -42,7 +42,7 @@ const CHANGELOG = [
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Zmazanie tiketu odstráni všetky jeho dnešné úlohy, aj keď už niekto vypísal protokol (protokol ostane medzi nepriradenými) — nikomu neostane „Vypísať protokol“ k neexistujúcemu tiketu. Obnova z Koša ich vráti." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Import zákaziek spáruje zákazníka podľa IČO aj keď je zapísané s medzerami — nevznikne druhý zákazník s tým istým IČO." },
     { roles: ["admin"], text: "Kto má archivovanú starú kartu zamestnanca a aktívnu novú, platforma berie vždy tú aktívnu (depo, prepravy, zmena roly). Načítanie cudzieho súboru ako zálohy nič nezmení a povie to." },
-    { text: "iPhone: hlavička a nadpisy okien sú nižšie od stavovej lišty — iOS 26 tam rozmazáva obsah (odznak zvončeka, nadpis okna)." },
+    { text: "iPhone: hlavička a nadpisy okien sú nižšie od stavovej lišty (iOS 26 tam rozmazáva obsah) a počet upozornení je vo zvončeku vpravo dole." },
     { roles: ["sofer", "externy_sofer"], text: "Problém s prepravou: popis do 300 znakov." },
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podklady: km s desatinnou čiarkou." },
   ] },
@@ -13104,6 +13104,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
         <NavIcon id="zvoncek" />
         {unreadCount > 0 && (
           <span
+            className="bell-badge"
             style={{
               position: "absolute",
               top: -5,
@@ -32423,6 +32424,8 @@ function GlobalStyle() {
       .nav-b.nav-b-problem { background: var(--accent-fill); color: #fff; }
       .side-menu-wrap.collapsed .nav-b { position: absolute; top: 0; right: 2px; font-size: 9px; padding: 0 5px; }
       .header-new-wrap { position: relative; }
+      /* iPhone/iPad (iOS 26 rozmazáva pás pod stavovou lištou): odznak zvončeka vpravo dole. */
+      @supports (-webkit-touch-callout: none) { .bell-badge { top: auto !important; bottom: -5px !important; } }
       .header-new-btn { background: #fff; color: var(--accent-fill); border: none; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
       .header-new-drop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 400; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px; min-width: 230px; }
       .header-new-drop .kebab-item { color: var(--text); padding: 9px 12px; font-size: 13.5px; }
