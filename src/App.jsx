@@ -31,15 +31,23 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.845";
+const APP_VERSION = "1.0.846";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.846", items: [
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Zmazanie tiketu odstráni všetky jeho dnešné úlohy, aj keď už niekto vypísal protokol (protokol ostane medzi nepriradenými) — nikomu neostane „Vypísať protokol“ k neexistujúcemu tiketu. Obnova z Koša ich vráti." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Import zákaziek spáruje zákazníka podľa IČO aj keď je zapísané s medzerami — nevznikne druhý zákazník s tým istým IČO." },
+    { roles: ["admin"], text: "Kto má archivovanú starú kartu zamestnanca a aktívnu novú, platforma berie vždy tú aktívnu (depo, prepravy, zmena roly). Načítanie cudzieho súboru ako zálohy nič nezmení a povie to." },
+    { text: "iPhone: červená hlavička siaha až pod stavovú lištu — odznak zvončeka už nie je rozmazaný." },
+    { roles: ["sofer", "externy_sofer"], text: "Problém s prepravou: popis do 300 znakov." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podklady: km s desatinnou čiarkou." },
+  ] },
   { v: "1.0.845", items: [
-    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Flotila: „V príprave“ má tmavšiu farbu — už sa nepletie s poruchou ani rezerváciami." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Flotila: „V príprave“ má vlastnú farbu (vo svetlom režime tmavohnedú) — už sa nepletie s poruchou ani rezerváciami." },
   ] },
   { v: "1.0.844", items: [
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Tiket obnovený z Koša má späť aj pridelenie technikovi a prepojené protokoly — hotová úloha sa nevráti ako otvorená." },
@@ -5683,7 +5691,8 @@ function DispatcherApp() {
 
   // Vlastný záznam zamestnanca prihláseného človeka (podľa REÁLNEJ identity, nie podľa
   // simulovanej role cez "Zobraziť ako") — používa sa na prednastavenie filtra "len moje".
-  const myEmployee = useMemo(() => employees.find((e) => e.linkedUserId && e.linkedUserId === currentUser?.id) || null, [employees, currentUser]);
+  // Pri zmene práce ostáva stará karta archivovaná — prednosť má aktívna.
+  const myEmployee = useMemo(() => { const mine = currentUser?.id ? employees.filter((e) => e.linkedUserId === currentUser.id) : []; return mine.find((e) => !e.archived) || mine[0] || null; }, [employees, currentUser]);
   // Externý šofér číta stroje a kontroly len k svojim zákazkám (RLS) — po novom pridelení ich realtime nepošle, dočítať.
   const extResyncedRef = useRef(new Set());
   useEffect(() => {
@@ -5846,7 +5855,7 @@ function DispatcherApp() {
         ok: false,
         message: isNetworkError
           ? "Nepodarilo sa pripojiť na server (pomalá alebo nestabilná sieť) — heslo je pravdepodobne v poriadku, skús to znova alebo na inej sieti."
-          : "Nesprávne meno alebo heslo (alebo účet ešte nie je potvrdený emailom).",
+          : "Nesprávny email alebo heslo (alebo účet ešte nie je potvrdený emailom).",
       };
     }
     setSession(data.session);
@@ -5914,7 +5923,7 @@ function DispatcherApp() {
         }
         setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
         // Rola účtu a karta zamestnanca sa nesmú rozísť (šofér/technik filtre, checkeri).
-        const emp = employees.find((e) => e.linkedUserId === id);
+        const emp = employees.find((e) => e.linkedUserId === id && !e.archived) || employees.find((e) => e.linkedUserId === id);
         if (emp && patch.role && patch.role !== emp.role && !["admin", "nezaradeny"].includes(patch.role)) {
           updateEmployee(emp.id, { role: patch.role, ...(DISPATCHER_ROLES.includes(patch.role) ? {} : { alsoVeduciDispecer: false }) }, { skipRoleSync: true });
         }
@@ -6891,6 +6900,7 @@ function DispatcherApp() {
       try {
         const parsed = JSON.parse(reader.result);
         const data = parsed && parsed.data ? parsed.data : parsed; // support raw {machines:...} too
+        if (!["machines", "jobs", "customers", "employees", "damages", "assignments"].some((k) => Array.isArray(data?.[k]))) { showNotice("Tento súbor nie je záloha platformy — nič sa nezmenilo."); return; }
         // Import PREPÍŠE aktuálne dáta obsahom zálohy (čo v zálohe nie je, zmizne) —
         // najprv potvrdenie s prehľadom, čo sa nahradí.
         const counts = Object.entries(data || {})
@@ -7844,7 +7854,7 @@ function DispatcherApp() {
       // Externý šofér smie písať len dispečingu/servisu (step65) — obchodník sa dozvie z rolí požičovne.
       userName: currentUser?.role === "externy_sofer" ? null : record.obchodnik || null,
       title: "Nové poškodenie",
-      message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis}“.`,
+      message: `Nahlásené nové poškodenie: stroj ${machine.code}${record.customer ? " u zákazníka " + record.customer : ""} — „${popis.replace(/[.\s]+$/, "")}“.`,
       link: { module: "servis", view: "poskodenia", damageId: record.id },
     };
     if (opts?.notifyRoles) pushNotification({ ...dmgNotif, roles: withLeadTechnician(opts.notifyRoles, machine) });
@@ -8039,16 +8049,16 @@ function DispatcherApp() {
     const t = todayISO();
     const linked = protocolLogs.filter((p) => p.damageId === id);
     // Pre obnovu z Koša (rozhodnutie 24. 10.): úlohy, ktoré zmazanie odstráni, a väzby protokolov.
-    const removedTasks = assignments.filter((a) => !a.kind && a.damageId === id && ((a.date || "") > t || (!linked.length && a.date === t)));
+    // Dnešné úlohy tiketu odpadnú všetky — aj hotová (protokol sa odpojí, inak by sa ukázala ako otvorená); obnova z Koša ich vráti aj s väzbou.
+    const dropToday = (a) => !a.kind && a.damageId === id && a.date === t;
+    const removedTasks = assignments.filter((a) => (!a.kind && a.damageId === id && (a.date || "") > t) || dropToday(a));
     if (record) moveToTrash("damage", "damages", { ...record, _restore: { assignments: removedTasks, protocols: linked.map((p) => ({ id: p.id, assignmentId: p.assignmentId || null })) } }, record?.code);
     persistDamages((damages) => damages.filter((d) => d.id !== id));
     dropOpenAssignmentsForDamages([id]);
-    // Dnešná úloha bez protokolu odpadá; vypísaný protokol sa uvoľní medzi nepriradené (nesmie zmiznúť).
-    if (!linked.length) {
-      notifyRemovedTechnicians(assignments.filter((a) => !a.kind && a.damageId === id && a.date === t), damageTaskLabel(record));
-      persistAssignments((cur) => cur.filter((a) => !(!a.kind && a.damageId === id && a.date === t)));
-    }
-    else persistProtocolLogs((cur) => cur.map((p) => (p.damageId === id ? { ...p, damageId: null, assignmentId: null } : p)));
+    notifyRemovedTechnicians(assignments.filter((a) => dropToday(a) && !hasServiceProtocol(a)), damageTaskLabel(record)); // kto už protokol má, toho netreba upozorňovať
+    persistAssignments((cur) => cur.filter((a) => !dropToday(a)));
+    // Vypísaný protokol sa uvoľní medzi nepriradené (nesmie zmiznúť).
+    if (linked.length) persistProtocolLogs((cur) => cur.map((p) => (p.damageId === id ? { ...p, damageId: null, assignmentId: null } : p)));
   }
   function setDamageNote(id, note) {
     persistDamages((damages) => damages.map((d) => (d.id === id ? { ...d, poznamkaDispecera: note } : d)));
@@ -14205,8 +14215,9 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
     return () => { window.removeEventListener("online", upd); window.removeEventListener("offline", upd); };
   }, []);
   return (
-    <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{ background: "var(--accent-fill)" }}>
+    <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100, marginTop: "calc(-1 * env(safe-area-inset-top))" }}>
+      {/* Červená aj pod stavovou lištou iPhonu — iOS 26 tam rozmazáva okraj, bez toho by bol sivý a „zjedol“ odznak zvončeka. */}
+      <div style={{ background: "var(--accent-fill)", paddingTop: "env(safe-area-inset-top)" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           {/* Logo je z tlačového watermarku — kreslené na biele pozadie, na
               červenej hlavičke bez neho vyzeralo rozmazane/nekontrastne.
@@ -17607,7 +17618,7 @@ function vehicleDateStatus(date, today) {
   if (!date) return { cls: "", label: "—" };
   if (date < today) return { cls: "badge-danger", label: "po termíne" };
   const daysLeft = Math.round((new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-  if (daysLeft <= 30) return { cls: "badge-warn", label: `o ${daysLeft} dní` };
+  if (daysLeft <= 30) return { cls: "badge-warn", label: `o ${plural(daysLeft, "deň", "dni", "dní")}` };
   return { cls: "", label: "" };
 }
 function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, onDelete }) {
@@ -20976,7 +20987,7 @@ function ImportJobsModal({ machines, customers, jobs: existingJobs, reservations
   // Párovanie na existujúcich zákazníkov - najprv podľa IČO (spoľahlivejšie,
   // ak je v súbore), inak podľa presného mena firmy.
   const customerByIco = useMemo(
-    () => Object.fromEntries((customers || []).filter((c) => c.ico).map((c) => [c.ico.trim(), c])),
+    () => Object.fromEntries((customers || []).filter((c) => icoKey(c.ico)).map((c) => [icoKey(c.ico), c])),
     [customers]
   );
   const customerByName = useMemo(() => Object.fromEntries((customers || []).map((c) => [(c.firma || "").trim().toLowerCase(), c])), [customers]);
@@ -21050,12 +21061,14 @@ function ImportJobsModal({ machines, customers, jobs: existingJobs, reservations
       if (why.length) outW.push(`${codeRaw} (${fmtDate(startDate)}: ${why.join(", ")})`);
       const customerName = mapCustomer ? (r[mapCustomer] || "").toString().trim() : "";
       const ico = mapIco ? (r[mapIco] || "").toString().trim() : "";
+      let jobCustomer = customerName;
       if (customerName) {
         // Nespoliehaj sa len na presné meno - ak sa nájde podľa IČO, použi
         // presne to meno, čo už appka o zákazníkovi eviduje (zjednotí drobné
         // rozdiely v zápise, napr. "s.r.o." vs "spol. s r.o.").
-        const matched = (ico && customerByIco[ico]) || customerByName[customerName.toLowerCase()];
-        customerUpserts.push({ firma: matched ? matched.firma : customerName, ico });
+        const matched = (icoKey(ico) && customerByIco[icoKey(ico)]) || customerByName[customerName.toLowerCase()];
+        if (matched) jobCustomer = matched.firma; // zákazka sa so zákazníkom spája podľa mena
+        customerUpserts.push({ firma: jobCustomer, ico });
       }
       jobs.push({
         id: uid(),
@@ -21063,7 +21076,7 @@ function ImportJobsModal({ machines, customers, jobs: existingJobs, reservations
         driverId: null,
         fromDepo: machine.depo || "",
         toLocation: mapToLocation ? (r[mapToLocation] || "").toString().trim() : "",
-        customer: customerName,
+        customer: jobCustomer,
         customerEmail: "",
         startDate,
         endDate: mapEnd ? parseImportDate(r[mapEnd]) || startDate : startDate,
@@ -25608,7 +25621,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
                 <td data-label="Práca">{(p.workItems || []).map((w) => `${w.work}${w.hours ? " (" + String(w.hours).replace(".", ",") + " h)" : ""}`).join(", ") || "—"}</td>
                 <td data-label="Hodiny">{String(p.totalHours ?? "—").replace(".", ",")} h</td>
                 <td data-label="Materiál">{(p.materialItems || []).map((mi) => `${mi.desc}${mi.pn ? " (" + mi.pn + ")" : ""}${mi.qty ? " × " + mi.qty : ""}`).join(", ") || "—"}</td>
-                <td data-label="Km">{p.travelKm || "—"}</td>
+                <td data-label="Km">{p.travelKm ? Number(p.travelKm).toLocaleString("sk-SK") : "—"}</td>
                 <td data-label="Čas na ceste">{p.travelHours ? String(p.travelHours).replace(".", ",") + " h" : "—"}</td>
                 {showHistory && <td data-label="Objednávka/výkaz">{p.erpOrderNumber || "—"}</td>}
                 <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -27858,43 +27871,48 @@ function LoginScreen({ onLogin, onSignUp }) {
           {mode === "login" ? "Interná platforma — prihlásenie" : "Vytvorenie nového účtu"}
         </h1>
 
+        <form onSubmit={(e) => { e.preventDefault(); if (!busy) (mode === "login" ? handleLogin : handleSignUp)(); }}>
         <Field label="Email">
           <input
             type="email"
+            name="email"
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && mode === "login" && handleLogin()}
             style={{ width: "100%" }}
             autoFocus
           />
         </Field>
         {mode === "signup" && (
           <Field label="Celé meno">
-            <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} />
+            <input name="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} />
           </Field>
         )}
         <Field label="Heslo">
           <input
             type="password"
+            name="password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && mode === "login" && handleLogin()}
             style={{ width: "100%" }}
           />
         </Field>
         {mode === "signup" && (
           <Field label="Zopakovať heslo">
-            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
+            <input type="password" name="password2" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ width: "100%" }} />
           </Field>
         )}
 
-        {error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        {info && <div style={{ color: "var(--ok)", fontSize: 13, marginBottom: 12 }}>{info}</div>}
+        <div role="alert">{error && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}</div>
+        <div role="status">{info && <div style={{ color: "var(--ok)", fontSize: 13, marginBottom: 12 }}>{info}</div>}</div>
 
-        <button className="btn btn-accent" style={{ width: "100%", marginBottom: 10 }} disabled={busy} onClick={mode === "login" ? handleLogin : handleSignUp}>
+        <button type="submit" className="btn btn-accent" style={{ width: "100%", marginBottom: 10 }} disabled={busy}>
           {busy ? "Chvíľu strpenia…" : mode === "login" ? "Prihlásiť sa" : "Vytvoriť účet"}
         </button>
+        </form>
         <button
+          type="button"
           className="btn btn-outline"
           style={{ width: "100%" }}
           onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
@@ -29613,7 +29631,7 @@ function ReportTransportIssueModal({ job, machine, onClose, onConfirm }) {
     <Modal eyebrow="⚠ Problém s prepravou" title={machine?.code || job.customer || ""} onClose={onClose} elevated form>
       {machine && job.customer && <div className="fintro">{job.customer}</div>}
       <Field label="Čo sa deje (dispečer to uvidí hneď) *">
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný, porucha stroja" style={{ width: "100%" }} />
+        <input maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="napr. meškanie 30 min, zákazník neprítomný, porucha stroja" style={{ width: "100%" }} />
       </Field>
       {machine && (
         <label className={`fck${isDamage ? " fnote fnote-r" : ""}`}>

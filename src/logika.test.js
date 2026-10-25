@@ -188,7 +188,7 @@ describe("rozhodnutia 24. 10.", () => {
     expect(g.length).toBeGreaterThan(0);
     expect(g.map((x) => _test._verNum(x.v))).toEqual([...g.map((x) => _test._verNum(x.v))].sort((a, b) => b - a));
     expect(g.every((x) => _test._verNum(x.v) > _test._verNum("1.0.841") && x.items.length)).toBe(true);
-    expect(g[0].items).toContain("Kontrolu stroja dokončí len technik, ktorému je pridelená; kontrolu bez technika dokončí servis.");
+    expect(g.flatMap((x) => x.items)).toContain("Kontrolu stroja dokončí len technik, ktorému je pridelená; kontrolu bez technika dokončí servis.");
     expect(g.flatMap((x) => x.items)).not.toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
     expect(_test.whatsNewFor("admin", "1.0.841").flatMap((x) => x.items)).toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
   });
