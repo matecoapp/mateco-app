@@ -42,7 +42,7 @@ const CHANGELOG = [
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Zmazanie tiketu odstráni všetky jeho dnešné úlohy, aj keď už niekto vypísal protokol (protokol ostane medzi nepriradenými) — nikomu neostane „Vypísať protokol“ k neexistujúcemu tiketu. Obnova z Koša ich vráti." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Import zákaziek spáruje zákazníka podľa IČO aj keď je zapísané s medzerami — nevznikne druhý zákazník s tým istým IČO." },
     { roles: ["admin"], text: "Kto má archivovanú starú kartu zamestnanca a aktívnu novú, platforma berie vždy tú aktívnu (depo, prepravy, zmena roly). Načítanie cudzieho súboru ako zálohy nič nezmení a povie to." },
-    { text: "iPhone: červená hlavička siaha až pod stavovú lištu — odznak zvončeka už nie je rozmazaný." },
+    { text: "iPhone: hlavička a nadpisy okien sú nižšie od stavovej lišty — iOS 26 tam rozmazáva obsah (odznak zvončeka, nadpis okna)." },
     { roles: ["sofer", "externy_sofer"], text: "Problém s prepravou: popis do 300 znakov." },
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podklady: km s desatinnou čiarkou." },
   ] },
@@ -14216,8 +14216,8 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
   }, []);
   return (
     <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100, marginTop: "calc(-1 * env(safe-area-inset-top))" }}>
-      {/* Červená aj pod stavovou lištou iPhonu — iOS 26 tam rozmazáva okraj, bez toho by bol sivý a „zjedol“ odznak zvončeka. */}
-      <div style={{ background: "var(--accent-fill)", paddingTop: "env(safe-area-inset-top)" }}>
+      {/* Červená aj pod stavovou lištou iPhonu. iOS 26 rozmazáva pás o niečo vyšší než stavová lišta — +14 px len tam, kde lišta je (na PC 0). */}
+      <div style={{ background: "var(--accent-fill)", paddingTop: "calc(env(safe-area-inset-top) + min(14px, env(safe-area-inset-top)))" }}>
         <div className="header-topbar" style={{ width: "100%", padding: "9px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 6, boxSizing: "border-box" }}>
           {/* Logo je z tlačového watermarku — kreslené na biele pozadie, na
               červenej hlavičke bez neho vyzeralo rozmazane/nekontrastne.
@@ -32929,7 +32929,7 @@ function GlobalStyle() {
           position: fixed !important;
           left: 8px !important;
           right: 8px !important;
-          top: calc(62px + env(safe-area-inset-top)) !important;
+          top: calc(62px + env(safe-area-inset-top) + min(14px, env(safe-area-inset-top))) !important;
           width: auto !important;
           max-width: none !important;
         }
@@ -33110,7 +33110,7 @@ function GlobalStyle() {
            spodnej hrane karty (kde .modal-panel končí a .modal-overlay pod
            ňou pokračuje tou istou farbou) bola vidno tenká čiara — zvyšok
            po predošlej "diere" v pozadí. Border aj shadow tu vypnuté. */
-        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; border: none !important; box-shadow: none !important; padding: 12px !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
+        .modal-panel { width: 100% !important; max-width: 100% !important; min-height: 100dvh; border-radius: 0 !important; border: none !important; box-shadow: none !important; padding: 12px !important; padding-top: max(12px, calc(env(safe-area-inset-top) + min(14px, env(safe-area-inset-top)))) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
         /* Dlhé karty (Karta stroja a pod.) — .modal-overlay je vlastný
            scroll-kontajner (overflowY:auto). Bez "overscroll-behavior" sa na
            iOS pri dotiahnutí na koniec obsahu "gumovo" preťahovalo ZA vlastný
