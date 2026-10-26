@@ -6655,6 +6655,13 @@ function DispatcherApp() {
   }
   // Hromadný import z ERP (firma + číslo odberateľa) — nepreváži už vyplnené kontaktné údaje.
   function importCustomers(rows) {
+    // Spárovaný podľa mena, ale súbor má iné IČO — IČO v platforme ostáva, len upozorniť (rozhodnutie 26. 10.).
+    const icoDiff = new Set();
+    rows.forEach((row) => {
+      const ico = icoKey(row.ico), firma = (row.firma || "").trim().toLowerCase();
+      const c = ico && !customers.some((x) => icoKey(x.ico) === ico) && customers.find((x) => x.firma.toLowerCase() === firma);
+      if (c && icoKey(c.ico)) icoDiff.add(`${c.firma} (v platforme ${c.ico}, v súbore ${ico})`);
+    });
     persistCustomers((customers) => {
     let next = [...customers];
     rows.forEach((row) => {
@@ -6666,13 +6673,15 @@ function DispatcherApp() {
       const byIco = ico ? next.findIndex((c) => icoKey(c.ico) === ico) : -1;
       const idx = byIco >= 0 ? byIco : next.findIndex((c) => c.firma.toLowerCase() === firma.toLowerCase());
       if (idx >= 0) {
-        next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela, ico: ico || next[idx].ico };
+        const keepIco = ico && icoKey(next[idx].ico) && icoKey(next[idx].ico) !== ico;
+        next[idx] = { ...next[idx], cisloOdberatela: cisloOdberatela || next[idx].cisloOdberatela, ico: keepIco ? next[idx].ico : ico || next[idx].ico };
       } else {
         next.push({ id: uid(), firma, cisloOdberatela, ico, kontakt: "", email: "", telefon: "", contacts: [], createdAt: new Date(serverNowMs()).toISOString() });
       }
     });
     return next;
     });
+    if (icoDiff.size) showNotice(`IČO sa nezmenilo pri ${plural(icoDiff.size, "zákazníkovi", "zákazníkoch", "zákazníkoch")} — v súbore je iné ako v platforme: ${[...icoDiff].join("; ")}. Skontrolujte a prípadne opravte ručne.`);
   }
   // Ručné pridanie zákazníka priamo zo záložky Zákazníci (nie automatické
   // doplnenie zo zákazky) — plnohodnotný záznam, rovno aj s poľom na kontakty.
