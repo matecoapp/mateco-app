@@ -17,6 +17,12 @@ describe("audit log — zmena", () => {
     expect(auditChange(e, null, {})).toBe("");
     expect(auditChange({ ...e, action: "insert" }, { role: "technik" }, {})).toBe("");
   });
+  it("ID ukáže menom/kódom, úlohu a odkaz len ako pridané/zrušené, neznáme ID ako zmazané", () => {
+    const e = { action: "update", table_name: "damages", old_data: { assignmentId: null, machineId: "m4" }, new_data: { type: "x", assignmentId: "r7av5jgauf9x", machineId: "m9" } };
+    expect(auditChange(e, null, { m4: "S-105" })).toBe("úloha v pláne: pridaná · stroj: S-105 → (zmazaný záznam)");
+    const j = { action: "update", table_name: "jobs", old_data: { publicToken: "6a6d5a3e-7c61-4952-9504-068f6c9f43f0" }, new_data: { publicToken: null } };
+    expect(auditChange(j, null, {})).toBe("odkaz pre zákazníka: zrušený");
+  });
   it("viac ako 3 zmeny skráti", () => {
     const e = { action: "update", table_name: "jobs", old_data: { a: 1, b: 1, c: 1, d: 1 }, new_data: { a: 2, b: 2, c: 2, d: 2 } };
     expect(auditChange(e, null, {})).toBe("a: 1 → 2 · b: 1 → 2 · c: 1 → 2 · +1");

@@ -192,6 +192,11 @@ function buildOfficialProtocolHtml(data) {
 // telefóny/emaily čiernou, tlačidlá 48 px, rizikové tlačidlo s červeným obrysom.
 const SEC = { fontFamily: "'Barlow Condensed', 'Barlow', Arial, sans-serif", fontSize: 15, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "#5A5A5A", margin: "18px 0 6px" };
 const LINK = { color: "#1A1A1A", textDecoration: "none" };
+// Čiarové ikony z platformy (NAV_ICON_PATHS v App.jsx) namiesto emoji, ktoré každý systém kreslí inak.
+const ICO = { telefon: "M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z", tlaciaren: "M6 9V3h12v6 M6 17H3v-7h18v7h-3 M6 13h12v8H6z" };
+function Ico({ id, size = 16 }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-0.2em" }}><path d={ICO[id]} /></svg>;
+}
 const BTN = { width: "100%", minHeight: 48, padding: "10px 14px", borderRadius: 8, background: "#fff", fontFamily: "inherit", fontWeight: 600, fontSize: 15, cursor: "pointer" };
 
 // v1.0.808: protokol spísaný bez zákazníka — potvrdenie / nesúhlas zákazníka cez portál.
@@ -552,6 +557,8 @@ export default function CustomerPortal({ token }) {
 
   // Po termíne: stroj je u zákazníka po zmluvnom konci — zákazník má vedieť, že sa od neho niečo čaká (N2, k34).
   const overdue = !!data && !data.returnDone && !data.notRealized && !!data.handoverDone && !!data.endDate && data.endDate < todayBA();
+  // Zvoz už dispečer naplánoval (dátum zvozu dnes alebo neskôr) — zákazník nemusí nič dohadovať.
+  const pickupPlanned = overdue && !!data.pickupDate && data.pickupDate >= todayBA();
 
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F2", color: "#1A1A1A", fontFamily: "'Barlow', Arial, sans-serif" }}>
@@ -647,7 +654,9 @@ export default function CustomerPortal({ token }) {
               </div>
               {overdue && (
                 <div style={{ background: "#FDEBD3", color: "#8A4100", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-                  Prenájom skončil {fmtDate(data.endDate).slice(0, 6)} — dohodnite vrátenie alebo predĺženie.
+                  Prenájom skončil {fmtDate(data.endDate).slice(0, 6)} — {pickupPlanned
+                    ? `${data.selfReturn ? "vrátenie do depa je naplánované" : "zvoz je naplánovaný"} na ${fmtDate(data.pickupDate).slice(0, 6)}`
+                    : "dohodnite vrátenie alebo predĺženie."}
                 </div>
               )}
 
@@ -660,7 +669,7 @@ export default function CustomerPortal({ token }) {
                   </div>
                 )}
                 {!data.returnDone && !data.notRealized && (
-                  <div style={{ display: "flex", flexDirection: overdue ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
+                  <div style={{ display: "flex", flexDirection: overdue && !pickupPlanned ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
                     <RequestForm
                       type="problem"
                       jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
@@ -670,7 +679,7 @@ export default function CustomerPortal({ token }) {
                       type="extension"
                       jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
                       currentEnd={data.endDate}
-                      primary={overdue}
+                      primary={overdue && !pickupPlanned}
                       onSubmit={submitRequest}
                     />
                   </div>
@@ -682,7 +691,7 @@ export default function CustomerPortal({ token }) {
                     <div style={{ fontWeight: 700 }}>{data.salespersonName}</div>
                     {data.salespersonPhone && (
                       <div style={{ fontVariantNumeric: "tabular-nums" }}>
-                        <a href={`tel:${data.salespersonPhone}`} style={LINK}>☎ {data.salespersonPhone}</a>
+                        <a href={`tel:${data.salespersonPhone}`} style={LINK}><Ico id="telefon" /> {data.salespersonPhone}</a>
                       </div>
                     )}
                     {data.salespersonEmail && (
@@ -694,7 +703,7 @@ export default function CustomerPortal({ token }) {
                 )}
                 <div style={{ fontSize: 15, marginBottom: 14 }}>
                   <div style={{ fontWeight: 700 }}>Nahlasovanie porúch</div>
-                  <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}>☎ +421 905 979 484</a></div>
+                  <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}><Ico id="telefon" /> +421 905 979 484</a></div>
                   <div><a href="mailto:servis@matecoslovakia.sk" style={LINK}>servis@matecoslovakia.sk</a></div>
                 </div>
               </div>
@@ -711,7 +720,7 @@ export default function CustomerPortal({ token }) {
                     }}
                     style={{ ...BTN, width: "auto", minHeight: 44, fontSize: 14, border: "1px solid #CFCFCF", color: "#1A1A1A" }}
                   >
-                    🖨️ Vytlačiť / uložiť ako PDF
+                    <Ico id="tlaciaren" /> Vytlačiť / uložiť ako PDF
                   </button>
                 )}
               </div>
