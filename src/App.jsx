@@ -31,13 +31,23 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.848";
+const APP_VERSION = "1.0.849";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.849", items: [
+    { roles: ["sofer", "externy_sofer"], text: "Protokol uložený bez signálu už nepíše „odoslaný“, ale „uložený v zariadení — odošle sa po pripojení“. Okno po uložení protokolu sa zavrie bez otázky na rozpísané údaje." },
+    { roles: ["technik", "veduci_technik_ba"], text: "Servisný protokol: pri otvorení sa namiesto interných kódov ukáže len „Údaje stroja a úlohy predvyplnené“." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Poškodenie zo žiadosti zákazníka presunuté do Koša vráti žiadosť medzi nevybavené (zákazník môže nahlásiť ďalší problém); obnova z Koša ju znova prepojí." },
+    { roles: ["fakturant_servis"], text: "Kôš ukazuje zmazané tikety ako dispečerovi servisu." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "fakturant_servis", "veduci_technik_ba"], text: "Náhradné diely na počítači: dátum objednania sa už neoreže." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Prepravy: „✓ Odoslané“ sa zapíše až po výbere e-mailového programu — zavretie okna výberu nič nezapíše." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna"], text: "Štítok „↓ Zvoz“ je neutrálny (nie jantárový ako po termíne), dovolenka „prebieha“ je modrá ako ostatné prebiehajúce stavy." },
+    { text: "Portál zákazníka: odkaz funguje aj vtedy, keď ho e-mail či SMS prepíše na veľké písmená; potvrdenie protokolu sa už nezasekne." },
+  ] },
   { v: "1.0.848", items: [
     { text: "Jeden stav = jedna farba v celej platforme: červená = akútne (porucha, nové poškodenie, bez šoféra, preprava mešká), jantárová = po termíne alebo čaká (zákazka, revízia či kontrola po termíne, čaká na diely, v príprave), modrá = prebieha, zelená = hotovo, sivá = naplánované. „Nové“ poškodenie má v zozname aj v detaile rovnakú farbu." },
     { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin", "obchodnik", "fakturant_pozicovna"], text: "Zákazka po termíne je všade jantárová (štítok aj riadok v Zákazkách a Dátach požičovne). Preprava po termíne sa volá „Mešká“ a je červená ako na Dnes." },
@@ -1632,6 +1642,7 @@ function composeMail(mail) {
   }
   if (pref === "web" || pref === "desktop") {
     sendMailWithClient(pref, mail);
+    mail.onSent?.();
   } else if (_mailComposeListener) {
     _mailComposeListener(mail);
   } else {
@@ -4246,7 +4257,7 @@ function ConfirmDeleteModal({ label, onClose, onConfirm, trash }) {
     return (
       <Modal title="Presunúť do Koša?" onClose={onClose} elevated>
         <div style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45 }}>
-          Vymazať {label}? Presunie sa do Koša — vedúci ho tam vie obnoviť.
+          Vymazať {label}? Presunie sa do Koša, odkiaľ sa dá obnoviť.
         </div>
         <FormFoot confirm>
           <button className="btn btn-accent" onClick={() => { onConfirm(); onClose(); }}>
@@ -6482,6 +6493,9 @@ function DispatcherApp() {
       if (tasks.length) persistAssignments((cur) => [...cur.filter((x) => !tasks.some((a) => a.id === x.id)), ...tasks]);
       const links = new Map((restoreExtra.protocols || []).map((p) => [p.id, p.assignmentId]));
       if (links.size) persistProtocolLogs((cur) => cur.map((p) => (links.has(p.id) && !p.damageId ? { ...p, damageId: record.id, assignmentId: links.get(p.id) } : p)));
+      // Žiadosť z portálu späť k tiketu — len ak ju medzitým nikto nespracoval inak.
+      const reqIds = restoreExtra.portalRequests || [];
+      if (reqIds.length) persistPortalRequests((cur) => cur.map((r) => (reqIds.includes(r.id) && r.status === "pending" && !r.linkedDamageId ? { ...r, status: "in_progress", linkedDamageId: record.id } : r)));
     }
     if (droppedDrivers) notifyDispatchers({ kind: "assignment_transport", title: "Prepravy bez šoféra", message: `Obnovená zákazka ${record.customer || "—"} je bez šoféra — pôvodný šofér už nepracuje. Prideľte ho v Prepravách.`, link: { module: "poziciovna", view: "prepravy" } }, { job: record, lead: true });
     // Zmazanie zamestnanca vzalo účtu rolu — obnova ju vráti, ale len účtu, ktorý je
@@ -8193,8 +8207,11 @@ function DispatcherApp() {
     // Dnešné úlohy tiketu odpadnú všetky — aj hotová (protokol sa odpojí, inak by sa ukázala ako otvorená); obnova z Koša ich vráti aj s väzbou.
     const dropToday = (a) => !a.kind && a.damageId === id && a.date === t;
     const removedTasks = assignments.filter((a) => (!a.kind && a.damageId === id && (a.date || "") > t) || dropToday(a));
-    if (record) moveToTrash("damage", "damages", { ...record, _restore: { assignments: removedTasks, protocols: linked.map((p) => ({ id: p.id, assignmentId: p.assignmentId || null })) } }, record?.code);
+    // Žiadosť zákazníka, z ktorej tiket vznikol, sa vráti medzi nevybavené — inak by ostala „V riešení“ a portál by blokoval ďalšie nahlásenie.
+    const portalReqIds = (portalRequests || []).filter((r) => r.linkedDamageId === id && r.status !== "resolved").map((r) => r.id);
+    if (record) moveToTrash("damage", "damages", { ...record, _restore: { assignments: removedTasks, protocols: linked.map((p) => ({ id: p.id, assignmentId: p.assignmentId || null })), portalRequests: portalReqIds } }, record?.code);
     persistDamages((damages) => damages.filter((d) => d.id !== id));
+    if (portalReqIds.length) persistPortalRequests((cur) => cur.map((r) => (portalReqIds.includes(r.id) ? { ...r, status: "pending", linkedDamageId: null } : r)));
     dropOpenAssignmentsForDamages([id]);
     notifyRemovedTechnicians(assignments.filter((a) => dropToday(a) && !hasServiceProtocol(a)), damageTaskLabel(record)); // kto už protokol má, toho netreba upozorňovať
     persistAssignments((cur) => cur.filter((a) => !dropToday(a)));
@@ -12840,6 +12857,7 @@ function MailChoiceModal({ mail, onClose }) {
       }
     }
     sendMailWithClient(client, mail);
+    mail.onSent?.(); // „Odoslané“ až po voľbe klienta — Esc v tomto okne nič nezapíše
     onClose();
   }
 
@@ -13113,7 +13131,7 @@ const TRASH_TYPE_LABELS = {
 };
 function canSeeTrashEntry(entry, user) {
   if (isAdminUser(user)) return true;
-  const role = user?.role;
+  const role = ROLE_PERM_ALIAS[user?.role] || user?.role; // fakturant servisu vidí Kôš ako dispečer servisu
   // Autá a modely spravujú obaja vedúci; zamestnancov každý svojej oblasti.
   if ((role === "veduci_pozicovne" || role === "veduci_servisu") && ["vehicle", "machineModel"].includes(entry.recordType)) return true;
   if (role === "veduci_pozicovne") {
@@ -14655,7 +14673,7 @@ function ProtocolModal({ html, params, onClose }) {
           }}
         >
           {entries.length > 0
-            ? `Predvyplnené: ${entries.map(([k, v]) => `${k}=${v}`).join(" · ")}`
+            ? "✓ Údaje stroja a úlohy predvyplnené" // interné kľúče (machineId, damageId…) technikovi nič nehovoria
             : "Žiadne údaje neboli predvyplnené (prázdny formulár)"}
         </div>
       )}
@@ -15858,7 +15876,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
         }}
       >
         <span style={{ minWidth: 0 }}>
-          <span className={`badge ${isVyvoz ? "badge-info" : "badge-warn"}`} style={{ marginRight: 8, verticalAlign: 2 }}>{isVyvoz ? "↑ Vývoz" : "↓ Zvoz"}</span>
+          <span className={`badge ${isVyvoz ? "badge-info" : ""}`} style={{ marginRight: 8, verticalAlign: 2 }}>{isVyvoz ? "↑ Vývoz" : "↓ Zvoz"}</span>
           <strong className="tnum">{machine?.code || "—"}</strong>{t.customer ? ` · ${t.customer}` : ""}
           <span className="cell-sub" style={{ display: "block" }}>{t.from} → {t.to}</span>
           <span className="cell-sub" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -16046,8 +16064,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                           ? `Dobrý deň, ${driver.name},\n\nna ${dayWord} (${fmtDate(dateVal)}) máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`
                           : `Dobrý deň, ${driver.name},\n\nna ${dayWord} (${fmtDate(dateVal)}) už nemáte naplánované žiadne prepravy — predchádzajúci zoznam neplatí.\n\nĎakujeme.`;
                         const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join(MAILTO_SEP);
-                        composeMail({ to: toAll, subject: `Prepravy na ${dayWord} ${fmtDate(dateVal)}`, body });
-                        recordTransportSend(driver.id, dateVal, items.map((t) => t.id));
+                        composeMail({ to: toAll, subject: `Prepravy na ${dayWord} ${fmtDate(dateVal)}`, body, onSent: () => recordTransportSend(driver.id, dateVal, items.map((t) => t.id)) });
                       }}
                     >
                       {!status.sent
@@ -16132,8 +16149,7 @@ function TransportsOverview({ dnes, jobs, drivers, jobDispatcher, machineById, t
                     });
                     const body = `Dobrý deň, ${driver.name},\n\nna ${fmtDate(quickFilter.dateVal)} máte naplánované tieto prepravy:\n\n${lines.join("\n")}\n\nĎakujeme.`;
                     const toAll = [driver.email || (driver.role === "externy_sofer" ? "" : nameToEmail(driver.name)), ...checkerEmails].filter(Boolean).join(MAILTO_SEP);
-                    composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body });
-                    recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]);
+                    composeMail({ to: toAll, subject: `${quickFilter.label} — ${fmtDate(quickFilter.dateVal)}`, body, onSent: () => recordTransportSend(driver.id, quickFilter.dateVal, liveItems.map((t) => t.id), [quickFilter.type]) });
                   }}
                 >
                   {!sendStatus.sent
@@ -18734,10 +18750,10 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   if (screen === "sent" || screen === "sentReturn") {
     const isRet = screen === "sentReturn";
     return (
-      <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
+      <Modal key="sent" headerExtra={issueBtn} eyebrow="Protokol o odovzdaní" title={machine?.code || "Stroj"} onClose={onClose}>
         <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{isRet ? "Protokol o vrátení bol odoslaný" : "Protokol o prevzatí bol odoslaný"}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{`Protokol o ${isRet ? "vrátení" : "prevzatí"} ${navigator.onLine ? "bol odoslaný" : "je uložený v zariadení — odošle sa po pripojení"}`}</div>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 18 }}>
             {job?.customer || "—"}
           </div>
@@ -26328,7 +26344,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
               <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <strong>{row.name}</strong> <span className="tnum">· {dm(v.startDate)}–{dm(v.endDate)}</span>
-                  {active && <span className="badge badge-warn" style={{ marginLeft: 8 }}>prebieha</span>}
+                  {active && <span className="badge badge-info" style={{ marginLeft: 8 }}>prebieha</span>}
                   {owned.length > 0 && (
                     <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
                       {active ? `po návrate: ${owned.map(short).join(", ")}` : owned.map((d) => `${d} → zástup ${dispatchers.find((x) => x.id === dsp.subIdOf(v, d))?.name || "—"}`).join(", ")}
@@ -33512,9 +33528,9 @@ function GlobalStyle() {
         .sp-fixed th { white-space: nowrap !important; }
         .sp-fixed td :is(input, select) { min-width: 0 !important; max-width: 100% !important; }
         .sp-fixed td:last-child, .sp-fixed th:last-child { padding-right: 8px; }
-        .sp-fixed .spc-vyber { width: 40px; } .sp-fixed .spc-dodavatel { width: 10%; } .sp-fixed .spc-cisloPolozky { width: 9.2%; } .sp-fixed .spc-pocetKusov { width: 8.4%; }
-        .sp-fixed .spc-cisloDielu { width: 7.8%; } .sp-fixed .spc-popisDielu { width: 8.4%; } .sp-fixed .spc-poznamka { width: 7%; } .sp-fixed .spc-urcenie { width: 6.4%; }
-        .sp-fixed .spc-datum { width: 10.5%; } .sp-fixed .spc-nakup { width: 12.5%; } .sp-fixed .spc-del { width: 5.5%; } .sp-fixed .spc-akcie { width: 42.8%; }
+        .sp-fixed .spc-vyber { width: 40px; } .sp-fixed .spc-dodavatel { width: 10%; } .sp-fixed .spc-cisloPolozky { width: 8.6%; } .sp-fixed .spc-pocetKusov { width: 7.6%; }
+        .sp-fixed .spc-cisloDielu { width: 7.4%; } .sp-fixed .spc-popisDielu { width: 8.4%; } .sp-fixed .spc-poznamka { width: 6.4%; } .sp-fixed .spc-urcenie { width: 6.4%; }
+        .sp-fixed .spc-datum { width: 12%; } .sp-fixed .spc-nakup { width: 12.5%; } .sp-fixed .spc-del { width: 5.5%; } .sp-fixed .spc-akcie { width: 42.8%; }
       }
       @media (hover: hover) {
         .jobs-table.sp-fixed th { position: relative; top: auto !important; }

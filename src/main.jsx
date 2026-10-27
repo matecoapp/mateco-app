@@ -28,7 +28,8 @@ document.addEventListener(
 // Zákaznícky portál (bez prihlásenia) — ak je v URL "?portal=<token>", vykresli
 // len tú ľahkú stránku namiesto celej dispečerskej appky. Kontroluje sa skôr než
 // čokoľvek iné, nech to nezávisí na zvyšku inicializácie.
-const portalToken = new URLSearchParams(window.location.search).get("portal");
+// Tokeny sú malými písmenami (claim_job_public_token) — niektoré aplikácie odkaz prepíšu na veľké.
+const portalToken = new URLSearchParams(window.location.search).get("portal")?.toLowerCase();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

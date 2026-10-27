@@ -131,7 +131,7 @@ function buildOfficialProtocolHtml(data) {
   }
 </style></head>
 <body>
-  <div class="toolbar"><button class="btn btn-accent" onclick="window.print()">🖨 Tlačiť / uložiť ako PDF</button></div>
+  <div class="toolbar"><button class="btn btn-accent" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
   <div class="page">
   <div class="body-content">
   <div class="head">
