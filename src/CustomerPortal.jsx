@@ -168,7 +168,7 @@ function buildOfficialProtocolHtml(data) {
         ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm) : sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
         ${sigBlock(data.returnDriverSignature, "Za prenajímateľa", data.returnDriverName)}
       </div>`
-        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">Stroj je v prenájme — zatiaľ nebol vrátený.</div>`}
+        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.completed && !data.notRealized ? `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.` : "Stroj je v prenájme — zatiaľ nebol vrátený."}</div>`}
     </div>
   </div>
   <div class="legal">
@@ -224,7 +224,7 @@ function SignaturePad({ onChange }) {
     </div>
   );
 }
-function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
+function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
   const [mode, setMode] = useState(null); // null | "agree" | "disagree"
   const [name, setName] = useState("");
   const [sig, setSig] = useState(null);
@@ -232,17 +232,20 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const ok = name.trim() && (mode === "agree" ? !!sig : comment.trim());
+  const busy = useRef(false); // druhé rýchle ťuknutie príde skôr, než sa tlačidlo prekreslí na neaktívne
   async function send() {
-    if (!ok || sending) return;
+    if (!ok || sending || busy.current) return;
+    busy.current = true;
     setSending(true); setError(null);
     const res = await onSubmit(mode === "agree", name.trim(), sig, comment.trim());
+    busy.current = false;
     setSending(false);
     if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : res === "invalid_token" ? "Tento odkaz už nie je platný." : !navigator.onLine ? "Ste bez signálu — skúste to znova po pripojení." : "Nepodarilo sa odoslať — skúste to znova.");
   }
   return (
     <div style={{ background: "#FFF8E1", border: "1px solid #E6C25A", borderRadius: 8, padding: 12, marginTop: 10 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{phaseLabel} stroja prebehlo bez Vás</div>
-      <div style={{ fontSize: 14, color: "#3A3A3A", marginBottom: 8 }}>Skontrolujte stav stroja podľa fotiek a checklistu vyššie a protokol potvrďte, alebo nám napíšte, s čím nesúhlasíte.</div>
+      <div style={{ fontSize: 14, color: "#3A3A3A", marginBottom: 8 }}>Skontrolujte stav stroja {hasPhotos ? "podľa fotiek a checklistu" : "podľa checklistu"} vyššie a protokol potvrďte, alebo nám napíšte, s čím nesúhlasíte.</div>
       {!mode ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" onClick={() => setMode("agree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", background: "#E30613", color: "#fff", border: "none" }}>Potvrdiť protokol</button>
@@ -317,7 +320,7 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
           </div>
         </div>
       )}
-      {custAbsent && !confirm && onConfirm && <div id={`potvrdit-${title}`}><ConfirmProtocolBox phaseLabel={title} onSubmit={onConfirm} /></div>}
+      {custAbsent && !confirm && onConfirm && <div id={`potvrdit-${title}`}><ConfirmProtocolBox phaseLabel={title} onSubmit={onConfirm} hasPhotos={(photos || []).map(safePhotoUrl).some(Boolean)} /></div>}
     </div>
   );
 }
@@ -336,7 +339,21 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   const [endDate, setEndDate] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  // Po odoslaní potvrdenie „Odoslané ✓“ na mieste formulára (rovnaká výška) — druhé ťuknutie netrafí iné tlačidlo, ktoré by sa posunulo hore.
+  const [sentH, setSentH] = useState(0);
+  const busy = useRef(false);
+  const boxRef = useRef(null);
+  const wasLocked = useRef(jobLocked);
+  useEffect(() => { if (wasLocked.current && !jobLocked) setSentH(0); wasLocked.current = jobLocked; }, [jobLocked]); // žiadosť vybavená → dá sa poslať ďalšia
 
+  if (sentH) {
+    return (
+      <div role="status" style={{ minHeight: sentH, boxSizing: "border-box", border: "1px solid #A9D5B4", background: "#EEF8F0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#1E6B33" }}>Odoslané ✓</div>
+        <div style={{ fontSize: 14, color: "#3A3A3A" }}>{type === "problem" ? "Hlásenie sme dostali." : "Žiadosť o zmenu dátumu sme dostali."} Stav nájdete vyššie vo „Vaše žiadosti“.</div>
+      </div>
+    );
+  }
   // Čakajúca žiadosť je hneď nad formulárom vo „Vaše žiadosti“ — druhý text by ju len opakoval.
   if (jobLocked) return null;
 
@@ -349,16 +366,22 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
     not_realized: "Tento prenájom sa nerealizoval.",
     too_long: "Správa je príliš dlhá (najviac 2000 znakov).",
     already_returned: "Stroj už bol vrátený — žiadosť ani hlásenie už nie je možné.",
+    job_completed: "Prenájom je už ukončený — dátum vrátenia sa nedá zmeniť. V prípade otázok kontaktujte obchodníka.",
+    same_date: "Zvolený dátum je rovnaký ako súčasný koniec prenájmu.",
   };
 
   const maxEnd = new Date(Date.now() + 366 * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   async function handleSubmit() {
+    if (busy.current) return;
     if (type === "extension" && endDate > maxEnd) { setError("Dátum môže byť najviac rok dopredu — dlhší prenájom dohodnite s obchodníkom."); return; }
+    busy.current = true;
     setSending(true);
     setError(null);
     const reason = await onSubmit(type === "problem" ? message.trim() : null, type === "extension" ? endDate : null);
+    busy.current = false;
     setSending(false);
     if (reason === true) {
+      setSentH(boxRef.current?.offsetHeight || 1);
       setOpen(false);
       setMessage("");
       setEndDate("");
@@ -379,7 +402,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   }
 
   return (
-    <div style={{ border: "1px solid #E2E2E2", borderRadius: 8, padding: 12 }}>
+    <div ref={boxRef} style={{ border: "1px solid #E2E2E2", borderRadius: 8, padding: 12 }}>
       {type === "problem" ? (
         <textarea maxLength={2000}
           value={message}
@@ -416,6 +439,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
         </button>
         <button
           onClick={() => setOpen(false)}
+          disabled={sending}
           style={{ ...BTN, width: "auto", border: "1px solid #CFCFCF", color: "#1A1A1A" }}
         >
           Zrušiť
@@ -555,8 +579,13 @@ export default function CustomerPortal({ token }) {
     };
   }, [token]);
 
+  // Dispečer prenájom ukončil, stroj čaká na zvoz — predĺženie sa už neponúka (k38 S1).
+  const completed = !!data?.completed && !data.returnDone && !data.notRealized;
   // Po termíne: stroj je u zákazníka po zmluvnom konci — zákazník má vedieť, že sa od neho niečo čaká (N2, k34).
-  const overdue = !!data && !data.returnDone && !data.notRealized && !!data.handoverDone && !!data.endDate && data.endDate < todayBA();
+  const overdue = !!data && !completed && !data.returnDone && !data.notRealized && !!data.handoverDone && !!data.endDate && data.endDate < todayBA();
+  const departureLate = !!data && !completed && !data.handoverDone && !data.returnDone && !data.notRealized && !!(data.departureDate || data.startDate) && (data.departureDate || data.startDate) < todayBA();
+  // Ukončená zákazka so zvozom (vrátením) v minulosti — stroj ešte nie je späť (D2, k39).
+  const pickupLate = completed && !!(data.pickupDate || data.endDate) && (data.pickupDate || data.endDate) < todayBA();
   // Zvoz už dispečer naplánoval (dátum zvozu dnes alebo neskôr) — zákazník nemusí nič dohadovať.
   const pickupPlanned = overdue && !!data.pickupDate && data.pickupDate >= todayBA();
 
@@ -611,8 +640,8 @@ export default function CustomerPortal({ token }) {
                 </div>
                 <span
                   style={{
-                    background: data.returnDone || data.notRealized ? "#EFEFEF" : overdue ? "#FDEBD3" : "#E7EEF9",
-                    color: data.returnDone || data.notRealized ? "#3A3A3A" : overdue ? "#8A4100" : "#1F4E99",
+                    background: data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue ? "#FDEBD3" : "#E7EEF9",
+                    color: data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue ? "#8A4100" : "#1F4E99",
                     fontSize: 13,
                     fontWeight: 600,
                     padding: "4px 12px",
@@ -620,7 +649,7 @@ export default function CustomerPortal({ token }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {data.notRealized ? "Nerealizovaná" : data.returnDone ? "Ukončené" : overdue ? "Po termíne" : "Aktívny prenájom"}
+                  {data.notRealized ? "Nerealizovaná" : data.returnDone || completed ? "Ukončené" : !data.handoverDone ? (data.selfPickup ? "Čaká na vyzdvihnutie" : "Čaká na dodanie stroja") : overdue ? "Po termíne" : "Aktívny prenájom"}
                 </span>
               </div>
 
@@ -630,14 +659,17 @@ export default function CustomerPortal({ token }) {
                   {data.machineType || "Stroj"}
                 </div>
                 {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A" }}>{data.address}</div>}
+                {!data.handoverDone && !data.returnDone && !data.notRealized && !completed && !data.selfPickup && (data.departureDate || data.startDate) && (
+                  <div style={{ fontSize: 14, color: departureLate ? "#8A4100" : "#5A5A5A", fontWeight: departureLate ? 600 : undefined, marginTop: 4 }}>{departureLate ? "Vývoz sa oneskoruje — kontaktujte obchodníka" : `Plánovaný vývoz ${fmtDate(data.departureDate || data.startDate)}`}</div>
+                )}
                 {data.selfPickup && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
-                    Vyzdvihnutie v depe {data.fromDepo || ""}{data.departureDate ? ` dňa ${fmtDate(data.departureDate)}` : ""}
+                    {departureLate ? <span style={{ color: "#8A4100", fontWeight: 600 }}>Vyzdvihnutie v depe {data.fromDepo || ""} sa oneskoruje — kontaktujte obchodníka</span> : <>Vyzdvihnutie v depe {data.fromDepo || ""}{data.departureDate ? ` dňa ${fmtDate(data.departureDate)}` : ""}</>}
                   </div>
                 )}
                 {data.selfReturn && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
-                    Vrátenie do depa {data.returnDepo || data.fromDepo || ""}{data.pickupDate ? ` dňa ${fmtDate(data.pickupDate)}` : ""}
+                    Vrátenie do depa {data.returnDepo || data.fromDepo || ""}{data.pickupDate && !departureLate && !pickupLate ? ` dňa ${fmtDate(data.pickupDate)}` : ""}
                   </div>
                 )}
               </div>
@@ -659,6 +691,11 @@ export default function CustomerPortal({ token }) {
                     : "dohodnite vrátenie alebo predĺženie."}
                 </div>
               )}
+              {completed && (
+                <div style={{ background: pickupLate ? "#FDEBD3" : "#EFEFEF", color: pickupLate ? "#8A4100" : "#3A3A3A", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+                  Prenájom ukončený{pickupLate ? ` — ${data.selfReturn ? "vrátenie do depa sa oneskoruje" : "zvoz sa oneskoruje"}, kontaktujte obchodníka` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "vrátenie do depa" : "zvoz"} ${fmtDate(data.pickupDate || data.endDate).slice(0, 6)}` : ""}
+                </div>
+              )}
 
               <div>
                 <RequestHistory requests={data.requests} />
@@ -675,13 +712,13 @@ export default function CustomerPortal({ token }) {
                       jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
                       onSubmit={submitRequest}
                     />
-                    <RequestForm
+                    {!completed && <RequestForm
                       type="extension"
                       jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}
                       currentEnd={data.endDate}
                       primary={overdue && !pickupPlanned}
                       onSubmit={submitRequest}
-                    />
+                    />}
                   </div>
                 )}
 
@@ -708,6 +745,7 @@ export default function CustomerPortal({ token }) {
                 </div>
               </div>
 
+              {!data.notRealized && <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
                 <div style={{ ...SEC, margin: 0 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
                 {((data.handoverDone && !data.migratedWithoutHandover) || data.returnDone) && (
@@ -763,10 +801,11 @@ export default function CustomerPortal({ token }) {
                 ) : (
                   <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Vrátenie</div>
-                    <div style={{ fontSize: 14, color: "#5A5A5A" }}>Stroj je v prenájme — zatiaľ nebol vrátený.</div>
+                    <div style={{ fontSize: 14, color: "#5A5A5A" }}>{completed ? `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.` : "Stroj je v prenájme — zatiaľ nebol vrátený."}</div>
                   </div>
                 )
               )}
+              </>}
             </div>
           </div>
         )}

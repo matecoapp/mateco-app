@@ -29,7 +29,9 @@ document.addEventListener(
 // len tú ľahkú stránku namiesto celej dispečerskej appky. Kontroluje sa skôr než
 // čokoľvek iné, nech to nezávisí na zvyšku inicializácie.
 // Tokeny sú malými písmenami (claim_job_public_token) — niektoré aplikácie odkaz prepíšu na veľké.
-const portalToken = new URLSearchParams(window.location.search).get("portal")?.toLowerCase();
+// Pošta/SMS pripoja k odkazu bodku, zátvorku či medzeru — berie sa len samotné UUID.
+const portalParam = new URLSearchParams(window.location.search).get("portal");
+const portalToken = portalParam && (portalParam.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || portalParam).toLowerCase();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

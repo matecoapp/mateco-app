@@ -23,6 +23,18 @@ describe("audit log — zmena", () => {
     const j = { action: "update", table_name: "jobs", old_data: { publicToken: "6a6d5a3e-7c61-4952-9504-068f6c9f43f0" }, new_data: { publicToken: null } };
     expect(auditChange(j, null, {})).toBe("odkaz pre zákazníka: zrušený");
   });
+  it("stavy ľudskými slovami aj keď sa popis poškodenia nezmenil (bod 80)", () => {
+    const e = { action: "update", table_name: "damages", old_data: { stav: "nove" }, new_data: { stav: "pridelene", technicianId: "e1" } };
+    expect(auditChange(e, null, {})).toBe("stav: Nové → Pridelené");
+    const ph = { action: "update", table_name: "partHandovers", old_data: { status: "check" }, new_data: { status: "billing" } };
+    expect(auditChange(ph, null, {})).toBe("stav: Čaká na kontrolu → Na fakturáciu");
+  });
+  it("ľudské názvy polí a dátumy v tvare platformy (N18)", () => {
+    const m = { action: "update", table_name: "machines", old_data: { trackRevisions: true, revizia: "2026-10-21" }, new_data: { trackRevisions: false, revizia: "2026-10-28" } };
+    expect(auditChange(m, null, {})).toBe("sledovať revíziu ZZ: áno → nie · revízia ZZ: 21. 10. 2026 → 28. 10. 2026");
+    const j = { action: "update", table_name: "jobs", old_data: { selfReturn: false }, new_data: { selfReturn: true } };
+    expect(auditChange(j, null, {})).toBe("vlastná doprava (zvoz): nie → áno");
+  });
   it("viac ako 3 zmeny skráti", () => {
     const e = { action: "update", table_name: "jobs", old_data: { a: 1, b: 1, c: 1, d: 1 }, new_data: { a: 2, b: 2, c: 2, d: 2 } };
     expect(auditChange(e, null, {})).toBe("a: 1 → 2 · b: 1 → 2 · c: 1 → 2 · +1");

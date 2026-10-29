@@ -192,4 +192,8 @@ describe("rozhodnutia 24. 10.", () => {
     expect(g.flatMap((x) => x.items)).not.toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
     expect(_test.whatsNewFor("admin", "1.0.841").flatMap((x) => x.items)).toContain("Jeden prihlasovací účet môže byť len na jednej karte zamestnanca.");
   });
+  it("„Čo je nové“ — fakturant servisu vidí aj novinky dispečera servisu (alias ako can())", () => {
+    const fs = _test.whatsNewFor("fakturant_servis", "0").flatMap((x) => x.items);
+    expect(_test.whatsNewFor("dispecer_servisu", "0").flatMap((x) => x.items).every((t) => fs.includes(t))).toBe(true);
+  });
 });
