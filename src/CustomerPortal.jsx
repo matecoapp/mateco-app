@@ -33,14 +33,14 @@ const HANDOVER_CHECKLIST_ITEMS = [
 ];
 
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
-// Čas z databázy (ISO) → DD.MM.RRRR v čase firmy.
+// Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
 const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
 
 function fmtDate(iso) {
   if (!iso) return "—";
   const [y, m, d] = String(iso).split("-");
   if (!y || !m || !d) return iso;
-  return `${d}.${m}.${y}`;
+  return `${Number(d)}. ${Number(m)}. ${y}`;
 }
 
 // Rovnaké právne texty a logo ako v App.jsx (openPrintableHandoverProtocol) —
@@ -87,8 +87,10 @@ function buildOfficialProtocolHtml(data) {
       return `<div class="checkrow"><span>${i + 1}. ${esc(label)}</span><span class="mark ${markClass}">${mark}</span></div>${note}`;
     }).join("");
   }
+  // Mobil: A4 sa zmenší na šírku displeja ako FIT_PAGE_JS v App.jsx (screen.width: nové okno by telefón roztiahol na šírku A4); tlač v plnej veľkosti.
   return `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Protokol ${esc(data.protocolNumber)}</title>
 <link rel="stylesheet" href="${FONT_CSS_URL}">
 <style>
@@ -147,7 +149,7 @@ function buildOfficialProtocolHtml(data) {
     <div><span class="l">Nájomca:</span>${esc(data.customer)}</div>
     <div><span class="l">Nájomná zmluva č.:</span>${esc(data.cisloZmluvy)}</div>
     <div><span class="l">Miesto prenájmu:</span>${esc(data.address)}</div>
-    <div><span class="l">Objednaná doba prenájmu:</span>${data.startDate ? fmtDate(data.startDate) : ""} – ${data.endDate ? fmtDate(data.endDate) : "—"}</div>
+    <div><span class="l">Objednaná doba prenájmu:</span> ${data.startDate ? fmtDate(data.startDate) : ""} – ${data.endDate ? fmtDate(data.endDate) : "—"}</div>
   </div>
   <div class="cols">
     <div>
@@ -185,6 +187,7 @@ function buildOfficialProtocolHtml(data) {
     <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
   </div>
   </div>
+  <script>(function(){function f(){var v=Math.min(document.documentElement.clientWidth,screen.width||1e4);document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";var w=e.offsetWidth+16;e.style.zoom=w>v?String(v/w):"";});}function r(){document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";});}f();addEventListener("resize",f);addEventListener("beforeprint",r);addEventListener("afterprint",f);})();</script>
 </body></html>`;
 }
 
@@ -268,7 +271,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <button type="button" onClick={() => { setMode(null); setError(null); }} style={{ ...BTN, flex: "1 1 120px", width: "auto", border: "1px solid #CFCFCF" }}>Späť</button>
             <button type="button" disabled={!ok || sending} onClick={send} style={{ ...BTN, flex: "2 1 180px", width: "auto", background: ok ? "#E30613" : "#EFEFEF", color: ok ? "#fff" : "#767676", border: "none" }}>
-              {sending ? "Odosielam…" : mode === "agree" ? "Potvrdiť podpisom" : "Odoslať nesúhlas"}
+              {sending ? "Odosiela sa…" : mode === "agree" ? "Potvrdiť podpisom" : "Odoslať nesúhlas"}
             </button>
           </div>
         </div>
@@ -367,6 +370,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
     too_long: "Správa je príliš dlhá (najviac 2000 znakov).",
     already_returned: "Stroj už bol vrátený — žiadosť ani hlásenie už nie je možné.",
     job_completed: "Prenájom je už ukončený — dátum vrátenia sa nedá zmeniť. V prípade otázok kontaktujte obchodníka.",
+    not_delivered: "Stroj ešte nebol dodaný — s otázkami k vývozu sa obráťte na obchodníka.",
     same_date: "Zvolený dátum je rovnaký ako súčasný koniec prenájmu.",
   };
 
@@ -435,7 +439,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
           disabled={sending || (type === "problem" ? !message.trim() : !endDate || endDate === currentEnd)}
           style={{ ...BTN, flex: 1, border: "none", ...(type === "extension" && (!endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
-          {sending ? "Odosielam…" : "Odoslať"}
+          {sending ? "Odosiela sa…" : "Odoslať"}
         </button>
         <button
           onClick={() => setOpen(false)}
@@ -686,14 +690,14 @@ export default function CustomerPortal({ token }) {
               </div>
               {overdue && (
                 <div style={{ background: "#FDEBD3", color: "#8A4100", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-                  Prenájom skončil {fmtDate(data.endDate).slice(0, 6)} — {pickupPlanned
-                    ? `${data.selfReturn ? "vrátenie do depa je naplánované" : "zvoz je naplánovaný"} na ${fmtDate(data.pickupDate).slice(0, 6)}`
+                  Prenájom skončil {fmtDate(data.endDate).replace(/ \d{4}$/, "")} — {pickupPlanned
+                    ? `${data.selfReturn ? "vrátenie do depa je naplánované" : "zvoz je naplánovaný"} na ${fmtDate(data.pickupDate).replace(/ \d{4}$/, "")}`
                     : "dohodnite vrátenie alebo predĺženie."}
                 </div>
               )}
               {completed && (
                 <div style={{ background: pickupLate ? "#FDEBD3" : "#EFEFEF", color: pickupLate ? "#8A4100" : "#3A3A3A", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-                  Prenájom ukončený{pickupLate ? ` — ${data.selfReturn ? "vrátenie do depa sa oneskoruje" : "zvoz sa oneskoruje"}, kontaktujte obchodníka` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "vrátenie do depa" : "zvoz"} ${fmtDate(data.pickupDate || data.endDate).slice(0, 6)}` : ""}
+                  Prenájom ukončený{pickupLate ? ` — ${data.selfReturn ? "vrátenie do depa sa oneskoruje" : "zvoz sa oneskoruje"}, kontaktujte obchodníka` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "vrátenie do depa" : "zvoz"} ${fmtDate(data.pickupDate || data.endDate).replace(/ \d{4}$/, "")}` : ""}
                 </div>
               )}
 
@@ -707,11 +711,12 @@ export default function CustomerPortal({ token }) {
                 )}
                 {!data.returnDone && !data.notRealized && (
                   <div style={{ display: "flex", flexDirection: overdue && !pickupPlanned ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
-                    <RequestForm
+                    {/* Pred dodaním stroja nie je čo nahlásiť servisu — zákazník volá obchodníka (Rado 1. 11.). */}
+                    {(data.handoverDone || data.migratedWithoutHandover) && <RequestForm
                       type="problem"
                       jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
                       onSubmit={submitRequest}
-                    />
+                    />}
                     {!completed && <RequestForm
                       type="extension"
                       jobLocked={(data.requests || []).some((r) => r.type === "extension" && r.status === "pending")}

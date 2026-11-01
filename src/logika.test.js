@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { _test } from "./App.jsx";
 
-const { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum } = _test;
+const { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, passwordProblem, authErrorSk, fmtDate } = _test;
 
 describe("dátumy", () => {
   it("rozpozná neexistujúci dátum", () => {
@@ -195,5 +195,31 @@ describe("rozhodnutia 24. 10.", () => {
   it("„Čo je nové“ — fakturant servisu vidí aj novinky dispečera servisu (alias ako can())", () => {
     const fs = _test.whatsNewFor("fakturant_servis", "0").flatMap((x) => x.items);
     expect(_test.whatsNewFor("dispecer_servisu", "0").flatMap((x) => x.items).every((t) => fs.includes(t))).toBe(true);
+  });
+});
+
+describe("heslo (pravidlo Supabase)", () => {
+  it("vyžaduje 10 znakov, malé aj veľké písmeno a číslicu", () => {
+    expect(passwordProblem("Abcdefgh12")).toBe("");
+    expect(passwordProblem("Abcdefg12")).not.toBe(""); // 9 znakov
+    expect(passwordProblem("abcdefgh12")).not.toBe(""); // bez veľkého
+    expect(passwordProblem("ABCDEFGH12")).not.toBe(""); // bez malého
+    expect(passwordProblem("Abcdefghij")).not.toBe(""); // bez číslice
+    expect(passwordProblem("Abcdefgh12 ")).toMatch(/medzerou/); // medzera na konci
+    expect(passwordProblem("ábcdefghí1")).toMatch(/diakritikou/); // diakritika sa neráta
+  });
+  it("anglickú chybu Supabase o slabom hesle preloží", () => {
+    const sk = passwordProblem("");
+    expect(authErrorSk({ code: "weak_password", message: "Password should be at least 10 characters." })).toBe(sk);
+    expect(authErrorSk({ message: "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789." })).toBe(sk);
+    expect(authErrorSk({ message: "Iná chyba" })).toBe("Iná chyba");
+  });
+});
+
+describe("zobrazenie dátumu", () => {
+  it("tvar „2. 11. 2026“ bez núl na začiatku", () => {
+    expect(fmtDate("2026-11-02")).toBe("2. 11. 2026");
+    expect(fmtDate("2026-10-28")).toBe("28. 10. 2026");
+    expect(fmtDate("")).toBe("—");
   });
 });
