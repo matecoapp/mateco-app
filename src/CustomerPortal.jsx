@@ -644,8 +644,8 @@ export default function CustomerPortal({ token }) {
                 </div>
                 <span
                   style={{
-                    background: data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue ? "#FDEBD3" : "#E7EEF9",
-                    color: data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue ? "#8A4100" : "#1F4E99",
+                    background: data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue || departureLate ? "#FDEBD3" : "#E7EEF9",
+                    color: data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue || departureLate ? "#8A4100" : "#1F4E99",
                     fontSize: 13,
                     fontWeight: 600,
                     padding: "4px 12px",
@@ -743,11 +743,14 @@ export default function CustomerPortal({ token }) {
                     )}
                   </div>
                 )}
+                {/* Pred dodaním stroja zákazník rieši všetko s obchodníkom (Rado 2. 11.); bez obchodníka ostane aspoň linka servisu. */}
+                {(data.handoverDone || data.migratedWithoutHandover || data.returnDone || !data.salespersonName) && (
                 <div style={{ fontSize: 15, marginBottom: 14 }}>
                   <div style={{ fontWeight: 700 }}>Nahlasovanie porúch</div>
                   <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}><Ico id="telefon" /> +421 905 979 484</a></div>
                   <div><a href="mailto:servis@matecoslovakia.sk" style={LINK}>servis@matecoslovakia.sk</a></div>
                 </div>
+                )}
               </div>
 
               {!data.notRealized && <>
