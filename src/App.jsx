@@ -44,7 +44,8 @@ const CHANGELOG = [
     { roles: ["admin"], text: "Import zákaziek: zákazník, ktorý v platforme nie je a v súbore je viackrát, sa založí len raz. Zákazky s Dátumom do pred dneškom sa vypíšu a predvolene vynechajú (dajú sa naimportovať aj ony)." },
     { roles: ["admin"], text: "Import strojov: model sa spáruje so zoznamom modelov aj pri inom zápise (medzery, pomlčky, veľké písmená) a uloží sa v tvare zo zoznamu. Neznáme modely platforma pred importom vypíše a založí ich len po potvrdení. Depo prijme aj s malými písmenami a ako skratku (BA, NR, ZV, ZA, PO); riadok s neznámym depom sa nenaimportuje." },
     { roles: ["admin"], text: "Import externých zákaziek prijme depo aj ako skratku (BA, NR, ZV, ZA, PO); neznáme depo vypíše. Import dielov priradí stĺpce zo šablóny sám a vypíše neznámy stav." },
-    { roles: ["admin", "veduci_pozicovne", "dispecer_pozicovne"], text: "Import rámcových zmlúv a blacklistu priradí stĺpce zo šablóny sám, vopred vypíše riadky bez povinného poľa a neplatné dátumy a po dokončení ukáže počet naimportovaných." },
+    { roles: ["admin"], text: "Import rámcových zmlúv a blacklistu priradí stĺpce zo šablóny sám, vopred vypíše riadky bez povinného poľa a neplatné dátumy a po dokončení ukáže počet naimportovaných." },
+    { roles: ["fakturant_pozicovna", "dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Rámcové zmluvy a blacklist (Dokumenty): záznam sa dá upraviť (⋯ → Upraviť). Zadávať, upravovať a mazať ich môže aj fakturant požičovne. Hromadný import CSV je len pre administrátora." },
   ] },
   { v: "1.0.857", items: [
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Deaktivácia účtu počas vypĺňania protokolu (prevzatie/vrátenie, servisný protokol, kontrola stroja, výdaj dielov) už rozpísané údaje nezahodí: okno ostane otvorené s hláškou, protokol uložíte do zariadenia a odošle sa po obnovení prístupu." },
@@ -936,7 +937,7 @@ const PERM = {
   // Spoločné
   backup_export: [],
   backup_import: [],
-  documents_edit: ["veduci_pozicovne", "dispecer_pozicovne"],
+  documents_edit: ["veduci_pozicovne", "dispecer_pozicovne", "fakturant_pozicovna"],
   employee_manage: ["veduci_pozicovne", "veduci_servisu"],
   vehicle_manage: ["veduci_pozicovne", "veduci_servisu"],
   // Štatistiky v Administratíve — obaja vedúci vidia OBE (požičovňa aj servis),
@@ -7230,6 +7231,11 @@ function DispatcherApp() {
   function importFramoveZmluvy(rows) {
     persistFramoveZmluvy((framoveZmluvy) => [...framoveZmluvy, ...rows.map((r) => ({ id: uid(), ...r }))]);
   }
+  // Zmenený názov bez výberu zákazníka zo zoznamu — stará väzba na zákazníka by ukazovala na inú firmu.
+  const recordPatch = (old, values, nameKey) => ({ ...values, ...(old && values[nameKey] !== old[nameKey] && values.customerId === old.customerId ? { customerId: null } : {}) });
+  function updateFramovaZmluva(id, values) {
+    persistFramoveZmluvy((list) => list.map((r) => (r.id === id ? { ...r, ...recordPatch(r, values, "najomca") } : r)));
+  }
   function deleteFramovaZmluva(id) {
     const record = framoveZmluvy.find((r) => r.id === id);
     moveToTrash("framovaZmluva", "framoveZmluvy", record, record?.najomca);
@@ -7242,6 +7248,9 @@ function DispatcherApp() {
   }
   function importBlacklist(rows) {
     persistBlacklist((blacklist) => [...blacklist, ...rows.map((r) => ({ id: uid(), ...r }))]);
+  }
+  function updateBlacklistEntry(id, values) {
+    persistBlacklist((list) => list.map((r) => (r.id === id ? { ...r, ...recordPatch(r, values, "nazovZakaznika") } : r)));
   }
   function deleteBlacklistEntry(id) {
     const record = blacklist.find((r) => r.id === id);
@@ -11778,11 +11787,14 @@ function DispatcherApp() {
             customers={customers}
             onAddFramovaZmluva={addFramovaZmluva}
             onImportFramoveZmluvy={importFramoveZmluvy}
+            onUpdateFramovaZmluva={updateFramovaZmluva}
             onDeleteFramovaZmluva={(id) => askDelete("túto rámcovú zmluvu", () => deleteFramovaZmluva(id), true)}
             onAddBlacklist={addBlacklistEntry}
             onImportBlacklist={importBlacklist}
+            onUpdateBlacklist={updateBlacklistEntry}
             onDeleteBlacklist={(id) => askDelete("tento záznam z blacklistu", () => deleteBlacklistEntry(id), true)}
             canEdit={can(effectiveUser, "documents_edit")}
+            canImport={isAdminUser(effectiveUser)}
             canExportPhotos={isAdminUser(effectiveUser)}
           />
         )}
@@ -14342,8 +14354,8 @@ const BLACKLIST_FIELDS = [
   { key: "riesenie", label: "Riešenie" },
 ];
 
-function AddRecordModal({ title, fields, onClose, onSave, customers, customerNameKey }) {
-  const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.key, ""])));
+function AddRecordModal({ title, fields, onClose, onSave, customers, customerNameKey, initial }) {
+  const [values, setValues] = useState(() => ({ ...(initial?.customerId ? { customerId: initial.customerId } : {}), ...Object.fromEntries(fields.map((f) => [f.key, initial?.[f.key] ?? ""])) }));
   const canSave = fields.filter((f) => f.required).every((f) => (values[f.key] || "").trim());
   return (
     <Modal title={title} onClose={onClose} wide>
@@ -14546,8 +14558,9 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
   );
 }
 
-function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, canEdit, customers, customerNameKey }) {
+function RecordsTableView({ title, fields, items, onAdd, onUpdate, onImport, onDelete, canEdit, canImport, customers, customerNameKey }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [showImport, setShowImport] = useState(false);
   return (
     <div>
@@ -14555,7 +14568,7 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
         <h1 className="page-h1" style={{ margin: 0 }}>{title}</h1>
         {canEdit && (
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import CSV</button>
+            {canImport && <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import CSV</button>}
             <button className="btn btn-accent" onClick={() => setShowAdd(true)}>+ Pridať</button>
           </div>
         )}
@@ -14586,7 +14599,7 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
                 })}
                 {canEdit && (
                   <td className="td-actions" style={{ textAlign: "right" }}>
-                    <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Zmazať", danger: true, onClick: () => onDelete(item.id) }]} />
+                    <KebabMenu label="⋯" name="Ďalšie akcie" actions={[onUpdate && { label: "Upraviť", onClick: () => setEditing(item) }, { label: "Zmazať", danger: true, onClick: () => onDelete(item.id) }]} />
                   </td>
                 )}
               </tr>
@@ -14602,6 +14615,17 @@ function RecordsTableView({ title, fields, items, onAdd, onImport, onDelete, can
           customerNameKey={customerNameKey}
           onClose={() => setShowAdd(false)}
           onSave={(v) => { onAdd(v); setShowAdd(false); }}
+        />
+      )}
+      {editing && (
+        <AddRecordModal
+          title={`Upraviť — ${title}`}
+          fields={fields}
+          initial={editing}
+          customers={customers}
+          customerNameKey={customerNameKey}
+          onClose={() => setEditing(null)}
+          onSave={(v) => { onUpdate(editing.id, v); setEditing(null); }}
         />
       )}
       {showImport && (
@@ -14727,11 +14751,14 @@ function DocumentsView({
   customers,
   onAddFramovaZmluva,
   onImportFramoveZmluvy,
+  onUpdateFramovaZmluva,
   onDeleteFramovaZmluva,
   onAddBlacklist,
   onImportBlacklist,
+  onUpdateBlacklist,
   onDeleteBlacklist,
   canEdit,
+  canImport,
   canExportPhotos,
 }) {
   const active = subTabs.find((s) => s.id === subView);
@@ -14754,8 +14781,10 @@ function DocumentsView({
         items={framoveZmluvy}
         onAdd={onAddFramovaZmluva}
         onImport={onImportFramoveZmluvy}
+        onUpdate={onUpdateFramovaZmluva}
         onDelete={onDeleteFramovaZmluva}
         canEdit={canEdit}
+        canImport={canImport}
         customers={customers}
         customerNameKey="najomca"
       />
@@ -14769,8 +14798,10 @@ function DocumentsView({
         items={blacklist}
         onAdd={onAddBlacklist}
         onImport={onImportBlacklist}
+        onUpdate={onUpdateBlacklist}
         onDelete={onDeleteBlacklist}
         canEdit={canEdit}
+        canImport={canImport}
         customers={customers}
         customerNameKey="nazovZakaznika"
       />
