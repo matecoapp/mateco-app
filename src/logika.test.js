@@ -223,3 +223,52 @@ describe("zobrazenie dátumu", () => {
     expect(fmtDate("")).toBe("—");
   });
 });
+
+describe("čítanie CSV pri importoch", () => {
+  const { decodeImportCsv, parseImportCsvText, importDepo, machineModelKey } = _test;
+  const utf8 = (s) => new TextEncoder().encode(s);
+  // Windows-1250 ručne (Node TextEncoder vie len UTF-8) — len znaky použité v teste.
+  const cp1250 = (s) => Uint8Array.from([...s].map((ch) => ({ Ž: 0x8e, á: 0xe1, Č: 0xc8, í: 0xed, ľ: 0xbe, š: 0x9a, é: 0xe9 })[ch] ?? ch.charCodeAt(0)));
+  const text = "Názov firmy;IČO\r\nŽilinská stavebná, a.s.;31456789\r\n";
+  it("UTF-8 s BOM, bez BOM aj Windows-1250 dajú ten istý text", () => {
+    expect(decodeImportCsv(Uint8Array.from([0xef, 0xbb, 0xbf, ...utf8(text)])).text).toBe(text);
+    expect(decodeImportCsv(utf8(text)).text).toBe(text);
+    expect(decodeImportCsv(cp1250(text)).text).toBe(text);
+  });
+  it("poškodený UTF-8 s BOM a .xlsx nenačíta (chyba, nie potichu zlý text)", () => {
+    expect(decodeImportCsv(Uint8Array.from([0xef, 0xbb, 0xbf, 0x41, 0xc3, 0x3b, 0x42])).error).toMatch(/diakritiku/);
+    expect(decodeImportCsv(Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0, 0])).error).toMatch(/xlsx/);
+    expect(decodeImportCsv(utf8("A;B�")).error).toMatch(/diakritiku/);
+  });
+  it("bodkočiarka aj čiarka, čísla riadkov, prázdne riadky", () => {
+    const a = parseImportCsvText("Názov firmy;IČO\r\nA s.r.o.;1\r\n\r\n;\r\nŽilinská stavebná, a.s.;2\r\n");
+    expect(a.fields).toEqual(["Názov firmy", "IČO"]);
+    expect(a.rows).toEqual([{ __line: 2, "Názov firmy": "A s.r.o.", "IČO": "1" }, { __line: 5, "Názov firmy": "Žilinská stavebná, a.s.", "IČO": "2" }]);
+    const b = parseImportCsvText('Názov firmy,IČO\n"Žilinská stavebná, a.s.",2\n');
+    expect(b.rows).toEqual([{ __line: 2, "Názov firmy": "Žilinská stavebná, a.s.", "IČO": "2" }]);
+  });
+  it("návod nad hlavičkou preskočí, čísla riadkov ostanú podľa súboru", () => {
+    const r = parseImportCsvText("Import zákazníkov;;\r\nSúbor musí byť CSV;;\r\nNázov firmy;Číslo odberateľa;IČO\r\nA s.r.o.;100;1\r\n");
+    expect(r.fields).toEqual(["Názov firmy", "Číslo odberateľa", "IČO"]);
+    expect(r.rows).toEqual([{ __line: 4, "Názov firmy": "A s.r.o.", "Číslo odberateľa": "100", "IČO": "1" }]);
+    expect(parseImportCsvText("")).toEqual({ fields: [], rows: [] });
+  });
+  it("depo: názov bez ohľadu na písmená/diakritiku a skratky; neznáme prázdne", () => {
+    expect(importDepo("zvolen")).toBe("Zvolen");
+    expect(importDepo(" ZV ")).toBe("Zvolen");
+    expect(importDepo("ba")).toBe("Bratislava");
+    expect(importDepo("NR")).toBe("Nitra");
+    expect(importDepo("ZA")).toBe("Žilina");
+    expect(importDepo("Zilina")).toBe("Žilina");
+    expect(importDepo("PO")).toBe("Prešov");
+    expect(importDepo("EXT")).toBe("Externé");
+    expect(importDepo("Zvolenn")).toBe("");
+    expect(importDepo("")).toBe("");
+  });
+  it("model: rovnaký kľúč ako poistka v DB", () => {
+    expect(machineModelKey("Nožnicová 10m")).toBe(machineModelKey("nožnicová 10 m"));
+    expect(machineModelKey("GS-1932")).toBe(machineModelKey("gs 19.32"));
+    expect(machineModelKey("Z45/25_J")).toBe(machineModelKey("z4525j"));
+    expect(machineModelKey("Kĺbová 16 m")).not.toBe(machineModelKey("Kĺbová 18 m"));
+  });
+});
