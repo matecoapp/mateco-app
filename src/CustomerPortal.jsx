@@ -32,6 +32,8 @@ const HANDOVER_CHECKLIST_ITEMS = [
   "aDBlue - regenerácia motora",
 ];
 
+// neviditeľné znaky (U+200B, U+FEFF, nedeliteľná medzera…) nie sú vyplnený text — rovnako ako v DB (k47)
+const filled = (s) => /[^\s\u00AD\u034F\u115F\u1160\u180E\u200B-\u200F\u2060-\u2064\u3164]/.test(s || "");
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
 // Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
 const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
@@ -234,7 +236,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
-  const ok = name.trim() && (mode === "agree" ? !!sig : comment.trim());
+  const ok = filled(name) && (mode === "agree" ? !!sig : filled(comment));
   const busy = useRef(false); // druhé rýchle ťuknutie príde skôr, než sa tlačidlo prekreslí na neaktívne
   async function send() {
     if (!ok || sending || busy.current) return;
@@ -436,7 +438,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
-          disabled={sending || (type === "problem" ? !message.trim() : !endDate || endDate === currentEnd)}
+          disabled={sending || (type === "problem" ? !filled(message) : !endDate || endDate === currentEnd)}
           style={{ ...BTN, flex: 1, border: "none", ...(type === "extension" && (!endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
           {sending ? "Odosiela sa…" : "Odoslať"}
@@ -644,8 +646,8 @@ export default function CustomerPortal({ token }) {
                 </div>
                 <span
                   style={{
-                    background: data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue || departureLate ? "#FDEBD3" : "#E7EEF9",
-                    color: data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue || departureLate ? "#8A4100" : "#1F4E99",
+                    background: pickupLate ? "#FDEBD3" : data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue || departureLate ? "#FDEBD3" : "#E7EEF9",
+                    color: pickupLate ? "#8A4100" : data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue || departureLate ? "#8A4100" : "#1F4E99",
                     fontSize: 13,
                     fontWeight: 600,
                     padding: "4px 12px",
@@ -743,8 +745,8 @@ export default function CustomerPortal({ token }) {
                     )}
                   </div>
                 )}
-                {/* Pred dodaním stroja zákazník rieši všetko s obchodníkom (Rado 2. 11.); bez obchodníka ostane aspoň linka servisu. */}
-                {(data.handoverDone || data.migratedWithoutHandover || data.returnDone || !data.salespersonName) && (
+                {/* Pred dodaním stroja zákazník rieši všetko s obchodníkom (Rado 2. 11.); bez kontaktu na obchodníka ostane aspoň linka servisu. */}
+                {(data.handoverDone || data.migratedWithoutHandover || data.returnDone || (!data.salespersonPhone && !data.salespersonEmail)) && (
                 <div style={{ fontSize: 15, marginBottom: 14 }}>
                   <div style={{ fontWeight: 700 }}>Nahlasovanie porúch</div>
                   <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}><Ico id="telefon" /> +421 905 979 484</a></div>
