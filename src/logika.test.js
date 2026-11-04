@@ -253,6 +253,13 @@ describe("čítanie CSV pri importoch", () => {
     expect(r.rows).toEqual([{ __line: 4, "Názov firmy": "A s.r.o.", "Číslo odberateľa": "100", "IČO": "1" }]);
     expect(parseImportCsvText("")).toEqual({ fields: [], rows: [] });
   });
+  it("oddeľovač podľa hlavičky, nie podľa riadku návodu s čiarkami; UTF-16 odmietne", () => {
+    const r = parseImportCsvText("Návod: vyplňte, prosím, stĺpce\nNázov firmy;Číslo odberateľa;IČO\nA, a.s.;1;87654321\n");
+    expect(r.fields).toEqual(["Názov firmy", "Číslo odberateľa", "IČO"]);
+    expect(r.rows).toEqual([{ __line: 3, "Názov firmy": "A, a.s.", "Číslo odberateľa": "1", "IČO": "87654321" }]);
+    expect(decodeImportCsv(Uint8Array.from([0xff, 0xfe, 0x41, 0, 0x3b, 0])).error).toMatch(/UTF-16/);
+    expect(decodeImportCsv(Uint8Array.from([0x41, 0, 0x3b, 0, 0x42, 0])).error).toMatch(/UTF-16/);
+  });
   it("depo: názov bez ohľadu na písmená/diakritiku a skratky; neznáme prázdne", () => {
     expect(importDepo("zvolen")).toBe("Zvolen");
     expect(importDepo(" ZV ")).toBe("Zvolen");

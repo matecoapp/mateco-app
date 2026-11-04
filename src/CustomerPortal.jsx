@@ -33,7 +33,7 @@ const HANDOVER_CHECKLIST_ITEMS = [
 ];
 
 // neviditeľné znaky (U+200B, U+FEFF, nedeliteľná medzera…) nie sú vyplnený text — rovnako ako v DB (k47)
-const filled = (s) => /[^\s\u00AD\u034F\u115F\u1160\u180E\u200B-\u200F\u2060-\u2064\u3164]/.test(s || "");
+const filled = (s) => /[^\s\u00AD\u034F\u115F\u1160\u180E\u200B-\u200F\u2060-\u2064\u3164\u17B4\u17B5\u1CBC\u2800\uFFA0]/.test(s || "");
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
 // Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
 const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
@@ -730,9 +730,10 @@ export default function CustomerPortal({ token }) {
                 )}
 
                 <div style={SEC}>Kontakty</div>
-                {data.salespersonName && (
+                {/* Archivovaný obchodník: bez mena a e-mailu, jeho služobný telefón prechádza na nového (Rado 4. 11.). */}
+                {(data.salespersonName || (data.salespersonArchived && data.salespersonPhone)) && (
                   <div style={{ marginBottom: 10, fontSize: 15 }}>
-                    <div style={{ fontWeight: 700 }}>{data.salespersonName}</div>
+                    <div style={{ fontWeight: 700 }}>{data.salespersonName || "Pridelený obchodník"}</div>
                     {data.salespersonPhone && (
                       <div style={{ fontVariantNumeric: "tabular-nums" }}>
                         <a href={`tel:${data.salespersonPhone}`} style={LINK}><Ico id="telefon" /> {data.salespersonPhone}</a>
