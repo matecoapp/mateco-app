@@ -32,8 +32,11 @@ const HANDOVER_CHECKLIST_ITEMS = [
   "aDBlue - regenerácia motora",
 ];
 
-// neviditeľné znaky (U+200B, U+FEFF, nedeliteľná medzera…) nie sú vyplnený text — rovnako ako v DB (k47)
-const filled = (s) => /[^\s\u00AD\u034F\u115F\u1160\u180E\u200B-\u200F\u2060-\u2064\u3164\u17B4\u17B5\u1CBC\u2800\uFFA0]/.test(s || "");
+// vyplnený text = aspoň jedno písmeno alebo číslica (neviditeľné a neobvyklé znaky nie) — rovnako ako v DB (k53)
+const filled = (s) => /[\p{L}\p{N}]/u.test((s || "").replace(/[\u115F\u1160\u3164\uFFA0]/g, "")); // hangulské výplne sú „písmená“
+// Podpis uložený v úložisku platformy (odkaz) — len vlastné úložisko, nie cudzia URL (ako safeImgUrl v App.jsx).
+const ownStorageImg = (u) => typeof u === "string" && u.startsWith(`${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/protocols/`) && /^https?:\/\/[^"'<>\s]+$/.test(u);
+const safeSig = (u) => /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(u || "") || ownStorageImg(u);
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
 // Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
 const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
@@ -76,10 +79,8 @@ function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
   const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div>${confirmLine(c) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
-  // Podpis šoféra/zákazníka uložený v úložisku platformy (odkaz) — len vlastné úložisko, nie cudzia URL.
-  const ownStorageImg = (u) => typeof u === "string" && u.startsWith(`${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/protocols/`) && /^https?:\/\/[^"'<>\s]+$/.test(u);
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") || ownStorageImg(dataUrl) ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${safeSig(dataUrl) ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(statusKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
@@ -123,7 +124,7 @@ function buildOfficialProtocolHtml(data) {
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
   .sigbox { border: 1px solid #ccc; border-radius: 4px; padding: 7px; }
   .siglabel { font-size: 11px; color: #666; margin-bottom: 4px; }
-  .sigimg { max-width: 100%; height: 64px; }
+  .sigimg { max-width: 100%; max-height: 64px; } /* bez pevnej výšky — podpis si zachová pomer strán */
   .signone { font-size: 11px; color: #999; min-height: 64px; display: flex; align-items: center; overflow-wrap: anywhere; }
   .legal { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #444; }
   .legal ol { margin: 4px 0; padding-left: 17px; }
@@ -312,11 +313,11 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : custSig ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : safeSig(custSig) ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
-          {driverSig ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {safeSig(driverSig) ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
       </div>
       {custAbsent && (photos || []).length > 0 && (

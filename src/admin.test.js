@@ -22,6 +22,8 @@ describe("audit log — zmena", () => {
     expect(auditChange(e, null, { m4: "S-105" })).toBe("úloha v pláne: pridaná · stroj: S-105 → (zmazaný záznam)");
     const j = { action: "update", table_name: "jobs", old_data: { publicToken: "6a6d5a3e-7c61-4952-9504-068f6c9f43f0" }, new_data: { publicToken: null } };
     expect(auditChange(j, null, {})).toBe("odkaz pre zákazníka: zrušený");
+    const h = { action: "update", table_name: "handoverProtocols", old_data: { handoverCustomerSignature: "podpis 1a2b3c4d" }, new_data: { handoverCustomerSignature: "podpis 9f8e7d6c", handoverDone: true } };
+    expect(auditChange(h, null, {})).toBe("podpis nájomcu pri prevzatí: zmenený");
   });
   it("stavy ľudskými slovami aj keď sa popis poškodenia nezmenil (bod 80)", () => {
     const e = { action: "update", table_name: "damages", old_data: { stav: "nove" }, new_data: { stav: "pridelene", technicianId: "e1" } };
