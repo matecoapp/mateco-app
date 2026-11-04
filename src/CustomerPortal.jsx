@@ -76,8 +76,10 @@ function buildOfficialProtocolHtml(data) {
   const esc = protocolEsc;
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
   const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div>${confirmLine(c) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
+  // Podpis šoféra/zákazníka uložený v úložisku platformy (odkaz) — len vlastné úložisko, nie cudzia URL.
+  const ownStorageImg = (u) => typeof u === "string" && u.startsWith(`${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/protocols/`) && /^https?:\/\/[^"'<>\s]+$/.test(u);
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl || "") || ownStorageImg(dataUrl) ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(statusKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {

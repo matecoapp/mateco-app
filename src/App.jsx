@@ -31,13 +31,16 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.859";
+const APP_VERSION = "1.0.860";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.860", items: [
+    { roles: ["sofer", "externy_sofer", "dispecer_pozicovne", "veduci_pozicovne", "technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "admin"], text: "Podpisy v protokole o odovzdaní, vo výdaji dielov a v servisnom protokole sa po uložení ukladajú do úložiska ako obrázok (ako fotky) — platforma sa tak načíta rýchlejšie. Bez signálu ostane podpis v zariadení a odošle sa spolu s protokolom po návrate signálu." },
+  ] },
   { v: "1.0.859", items: [
     { roles: ["technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "admin"], text: "Zmazanie tiketu nechá technikovi aj dnešnú hotovú úlohu (s protokolom) ako históriu — ostane v „Hotové dnes“ aj v Pláne. Nehotové úlohy bez protokolu odpadnú ako doteraz." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Zmazaná zákazka, ktorá vznikla z rezervácie, rezerváciu zruší (štítok „Zrušená“, dôvod „Zákazka bola zmazaná“) a obchodník rezervácie dostane upozornenie „Zrušená rezervácia“. Obnova zákazky z Koša vráti rezerváciu na „Premenená“. Platí aj pre „Vymazať všetky zákazky“; nerealizovaná zákazka rezerváciu nemení." },
@@ -2477,9 +2480,11 @@ function photoFolder(machine, job) {
    Storage helpers — backed by Supabase (tabuľka app_data: key, value, updated_at)
 --------------------------------------------------------- */
 // Podpis v tlačenom/zobrazenom protokole len ako skutočný obrázok (data:image/… alebo
-// https URL) — čokoľvek iné (napr. podvrhnuté HTML cez API) sa nezobrazí.
+// odkaz do vlastného úložiska) — čokoľvek iné (napr. podvrhnuté HTML alebo cudzia URL cez API) sa nezobrazí.
+const OWN_STORAGE_URL = `${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/`;
 function safeImgUrl(u) {
-  return typeof u === "string" && /^(data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|https:\/\/[^"'<>\s]+)$/.test(u);
+  return typeof u === "string" && (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(u)
+    || (u.startsWith(OWN_STORAGE_URL) && /^https?:\/\/[^"'<>\s]+$/.test(u)));
 }
 // Prihlásenie podľa času servera: supabase-js porovnáva platnosť tokenu (expires_at, čas servera)
 // s hodinami zariadenia — pri hodinách o hodinu vpred by obnovoval token donekonečna.
@@ -2920,6 +2925,7 @@ function setRejectedRecordListener(fn) { _rejectedRecordListener = fn; }
 // Odmietnutý protokol, ktorý je v DB už uložený s tými istými podpismi (napr. dohratie fotiek po uzavretí
 // protokolu iným zápisom) — nie je to „neuložený protokol“, nič nehlásiť.
 async function protocolAlreadySaved(item) {
+  item = swapUploadedPhotos(item); // podpisy už nahraté do úložiska (v DB je odkaz)
   const { data: fr, error } = await supabase.from("handoverProtocols").select("data").eq("id", item.id).maybeSingle();
   const phasesDone = (d) => !!d && (!item.handoverDone || !!d.handoverDone) && (!item.returnDone || !!d.returnDone);
   let od = null;
@@ -3003,16 +3009,18 @@ async function flushOutboxOnce() {
       // Medzitým ho uložilo bežné ukladanie (záznam je vo fronte už počas opakovaní) — nič viac.
       const still = await idbGet("outbox", qKey);
       if (!still || JSON.stringify(still.item) !== JSON.stringify(item)) return;
-      let toWrite = item;
+      let sent; // nový podpis do úložiska ešte pred zlúčením a zápisom (base64 by DB v uzavretom protokole už nevymenila)
+      try { sent = await uploadSignatures(table, item, it.base); } catch (e) { console.error(`Nahranie podpisu zlyhalo (${table}) — skúsi sa znova`, e); return; }
+      let toWrite = sent;
       if ("base" in it) {
         const { data: fresh, error } = await supabase.from(table).select("id, data").eq("id", item.id).maybeSingle();
         if (error) return; // stále offline
         if (!fresh && table === "handoverProtocols" && _fieldRole) {
           // Šofér (najmä externý) cudzí protokol neprečíta — „nenájdený“ nemusí znamenať zmazaný.
           // Zápis rozhodne DB: odmietnutie ide cestou „denied“ (protokol ostane v zariadení).
-          toWrite = item;
+          toWrite = sent;
         } else {
-          toWrite = mergeOnFresh(fresh ? { ...fresh.data, id: fresh.id } : null, item, it.base, (fields) => _mergeConflictListener?.(table, item, fields));
+          toWrite = mergeOnFresh(fresh ? { ...fresh.data, id: fresh.id } : null, sent, it.base, (fields) => _mergeConflictListener?.(table, item, fields));
           // Kontrola urobená bez signálu ostáva pripísaná tomu, kto ju urobil (medzitým ju mohol dostať zástupca).
           if (toWrite && table === "assignments" && toWrite.kind === "kontrolaStroja" && toWrite.resolved && !it.base?.resolved && item.technicianId) {
             toWrite = { ...toWrite, technicianId: item.technicianId, technicianIds: item.technicianIds, _dbTechnicianId: fresh?.data?.technicianId || null };
@@ -3419,7 +3427,9 @@ async function uploadToStorageWithRetry(bucket, path, blob, contentType, attempt
   // Súbor už existuje — predchádzajúci pokus sa na serveri podaril, len klient
   // nedostal odpoveď (výpadok siete). Cesty sú jedinečné, takže je to ten istý súbor.
   if (String(error.statusCode) === "409" || /already exists|Duplicate/i.test(error.message || "")) return true;
-  if (attempt < 3) {
+  // Odmietnutie (4xx, napr. deaktivovaný účet) sa opakovaním nezmení — opakuje sa len výpadok siete/servera.
+  const st = +(error.statusCode || error.status || 0);
+  if (attempt < 3 && !(st >= 400 && st < 500)) {
     await sleep(attempt * 800);
     return uploadToStorageWithRetry(bucket, path, blob, contentType, attempt + 1);
   }
@@ -3471,6 +3481,35 @@ function swapUploadedPhotos(item) {
   const out = {};
   for (const [k, v] of Object.entries(item)) out[k] = Array.isArray(v) ? v.map(sw) : sw(v);
   return changed ? out : item;
+}
+// Nový podpis (PNG) ide pred zápisom záznamu do úložiska „protocols“, v zázname ostane odkaz (záznamy ostanú malé).
+// Názov súboru = SHA-256 podpisu: ten istý podpis má vždy ten istý odkaz (opakovanie, fronta) a DB (step126) podľa
+// neho overí, že výmena data → odkaz je ten istý podpis. Staré záznamy s base64 ostávajú, kým sa podpis nezmení.
+const SIGNATURE_FIELDS = {
+  handoverProtocols: ["handoverCustomerSignature", "handoverDriverSignature", "returnCustomerSignature", "returnDriverSignature"],
+  partHandovers: ["customerSignature", "handerSignature"],
+  protocolLogs: ["technicianSignature", "customerSignature"],
+};
+async function uploadSignatures(table, item, base) {
+  let out = item;
+  for (const k of SIGNATURE_FIELDS[table] || []) {
+    const v = out?.[k];
+    if (typeof v !== "string" || !v.startsWith("data:image/png;base64,") || (base?.[k] === v && !_uploadedPhotoUrls.has(v))) continue;
+    if (!_uploadedPhotoUrls.has(v)) {
+      const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const path = `podpisy/${hash}.png`;
+      try { await uploadToStorageWithRetry("protocols", path, await dataUrlToBlob(v), "image/png"); } catch (e) {
+        // Úložisko odmietlo (napr. deaktivovaný účet) — o zázname rozhodne DB ako doteraz (podpis ostane base64); bez signálu / výpadok servera ďalej chyba.
+        const st = e?.status || +e?.statusCode || 0;
+        if (st && st < 500) continue;
+        throw e;
+      }
+      if (_uploadedPhotoUrls.size >= 60) _uploadedPhotoUrls.delete(_uploadedPhotoUrls.keys().next().value);
+      _uploadedPhotoUrls.set(v, supabase.storage.from("protocols").getPublicUrl(path).data.publicUrl);
+    }
+    out = { ...out, [k]: _uploadedPhotoUrls.get(v) };
+  }
+  return out;
 }
 const _deniedMsg = new Map(); // dôvod odmietnutia z databázy (table:id) pre hlásenie používateľovi
 async function writeRecordRowWithRetry(table, rawItem, attempt = 1, maxAttempts = 4) {
@@ -3658,6 +3697,8 @@ function saveRecordRow(table, item, base) {
       _saveStatusListener?.("ok", table);
       return;
     }
+    let sigFail = false; // podpis sa nenahral (slabý signál) — záznam nejde do DB s base64, odošle ho fronta
+    try { item = await uploadSignatures(table, item, base); } catch (e) { sigFail = true; console.error(`Nahranie podpisu zlyhalo (${table})`, e); }
     if (fieldRow && table === "handoverProtocols") await queueIt();
     // Kancelária: zápis nad čerstvým riadkom (len moje zmenené polia) — dvaja ľudia na tom istom
     // zázname tesne po sebe si neprepíšu celý riadok (realtime mohol ešte nedoraziť).
@@ -3665,7 +3706,7 @@ function saveRecordRow(table, item, base) {
     let condOk = false; // zapísané podmienene (nikto iný medzitým riadok nezmenil)
     let busy = false; // 3× niekto iný zapísal skôr — neprepísať, človek to skúsi znova
     let conflictShown = false;
-    if (!fieldRow && base && MERGE_ON_SAVE.has(table)) {
+    if (!sigFail && !fieldRow && base && MERGE_ON_SAVE.has(table)) {
       // Prečítať → zlúčiť → zapísať len ak sa riadok medzitým nezmenil (updated_at); inak znova (audit 23. 10.: súbeh ~200 ms).
       for (let tryN = 0; tryN < 3 && !condOk; tryN++) {
         // bez vstavaného opakovania pri 503 (~7 s) — zlyhanie sa rieši nižšie (zápis / vrátenie)
@@ -3689,7 +3730,7 @@ function saveRecordRow(table, item, base) {
     // Upozornenia k tomuto záznamu, ktoré ešte čakajú vo fronte (offline), odídu s týmto zápisom (fronta sa po ňom zmaže).
     if (fieldRow) { const q = await idbGet("outbox", qKey); if (q?.item?._notify?.length) toSend = { ...toSend, _notify: mergeNotify(q.item._notify, toSend._notify) }; }
     // Kancelária (zmena sa pri neúspechu vráti a formulár otvorí znova): menej opakovaní, nech človek nečaká ~12 s.
-    const ok = condOk ? true : busy ? false : await writeRecordRowWithRetry(table, toSend, 1, fieldRow ? 4 : 2);
+    const ok = sigFail ? false : condOk ? true : busy ? false : await writeRecordRowWithRetry(table, toSend, 1, fieldRow ? 4 : 2);
     if (pendingN && ok === "denied" && !fieldRow) _dropLocalNotifs?.(pendingN); // databáza záznam (a s ním upozornenie) odmietla
     if (ok === "denied" && table === "notifications") { _droppedNotifs++; _droppedListener?.(_droppedNotifs); } // hneď nahlásiť (Stav platformy)
     if (ok === "denied") {
@@ -19338,6 +19379,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
         // Pomer strán zdroja == pomer strán canvasu (oba "aspect"), takže
         // priame roztiahnutie na w×h nič neskresľuje.
         img.onload = () => ctx.drawImage(img, 0, 0, w, h);
+        img.crossOrigin = "anonymous"; // podpis z úložiska (odkaz) — inak by toDataURL pri „Hotovo“ zlyhalo
         img.src = dataUrl;
       }
     }
