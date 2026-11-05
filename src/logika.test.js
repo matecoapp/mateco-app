@@ -196,6 +196,11 @@ describe("rozhodnutia 24. 10.", () => {
     const fs = _test.whatsNewFor("fakturant_servis", "0").flatMap((x) => x.items);
     expect(_test.whatsNewFor("dispecer_servisu", "0").flatMap((x) => x.items).every((t) => fs.includes(t))).toBe(true);
   });
+  it("„Čo je nové“ — fakturant požičovne nedostane položky len pre obchodníka", () => {
+    const fp = _test.whatsNewFor("fakturant_pozicovna", "1.0.861").flatMap((x) => x.items);
+    expect(fp.some((t) => /Upravil/.test(t))).toBe(true);
+    expect(fp.some((t) => /z vašej rezervácie obnoví/.test(t))).toBe(false);
+  });
 });
 
 describe("heslo (pravidlo Supabase)", () => {

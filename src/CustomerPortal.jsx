@@ -442,7 +442,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
         <button
           onClick={handleSubmit}
           disabled={sending || (type === "problem" ? !filled(message) : !endDate || endDate === currentEnd)}
-          style={{ ...BTN, flex: 1, border: "none", ...(type === "extension" && (!endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
+          style={{ ...BTN, flex: 1, border: "none", ...((type === "problem" ? !filled(message) : !endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676", cursor: "default" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
           {sending ? "Odosiela sa…" : "Odoslať"}
         </button>

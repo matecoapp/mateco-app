@@ -31,13 +31,25 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.862";
+const APP_VERSION = "1.0.863";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.863", items: [
+    { roles: ["technik", "veduci_technik_ba"], text: "Servisný protokol a výdaj dielov sa pri slabom signáli nestratia: sú uložené v zariadení ešte pred nahrávaním podpisu, takže obnovenie alebo zavretie platformy počas odosielania im neublíži." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Pomalé nahrávanie podpisu už nezdrží odosielanie ostatných zmien čakajúcich v zariadení." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Uzavretý protokol o odovzdaní (prevzatie alebo vrátenie) znovu otvorí len administrátor. Doplnený chýbajúci podpis musí byť podpis z platformy." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: uložený podpis je na sivom podklade so zámkom a textom „Podpísané — podpis sa nedá zmeniť“; zakázané „Zákazník nebol prítomný“ je sivé. Plátno podpisu drží fokus klávesnice (Tab neodíde na tlačidlá protokolu), po zavretí sa fokus vráti na pole podpisu." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Otvorená karta rezervácie sa obnoví, keď ju kolega premení alebo zruší (správny štítok, bez akcií); keď ju zmaže, karta sa zavrie s hláškou „Táto rezervácia už bola zmazaná.“ — rovnako po kliknutí na upozornenie k zmazanej rezervácii. Zmazanie zrušenej rezervácie obchodníkovi ďalšie upozornenie nepošle." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna", "obchodnik"], text: "Rámcové zmluvy a blacklist: „Upravil“ pri novom zázname už nejde podvrhnúť (zapisuje ho len server)." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Kontrola výdaja dielov: jasnejší text — diely, počty a odberateľa opravíte priamo v okne; podpisy sa nemenia (ak podpísal nesprávny človek, výdaj zmažte a vypíšte nový); poznámka technika na samostatnom riadku. Cena dielu má popis „cena za kus v € bez DPH“ nad riadkami." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Prepravy na tablete: v paneli Osobný odber / vrátenie v depe ťuk na dátum trafí správny riadok." },
+    { roles: ["admin"], text: "Import zákaziek na mobile: hlavička prvého stĺpca náhľadu ostane pri posune viditeľná." },
+    { text: "Dátumy v textoch upozornení a v „Teraz treba“ na karte zákazky sa nezalomia v strede." },
+  ] },
   { v: "1.0.862", items: [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol o odovzdaní: podpisy uloženej fázy sú len na čítanie (oprava ostatných údajov ostáva). Chýbajúci podpis sa dá doplniť." },
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podpisy odovzdaného výdaja dielov a uloženého servisného protokolu sa už nemenia. Pri chybe vo výdaji ho zmažte a vypíšte nový." },
@@ -63,7 +75,7 @@ const CHANGELOG = [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Ukončiť zákazku pri výpadku servera: okno sa otvorí znova s vyplnenými údajmi (koniec, zvoz, depo, šofér), ako pri úprave zákazky." },
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Výdaj dielov na PC: riadok dielu (cena, ×) sa zmestí do okna „Kontrola výdaja dielov“ aj „Nový výdaj dielov“." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "sofer", "externy_sofer", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podpis v protokole o odovzdaní a v dodacom liste (náhľad, tlač, PDF aj tlač z portálu) má pôvodný pomer strán — už nie je stlačený do šírky." },
-    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: ťuknutie na podpis a „Hotovo“ bez kreslenia ponechá pôvodný podpis bezo zmeny." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: ťuknutie na podpis a „Hotovo“ bez kreslenia ponechá pôvodný podpis bezo zmeny (od 1.0.862 sú uložené podpisy len na čítanie)." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Plátno podpisu: Esc ho zavrie (ako Zrušiť), nie celý protokol; „Otočte telefón pre viac miesta“ sa ukáže len na telefóne na výšku." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Zrušená rezervácia ukazuje aj dátum zrušenia („Rezervácia je zrušená 4. 11. 2026 — zákazka bola zmazaná.“); obdobie v súhrne karty sa nezalomí v strede dátumu." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Dlhé okná na PC (Import zákaziek, Nová zákazka): pod tlačidlami dole už nepresvitá obsah okna." },
@@ -708,10 +720,11 @@ const CHANGELOG = [
 ];
 const _verNum = (v) => String(v || "0").split(".").reduce((n, x) => n * 10000 + (Number(x) || 0), 0);
 // Skupiny {v, items} od najnovšej verzie; okno ukáže prvú, ostatné až po „Staršie zmeny“ (rozhodnutie 24. 10.).
+// Fakturant servisu dostáva upozornenia dispečera servisu (alias), fakturant požičovne nie obchodníkove (rezervácie) — len položky so svojou rolou (k55).
 function whatsNewFor(role, seen) {
   return CHANGELOG.filter((c) => _verNum(c.v) > _verNum(seen))
     .sort((a, b) => _verNum(b.v) - _verNum(a.v))
-    .map((c) => ({ v: c.v, items: c.items.filter((i) => !i.roles || role === "admin" || i.roles.includes(role) || i.roles.includes(ROLE_PERM_ALIAS[role])).map((i) => i.text) }))
+    .map((c) => ({ v: c.v, items: c.items.filter((i) => !i.roles || role === "admin" || i.roles.includes(role) || (role === "fakturant_servis" && i.roles.includes("dispecer_servisu"))).map((i) => i.text) }))
     .filter((g) => g.items.length);
 }
 // Oblasť položky „Čo je nové“ podľa rolí, ktorým je určená (na zoskupenie dlhého zoznamu).
@@ -3044,7 +3057,7 @@ async function flushOutboxOnce() {
       const still = await idbGet("outbox", qKey);
       if (!still || JSON.stringify(still.item) !== JSON.stringify(item)) return;
       let sent; // nový podpis do úložiska ešte pred zlúčením a zápisom (base64 by DB v uzavretom protokole už nevymenila)
-      try { sent = await uploadSignatures(table, item, it.base); } catch (e) { console.error(`Nahranie podpisu zlyhalo (${table}) — skúsi sa znova`, e); return; }
+      try { sent = await Promise.race([uploadSignatures(table, item, it.base), sleep(15000).then(() => { throw new Error("Nahrávanie podpisu trvá príliš dlho"); })]); } catch (e) { console.error(`Nahranie podpisu zlyhalo (${table}) — skúsi sa znova`, e); return; }
       let toWrite = sent;
       if ("base" in it) {
         const { data: fresh, error } = await supabase.from(table).select("id, data").eq("id", item.id).maybeSingle();
@@ -3734,8 +3747,11 @@ function saveRecordRow(table, item, base) {
       _saveStatusListener?.("ok", table);
       return;
     }
-    // Protokol do fronty ešte pred nahrávaním podpisu — F5 / zavretie karty počas pomalého nahrávania ho nestratí.
-    if (fieldRow && table === "handoverProtocols") await queueIt();
+    // Podpísaný záznam do fronty ešte pred nahrávaním podpisu — F5 / zavretie karty počas pomalého nahrávania ho nestratí.
+    if (fieldRow && SIGNATURE_FIELDS[table]) {
+      await queueIt();
+      if (table === "protocolLogs") { await idbDelete("outbox", `protocol:${item.id}`); refreshOutboxCount(); } // servisný protokol je už vo fronte ako záznam (id = queueId)
+    }
     let sigFail = false; // podpis sa nenahral (slabý signál) — záznam nejde do DB s base64, odošle ho fronta
     try {
       item = await Promise.race([uploadSignatures(table, item, base), sleep(15000).then(() => { throw new Error("Nahrávanie podpisu trvá príliš dlho"); })]);
@@ -7743,6 +7759,7 @@ function DispatcherApp() {
     if (link.reservationId) {
       const r = reservations.find((x) => x.id === link.reservationId);
       if (r) setReservationCardTarget(r);
+      else if (reservations.length) showNotice("Táto rezervácia už bola zmazaná.");
     }
     if (link.jobId) {
       const j = jobs.find((x) => x.id === link.jobId);
@@ -8214,6 +8231,14 @@ function DispatcherApp() {
     }
     return true;
   }
+  // Otvorená karta rezervácie berie živý záznam — kolega ju mohol medzitým premeniť, zrušiť alebo zmazať (k55).
+  useEffect(() => {
+    if (!reservationCardTarget) return;
+    const live = reservations.find((r) => r.id === reservationCardTarget.id);
+    if (live) { if (live !== reservationCardTarget) setReservationCardTarget(live); return; }
+    setReservationCardTarget(null);
+    showNotice("Táto rezervácia už bola zmazaná.");
+  }, [reservations]); // eslint-disable-line react-hooks/exhaustive-deps
   function deleteReservation(id) {
     if (!can(effectiveUser, "reservation_delete") || officeOffline("reservations")) return false;
     const record = reservations.find((r) => r.id === id);
@@ -8377,7 +8402,8 @@ function DispatcherApp() {
       };
       persistProtocolLogs((protocolLogs) => [...protocolLogs.filter((x) => x.id !== record.id), record]); // opakované spracovanie (pád medzi uložením a zmazaním z fronty) bez duplicity
       console.log("[protokol] úspešne uložený a priradený:", record);
-      idbDelete("outbox", `protocol:${queueId}`);
+      // Terén: z fronty ho zoberie až uloženie záznamu (saveRecordRow) — inak by sa pri pomalom nahrávaní podpisu stratil.
+      if (!_offlineQueueAllowed) idbDelete("outbox", `protocol:${queueId}`);
       refreshOutboxCount();
       // Notifikácia je len doplnok k už uloženému protokolu — chyba tu (napr. v
       // párovaní na otvorenú zákazku) nesmie protokol znova zaradiť do frontu
@@ -12821,8 +12847,9 @@ function DispatcherApp() {
           onConfirm={(reason) => {
             const r = rejectReservationTarget;
             const machine = machineById[r.machineId];
+            const wasCancelled = reservations.find((x) => x.id === r.id)?.status === "cancelled"; // o zrušení už obchodník správu dostal
             if (deleteReservation(r.id) === false) return; // bez signálu — nič sa nezmazalo, obchodníkovi nič nejde
-            pushNotification({
+            if (!wasCancelled) pushNotification({
               kind: "reservation",
               roles: [],
               userName: r.obchodnik || null,
@@ -14482,7 +14509,7 @@ function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRea
                       <span style={{ fontSize: 14, fontWeight: 700 }}>{n.title}</span>
                       {n.link && <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--accent-dark)" }}>zobraziť →</span>}
                     </div>
-                    <div style={{ fontSize: 14, color: "var(--text)", marginBottom: 3, overflowWrap: "anywhere" }}>{spacedDates(n.message)}</div>
+                    <div style={{ fontSize: 14, color: "var(--text)", marginBottom: 3, overflowWrap: "anywhere" }}>{nbDates(spacedDates(n.message))}</div>
                     <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{fmtWhen(n.createdAt)}</div>
                   </div>
                 );
@@ -15299,6 +15326,7 @@ const NAV_ICON_PATHS = {
   miesto: "M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z M12 12.5a2.5 2.5 0 1 0 0-.1",
   okoX: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M4 4l16 16",
   kompas: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18 M15.5 8.5l-2 5-5 2 2-5z",
+  zamok: "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
 };
 function NavIcon({ id, size = 18 }) {
   return (
@@ -17093,6 +17121,7 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
               return (
                 <div
                   key={t.id}
+                  className="self-tr-row"
                   onClick={() => onOpenJob && onOpenJob(t.jobId, t.type)}
                   style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12, cursor: onOpenJob ? "pointer" : "default" }}
                 >
@@ -19373,14 +19402,16 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, pendingE
 function SignaturePad({ value, onChange, label, summary, miss, readOnly }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
+  const locked = readOnly && !!value;
   return (
-    <div>
+    <div className={locked ? "sig-locked" : undefined}>
       <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{label}</label>
       <button
         ref={btnRef}
         type="button"
         data-miss={miss || undefined}
         disabled={readOnly}
+        title={locked ? "Uložený podpis sa nedá zmeniť — opravujú sa len ostatné údaje." : undefined}
         onClick={() => setOpen(true)}
         style={{
           width: "100%", height: 100, border: "1px solid var(--border)", borderRadius: 6, background: "#fff",
@@ -19398,14 +19429,15 @@ function SignaturePad({ value, onChange, label, summary, miss, readOnly }) {
           Vymazať
         </button>
       )}
+      {locked && <div className="fhint sig-locked-note"><NavIcon id="zamok" size={14} /> Podpísané — podpis sa nedá zmeniť</div>}
       {open && (
         <SignatureOverlay
           label={label}
           summary={summary}
           initialValue={value}
           fieldAspect={btnRef.current ? btnRef.current.getBoundingClientRect().width / btnRef.current.getBoundingClientRect().height : 3.2}
-          onCancel={() => setOpen(false)}
-          onDone={(dataUrl) => { onChange(dataUrl); setOpen(false); }}
+          onCancel={() => { setOpen(false); btnRef.current?.focus(); }}
+          onDone={(dataUrl) => { onChange(dataUrl); setOpen(false); btnRef.current?.focus(); }}
         />
       )}
     </div>
@@ -19423,10 +19455,22 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
   const hasDrawnRef = useRef(false);
   const editedRef = useRef(false); // „Hotovo“ bez ťahu/vymazania vráti pôvodný podpis (nie jeho prekreslenú kópiu)
   const aspect = fieldAspect > 0 ? fieldAspect : 3.2;
+  const rootRef = useRef(null);
+  const doneRef = useRef(null);
+  useEffect(() => { doneRef.current?.focus(); }, []);
 
   // Esc = Zrušiť len plátno (capture + stop, inak by sa pýtalo „Zavrieť okno?“ celého protokolu).
+  // Tab ostáva v plátne — inak by sa fokus dostal na tlačidlá protokolu pod ním (Uložiť opravu).
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onCancel(); } };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onCancel(); }
+      if (e.key === "Tab" && rootRef.current) {
+        const f = [...rootRef.current.querySelectorAll("button, canvas")];
+        const i = f.indexOf(document.activeElement);
+        e.preventDefault();
+        f[i < 0 ? 0 : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+      }
+    };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
   }, [onCancel]);
@@ -19532,7 +19576,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
   }
 
   return (
-    <div className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "var(--panel)", color: "var(--text)", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div ref={rootRef} className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "var(--panel)", color: "var(--text)", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
       {/* Hlavička + zhrnutie (čo sa podpisuje) sú nad plochou; canvas si dopočíta zvyšnú výšku sám (wrapRef). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "max(8px, env(safe-area-inset-top)) 12px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <button type="button" onClick={onCancel} style={{ minHeight: 44, padding: "0 6px", border: 0, background: "none", font: "inherit", fontSize: 16, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>Zrušiť</button>
@@ -19551,6 +19595,8 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
         <div style={{ position: "relative", lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
+          tabIndex={0}
+          aria-label="Plocha na podpis"
           style={{ touchAction: "none", background: "#fff", border: "2px solid var(--border)", borderRadius: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}
           onMouseDown={start}
           onMouseMove={move}
@@ -19567,7 +19613,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 16px max(14px, env(safe-area-inset-bottom))", flexShrink: 0 }}>
-        <button type="button" className="btn btn-accent" style={{ width: "100%", minHeight: 56, fontSize: 18, fontWeight: 700, justifyContent: "center" }} onClick={done}>Hotovo</button>
+        <button ref={doneRef} type="button" className="btn btn-accent" style={{ width: "100%", minHeight: 56, fontSize: 18, fontWeight: 700, justifyContent: "center" }} onClick={done}>Hotovo</button>
         <span className="sig-rotate-hint" style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center" }}>Otočte telefón pre viac miesta</span>
       </div>
     </div>
@@ -20095,7 +20141,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
       {isCorrection && (
         <div className="fnote fnote-r">
-          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená. Podpisy sa už nemenia.
+          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená.{(customerSigLocked || driverSigLocked) && " Podpisy sa už nemenia."}
         </div>
       )}
 
@@ -20992,7 +21038,7 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
           ...(machine && !machine.archived && (!machine.objekt || machine.objekt === "Požičovňový stroj") && job.status !== "completed" && !job.notRealized && isRealISODate(job.endDate) && job.endDate >= today
             ? [["revizia", "trackRevisions", "Revízia ZZ"], ["reviziaEZ", "trackRevisionsEZ", "Revízia EZ"], ["uradnaSkuska", "trackUradnaSkuska", "Úradná skúška"]]
               .filter(([f, t]) => machine[t] !== false && isRealISODate(machine[f]) && machine[f] < job.endDate && machine[f] <= addDaysISO(today, 14))
-              .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {fmtDate(machine[f])} — pred koncom prenájmu ({fmtDate(job.endDate)})</>,
+              .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {nbDates(fmtDate(machine[f]))} — pred koncom prenájmu ({nbDates(fmtDate(job.endDate))})</>,
                 actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
             : []),
           ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
@@ -33058,13 +33104,13 @@ function PartHandoverFields({ value, onChange, customers, machines, withPrices }
         </Field>
         <Field label="Číslo objednávky zákazníka (voliteľné)"><input value={v.orderNumber || ""} onChange={(e) => set({ orderNumber: e.target.value })} style={{ width: "100%" }} /></Field>
       </div>
-      <div style={{ fontWeight: 600, fontSize: 13, margin: "6px 0 8px" }}>Diely *</div>
+      <div style={{ fontWeight: 600, fontSize: 13, margin: "6px 0 8px" }}>Diely *{withPrices && <span style={{ fontWeight: 400, color: "var(--text-dim)" }}> · cena za kus v € bez DPH</span>}</div>
       {items.map((it, i) => (
         <div key={i} style={{ display: "grid", gridTemplateColumns: withPrices ? "minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 0.9fr) auto" : "minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 0.7fr) auto", gap: 6, marginBottom: 6 }}>
           <input value={it.name || ""} onChange={(e) => setItem(i, { name: e.target.value })} placeholder="Názov dielu *" aria-label="Názov dielu" />
           <input value={it.pn || ""} onChange={(e) => setItem(i, { pn: e.target.value })} placeholder="PN *" aria-label="PN dielu" />
           <input value={it.qty ?? ""} onChange={(e) => setItem(i, { qty: e.target.value })} placeholder="Ks *" inputMode="decimal" aria-label="Počet kusov" />
-          {withPrices && <input value={it.price ?? ""} onChange={(e) => setItem(i, { price: e.target.value })} placeholder="€/ks bez DPH" inputMode="decimal" aria-label="Cena za kus" />}
+          {withPrices && <input value={it.price ?? ""} onChange={(e) => setItem(i, { price: e.target.value })} placeholder="€/ks" inputMode="decimal" aria-label="Cena za kus" />}
           <button type="button" className="btn btn-ghost" style={{ padding: "4px 8px" }} disabled={items.length === 1} onClick={() => set({ items: items.filter((_, idx) => idx !== i) })} aria-label="Odstrániť diel">✕</button>
         </div>
       ))}
@@ -33253,7 +33299,13 @@ function PartHandoverEditModal({ rec, customers, machines, employees, onClose, o
   }
   return (
     <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide form>
-      {signed && <div className="fnote fnote-y">Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“. Podpisy sa nemenia — pri chybe výdaj zmažte a vypíšte nový.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
+      {signed && (
+        <div className="fnote fnote-y">
+          <div>Výdaj je podpísaný ({rec.handedBy || "—"}). Diely, počty a odberateľa opravíte tu — zapíše sa „Opravené dispečerom“.</div>
+          <div style={{ marginTop: 4 }}>Podpisy sa nemenia. Ak podpísal nesprávny človek, výdaj zmažte a vypíšte nový.</div>
+          {rec.handoverNote && <div style={{ marginTop: 4 }}>Poznámka pri odovzdaní: {rec.handoverNote}</div>}
+        </div>
+      )}
       {!signed && (
         <div className="fgrid2">
           <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
@@ -35318,6 +35370,10 @@ function GlobalStyle() {
       .fnote-r { background: var(--danger-bg); color: var(--danger-text); border-left: 3px solid var(--danger); font-weight: 600; }
       .fhint { font-size: 13px; color: var(--text-dim); margin-top: 4px; font-weight: 400; }
       .fck { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text); line-height: 1.35; margin: 2px 0 14px; cursor: pointer; }
+      .fck:has(> input:disabled) { color: var(--text-dim); background: var(--panel-2); cursor: not-allowed; }
+      .sig-locked { background: var(--panel-2); border-radius: 8px; padding: 8px; }
+      .sig-locked > button:disabled { border-style: dashed !important; }
+      .sig-locked-note { display: flex; align-items: center; gap: 6px; font-weight: 600; }
       .fck small { display: block; font-size: 13px; color: var(--text-dim); margin-top: 2px; }
       .fgrid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; align-items: start; }
       .fstep { display: flex; align-items: center; gap: 10px; margin: 20px 0 10px; flex-wrap: wrap; }
@@ -35790,6 +35846,7 @@ function GlobalStyle() {
           z-index: 1;
           box-shadow: 2px 0 4px rgba(0,0,0,.08);
         }
+        table th:first-child { z-index: 41; background: var(--panel-2); } /* hlavička nad bunkami prvého stĺpca aj nad ostatnými hlavičkami */
 
         /* Väčšie, na dotyk pohodlnejšie tlačidlá */
         .btn { min-height: 48px; padding: 7px 14px; font-size: 15px; }
@@ -35914,6 +35971,7 @@ function GlobalStyle() {
         .app-shell label:has(> input[type=checkbox], > input[type=radio]):not(.gantt-scroll *) { min-height: 44px; }
         /* Čísla strojov / telefóny ako odkaz v texte — väčšia dotyková plocha bez zmeny riadkovania. */
         .app-shell :is(button.tnum, a.tnum, a[href^="tel:"]):not(.btn):not(.gantt-scroll *) { padding-block: 14px !important; margin-block: -14px !important; }
+        .app-shell .self-tr-row { min-height: 44px; } /* osobné odbery: dátum (plocha 44 px) nezasiahne susedný riadok */
         /* Dispečeri: telefóny pod sebou v tabuľke — vyšší riadok a plocha 40+ px, aby sa susedné neprekrývali. */
         .app-shell .disp-tbl td { padding-block: 14px !important; }
         .app-shell .disp-tbl td a.tnum[href^="tel:"] { padding-block: 12px !important; margin-block: -12px !important; }
