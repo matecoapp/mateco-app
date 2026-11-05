@@ -31,13 +31,42 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.863";
+const APP_VERSION = "1.0.865";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.865", items: [
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna", "obchodnik"], text: "Premenovanie alebo zmena IČO zákazníka už nemení záznam blacklistu inej firmy s rovnakým názvom ani rámcovú zmluvu firmy s iným IČO." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis", "technik", "veduci_technik_ba"], text: "Výdaj dielov: „Odovzdal“ zapíše platforma podľa prihláseného. Nový výdaj z kancelárie je bez podpisov (podpisuje sa pri odovzdaní) a zmazaný odovzdaný výdaj vie obnoviť len administrátor z Koša." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Výdaj dielov: „Opravené kanceláriou“ zapisuje len platforma pri zmene dielov alebo odberateľa — samotné doplnenie ceny pri kontrole už nie je oprava." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Okno Kontrola výdaja dielov sa pri zavretí bez zmeny už nepýta „Zavrieť okno?“." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Upraviť servisný protokol: „Uložené ✓“ sa ukáže až po skutočnom uložení; bez spojenia „Neuložené — skúste znova“ a úprava ostane otvorená." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: pri podpísanej fáze ani po potvrdení zákazníkom v portáli sa „Zákazník nebol prítomný“ a podpis nájomcu už nemenia; okno ukáže „Zákazník potvrdil v portáli: meno, dátum“ (alebo nesúhlas)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Poškodený dátum v protokole už nezhodí záložku Protokol (zobrazí sa „—“) a platforma ho uloží len ako dátum." },
+    { roles: ["admin"], text: "Importy (zákazky, zákazníci, poškodenia, externé zákazky, rámcové zmluvy, blacklist, diely) bez spojenia už nehlásia počet naimportovaných — ostane len hláška, že sa neuložili." },
+    { roles: ["admin"], text: "Audit log: polia výdaja dielov a servisného protokolu po slovensky, servisný protokol pomenovaný strojom a zákazníkom, obrázky (aj vnorené) len ako značka." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "technik", "veduci_technik_ba"], text: "Klik na upozornenie k zmazanému tiketu ukáže „Tento tiket už bol zmazaný.“" },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: bez doplneného podpisu sa meno nezapíše a pole nie je predvyplnené; po zrušení „Zákazník nebol prítomný“ poznámka hore povie, že podpis nájomcu je povinný (bez neho sa zrušenie neuloží)." },
+    { roles: ["admin"], text: "Audit log: zmazaná rezervácia so zákazníkom, strojom a termínom." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: meno pod uloženým podpisom má zámok a text „Podpísané — meno sa nedá zmeniť“, bez hviezdičky; v tmavom režime je odlíšené od upraviteľného poľa. Zamknutý podpis je zarovnaný so susedným." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Kontrola výdaja dielov: meno odovzdávajúceho je v páse len raz; pri neprítomnom odberateľovi pás nepíše „podpísaný“. Oprava sa zapíše ako „Opravené kanceláriou“ (aj na dodacom liste)." },
+    { text: "„Čo je nové“: aj najnovšia verzia má nadpis s číslom verzie; „Rozumiem“ je na mobile vždy viditeľné aj po rozbalení starších zmien." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Bez signálu sa fotky do protokolu pridajú hneď (platforma neskúša nahrávať opakovane) — protokol uložíte bez čakania." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Pri pomalom spojení pás píše „odosiela sa… (pomalé spojenie)“ namiesto „keď sa platforma pripojí“; pomaly sa nahrávajúci podpis sa neposiela viackrát naraz." },
+    { roles: ["technik", "veduci_technik_ba"], text: "Hláška pri deaktivácii účtu spomína aj rozpísaný výdaj dielov." },
+  ] },
+  { v: "1.0.864", items: [
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: meno pod uloženým podpisom (za nájomcu aj za prenajímateľa) je len na čítanie — zmeniť sa dá len obnovou zálohy. Pri chýbajúcom podpise sa meno zapíše spolu s doplneným podpisom." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol: chýbajúci podpis pri oprave doplniť môžete, ale nemusíte — „Uložiť opravu“ ho už nevyžaduje. Ak zrušíte „Zákazník nebol prítomný“, podpis nájomcu treba." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Kontrola výdaja dielov: kto prevzal (alebo že odberateľ nebol prítomný) a kto odovzdal sa len zobrazí — po odovzdaní sa nemení spolu s podpismi. Diely, počty a firmu odberateľa opravíte ako doteraz." },
+    { roles: ["admin"], text: "Audit log zaznamená aj zmeny podpisov vo výdaji dielov a v servisných protokoloch („podpis zákazníka/technika: zmenený“, bez obrázka); pribudol filter Servisné protokoly." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "admin"], text: "Premenovanie zákazníka (aj zmena IČO) už nemení „Upravil“ v rámcových zmluvách ani v blackliste — „Upravil“ ukazuje len toho, kto záznam priamo upravil." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "admin"], text: "Zrušená rezervácia: obnova zmazanej zákazky z nej prejde len s pôvodným strojom a termínom; zmazanú zrušenú rezerváciu nejde vložiť znova — vráti ju len administrátor z Koša." },
+    { roles: ["admin"], text: "Audit log zaznamenáva aj zmazanie rezervácie." },
+  ] },
   { v: "1.0.863", items: [
     { roles: ["technik", "veduci_technik_ba"], text: "Servisný protokol a výdaj dielov sa pri slabom signáli nestratia: sú uložené v zariadení ešte pred nahrávaním podpisu, takže obnovenie alebo zavretie platformy počas odosielania im neublíži." },
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Pomalé nahrávanie podpisu už nezdrží odosielanie ostatných zmien čakajúcich v zariadení." },
@@ -1703,11 +1732,23 @@ ${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-ite
       return;
     }
     window.parent.postMessage({ type: 'mateco_protocol_edited', id: ${JSON.stringify(p.id)}, patch: patch }, '*');
-    msg.style.color = '#2e7d32';
-    msg.textContent = 'Uložené ✓';
-    lockFields();
-    setTimeout(function() { msg.textContent = ''; }, 2500);
+    msg.style.color = '';
+    msg.textContent = 'Ukladám…';
   }
+  // „Uložené“ až podľa výsledku z platformy — bez spojenia ostane úprava otvorená.
+  window.addEventListener('message', function(e) {
+    if (e.source !== window.parent || !e.data || e.data.type !== 'mateco_protocol_edit_result') return;
+    var msg = document.getElementById('saveMsg');
+    if (e.data.ok) {
+      msg.style.color = '#2e7d32';
+      msg.textContent = 'Uložené ✓';
+      lockFields();
+      setTimeout(function() { msg.textContent = ''; }, 2500);
+    } else {
+      msg.style.color = '#c62828';
+      msg.textContent = 'Neuložené — skúste znova';
+    }
+  });
 </script>
 </body></html>`;
   if (_printProtocolOpenListener) {
@@ -2156,7 +2197,11 @@ function ImportRowNotes({ skipped = [], notes = [] }) {
 // counts: vlastný text počtu namiesto „N naimportovaných záznamov“ (napr. „3 pridané, 2 aktualizované“).
 function importDoneNotice(what, n, skipped = [], notes = [], counts) {
   const sec = (title, xs) => xs.length ? `\n\n${title} (${xs.length}):\n${xs.slice(0, 20).join("\n")}${xs.length > 20 ? `\n… a ďalších ${xs.length - 20}` : ""}` : "";
+  // Počet až po potvrdení zápisu servera — pri výpadku ostane len hláška „neuložila sa“ (k57 S5).
+  const started = Date.now();
+  setTimeout(async () => { await waitForSaves(); if (_officeSaveFailAt >= started || _lastOfflineBlockAt >= started) return;
   showNotice(`Import ${what}: ${counts || plural(n, "naimportovaný záznam", "naimportované záznamy", "naimportovaných záznamov")}, ${plural(skipped.length, "preskočený riadok", "preskočené riadky", "preskočených riadkov")}.${sec("Preskočené", skipped)}${sec("Upozornenia", notes)}`, skipped.length + notes.length > 0);
+  }, 100);
 }
 // Pre porovnanie období v štatistikách — vráti rovnako dlhé obdobie hneď pred
 // zvoleným (napr. 1.–15. jún → predchádzajúce je 17.–31. máj).
@@ -2197,7 +2242,7 @@ function weekRangeFor(iso) {
   return { weekStart, weekEnd };
 }
 const fmtDate = (iso) => {
-  if (!iso) return "—";
+  if (!iso || typeof iso !== "string") return "—"; // poškodený záznam (napr. dátum ako číslo) nezhodí obrazovku
   // Časová pečiatka (napr. createdAt v UTC) — deň podľa slovenského času, nie UTC
   // (protokol o 00:30 inak padol do predchádzajúceho dňa).
   if (iso.length > 10 && iso.includes("T")) { const t = new Date(iso); if (!isNaN(t)) iso = _baDay.format(t); } // slovenský deň aj na zariadení v inom pásme
@@ -2208,13 +2253,14 @@ const fmtDate = (iso) => {
 const DATE_RE = /(\d{1,2}\. \d{1,2}\. \d{4})/;
 const nbDates = (t) => (typeof t === "string" && DATE_RE.test(t) ? t.split(DATE_RE).map((x, i) => (i % 2 ? <span key={i} style={{ whiteSpace: "nowrap" }}>{x}</span> : x)) : t);
 // CSV pre Excel ostáva „02.11.2026“ (strojový tvar, Excel ho číta ako dátum).
-const fmtDateCsv = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "");
+const fmtDateCsv = (iso) => (typeof iso === "string" && iso ? iso.slice(0, 10).split("-").reverse().join(".") : "");
 // Dátum a čas „27. 10. 2026 14:05“ (čas firmy) — zvonček, Audit log, Stav platformy, zálohy (k37).
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 // Dátumy „02.11.2026“ v uloženom texte upozornenia → „2. 11. 2026“ (jeden formát v zvončeku).
 const spacedDates = (t) => String(t || "").replace(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g, (_, d, m, y) => `${Number(d)}. ${Number(m)}. ${y}`);
 // Obdobie bez dvojitého roku (v1.0.805): „13.–19. 10.“, „28. 9.–3. 10.“; rok iný než aktuálny sa dopíše, rôzne roky = plný tvar.
 const fmtRange = (a, b) => {
+  if (typeof a !== "string" || typeof b !== "string") return "—";
   const [ya, ma, da] = a.slice(0, 10).split("-").map(Number);
   const [yb, mb, db] = b.slice(0, 10).split("-").map(Number);
   if (ya !== yb) return `${fmtDate(a)} – ${fmtDate(b)}`;
@@ -3476,7 +3522,8 @@ async function uploadToStorageWithRetry(bucket, path, blob, contentType, attempt
   if (String(error.statusCode) === "409" || /already exists|Duplicate/i.test(error.message || "")) return true;
   // Odmietnutie (4xx, napr. deaktivovaný účet) sa opakovaním nezmení — opakuje sa len výpadok siete/servera.
   const st = +(error.statusCode || error.status || 0);
-  if (attempt < 3 && !(st >= 400 && st < 500)) {
+  // Bez signálu opakovanie nepomôže — fotka/podpis ide hneď do fronty (šofér nečaká ~2,4 s na fotku).
+  if (attempt < 3 && !(st >= 400 && st < 500) && navigator.onLine !== false) {
     await sleep(attempt * 800);
     return uploadToStorageWithRetry(bucket, path, blob, contentType, attempt + 1);
   }
@@ -3536,6 +3583,7 @@ const SIGNATURE_FIELDS = {
   partHandovers: ["customerSignature", "handerSignature"],
   protocolLogs: ["technicianSignature", "customerSignature"],
 };
+const _sigUploads = new Map(); // cesta podpisu → prebiehajúce nahrávanie: pri visiacom spojení ďalší beh fronty čaká na to isté, nezačne nové
 async function uploadSignatures(table, item, base) {
   let out = item;
   for (const k of SIGNATURE_FIELDS[table] || []) {
@@ -3545,7 +3593,9 @@ async function uploadSignatures(table, item, base) {
     if (!_uploadedPhotoUrls.has(v)) {
       const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))].map((b) => b.toString(16).padStart(2, "0")).join("");
       const path = `podpisy/${hash}.png`;
-      try { await uploadToStorageWithRetry("protocols", path, await dataUrlToBlob(v), "image/png"); } catch (e) {
+      let up = _sigUploads.get(path);
+      if (!up) { up = dataUrlToBlob(v).then((blob) => uploadToStorageWithRetry("protocols", path, blob, "image/png")).finally(() => _sigUploads.delete(path)); _sigUploads.set(path, up); }
+      try { await up; } catch (e) {
         // Úložisko odmietlo (napr. deaktivovaný účet) — o zázname rozhodne DB ako doteraz (podpis ostane base64); bez signálu / výpadok servera ďalej chyba.
         const st = e?.status || +e?.statusCode || 0;
         if (st && st < 500) continue;
@@ -3708,7 +3758,7 @@ function dropRecentQueuedNotifications() {
 }
 const MERGE_ON_SAVE = new Set(["jobs", "customers", "employees", "damages", "machines", "reservations", "vehicles", "partHandovers", "handoverProtocols"]); // protokol: kancelária zo staršej kópie neprepíše práve dokončenú fázu šoféra
 // Presun do Koša: záznam sa zmaže až po potvrdenom zápise do Koša (krátky výpadok ho inak zmazal bez Koša).
-const _trashSaved = new Map(); // id položky Koša → potvrdenie zápisu (true = uložená na serveri)
+const _trashSaved = new Map(); // id položky Koša (aj upravovaného servisného protokolu) → potvrdenie zápisu (true = uložená na serveri)
 const _trashBeforeDelete = new Map(); // "tabuľka:id" mazaného záznamu → Promise<boolean> zápisu do Koša
 function saveRecordRow(table, item, base) {
   const pendingN = item?.id ? _pendingNotify.get(item.id) : null;
@@ -3811,7 +3861,7 @@ function saveRecordRow(table, item, base) {
       _permissionDeniedListener?.(table, item.id);
     } else if (ok) {
       delete _retryActions[table];
-      if (table === "trash") _trashSaved.get(item.id)?.(true);
+      if (table === "trash" || table === "protocolLogs") _trashSaved.get(item.id)?.(true);
       if (!fieldRow && table !== "record_locks") clearOutageNotices();
       if (_busyKey === qKey) { _busyKey = null; document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text?.startsWith("Kolega práve ukladá")) b.remove(); }); } // ten istý záznam uložený na 2. pokus — stará hláška preč
       SAVED_ROW_PREFIX[table]?.forEach((pre) => markRowSaved(pre + item.id)); // potvrdené serverom → riadok v zozname krátko zazelená
@@ -3851,7 +3901,7 @@ function saveRecordRow(table, item, base) {
     _saveStatusListener?.(ok ? "ok" : "error", table, ok === true ? item.id : undefined);
   });
   _recordSaveQueues[qKey] = next;
-  if (table === "trash" && _trashSaved.has(item.id)) next.finally(() => { _trashSaved.get(item.id)?.(false); _trashSaved.delete(item.id); });
+  if ((table === "trash" || table === "protocolLogs") && _trashSaved.has(item.id)) next.finally(() => { _trashSaved.get(item.id)?.(false); _trashSaved.delete(item.id); });
   const drop = () => { if (_recordSaveQueues[qKey] === next) delete _recordSaveQueues[qKey]; };
   next.then(drop, drop); // pamäť pri celodennom behu
   return table === "record_locks" ? next : trackSave(next); // zámok „práve edituje“ nie je zmena používateľa
@@ -6274,7 +6324,14 @@ function DispatcherApp() {
           setTimeout(() => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById)), 50);
         }
       } else if (event.data.type === "mateco_protocol_edited") {
-        updateProtocolLog(event.data.id, event.data.patch);
+        // „Uložené“ v protokole až po potvrdení servera (výpadok servera sa zistí až pri zápise).
+        const id = event.data.id;
+        const reply = (ok) => { _trashSaved.delete(id); event.source?.postMessage({ type: "mateco_protocol_edit_result", id, ok }, event.origin); };
+        const cur = protocolLogs.find((p) => p.id === id);
+        const saved = cur && Object.keys(protocolEditPatch(cur, event.data.patch)).length ? new Promise((res) => _trashSaved.set(id, res)) : null;
+        if (updateProtocolLog(id, event.data.patch) === false) reply(false);
+        else if (saved) saved.then(reply);
+        else reply(true);
       } else if (event.data.type === "mateco_protocol_assign") {
         assignProtocolToDamage(event.data.id, event.data.damageId);
       } else if (event.data.type === "mateco_protocol_pa_resend") {
@@ -6401,7 +6458,7 @@ function DispatcherApp() {
   if (liveUser && !liveBlocked) usableUserRef.current = liveUser;
   const currentUser = draftHold ? usableUserRef.current : liveUser;
   useEffect(() => {
-    const text = "Váš účet bol deaktivovaný — rozpísaný protokol ešte uložte: ostane v tomto zariadení a odošle sa po obnovení prístupu.\n\nAk ide o omyl, obráťte sa na administrátora.";
+    const text = "Váš účet bol deaktivovaný — rozpísaný protokol alebo výdaj dielov ešte uložte: ostane v tomto zariadení a odošle sa po obnovení prístupu.\n\nAk ide o omyl, obráťte sa na administrátora.";
     if (draftHold) showNotice(text, true);
     else document.querySelectorAll("#mateco-notices .mateco-notice").forEach((b) => { if (b.dataset.text === text) b.remove(); });
   }, [draftHold]);
@@ -7405,7 +7462,7 @@ function DispatcherApp() {
     reopenFormRef.current = { table: "framoveZmluvy", id, at: Date.now(), open: reopen };
   }
   function importFramoveZmluvy(rows) {
-    persistFramoveZmluvy((framoveZmluvy) => [...framoveZmluvy, ...rows.map((r) => ({ id: uid(), ...r }))]);
+    return persistFramoveZmluvy((framoveZmluvy) => [...framoveZmluvy, ...rows.map((r) => ({ id: uid(), ...r }))]);
   }
   // Zmenený názov bez výberu zákazníka zo zoznamu — stará väzba na zákazníka by ukazovala na inú firmu.
   // values = len polia zmenené v okne (súbežná úprava kolegu v inom poli ostane).
@@ -7432,7 +7489,7 @@ function DispatcherApp() {
     reopenFormRef.current = { table: "blacklist", id, at: Date.now(), open: reopen };
   }
   function importBlacklist(rows) {
-    persistBlacklist((blacklist) => [...blacklist, ...rows.map((r) => ({ id: uid(), ...r }))]);
+    return persistBlacklist((blacklist) => [...blacklist, ...rows.map((r) => ({ id: uid(), ...r }))]);
   }
   function updateBlacklistEntry(id, values, reopen) {
     if (recordGone(blacklist, id)) return;
@@ -7496,7 +7553,7 @@ function DispatcherApp() {
       const c = ico && !customers.some((x) => icoKey(x.ico) === ico) && customers.find((x) => x.firma.toLowerCase() === firma);
       if (c && icoKey(c.ico)) icoDiff.add(`${c.firma} (v platforme ${c.ico}, v súbore ${ico})`);
     });
-    persistCustomers((customers) => {
+    if (persistCustomers((customers) => {
     let next = [...customers];
     rows.forEach((row) => {
       const firma = (row.firma || "").trim();
@@ -7514,7 +7571,7 @@ function DispatcherApp() {
       }
     });
     return next;
-    });
+    }) === false) return false;
     // Počty pre hlášku — rovnaké párovanie ako vyššie (IČO, inak presný názov), aj v rámci súboru.
     const known = customers.map((c) => [icoKey(c.ico), (c.firma || "").toLowerCase()]);
     let added = 0;
@@ -7570,11 +7627,10 @@ function DispatcherApp() {
       if (!(await askConfirm({ title: "Premenovať zákazníka?", message: `„${oldName}" sa premenuje na „${newName}" aj na ${plural(hits, "zákazke", "zákazkách", "zákazkách")}, v rezerváciách, blackliste a rámcových zmluvách.`, confirmLabel: "Premenovať" }))) return;
     }
     persistCustomers((customers) => customers.map((c) => (c.id === id ? { ...c, ...data, updatedAt: new Date(serverNowMs()).toISOString() } : c)));
-    // Názov a IČO v blackliste zosúladí DB trigger na customers (obchodník/fakturant do blacklistu písať nesmú).
+    // Názov a IČO v blackliste a názov v rámcových zmluvách zosúladí DB trigger na customers — „Upravil“ sa tak nezmení (rozhodnutie 5. 11.).
     if (renamed) {
       persistJobs((list) => list.map((j) => (mine(j) ? { ...j, customer: newName } : j)));
       persistReservations((list) => list.map((r) => (low(r.customer) === low(oldName) ? { ...r, customer: newName } : r)));
-      persistFramoveZmluvy((list) => list.map((z) => (low(z.najomca) === low(oldName) ? { ...z, najomca: newName } : z)));
     }
     showToast("Zákazník bol upravený.");
   }
@@ -7736,6 +7792,7 @@ function DispatcherApp() {
       // Z upozornenia rovno detail tiketu; zvýraznenie v zozname len keď detail netreba (karta stroja) alebo tiket už nie je.
       const dmg = link.openDetail !== false && damages.find((x) => x.id === link.damageId);
       if (dmg) setServiceEventDetail(dmg);
+      else if (damages.length && !damages.some((x) => x.id === link.damageId)) showNotice("Tento tiket už bol zmazaný.");
       else {
         setHighlightDamageId(link.damageId);
         setHighlightLocation({ module: link.module, view: link.view });
@@ -8254,7 +8311,7 @@ function DispatcherApp() {
   // "mateco_protocol_edited") — dispečer opravuje preklep/doplní pole po tom, čo bol
   // protokol už odoslaný technikom.
   function updateProtocolLog(id, rawPatch) {
-    persistProtocolLogs(
+    return persistProtocolLogs(
       (protocolLogs) => protocolLogs.map((p) => {
         if (p.id !== id) return p;
         const patch = protocolEditPatch(p, rawPatch);
@@ -9027,7 +9084,7 @@ function DispatcherApp() {
   // len pridá záznamy do damages, prípadne aj priradenia do assignments, ak
   // import obsahoval aj priradeného technika.
   async function importDamageRecordsBulk(records, newAssignments, warnings) {
-    if (records.length > 0) persistDamages((damages) => [...damages, ...records]);
+    if (records.length > 0 && persistDamages((damages) => [...damages, ...records]) === false) return;
     importDoneNotice(records[0]?.type === "externa" ? "externých zákaziek" : "poškodení", records.length, warnings?.skipped, warnings?.notes);
     if (!newAssignments || newAssignments.length === 0) return;
     // DB prijme pridelenie až keď tiket existuje — najprv počkať na zápis tiketov.
@@ -11670,7 +11727,7 @@ function DispatcherApp() {
           {outboxShown > 0 && <>
             {!navigator.onLine && <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.6a10 10 0 0 1 14 0" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="m3 3 18 18" /></svg>}
             <span>{!navigator.onLine && "Bez signálu · "}{changesText(Math.max(1, outboxShown))} na odoslanie</span>
-            <span className="sync-more">— odošle sa samo, keď sa platforma pripojí. Netreba nič robiť, len platformu nezmazať.</span>
+            <span className="sync-more">{navigator.onLine ? "— odosiela sa… (pomalé spojenie)" : "— odošle sa samo, keď sa platforma pripojí"}. Netreba nič robiť, len platformu nezmazať.</span>
           </>}
           {outboxBlocked > 0 && <span style={{ fontSize: 13 }}>Záznam sa neuložil — databáza ho odmietla (prácu medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Záznam ostáva v tomto zariadení; zavolajte kanceláriu.</span>}
         </div>
@@ -12583,6 +12640,7 @@ function DispatcherApp() {
       )}
       {!tourOpen && whatsNew && whatsNew.length > 0 && (
         <Modal title="Čo je nové v platforme" onClose={() => { setWhatsNew(null); setTimeout(() => document.getElementById("obsah")?.focus({ preventScroll: true }), 0); }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", margin: "0 0 4px" }}>Verzia {whatsNew[0].v}</div>
           {whatsNew[0].items.length > 8 ? (
             // Dlhý zoznam (admin vidí všetko) — po oblastiach a zbalené, nech je „Rozumiem“ hneď na očiach.
             <div style={{ marginBottom: 14 }}>
@@ -12604,7 +12662,7 @@ function DispatcherApp() {
               <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>{g.items.map((t) => <li key={t} style={{ marginBottom: 6 }}>{t}</li>)}</ul>
             </div>
           )) : <button type="button" className="btn btn-ghost" style={{ marginBottom: 12 }} aria-expanded="false" onClick={() => { setWhatsNewOlder(true); setTimeout(() => document.getElementById("whatsnew-older")?.focus(), 0); }}>Staršie zmeny ({plural(whatsNew.length - 1, "verzia", "verzie", "verzií")})</button>)}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}><button className="btn btn-accent" onClick={() => setWhatsNew(null)}>Rozumiem</button></div>
+          <FormFoot cancel={false}><button className="btn btn-accent" onClick={() => setWhatsNew(null)}>Rozumiem</button></FormFoot>
         </Modal>
       )}
       {showDriverReport && (
@@ -12943,7 +13001,7 @@ function DispatcherApp() {
             // Dispečer zákazky ako v addJob (kto importuje, ak je dispečer); inak dispečer depa zákazky.
             const ownDispatcher = myEmployee && DISPATCHER_ROLES.includes(myEmployee.role) && !myEmployee.archived ? myEmployee.id : null;
             const rows = importedRows.map((j) => ({ dispatcherId: ownDispatcher || dsp.owner(j.fromDepo)?.id || null, ...j }));
-            persistJobs((jobs) => [...jobs, ...rows]);
+            if (persistJobs((jobs) => [...jobs, ...rows]) === false) return; // bez spojenia sa neuložilo — žiadna hláška o úspechu, okno ostane
             // Stroj z čakajúcej rezervácie obchodníka — dozvie sa to ako pri ručnom založení (kolo 32).
             rows.forEach((j) => reservations.filter((x) => x.machineId === j.machineId && x.status === "pending" && x.obchodnik
               && rangesOverlap(jobFrom(j), jobTo(j), x.expectedStart, x.expectedEnd || x.expectedStart)).forEach((x) => {
@@ -12998,7 +13056,7 @@ function DispatcherApp() {
           customers={customers}
           onClose={() => setShowImportCustomers(false)}
           onImport={(rows, skipped) => {
-            importCustomers(rows, skipped);
+            if (importCustomers(rows, skipped) === false) return;
             setShowImportCustomers(false);
           }}
         />
@@ -14866,7 +14924,7 @@ function RecordsTableView({ title, importWhat, fields, items, onAdd, onUpdate, o
         />
       )}
       {showImport && (
-        <GenericCsvImportModal title={`Import ${importWhat} z CSV`} fields={fields} onClose={() => setShowImport(false)} onImport={(rows, skipped, notes) => { onImport(rows); setShowImport(false); importDoneNotice(importWhat, rows.length, skipped, notes); }} />
+        <GenericCsvImportModal title={`Import ${importWhat} z CSV`} fields={fields} onClose={() => setShowImport(false)} onImport={(rows, skipped, notes) => { if (onImport(rows) === false) return; setShowImport(false); importDoneNotice(importWhat, rows.length, skipped, notes); }} />
       )}
     </div>
   );
@@ -19781,7 +19839,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const noteKey = isReturnPhase ? "returnNote" : "handoverNote";
   const isCorrection = existing && ((isReturnPhase && existing.returnDone) || (!isReturnPhase && existing.handoverDone));
   // Podpis uloženej fázy je len na čítanie (rozhodnutie 4. 11.) — chýbajúci sa pri oprave dá doplniť.
-  const customerSigLocked = !!(isCorrection && existing[isReturnPhase ? "returnCustomerSignature" : "handoverCustomerSignature"]);
+  // Potvrdenie/nesúhlas zákazníka v portáli je jeho podpis — „nebol prítomný“ ani podpis nájomcu sa potom nemenia (mení len admin).
+  const customerConfirm = existing?.[isReturnPhase ? "returnCustomerConfirm" : "handoverCustomerConfirm"] || null;
+  const customerSigLocked = !!(isCorrection && existing[isReturnPhase ? "returnCustomerSignature" : "handoverCustomerSignature"]) || !!customerConfirm;
   const driverSigLocked = !!(isCorrection && existing[isReturnPhase ? "returnDriverSignature" : "handoverDriverSignature"]);
 
   const [customerSig, setCustomerSig] = useState(isReturnPhase ? existing?.returnCustomerSignature || null : existing?.handoverCustomerSignature || null);
@@ -19791,13 +19851,13 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // než je uvedený na zákazke, tak sa dá kedykoľvek prepísať.
   const defaultCustomerName = job?.customerContactName || job?.customer || "";
   const [customerName, setCustomerName] = useState(
-    (isReturnPhase ? existing?.returnCustomerName : existing?.handoverCustomerName) || defaultCustomerName
+    (isReturnPhase ? existing?.returnCustomerName : existing?.handoverCustomerName) || (isCorrection ? "" : defaultCustomerName)
   );
   // Meno "za prenajímateľa" — ťahá sa z prihláseného používateľa (ten, kto
   // protokol reálne vypĺňa na mieste), dá sa tiež prepísať (napr. keď stroj
   // odovzdáva/preberá iný šofér/checker, než je práve prihlásený).
   const [driverName, setDriverName] = useState(
-    (isReturnPhase ? existing?.returnDriverName : existing?.handoverDriverName) || user?.name || ""
+    (isReturnPhase ? existing?.returnDriverName : existing?.handoverDriverName) || (isCorrection ? "" : user?.name || "")
   );
   // Fotky stavu stroja pri zvoze od zákazníka (len fáza "vrátenie") — porovnanie
   // s fotkami checkera z vývozu (kontrola stroja pred vývozom).
@@ -19878,8 +19938,10 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const noCheckerInspection = !isReturnPhase && !job?.selfPickup && !(checkerInspection?.resolved && !checkerInspection?.skipped);
   const photosRequired = isReturnPhase || customerAbsent || noCheckerInspection;
   const photosNeeded = !isCorrection && photosRequired ? Math.max(0, MIN_MACHINE_PHOTOS - returnPhotos.length) : 0;
-  const customerOk = (customerAbsent ? returnPhotos.length > 0 : !!(customerSig && customerName.trim())) && photosNeeded === 0;
-  const canSave = uploadingPhotos === 0 && checklistComplete && customerOk && driverSig && driverName.trim();
+  // Oprava: chýbajúci podpis doplniť môže, nemusí (rozhodnutie 5. 11.); zrušenie „nebol prítomný“ ale podpis nájomcu pýta.
+  const customerSigOptional = isCorrection && !(isReturnPhase ? existing.returnCustomerAbsent : existing.handoverCustomerAbsent);
+  const customerOk = (customerAbsent ? returnPhotos.length > 0 : customerSigLocked || (customerSig ? !!customerName.trim() : customerSigOptional)) && photosNeeded === 0;
+  const canSave = uploadingPhotos === 0 && checklistComplete && customerOk && (driverSigLocked || (driverSig ? !!driverName.trim() : isCorrection));
 
   function handleSave() {
     const patch = { protocolNumber: protocolNumber.trim(), checklist };
@@ -19889,9 +19951,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.returnCustomerAbsent = customerAbsent;
       patch.returnAbsentAt = absentAt;
       patch.returnCustomerSignature = customerAbsent ? null : customerSig;
-      patch.returnCustomerName = customerAbsent ? "" : customerName.trim();
+      if (!customerSigLocked && (customerSig || customerAbsent || !isCorrection)) patch.returnCustomerName = customerAbsent ? "" : customerName.trim(); // pri oprave meno len s podpisom
       patch.returnDriverSignature = driverSig;
-      patch.returnDriverName = driverName.trim();
+      if (!driverSigLocked && (driverSig || !isCorrection)) patch.returnDriverName = driverName.trim();
       patch.returnDone = true;
       if (!existing?.returnDone) patch.returnDoneAt = new Date(serverNowMs()).toISOString(); // poškodenie počas prenájmu vs. po vrátení v ten istý deň (ERP)
       patch.returnDate = existing?.returnDate || todayISO();
@@ -19902,12 +19964,12 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.handoverCustomerAbsent = customerAbsent;
       patch.handoverAbsentAt = absentAt;
       patch.handoverCustomerSignature = customerAbsent ? null : customerSig;
-      patch.handoverCustomerName = customerAbsent ? "" : customerName.trim();
+      if (!customerSigLocked && (customerSig || customerAbsent || !isCorrection)) patch.handoverCustomerName = customerAbsent ? "" : customerName.trim();
       if (returnPhotos.length || existing?.handoverPhotos?.length) patch.handoverPhotos = returnPhotos;
       // Fotky šoféra nahrádzajú kontrolu checkera — vedieť to aj neskôr (DB pravidlo fotiek).
       if (!existing?.handoverDone && noCheckerInspection) patch.handoverWithoutInspection = true;
       patch.handoverDriverSignature = driverSig;
-      patch.handoverDriverName = driverName.trim();
+      if (!driverSigLocked && (driverSig || !isCorrection)) patch.handoverDriverName = driverName.trim();
       patch.handoverDone = true;
       patch.handoverDate = existing?.handoverDate || todayISO();
     }
@@ -20141,7 +20203,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
       {isCorrection && (
         <div className="fnote fnote-r">
-          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená.{(customerSigLocked || driverSigLocked) && " Podpisy sa už nemenia."}
+          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená.{(customerSigLocked || driverSigLocked) && " Uložené podpisy a mená pod nimi sa už nemenia."}{(customerSigLocked || customerAbsent || customerSigOptional) && (!customerSigLocked && !customerAbsent || !driverSigLocked) && " Chýbajúci podpis môžete doplniť (nie je povinný)."}{!customerSigLocked && !customerAbsent && !customerSigOptional && " Po zrušení „nebol prítomný“ treba podpis nájomcu."}
         </div>
       )}
 
@@ -20232,29 +20294,40 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         <span>Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)</span>
       </label>
       )}
+      {customerConfirm && (
+        <div style={{ fontSize: 13, marginBottom: 10, color: customerConfirm.status === "disputed" ? "var(--danger)" : "var(--text)" }}>
+          {customerConfirm.status === "disputed" ? "⚠ Zákazník v portáli nesúhlasí" : "✓ Zákazník potvrdil v portáli"}: {customerConfirm.name || "—"}, {fmtDateTime(customerConfirm.at)}
+        </div>
+      )}
       <div className="fgrid2">
         {customerAbsent ? (
           <div style={{ fontSize: 14, color: "var(--text-dim)", alignSelf: "center", marginBottom: 14 }}>Za nájomcu: zákazník nebol prítomný</div>
         ) : (
-        <Field label="Za nájomcu — meno *">
+        <div><Field label={customerSigLocked ? "Za nájomcu — meno" : "Za nájomcu — meno *"}>
           <input
-            value={customerName}
+            value={customerSigLocked ? existing[isReturnPhase ? "returnCustomerName" : "handoverCustomerName"] || "" : customerName}
             onChange={(e) => setCustomerName(e.target.value)}
+            readOnly={customerSigLocked}
+            className={customerSigLocked ? "name-locked" : undefined}
+            title={customerSigLocked ? "Meno pod uloženým podpisom sa nedá zmeniť." : undefined}
             placeholder="napr. Ján Novák"
-            data-miss={!customerName.trim() || undefined}
+            data-miss={(!customerSigLocked && !customerName.trim() && (customerSig || !customerSigOptional)) || undefined}
             style={{ width: "100%" }}
           />
-        </Field>
+        </Field>{customerSigLocked && <div className="fhint sig-locked-note name-locked-note"><NavIcon id="zamok" size={14} /> Podpísané — meno sa nedá zmeniť</div>}</div>
         )}
-        <Field label="Za prenajímateľa — meno *">
+        <div><Field label={driverSigLocked ? "Za prenajímateľa — meno" : "Za prenajímateľa — meno *"}>
           <input
-            value={driverName}
+            value={driverSigLocked ? existing[isReturnPhase ? "returnDriverName" : "handoverDriverName"] || "" : driverName}
             onChange={(e) => setDriverName(e.target.value)}
+            readOnly={driverSigLocked}
+            className={driverSigLocked ? "name-locked" : undefined}
+            title={driverSigLocked ? "Meno pod uloženým podpisom sa nedá zmeniť." : undefined}
             placeholder="napr. Ján Novák"
-            data-miss={!driverName.trim() || undefined}
+            data-miss={(!driverSigLocked && !driverName.trim() && (driverSig || !isCorrection)) || undefined}
             style={{ width: "100%" }}
           />
-        </Field>
+        </Field>{driverSigLocked && <div className="fhint sig-locked-note name-locked-note"><NavIcon id="zamok" size={14} /> Podpísané — meno sa nedá zmeniť</div>}</div>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} readOnly={customerSigLocked} /><div className="fhint">Podpisom nájomca potvrdzuje {isReturnPhase ? "vrátenie" : "prevzatie"} stroja v uvedenom stave a zásady prenájmu (bod 3) vrátane VOP.</div><PrivacyNote /></div>}
@@ -20273,10 +20346,10 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           ...ckMissing(checklist, statusKey, noteKey),
           photosNeeded > 0 && `fotky stroja (${photosNeeded})`,
           photosNeeded === 0 && customerAbsent && returnPhotos.length === 0 && "fotka stroja",
-          !customerAbsent && !customerName.trim() && "meno nájomcu",
-          !customerAbsent && !customerSig && "podpis nájomcu",
-          !driverName.trim() && "meno prenajímateľa",
-          !driverSig && "podpis prenajímateľa",
+          !customerAbsent && !customerSigLocked && !customerName.trim() && (customerSig || !customerSigOptional) && "meno nájomcu",
+          !customerAbsent && !customerSig && !customerSigOptional && "podpis nájomcu",
+          !driverSigLocked && !driverName.trim() && (driverSig || !isCorrection) && "meno prenajímateľa",
+          !driverSig && !isCorrection && "podpis prenajímateľa",
         ].filter(Boolean)}
         left={(existing || canDelete) && (
           <>
@@ -33050,7 +33123,7 @@ function openPrintablePartHandover(rec) {
 ${rec.note || rec.handoverNote ? `<div class="note">${rec.note ? `<b>Poznámka:</b> ${esc(rec.note)}` : ""}${rec.note && rec.handoverNote ? "<br>" : ""}${rec.handoverNote ? `<b>Pri odovzdaní:</b> ${esc(rec.handoverNote)}` : ""}</div>` : ""}
 <div class="colhead">Odovzdanie a prevzatie</div>
 <div class="sigs">${sig(rec.handerSignature, `Odovzdal (mateco)${rec.handedBy ? `: ${esc(rec.handedBy)}` : ""}`)}${customerSig}</div>
-${rec.correctedAt ? `<div class="corr">Opravené dispečerom ${esc(fmtDate(toLocalISO(new Date(rec.correctedAt))))}${rec.correctedBy ? ` (${esc(rec.correctedBy)})` : ""}.</div>` : ""}
+${rec.correctedAt ? `<div class="corr">Opravené kanceláriou ${esc(fmtDate(toLocalISO(new Date(rec.correctedAt))))}${rec.correctedBy ? ` (${esc(rec.correctedBy)})` : ""}.</div>` : ""}
 <div class="confirm">Odberateľ svojím podpisom potvrdzuje prevzatie vyššie uvedených dielov v uvedenom množstve a bez zjavných vád. Ceny sú uvedené bez DPH, ak sú vyplnené; záväzná je faktúra.</div>
 </div>
 <div class="footer">mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX<div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div></div>
@@ -33298,10 +33371,11 @@ function PartHandoverEditModal({ rec, customers, machines, employees, onClose, o
     onClose();
   }
   return (
-    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide form>
+    <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide form={!signed}>
       {signed && (
         <div className="fnote fnote-y">
-          <div>Výdaj je podpísaný ({rec.handedBy || "—"}). Diely, počty a odberateľa opravíte tu — zapíše sa „Opravené dispečerom“.</div>
+          <div>{rec.customerAbsent ? "Výdaj je odovzdaný." : "Výdaj je podpísaný."} Diely, počty a firmu odberateľa opravíte tu — zapíše sa „Opravené kanceláriou“.</div>
+          <div style={{ marginTop: 4 }}>{rec.customerAbsent ? `Odberateľ nebol prítomný — namiesto podpisu ${plural((rec.absentPhotos || []).length, "fotka", "fotky", "fotiek")}` : `Prevzal: ${rec.customerName || "—"}`} · Odovzdal: {rec.handedBy || "—"}</div>
           <div style={{ marginTop: 4 }}>Podpisy sa nemenia. Ak podpísal nesprávny človek, výdaj zmažte a vypíšte nový.</div>
           {rec.handoverNote && <div style={{ marginTop: 4 }}>Poznámka pri odovzdaní: {rec.handoverNote}</div>}
         </div>
@@ -33986,7 +34060,7 @@ function SparePartsImportButton({ depo, onImport, onClose }) {
   });
 
   function doImport() {
-    onImport(items);
+    if (onImport(items) === false) return;
     importDoneNotice(`dielov (${depo})`, items.length, skipped, notes);
     setShow(false);
     setRows([]);
@@ -34156,19 +34230,26 @@ const AUDIT_TABLE_LABELS = {
   partHandovers: "Výdaj dielov",
   damages: "Poškodenia / servis",
   jobs: "Zákazky (požičovňa)",
+  reservations: "Rezervácie",
   machines: "Stroje",
   spareParts: "Náhradné diely",
   handoverProtocols: "Protokoly o odovzdaní",
+  protocolLogs: "Servisné protokoly",
   employees: "Zamestnanci",
   profiles: "Účty (rola, prístup)",
 };
 const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
-const AUDIT_FIELD_LABELS = { handoverDone: "prevzatie hotové", returnDone: "vrátenie hotové", handoverDate: "dátum prevzatia", returnDate: "dátum vrátenia", protocolNumber: "číslo protokolu", checklist: "checklist", handoverCustomerAbsent: "zákazník neprítomný", returnCustomerAbsent: "zákazník neprítomný pri vrátení", assignedDate: "dátum pridelenia", assignmentId: "úloha", archivedDate: "dátum archivácie", archivedReason: "dôvod archivácie", archivedNote: "poznámka k archivácii", stav: "stav", status: "stav", resolved: "vyriešené", technicianId: "technik", technicianIds: "technici", popis: "popis", customer: "zákazník", machineId: "stroj", driverId: "šofér", returnDriverId: "šofér zvozu", startDate: "od", endDate: "do", depo: "depo", role: "rola", active: "prístup", archived: "archivovaný", name: "meno", phone: "telefón", email: "email", linkedUserId: "prepojený účet", note: "poznámka", customerId: "zákazník", jobId: "zákazka", damageId: "tiket", urcenieStrojId: "určené pre stroj", revizia: "revízia ZZ", reviziaEZ: "revízia EZ", uradnaSkuska: "úradná skúška", trackRevisions: "sledovať revíziu ZZ", trackRevisionsEZ: "sledovať revíziu EZ", trackUradnaSkuska: "sledovať úradnú skúšku", code: "sériové číslo", manufacturer: "výrobca", alsoEzTechnik: "revízny technik EZ" };
+const AUDIT_FIELD_LABELS = { handoverDone: "prevzatie hotové", returnDone: "vrátenie hotové", handoverDate: "dátum prevzatia", returnDate: "dátum vrátenia", protocolNumber: "číslo protokolu", checklist: "checklist", handoverCustomerAbsent: "zákazník neprítomný", returnCustomerAbsent: "zákazník neprítomný pri vrátení", assignedDate: "dátum pridelenia", assignmentId: "úloha", archivedDate: "dátum archivácie", archivedReason: "dôvod archivácie", archivedNote: "poznámka k archivácii", stav: "stav", status: "stav", resolved: "vyriešené", technicianId: "technik", technicianIds: "technici", popis: "popis", customer: "zákazník", machineId: "stroj", driverId: "šofér", returnDriverId: "šofér zvozu", startDate: "od", endDate: "do", depo: "depo", role: "rola", active: "prístup", archived: "archivovaný", name: "meno", phone: "telefón", email: "email", linkedUserId: "prepojený účet", note: "poznámka", customerId: "zákazník", jobId: "zákazka", damageId: "tiket", urcenieStrojId: "určené pre stroj", revizia: "revízia ZZ", reviziaEZ: "revízia EZ", uradnaSkuska: "úradná skúška", trackRevisions: "sledovať revíziu ZZ", trackRevisionsEZ: "sledovať revíziu EZ", trackUradnaSkuska: "sledovať úradnú skúšku", code: "sériové číslo", manufacturer: "výrobca", alsoEzTechnik: "revízny technik EZ",
+  // výdaj dielov a servisný protokol
+  items: "diely", dlNumber: "číslo dodacieho listu", erpDoc: "doklad ERP", customerName: "prevzal", handedBy: "odovzdal", handedById: "odovzdal (účet)", workNotes: "poznámka", erpProcessed: "spracované v ERP", correctedBy: "opravil", checkedBy: "skontroloval", processedBy: "spracoval", handoverNote: "poznámka pri odovzdaní", customerAbsent: "odberateľ neprítomný", absentPhotos: "fotky", signedItems: "podpísané diely", signedCustomer: "podpísaný odberateľ", assigneeName: "odovzdá", method: "spôsob", deliveryAddress: "adresa doručenia", contactName: "kontakt", contactPhone: "telefón kontaktu", orderNumber: "číslo objednávky", machineText: "stroj",
+  workDescription: "popis práce", customerSignatoryName: "meno podpisujúceho", technicianName: "technik", clientName: "zákazník", totalHours: "hodiny", travelHours: "hodiny cesty", travelKm: "km", machineHours: "motohodiny", workItems: "práce", materials: "materiál", usedParts: "použité diely", expectedStart: "začiatok", expectedEnd: "koniec" };
 // Odkazy, ktorých ID nič nehovorí — len či pribudli/zmizli (technik a dátum úlohy sú vlastné polia).
 const AUDIT_REF_ONLY = { assignmentId: ["úloha v pláne", "pridaná", "odobraná", "zmenená"], publicToken: ["odkaz pre zákazníka", "vydaný", "zrušený", "nový"],
   // podpisy protokolu o odovzdaní: v audite len značka (step128-a), nie obrázok
   handoverCustomerSignature: ["podpis nájomcu pri prevzatí", "pridaný", "odobraný", "zmenený"], handoverDriverSignature: ["podpis šoféra pri prevzatí", "pridaný", "odobraný", "zmenený"],
-  returnCustomerSignature: ["podpis nájomcu pri vrátení", "pridaný", "odobraný", "zmenený"], returnDriverSignature: ["podpis šoféra pri vrátení", "pridaný", "odobraný", "zmenený"] };
+  returnCustomerSignature: ["podpis nájomcu pri vrátení", "pridaný", "odobraný", "zmenený"], returnDriverSignature: ["podpis šoféra pri vrátení", "pridaný", "odobraný", "zmenený"],
+  // výdaj dielov a servisný protokol (step130-a)
+  customerSignature: ["podpis zákazníka", "pridaný", "odobraný", "zmenený"], handerSignature: ["podpis odovzdávajúceho", "pridaný", "odobraný", "zmenený"], technicianSignature: ["podpis technika", "pridaný", "odobraný", "zmenený"] };
 // Čo sa zmenilo pri úprave: old_data = staré hodnoty zmenených polí (step113), inak predošlý načítaný zápis záznamu.
 function auditChange(e, prevData, nameOf) {
   if (e.action !== "update") return "";
@@ -34408,7 +34489,7 @@ function AuditLogView({ profiles, employees = [], machines = [], jobs = [], dama
       <h1 className="page-h1">Audit log</h1>
       <p className="page-intro">
         {plural(filtered.length, "posledná zmena", "posledné zmeny", "posledných zmien")} v citlivých tabuľkách (poškodenia/servis, zákazky, stroje, náhradné
-        diely, protokoly o odovzdaní, zamestnanci, roly a prístup účtov) — zaznamenáva sa priamo v databáze, nedá sa obísť z platformy.
+        diely, výdaj dielov, protokoly o odovzdaní, servisné protokoly, rezervácie, zamestnanci, roly a prístup účtov) — zaznamenáva sa priamo v databáze, nedá sa obísť z platformy.
       </p>
       <div className="tbar">
         <select aria-label="Kto" value={who} onChange={(e) => setWho(e.target.value)} style={{ minHeight: 40 }}>
@@ -34463,7 +34544,9 @@ function AuditLogView({ profiles, employees = [], machines = [], jobs = [], dama
                 // Protokol a iné záznamy bez vlastného kódu: stroj · zákazník zo zákazky (nie interné ID).
                 const pj = !data?.code && data?.jobId ? jobs.find((j) => j.id === data.jobId) : null;
                 const pjLabel = pj ? [machines.find((m) => m.id === (data.machineId || pj.machineId))?.code, pj.customer].filter(Boolean).join(" · ") : "";
-                const label = data?.code || data?.name || data?.customer || data?.cisloDielu || pjLabel || e.record_id;
+                const plLabel = e.table_name === "protocolLogs" ? [nameOf[data?.machineId] || data?.machineSerial, data?.clientName].filter(Boolean).join(" · ") : ""; // servisný protokol: stroj · zákazník
+                const rsLabel = e.table_name === "reservations" && data ? [data.customer, nameOf[data.machineId], data.expectedStart && fmtRange(data.expectedStart, data.expectedEnd || data.expectedStart)].filter(Boolean).join(" · ") : ""; // rezervácia: zákazník · stroj · termín
+                const label = rsLabel || data?.code || data?.name || data?.customer || data?.cisloDielu || pjLabel || plLabel || e.record_id;
                 const n = e.group.length;
                 const revs = e.table_name === "damages" && e.action === "insert" && e.group.every((x) => ["revizia", "uradnaSkuska"].includes(x.new_data?.type));
                 const at = filtered.findIndex((x) => x.id === e.id);
@@ -35371,9 +35454,12 @@ function GlobalStyle() {
       .fhint { font-size: 13px; color: var(--text-dim); margin-top: 4px; font-weight: 400; }
       .fck { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text); line-height: 1.35; margin: 2px 0 14px; cursor: pointer; }
       .fck:has(> input:disabled) { color: var(--text-dim); background: var(--panel-2); cursor: not-allowed; }
-      .sig-locked { background: var(--panel-2); border-radius: 8px; padding: 8px; }
+      .sig-locked { background: var(--panel-2); border-radius: 8px; padding: 8px; margin: -8px -8px 0; } /* podklad presahuje do okolia, štítok a pole ostanú zarovnané so susedným podpisom */
       .sig-locked > button:disabled { border-style: dashed !important; }
       .sig-locked-note { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+      .name-locked { background: var(--panel-2); border-style: dashed; cursor: default; }
+      .app-shell.dark .name-locked { background: var(--bg); } /* v tmavom je --panel-2 aj pozadie upraviteľného poľa */
+      .name-locked-note { margin: -10px 0 14px; }
       .fck small { display: block; font-size: 13px; color: var(--text-dim); margin-top: 2px; }
       .fgrid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; align-items: start; }
       .fstep { display: flex; align-items: center; gap: 10px; margin: 20px 0 10px; flex-wrap: wrap; }

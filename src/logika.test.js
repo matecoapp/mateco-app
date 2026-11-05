@@ -226,6 +226,7 @@ describe("zobrazenie dátumu", () => {
     expect(fmtDate("2026-11-02")).toBe("2. 11. 2026");
     expect(fmtDate("2026-10-28")).toBe("28. 10. 2026");
     expect(fmtDate("")).toBe("—");
+    expect(fmtDate(20261030)).toBe("—");
   });
 });
 
