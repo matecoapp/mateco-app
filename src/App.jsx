@@ -31,13 +31,22 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.861";
+const APP_VERSION = "1.0.862";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.862", items: [
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Upraviť protokol o odovzdaní: podpisy uloženej fázy sú len na čítanie (oprava ostatných údajov ostáva). Chýbajúci podpis sa dá doplniť." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Podpisy odovzdaného výdaja dielov a uloženého servisného protokolu sa už nemenia. Pri chybe vo výdaji ho zmažte a vypíšte nový." },
+    { roles: ["obchodnik"], text: "Keď sa zákazka z vašej rezervácie obnoví z Koša, dostanete upozornenie „Obnovená zákazka z rezervácie“ (stroj, zákazník, termín) — rezervácia je znova premenená." },
+    { roles: ["admin", "veduci_pozicovne"], text: "Štatistiky: rezervácia premenená na zákazku, ktorá sa nerealizovala, sa ráta ako nepremenená — v úspešnosti, pri obchodníkoch aj v „Kde chýbajú stroje“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Zrušenú rezerváciu už nie je možné zmeniť, schváliť ani premeniť na novú zákazku. Obnova jej pôvodnej zákazky z Koša funguje ako doteraz." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna", "obchodnik"], text: "Rámcové zmluvy a blacklist: „Upravil“ zapisuje server podľa prihláseného používateľa." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu"], text: "Pripomienka revízie/úradnej skúšky pri zákazke s vlastným odberom radí „Pred vydaním stroja zariaďte revíziu alebo iný stroj“." },
+  ] },
   { v: "1.0.861", items: [
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin"], text: "Protokol o odovzdaní sa uloží do zariadenia ešte pred nahrávaním podpisu — ani pri slabom signáli sa po zavretí alebo obnovení platformy nestratí. Nahrávanie podpisu trvá najviac 15 s, potom protokol odošle fronta." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "sofer", "externy_sofer", "technik", "veduci_technik_ba", "fakturant_pozicovna"], text: "E-mail zákazníkovi z protokolu o odovzdaní („Poslať zákazníkovi“) už nemá na konci „S pozdravom, mateco Slovakia s.r.o.“ — pozdrav a podpis pridá poštový server." },
@@ -19361,7 +19370,7 @@ function CompleteJobModal({ job, machine, drivers, today, handoverDone, pendingE
 // (SignatureOverlay nižšie), lebo na mobile sa do 100px vysokého pásika
 // nedá poriadne podpísať. Po "Hotovo" sa podpis zmenší späť do tohto poľa
 // presne ako doteraz (rovnaký onChange(dataUrl) kontrakt, nič okolo sa nemení).
-function SignaturePad({ value, onChange, label, summary, miss }) {
+function SignaturePad({ value, onChange, label, summary, miss, readOnly }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   return (
@@ -19371,10 +19380,11 @@ function SignaturePad({ value, onChange, label, summary, miss }) {
         ref={btnRef}
         type="button"
         data-miss={miss || undefined}
+        disabled={readOnly}
         onClick={() => setOpen(true)}
         style={{
           width: "100%", height: 100, border: "1px solid var(--border)", borderRadius: 6, background: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: readOnly ? "default" : "pointer", opacity: 1,
         }}
       >
         {value ? (
@@ -19383,7 +19393,7 @@ function SignaturePad({ value, onChange, label, summary, miss }) {
           <span style={{ fontSize: 15, color: "#5A5A5A", display: "inline-flex", alignItems: "center", gap: 8 }}><NavIcon id="podpis" size={20} /> Ťuknite a podpíšte</span>
         )}
       </button>
-      {value && (
+      {value && !readOnly && (
         <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px", marginTop: 6 }} onClick={() => onChange(null)}>
           Vymazať
         </button>
@@ -19724,6 +19734,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const statusKey = isReturnPhase ? "returnStatus" : "handoverStatus";
   const noteKey = isReturnPhase ? "returnNote" : "handoverNote";
   const isCorrection = existing && ((isReturnPhase && existing.returnDone) || (!isReturnPhase && existing.handoverDone));
+  // Podpis uloženej fázy je len na čítanie (rozhodnutie 4. 11.) — chýbajúci sa pri oprave dá doplniť.
+  const customerSigLocked = !!(isCorrection && existing[isReturnPhase ? "returnCustomerSignature" : "handoverCustomerSignature"]);
+  const driverSigLocked = !!(isCorrection && existing[isReturnPhase ? "returnDriverSignature" : "handoverDriverSignature"]);
 
   const [customerSig, setCustomerSig] = useState(isReturnPhase ? existing?.returnCustomerSignature || null : existing?.handoverCustomerSignature || null);
   const [driverSig, setDriverSig] = useState(isReturnPhase ? existing?.returnDriverSignature || null : existing?.handoverDriverSignature || null);
@@ -20082,7 +20095,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
       {isCorrection && (
         <div className="fnote fnote-r">
-          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená.
+          <NavIcon id="podpis" size={16} /> Opravujete už odoslanú a podpísanú fázu — uloženie sa zaznamená. Podpisy sa už nemenia.
         </div>
       )}
 
@@ -20169,7 +20182,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       {/* Osobný odber/vrátenie je v depe so zákazníkom — tam voľba nemá zmysel. */}
       {(customerAbsent || !(isReturnPhase ? job?.selfReturn : job?.selfPickup)) && (
       <label className="fck fck-big">
-        <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} />
+        <input type="checkbox" checked={customerAbsent} disabled={customerSigLocked} onChange={(e) => setCustomerAbsent(e.target.checked)} />
         <span>Zákazník nebol prítomný — bez podpisu nájomcu (fotky stroja sú povinné)</span>
       </label>
       )}
@@ -20198,8 +20211,8 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         </Field>
       </div>
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} /><div className="fhint">Podpisom nájomca potvrdzuje {isReturnPhase ? "vrátenie" : "prevzatie"} stroja v uvedenom stave a zásady prenájmu (bod 3) vrátane VOP.</div><PrivacyNote /></div>}
-        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} />
+        {customerAbsent ? <div /> : <div><SignaturePad key={`${phase}-customer`} label="Podpis nájomcu (zákazník)" summary={sigSummary} value={customerSig} onChange={setCustomerSig} miss={!customerSig} readOnly={customerSigLocked} /><div className="fhint">Podpisom nájomca potvrdzuje {isReturnPhase ? "vrátenie" : "prevzatie"} stroja v uvedenom stave a zásady prenájmu (bod 3) vrátane VOP.</div><PrivacyNote /></div>}
+        <SignaturePad key={`${phase}-driver`} label="Podpis prenajímateľa (šofér/checker)" summary={sigSummary} value={driverSig} onChange={setDriverSig} miss={!driverSig} readOnly={driverSigLocked} />
       </div>
 
       <FormFoot
@@ -30197,7 +30210,7 @@ const STAT_INFO = {
   "Prepravy podľa šoféra": "Vývozy a zvozy s podpísaným protokolom v období (bez vlastnej dopravy zákazníka) a prevozy medzi depami, ktoré šofér dokončil. Podiel externých šoférov = koľko prepráv urobili externí šoféri. Naša doprava / zákazník sám = ako sa stroje k zákazníkovi a späť dostali.",
   "Presnosť prepráv": "Vývozy a zvozy našou dopravou v období: či sa protokol podpísal v plánovaný deň zo zákazky, neskôr alebo skôr. Ak dispečer termín v zákazke posunul, porovnáva sa s posunutým.",
   "Motohodiny za prenájom": "Rozdiel motohodín pri vrátení a pri odovzdaní (z protokolov) pri vráteniach v období — priemer na deň prenájmu a na jeden prenájom, podľa modelu. Ukazuje, ako intenzívne zákazníci stroje naozaj používajú. Neúplné alebo nezmyselné hodnoty sa vynechajú.",
-  "Rezervácie podľa obchodníka": "Rezervácie založené v období podľa obchodníka a koľko z nich sa premenilo na zákazku (úspešnosť).",
+  "Rezervácie podľa obchodníka": "Rezervácie založené v období podľa obchodníka a koľko z nich sa premenilo na zákazku (úspešnosť). Nerealizovaná zákazka sa ráta ako nepremenená rezervácia.",
   "Potvrdenie protokolu zákazníkom": "Protokoly o odovzdaní a vrátení v období: zákazník podpísal na mieste, alebo nebol prítomný — potom potvrdil protokol v portáli, nesúhlasil s ním, alebo ešte čaká. Pri potvrdení v portáli aj priemerný čas od protokolu po potvrdenie.",
   "Poškodenia po prenájme podľa zákazníka": "Poškodenia stroja nahlásené v deň vrátenia alebo do 2 dní po ňom, priradené zákazníkovi, ktorý stroj vrátil. „1 z 15 vrátení“ = pri 1 z jeho 15 vrátení v období sa našlo poškodenie. Podklad pri fakturácii škôd.",
   "Vyťaženosť technikov za mesiac": "Vykázané hodiny technika v mesiaci voči jeho fondu. Vykázané = hodiny na servisných protokoloch + čas na ceste + hodiny z checklistov kontroly stroja (pred vývozom aj po vrátení, pripíšu sa tomu, kto kontrolu urobil). Fond = (pracovné dni po–pi − sviatky s pracovným pokojom − dovolenka − PN/lekár z Plánu servisu) × 8 h; pri aktuálnom mesiaci k dnešku, pri novom technikovi od vytvorenia jeho karty. Pohotovosť a nadčasy sa rátajú, preto môže byť viac ako 100 %. Nevykázané = fond − vykázané (technik nemal prácu alebo nepísal protokoly). Spoločný protokol sa pripíše každému technikovi na ňom.",
@@ -30485,18 +30498,21 @@ function PoziciovnaStatistiky({ machines, machineModels, assignments, jobs, rese
   const utilPrevPeriod = fleetUtil(prev.start, prev.end);
 
   const periodReservations = reservations.filter((r) => r.status !== "cancelled" && r.createdAt && toLocalISO(new Date(r.createdAt)) >= start && toLocalISO(new Date(r.createdAt)) <= end);
+  // Premenená na zákazku, ktorá sa nerealizovala, sa ráta ako nepremenená (aj v „Kde chýbajú stroje“).
+  const notRealizedJobIds = new Set(jobs.filter((j) => j.notRealized).map((j) => j.id));
+  const isConv = (r) => r.status === "converted" && !notRealizedJobIds.has(r.convertedJobId);
   const byObchodnik = {};
   const convertedByObchodnik = {};
   periodReservations.forEach((r) => {
     const key = r.obchodnik || "— neuvedené —";
     byObchodnik[key] = (byObchodnik[key] || 0) + 1;
-    if (r.status === "converted") convertedByObchodnik[key] = (convertedByObchodnik[key] || 0) + 1;
+    if (isConv(r)) convertedByObchodnik[key] = (convertedByObchodnik[key] || 0) + 1;
   });
   const obchodnikRows = Object.entries(byObchodnik).sort((a, b) => b[1] - a[1]);
-  const totalConverted = periodReservations.filter((r) => r.status === "converted").length;
+  const totalConverted = periodReservations.filter(isConv).length;
   const successRatePct = periodReservations.length ? Math.round((totalConverted / periodReservations.length) * 100) : 0;
   const prevReservations = reservations.filter((r) => r.status !== "cancelled" && r.createdAt && toLocalISO(new Date(r.createdAt)) >= prev.start && toLocalISO(new Date(r.createdAt)) <= prev.end);
-  const prevConverted = prevReservations.filter((r) => r.status === "converted").length;
+  const prevConverted = prevReservations.filter(isConv).length;
   const prevSuccessRatePct = prevReservations.length ? Math.round((prevConverted / prevReservations.length) * 100) : 0;
   const reservationsDelta = statDelta(periodReservations.length, prevReservations.length);
   const successRateDelta = statDelta(successRatePct, prevSuccessRatePct, { percent: true });
@@ -30530,7 +30546,7 @@ function PoziciovnaStatistiky({ machines, machineModels, assignments, jobs, rese
   // Kde chýbajú stroje: modely nad 85 % a rezervácie (z obdobia), ktoré sa nepremenili na zákazku.
   const lostByModel = {};
   // „Stratená“ = nepremenená rezervácia, ktorej začiatok už prešiel (čakajúce a budúce ešte žijú).
-  periodReservations.filter((r) => r.status !== "converted" && isRealISODate(r.expectedStart) && r.expectedStart < today).forEach((r) => {
+  periodReservations.filter((r) => !isConv(r) && isRealISODate(r.expectedStart) && r.expectedStart < today).forEach((r) => {
     const t = machineById.get(r.machineId)?.type || "— bez modelu —";
     lostByModel[t] = (lostByModel[t] || 0) + 1;
   });
@@ -33237,7 +33253,7 @@ function PartHandoverEditModal({ rec, customers, machines, employees, onClose, o
   }
   return (
     <Modal eyebrow="Výdaj dielov" title={isNew ? "Nový výdaj dielov" : signed ? "Kontrola výdaja dielov" : "Úprava výdaja dielov"} onClose={onClose} wide form>
-      {signed && <div className="fnote fnote-y">Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
+      {signed && <div className="fnote fnote-y">Výdaj je podpísaný ({rec.handedBy || "—"}). Oprava sa zapíše a na dodacom liste bude „Opravené dispečerom“. Podpisy sa nemenia — pri chybe výdaj zmažte a vypíšte nový.{rec.handoverNote ? ` Poznámka pri odovzdaní: ${rec.handoverNote}` : ""}</div>}
       {!signed && (
         <div className="fgrid2">
           <Field label="Dátum odovzdania"><input type="date" value={draft.date || ""} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
