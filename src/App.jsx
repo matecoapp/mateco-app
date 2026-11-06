@@ -31,13 +31,35 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.865";
+const APP_VERSION = "1.0.867";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.867", items: [
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Nová kontrola stroja podľa dokumentu „Postup prevzatia pracovného stroja po prenájme“ — rovnaká pred vývozom aj po vrátení: 7 kapitol s bodmi (pri každom bode OK, Problém s Drobná / Závažná a poznámkou, alebo Nevzťahuje sa) a 8. Čistota a kompletnosť. „Všetko v poriadku“ vyplní naraz nevyplnené body." },
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Kontrola stroja: povinné palivo / batéria v % (vedľa motohodín) a klasifikácia stavu A–D. Platforma ju navrhne (nič → A, drobné alebo čistenie → B, závažné → C), môžete ju zmeniť; D len s poznámkou. Pri C a D sa pri uložení sám založí servisný tiket (pri oprave kontroly už nie druhý)." },
+    { roles: ["technik", "veduci_technik_ba", "sofer", "externy_sofer", "admin"], text: "Fotky stroja po záberoch: 9 povinných záberov (ľavá, pravá, predná, zadná strana, kôš / kabína s ovládaním, motohodiny, nosná časť, valce a piesty, zdvihnutý stav) — checker pred vývozom aj po vrátení, šofér pri vývoze aj pri zvoze. Fotky poškodení pridáte navyše, koľko treba. Osobný odber a vrátenie v depe šofér nefotí." },
+    { roles: ["technik", "veduci_technik_ba", "sofer", "externy_sofer", "admin"], text: "Fotoaparát platformy: obdĺžnik na zarovnanie stroja a v rohu predošlá fotka toho istého záberu tohto stroja; prázdne okienko záberu ju ukáže tiež. „Z galérie“ vyplní zábery po poradí. Bez signálu sa fotky uložia do zariadenia a odošlú sa samé." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Karta zákazky → Kontroly: porovnanie fotiek stroja — riadky sú zábery, stĺpce checker pred vývozom, šofér pri vývoze, šofér pri zvoze a checker po vrátení (prázdny stĺpec sa skryje). Klik fotku zväčší a šípkami listujete. Staršie fotky bez záberov sú v riadku „Ďalšie fotky“." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba"], text: "Kontrola checkera s klasifikáciou C alebo D založí tiket poškodenia (stav Nové, upozornenie ako pri nahlásení poruchy) s bodmi, ktoré checker označil (kapitola, bod, Drobná / Závažná, poznámka) a klasifikáciou. Stroj sa neblokuje." },
+    { roles: ["admin", "fakturant_servis", "dispecer_servisu", "veduci_servisu"], text: "Tlačová verzia kontroly checkera má kapitoly s bodmi, Drobná / Závažná a poznámky, čistotu, klasifikáciu A–D, motohodiny, palivo / batériu, odpracované hodiny a diely, meno checkera a čas uloženia (bez podpisu a fotiek). ERP — kontroly ostávajú ako doteraz (hodiny a diely z kontroly)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Staré kontroly (14 bodov) a protokoly s voľnými fotkami ostávajú v pôvodnom tvare — zobrazia sa, vytlačia a upravia ako doteraz." },
+    { roles: ["admin"], text: "Export fotiek (ZIP) sťahuje len fotky z úložiska platformy a mená súborov v ZIP sú bezpečné." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Esc v zväčšenej fotke zavrie len fotku, okno pod ňou ostane otvorené." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne"], text: "Fotky stroja sa ukladajú v pevnom poradí záberov (Ľavá strana … Zdvihnutý stav), fotky poškodení na konci. Portál zákazníka ukazuje pod fotkou názov záberu a fotku zväčší v okne (aj staršiu)." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Karta zákazky → Kontroly: pri vykonanej kontrole je hneď vidieť klasifikáciu (napr. „C — Poškodenie / servisné posúdenie“)." },
+    { roles: ["admin"], text: "Audit log: fotky, zábery, palivo a klasifikácia slovenskými názvami; obnova zálohy nezapisuje protokoly bez zmeny." },
+  ] },
+  { v: "1.0.866", items: [
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Upraviť servisný protokol: „Vykonal“ a „Kontaktná osoba“ sú po uložení len na čítanie (zámok, „Uložené — meno sa nedá zmeniť“) — mení ich len administrátor." },
+    { roles: ["admin", "sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Podpis v protokole o odovzdaní, výdaji dielov a servisnom protokole platforma prijme len ako podpis nakreslený v platforme, aj pri prvom podpise." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Výdaj dielov: diely a odberateľ, ktoré odberateľ videl pri podpise, sa po odovzdaní nedajú zmeniť (len administrátor)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna", "obchodnik"], text: "Zmena IČO zákazníka zmení IČO aj v rámcovej zmluve naviazanej na tohto zákazníka." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Zrušené rezervácie sa automaticky zmažú 30 dní po zrušení (bez Koša)." },
+  ] },
   { v: "1.0.865", items: [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "fakturant_pozicovna", "obchodnik"], text: "Premenovanie alebo zmena IČO zákazníka už nemení záznam blacklistu inej firmy s rovnakým názvom ani rámcovú zmluvu firmy s iným IČO." },
     { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis", "technik", "veduci_technik_ba"], text: "Výdaj dielov: „Odovzdal“ zapíše platforma podľa prihláseného. Nový výdaj z kancelárie je bez podpisov (podpisuje sa pri odovzdaní) a zmazaný odovzdaný výdaj vie obnoviť len administrátor z Koša." },
@@ -1110,8 +1132,9 @@ let _photoLightboxListener = null;
 function setPhotoLightboxOpenListener(fn) {
   _photoLightboxListener = fn;
 }
-function openPhotoLightbox(url) {
-  if (_photoLightboxListener) _photoLightboxListener(url);
+// list: [{ url, caption }] — v náhľade sa dá listovať (porovnanie záberov).
+function openPhotoLightbox(url, list) {
+  if (_photoLightboxListener) _photoLightboxListener(url, list);
 }
 // Formulár na záznam z merania VTZ EZ — rovnaký princíp ako protokol/lightbox
 // vyššie (globálny listener), aby ho vedel otvoriť ktorýkoľvek riadok v appke
@@ -1186,6 +1209,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
   }
 
   function sigBlock(dataUrl, label, name) {
+    dataUrl = sigUrl(dataUrl);
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${safeImgUrl(dataUrl) ? `<img src="${escAttr(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(phaseKey, noteKey) {
@@ -1383,7 +1407,7 @@ function openPrintableHandoverProtocol(job, machine, p, opts = {}) {
 // mateco logo (PNG, biele pozadie odstránené) — vytiahnuté z reálneho vzorového PDF protokolu.
 const MATECO_LOGO_B64 = "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";
 
-function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false) {
+function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false, isAdmin = false) {
   const esc = (s) => (s ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); // 0 sa vytlačí; aj v atribútoch
   const escAttr = (s) => esc(s).replace(/"/g, "&quot;");
   // Upraviteľné pole — contenteditable div namiesto <input>, takže v zobrazení je
@@ -1392,9 +1416,12 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   function field(label, key, value, opts = {}) {
     const cls = "v editfield" + (opts.red ? " red" : "");
     const suffix = opts.suffix ? ` <span class="unit">${esc(opts.suffix)}</span>` : "";
+    // Mená uloženého protokolu mení len admin (rozhodnutie 6. 11.) — bez data-field ich úprava neposiela.
+    if (opts.locked) return `<div class="field"><span class="l">${esc(label)}</span><div class="v name-locked">${esc(value)}</div><div class="name-locked-note"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4"/></svg> Uložené — meno sa nedá zmeniť</div></div>`;
     return `<div class="field"><span class="l">${esc(label)}</span><span class="vwrap"><div class="${cls}" data-field="${key}" contenteditable="false">${esc(value)}</div>${suffix}</span></div>`;
   }
   function sigBlock(dataUrl, label) {
+    dataUrl = sigUrl(dataUrl);
     return `<div class="sigbox"><div class="siglabel">${esc(label)}</div>${safeImgUrl(dataUrl) ? `<img src="${escAttr(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   const ROW_COUNT = 13;
@@ -1466,6 +1493,9 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
   body.editing .editfield[contenteditable="true"] { border-radius: 2px; box-shadow: 0 0 0 1px transparent; }
   body.editing .editfield[contenteditable="true"]:hover { box-shadow: 0 0 0 1px #ddd; }
   body.editing .editfield[contenteditable="true"]:focus { box-shadow: 0 0 0 1px #E30613; background: #fff8f8; }
+  .name-locked-note { display: none; }
+  body.editing .name-locked { background: #f4f4f4; box-shadow: 0 0 0 1px #c8c8c8; border-radius: 2px; cursor: default; }
+  body.editing .name-locked-note { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 12px; font-weight: 600; color: #6b6b6b; }
 
   .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px 14px; }
   .summary .field .v { font-size: 12.5px; }
@@ -1520,6 +1550,8 @@ function openPrintableServiceProtocol(p, assignCandidates = [], canEdit = false)
     .page { box-shadow: none; margin: 0; }
     .toolbar { display: none; }
     .editfield[contenteditable="true"] { box-shadow: none !important; background: transparent !important; }
+    .name-locked { box-shadow: none !important; background: transparent !important; }
+    .name-locked-note { display: none !important; }
     @page { size: A4; margin: 0; }
   }
 </style>
@@ -1579,8 +1611,8 @@ ${p.imageUrl ? `<div id="snapshotOverlay" class="modal-overlay" style="align-ite
     <div class="sechead">Odberateľ</div>
     <div class="secbody grid2">
       ${field("Zákazník", "clientName", p.clientName)}
-      ${field("Vykonal", "technicianName", p.technicianName)}
-      ${field("Kontaktná osoba", "customerSignatoryName", p.clientContact || p.customerSignatoryName)}
+      ${field("Vykonal", "technicianName", p.technicianName, { locked: !isAdmin })}
+      ${field("Kontaktná osoba", "customerSignatoryName", p.clientContact || p.customerSignatoryName, { locked: !isAdmin })}
     </div>
   </div>
 
@@ -1768,6 +1800,17 @@ function openPrintableChecklist(assignment, machine, technicianName) {
     .filter((it) => it.label && it.checkerStatus);
   const STATUS_LABEL = { ok: "OK", problem: "Problém" };
   const partsRows = assignment.usedParts || [];
+  // Nová kontrola (k59): kapitoly a body s Drobná/Závažná, čistota, palivo, klasifikácia — bez podpisu a fotiek (rozhodnutie 6. 11.).
+  const isNew = isNewChecklist(assignment.checklist);
+  const cl = assignment.checklist || [];
+  const cln = assignment.cleanliness || {};
+  const optL = (opts, k) => opts.find(([x]) => x === k)?.[1] || "—";
+  const at = assignment.checkerAt ? new Date(assignment.checkerAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const newRows = CHECKER_CHAPTERS.map((ch) => `<div class="chap"><div class="chaph">${ch.n}. ${esc(ch.title)}</div>${ch.items.map((x) => {
+    const it = cl.find((y) => y.key === x.key) || {};
+    const st = it.checkerStatus === "problem" ? `<b class="bad">${esc(SEVERITY_LABEL[it.severity] || "Problém")}</b>` : it.checkerStatus === "na" ? `<span class="na">nevzťahuje sa</span>` : it.checkerStatus === "ok" ? `<span class="ok">✓</span>` : "—";
+    return `<div class="crow${it.checkerStatus === "problem" ? " prob" : ""}"><span>${x.key.slice(1)}) ${esc(x.label)}</span><span>${st}</span></div>${it.checkerStatus === "problem" && it.checkerNote ? `<div class="cnote">${esc(it.checkerNote)}</div>` : ""}`;
+  }).join("")}</div>`).join("");
   const docHtml = `<!DOCTYPE html>
 <html lang="sk"><head><meta charset="UTF-8">
 <title>Checklist ${assignment.kind === "kontrolaStroja" ? (assignment.phase === "vratenie" ? "po vrátení " : "pred vývozom ") : ""}${esc(machine?.code)}</title>
@@ -1790,11 +1833,20 @@ function openPrintableChecklist(assignment, machine, technicianName) {
   table.items td { padding: 2.5px 6px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; }
   table.items th:last-child, table.items td:last-child { border-right: none; }
   table.items td.problem, table.items td.problem + td { color: #E30613; font-weight: 600; }
+  .chaps { columns: 2; column-gap: 14px; font-size: 9.5px; }
+  .chap { break-inside: avoid; margin-bottom: 6px; }
+  .chaph { font-weight: bold; font-size: 10px; border-bottom: 1px solid #ccc; padding: 1px 0; margin-bottom: 1px; }
+  .crow { display: flex; justify-content: space-between; gap: 6px; padding: 0.5px 0; border-bottom: 1px solid #f2f2f2; }
+  .crow.prob { color: #E30613; }
+  .cnote { color: #E30613; padding: 0 0 2px 10px; font-style: italic; }
+  .ok { color: #2e7d32; font-weight: bold; } .bad { color: #E30613; } .na { color: #888; }
+  .cls { font-size: 15px; font-weight: bold; }
   .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10.5px; color: #555; line-height: 1.7; }
   .footer .legal { margin-top: 6px; color: #888; font-size: 9.5px; }
   .toolbar { text-align: center; margin: 0 0 10px; padding: 10px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-family: Arial, sans-serif; position: sticky; top: 0; z-index: 50; background: #e8e8e8; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
   .btn { padding: 7px 14px; border-radius: 6px; font-family: Arial, sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid transparent; background: #E30613; color: #fff; }
-  @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; } .toolbar { display: none; } @page { size: A4; margin: 0; } }
+  /* min-height 297 mm + pätka nadol pri plnej strane pridali prázdnu 2. stranu s pätkou — v tlači pätka hneď za obsahom (k59 servis D2) */
+  @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; min-height: 0; padding: 10mm 12mm 6mm; } .section { margin-bottom: 6px; } .footer { padding-top: 6px; line-height: 1.4; } .toolbar { display: none; } @page { size: A4; margin: 0; } }
 </style>
 </head>
 <body>
@@ -1811,13 +1863,28 @@ function openPrintableChecklist(assignment, machine, technicianName) {
       <div class="field"><span class="l">Typ / Názov</span><span class="v">${esc(machine?.type) || "—"}</span></div>
       <div class="field"><span class="l">Sériové číslo</span><span class="v">${esc(machine?.code) || "—"}</span></div>
       <div class="field"><span class="l">Checker / Technik</span><span class="v">${esc(technicianName) || "—"}</span></div>
-      <div class="field"><span class="l">Dátum</span><span class="v">${esc((assignment.checkerDate || assignment.date || "").slice(0, 10))}</span></div>
-      <div class="field"><span class="l">Odpracované hodiny</span><span class="v">${esc(assignment.workHours)} h</span></div>
+      <div class="field"><span class="l">${isNew && at ? "Dátum a čas" : "Dátum"}</span><span class="v">${isNew && at ? esc(at) : esc(fmtDate((assignment.checkerDate || assignment.date || "").slice(0, 10)))}</span></div>
+      <div class="field"><span class="l">Odpracované hodiny</span><span class="v">${esc(String(assignment.workHours ?? "").replace(".", ","))} h</span></div>
+      ${assignment.editedBy ? `<div class="field"><span class="l">Upravil</span><span class="v">${esc(assignment.editedBy)}${assignment.editedAt ? `, ${esc(fmtDateTime(assignment.editedAt))}` : ""}</span></div>` : ""}
       ${assignment.kind === "kontrolaStroja" && (assignment.mth != null || assignment.noMth) ? `<div class="field"><span class="l">Počet MTH</span><span class="v">${assignment.noMth ? "bez počítadla" : esc(fmtMth(assignment.mth))}</span></div>` : ""}
       ${assignment.kind === "kontrolaStroja" ? `<div class="field"><span class="l">Druh kontroly</span><span class="v">${assignment.phase === "vratenie" ? "Po vrátení stroja (po prenájme)" : "Pred vývozom stroja (pred prenájmom)"}</span></div>` : ""}
+      ${isNew ? `<div class="field"><span class="l">Palivo / batéria</span><span class="v">${assignment.fuel != null ? esc(assignment.fuel) + " %" : "—"}</span></div>` : ""}
     </div>
   </div>
+  ${isNew ? `<div class="section">
+    <div class="sechead">Klasifikácia stavu</div>
+    <div class="secbody"><span class="cls">${esc(assignment.classification || "—")} — ${esc(CHECK_CLASSES[assignment.classification] || "")}</span>${assignment.classificationSuggested && assignment.classificationSuggested !== assignment.classification ? ` <span style="color:#666">(návrh platformy ${esc(assignment.classificationSuggested)})</span>` : ""}${assignment.classificationNote ? `<div>${esc(assignment.classificationNote)}</div>` : ""}</div>
+  </div>
   <div class="section">
+    <div class="sechead">Kontrola stroja</div>
+    <div class="secbody"><div class="chaps">${newRows}<div class="chap"><div class="chaph">8. Čistota a kompletnosť</div>
+      <div class="crow"><span>Stupeň znečistenia</span><span>${esc(optL(CLEAN_LEVELS, cln.level))}</span></div>
+      <div class="crow"><span>Druh znečistenia</span><span>${esc((cln.kinds || []).map((k) => optL(CLEAN_KINDS, k)).join(", ") || "—")}</span></div>
+      <div class="crow"><span>Kľúče a ovládače</span><span>${cln.keys === "chyba" ? '<b class="bad">Chýbajú</b>' : cln.keys === "ok" ? "Kompletné" : "—"}</span></div>
+      <div class="crow"><span>Dokumentácia a príslušenstvo</span><span>${cln.docs === "chyba" ? '<b class="bad">Chýba</b>' : cln.docs === "ok" ? "Kompletné" : "—"}</span></div>
+      ${cln.other ? `<div class="crow"><span>Iné zistenia</span><span>${esc(cln.other)}</span></div>` : ""}
+    </div></div></div>
+  </div>` : `<div class="section">
     <div class="sechead">Checklist</div>
     <div class="secbody">
       <table class="items">
@@ -1827,7 +1894,7 @@ function openPrintableChecklist(assignment, machine, technicianName) {
         </tbody>
       </table>
     </div>
-  </div>
+  </div>`}
   ${partsRows.length ? `<div class="section">
     <div class="sechead">Použité náhradné diely</div>
     <div class="secbody">
@@ -1898,7 +1965,7 @@ const DOW_NAMES_FULL = ["Nedeľa", "Pondelok", "Utorok", "Streda", "Štvrtok", "
 const DOW_NAMES = ["Ne", "Po", "Ut", "St", "Št", "Pi", "So"];
 // 14-bodový kontrolný zoznam z papierového "Protokolu o odovzdaní a prevzatí stroja" —
 // rovnaký zoznam sa vypĺňa dvakrát (Prevzatie aj Vrátenie), aby sa dal porovnať stav.
-// Povinný počet fotiek stroja: checker pred vývozom, šofér pri zvoze (a pri protokole bez zákazníka).
+// Povinný počet fotiek stroja v starom tvare (kontroly bez pomenovaných záberov) — nové majú MACHINE_SHOTS.
 const MIN_MACHINE_PHOTOS = 4;
 const HANDOVER_CHECKLIST_ITEMS = [
   "Technický stav zariadenia",
@@ -1927,6 +1994,57 @@ const HANDOVER_LEGAL_RULES = [
   "Náklady na vyčistenie pracovnej plošiny znáša nájomca!",
 ];
 const HANDOVER_VOP_NOTE = 'Neoddeliteľnou súčasťou protokolu sú "VŠEOBECNÉ OBCHODNÉ PODMIENKY" (VOP) zverejnené na www.matecoslovakia.sk';
+
+// 9 povinných záberov stroja — checker aj šofér, rovnaké poradie (rozhodnutie 6. 11.).
+// Fotky ostávajú poľom URL; k nemu paralelné pole kľúčov záberov (*PhotoShots, null = fotka navyše).
+const MACHINE_SHOTS = [
+  ["lava", "Ľavá strana"], ["prava", "Pravá strana"], ["predna", "Predná strana"], ["zadna", "Zadná strana"],
+  ["kos", "Kôš / kabína s ovládaním"], ["mth", "Motohodiny"], ["nosna", "Nosná časť (nožnice / ramená)"],
+  ["valce", "Valce a piesty"], ["zdvih", "Zdvihnutý stav"],
+];
+const SHOT_LABEL = Object.fromEntries(MACHINE_SHOTS);
+// Pri uložení: prvé zábery v pevnom poradí MACHINE_SHOTS, fotky navyše na koniec (portál, tlač, export čítajú pole po poradí).
+const sortShotItems = (items) => [...(items || [])].sort((a, b) => (MACHINE_SHOTS.findIndex(([k]) => k === a.shot) + 1 || 99) - (MACHINE_SHOTS.findIndex(([k]) => k === b.shot) + 1 || 99));
+// { kľúč záberu: url } a fotky bez záberu (staré záznamy, poškodenia).
+function shotPhotoMap(photos, shots) {
+  const map = {}; const extra = [];
+  (photos || []).forEach((url, i) => { const k = (shots || [])[i]; if (k && SHOT_LABEL[k] && !map[k]) map[k] = url; else extra.push(url); });
+  return { map, extra };
+}
+// Kontrola checkera podľa dokumentu „Postup prevzatia pracovného stroja po prenájme“ (kapitoly 3–9 → 1–7, čistota 8).
+const CHECKER_CHAPTERS = [
+  ["Vizuálny stav pred umytím", ["Celkový stav, kompletnosť a poškodenie laku", "Rám, nosná konštrukcia, zvary a deformácie", "Kryty, kapoty, dvere, ochranné plechy", "Úniky oleja, paliva a iných kvapalín", "Hydraulické hadice, potrubia a armatúry", "Káble, konektory a elektrické rozvody", "Štítky, označenia, výstrahy a čitateľnosť", "Znečistenie: betón, farba, lepidlá, olej a iné"]],
+  ["Podvozok, kolesá, pohon a riadenie", ["Pneumatiky / pásy: poškodenie, opotrebenie", "Disky, skrutky a upevnenie kolies", "Podvozok, nápravy, stabilizátory / podpery", "Pohony, prevodovky, reduktory a náboje", "Riadenie, vôľa a viditeľné poškodenie", "Jazda vpred / vzad a brzdenie (ak je bezpečné)", "Parkovacia brzda a zaistenie stroja"]],
+  ["Zdvíhacie konštrukcie, ramená a stožiare", ["Kĺbové / teleskopické ramená: deformácie, praskliny", "Nožnicový mechanizmus: ramená, čapy, puzdrá", "Stĺpový stožiar, vodiace prvky a klzáky", "Výsuvy, reťaze, laná, kladky a vedenia", "Hydraulické valce, piestnice a uchytenia", "Otočná nadstavba, veniec a uloženie", "Vidlice, nosič vidlíc, zaisťovacie prvky", "Zdvih / spúšťanie / vysúvanie: plynulosť pohybu"]],
+  ["Pracovný kôš, kabína a pracovisko obsluhy", ["Pracovný kôš: podlaha, zábradlie a bránka", "Kotviace body, zábrany a ochranné prvky", "Ovládací panel, joystick, tlačidlá a displej", "Kabína: sklá, dvere, sedadlo a pás", "Zrkadlá, osvetlenie, stierače a klaksón", "Ochranný rám / strecha a prístupové stupne", "Výhľad z pracoviska, označenia a štítky"]],
+  ["Bezpečnostné a ochranné prvky", ["Núdzové zastavenie (príslušné ovládacie miesta)", "Núdzové spúšťanie / núdzové ovládanie", "Blokovania, koncové spínače a signalizácia", "Ochrana proti preťaženiu a snímač náklonu", "Bezpečnostné zámky, západky a poistky", "Stabilizátory a kontrola ich funkcie", "Výstražné zvukové / svetelné signály"]],
+  ["Motor, batérie, hydraulika a príslušenstvo", ["Motor: štart, chod, úniky a dymivosť", "Batéria, nabíjačka, zásuvky a konektory", "Stav paliva, nabitia a prevádzkových kvapalín", "Hydraulický olej, hadice, valce a úniky", "Vidlice a predĺženia vidlíc: ohnutie / trhliny", "Navijak: lano, hák, kladka, bubon, poistky", "Zdvíhací hák: deformácia, poistka, značenie", "Rýchloupínač, zámky a upevnenie prídavného zariadenia", "Chýbajúce príslušenstvo / dokumentácia"]],
+  ["Funkčná kontrola a chybové hlásenia", ["Spustenie a chybové kódy / kontrolky", "Jazda, riadenie a brzdenie", "Zdvih, spúšťanie a pohyb ramien / stožiara", "Vysúvanie / zasúvanie, naklápanie vidlíc", "Otáčanie nadstavby / polohovanie koša", "Ovládanie z príslušných stanovíšť", "Funkcia prídavného zariadenia, ak je povolená", "Neštandardné zvuky, vibrácie a samovoľný pohyb"]],
+].map(([title, items], c) => ({ n: c + 1, title, items: items.map((label, i) => ({ key: `${c + 1}${"abcdefghi"[i]}`, label })) }));
+const CHECKER_ITEMS = CHECKER_CHAPTERS.flatMap((ch) => ch.items.map((it) => ({ ...it, chapter: ch })));
+const CLEAN_LEVELS = [["cisty", "Čistý"], ["bezne", "Bežné znečistenie"], ["umytie", "Potrebné umytie"], ["nadmerne", "Nadmerné znečistenie"]];
+const CLEAN_KINDS = [["blato", "Blato"], ["beton", "Betón"], ["farba", "Farba"], ["olej", "Olej"], ["lepidlo", "Lepidlo"], ["ine", "Iné"]];
+const CHECK_CLASSES = { A: "Bez závad", B: "Čistenie / drobné opravy", C: "Poškodenie / servisné posúdenie", D: "Odstavené z prevádzky" };
+const SEVERITY_LABEL = { drobna: "Drobná", zavazna: "Závažná" };
+// Nová kontrola (body s kľúčom) vs. stará (14 bodov protokolu šoféra podľa poradia).
+const isNewChecklist = (cl) => Array.isArray(cl) && cl.some((it) => it?.key);
+const checkItemLabel = (it, i) => (it?.key ? CHECKER_ITEMS.find((x) => x.key === it.key)?.label : HANDOVER_CHECKLIST_ITEMS[i]) || "";
+// Bod je vyplnený: V poriadku, Nevzťahuje sa, alebo Problém so závažnosťou a poznámkou.
+const checkItemDone = (it) => it?.checkerStatus === "ok" || it?.checkerStatus === "na" || (it?.checkerStatus === "problem" && !!SEVERITY_LABEL[it.severity] && !!String(it.checkerNote || "").trim());
+const cleanDone = (c) => !!c && CLEAN_LEVELS.some(([k]) => k === c.level) && (c.level === "cisty" || (c.kinds || []).length > 0) && ["ok", "chyba"].includes(c.keys) && ["ok", "chyba"].includes(c.docs);
+// Návrh klasifikácie: nič → A, drobné / čistenie → B, závažné → C (D len ručne).
+function suggestCheckClass(checklist, clean) {
+  const probs = (checklist || []).filter((it) => it?.checkerStatus === "problem");
+  if (probs.some((it) => it.severity === "zavazna")) return "C";
+  if (probs.length || ["umytie", "nadmerne"].includes(clean?.level) || clean?.keys === "chyba" || clean?.docs === "chyba") return "B";
+  return "A";
+}
+// Popis servisného tiketu z kontroly (C/D): klasifikácia + body s problémom.
+function checkerTicketText(a) {
+  const probs = (a.checklist || []).filter((it) => it?.checkerStatus === "problem")
+    .map((it) => { const x = CHECKER_ITEMS.find((y) => y.key === it.key); return `${it.key} ${x?.chapter.title || ""} — ${x?.label || ""} (${SEVERITY_LABEL[it.severity] || "—"}): ${String(it.checkerNote || "").trim()}`; });
+  return [`Kontrola ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}: ${a.classification} — ${CHECK_CLASSES[a.classification]}${a.classificationNote?.trim() ? ` (${a.classificationNote.trim()})` : ""}.`, probs.join("; ")].filter(Boolean).join(" ");
+}
 
 const DAMAGE_STAV_META = {
   opravene: { label: "Opravené", color: "var(--ok)", bg: "var(--ok-bg)" },
@@ -2351,6 +2469,8 @@ function protocolEditPatch(p, raw) {
     const before = isItems ? protocolItems(k, p[k]) : k in shown ? shown[k] : p[k];
     if (canonJSON(val === "" ? null : val) !== canonJSON(before === "" ? null : before)) patch[k] = val;
   });
+  // „Kontaktná osoba“ sa zobrazuje z clientContact — oprava ide do oboch polí (k59 servis S1).
+  if ("customerSignatoryName" in patch) patch.clientContact = patch.customerSignatoryName;
   return patch;
 }
 
@@ -2567,6 +2687,24 @@ function photoFolder(machine, job) {
   const ref = job ? job.code || job.cisloZmluvy || `${job.startDate || ""}_${job.customer || ""}` : "";
   return `${clean(machine?.code || machine?.id || "neznamy-stroj")}/${clean(ref || "bez-zakazky")}_${todayISO()}`;
 }
+// Fotka stroja do Storage; bez signálu dátová URL + fronta (pri návrate sa v zázname prepíše na odkaz).
+let _lastPhotoId = 0;
+async function storeMachinePhoto(file, { machine, job, table, recordId, field }) {
+  const blob = await compressImageToBlob(file);
+  const pathPrefix = photoFolder(machine, job);
+  _lastPhotoId = Math.max(Date.now(), _lastPhotoId + 1); // dve fotky v tej istej milisekunde nesmú mať rovnaký názov
+  const photoId = String(_lastPhotoId);
+  try {
+    const path = `${pathPrefix}/${photoId}.jpg`;
+    await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
+    return supabase.storage.from("inspections").getPublicUrl(path).data.publicUrl;
+  } catch (e) {
+    console.error("Nahranie fotky stroja do Storage zlyhalo (asi offline) — čaká vo fronte:", e);
+    const dataUrl = await blobToDataUrl(blob);
+    queuePhotoMigration({ photoId, table, recordId, field, oldValue: dataUrl, pathPrefix });
+    return dataUrl;
+  }
+}
 
 /* ---------------------------------------------------------
    Storage helpers — backed by Supabase (tabuľka app_data: key, value, updated_at)
@@ -2574,6 +2712,8 @@ function photoFolder(machine, job) {
 // Podpis v tlačenom/zobrazenom protokole len ako skutočný obrázok (data:image/… alebo
 // odkaz do vlastného úložiska) — čokoľvek iné (napr. podvrhnuté HTML alebo cudzia URL cez API) sa nezobrazí.
 const OWN_STORAGE_URL = `${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/`;
+// Podpis z úložiska sa zobrazí vždy z vlastného úložiska podľa cesty (DB overí, že súbor v ňom je) — hostiteľ v odkaze nerozhoduje.
+const sigUrl = (u) => (typeof u === "string" && u.replace(/^https?:\/\/[^/"'<>\s]+\/storage\/v1\/object\/public\/(protocols\/podpisy\/[0-9a-f]{64}\.png)$/, (_, p) => OWN_STORAGE_URL + p)) || u;
 function safeImgUrl(u) {
   return typeof u === "string" && (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(u)
     || (u.startsWith(OWN_STORAGE_URL) && /^https?:\/\/[^"'<>\s]+$/.test(u)));
@@ -2727,7 +2867,8 @@ async function collectStoredPhotoUrls(sinceIso) {
     rowCount += rows?.length || 0;
     for (const row of rows || []) {
       const matches = JSON.stringify(row.data).match(re);
-      if (matches) for (const m of matches) urls.add(m);
+      // len vlastné úložisko a bez „..“ — cudzí server ani cesta mimo priečinka nejde do ZIP (k59 S2)
+      if (matches) for (const m of matches) if (m.startsWith(OWN_STORAGE_URL) && !/\.\.|%2e%2e|\\/i.test(m)) urls.add(m);
     }
   }
   console.log(`Export fotiek: ${rowCount} záznamov prehľadaných, nájdených fotiek: ${urls.size}`);
@@ -2741,7 +2882,7 @@ async function exportPhotosAsZip(sinceIso, onProgress) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
-      entries.push({ name: url.split("/storage/v1/object/public/")[1], data: bytes });
+      entries.push({ name: url.slice(OWN_STORAGE_URL.length).replace(/[\\]/g, "_").replace(/\.\.+/g, "_").replace(/^\/+/, ""), data: bytes });
     } catch (e) {
       console.error("Export fotiek: preskočený súbor", url, e);
     }
@@ -5872,7 +6013,7 @@ function DispatcherApp() {
   }, []);
 
   useEffect(() => {
-    setPhotoLightboxOpenListener((url) => setLightboxUrl(url));
+    setPhotoLightboxOpenListener((url, list) => setLightboxUrl(list?.length ? { url, list } : url));
     return () => setPhotoLightboxOpenListener(null);
   }, []);
 
@@ -10739,7 +10880,8 @@ function DispatcherApp() {
     // Existujúcu (nevykonanú) kontrolu len presunieme/prehodíme — to isté ID,
     // nič rozpracované sa nestratí. Upozornenie ide len novému checkerovi.
     const reset = machineChanged && existing.resolved
-      ? { resolved: false, checklist: null, checkerPhotos: [], checkerBy: null, checkerDate: null, workHours: null, usedParts: [], mth: null, noMth: null, erpProcessed: false, erpProcessedAt: null, erpProcessedBy: null, erpSnapshot: null, erpOrderNumber: null, damageId: null }
+      ? { resolved: false, checklist: null, checkerPhotos: [], checkerBy: null, checkerDate: null, workHours: null, usedParts: [], mth: null, noMth: null, erpProcessed: false, erpProcessedAt: null, erpProcessedBy: null, erpSnapshot: null, erpOrderNumber: null, damageId: null,
+          checkerPhotoShots: [], fuel: null, cleanliness: null, classification: null, classificationSuggested: null, classificationNote: null, checkerAt: null }
       : {};
     const record = existing
       ? { ...existing, technicianId: checkerId, date: inspectionDate, self: !!job.selfPickup, machineId: job.machineId, ...reset }
@@ -13586,7 +13728,7 @@ function DispatcherApp() {
         <PrintProtocolModal html={printProtocolHtml} onClose={() => setPrintProtocolHtml(null)} />
       )}
       {lightboxUrl && (
-        <PhotoLightboxModal src={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+        <PhotoLightboxModal src={lightboxUrl.url || lightboxUrl} list={lightboxUrl.list} onClose={() => setLightboxUrl(null)} />
       )}
       {pendingMail && <MailChoiceModal mail={pendingMail} onClose={() => setPendingMail(null)} />}
       {highlightDamageId && (() => {
@@ -13842,6 +13984,7 @@ function DispatcherApp() {
           }}
           checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz")}
           checkerWarn={checkerProblemText(showHandoverProtocol, assignments, damages)}
+          prevShots={lastShotPhotos(showHandoverProtocol.machineId, assignments, handoverProtocols)}
           assignments={assignments}
           onClose={() => { setShowHandoverProtocol(null); setHandoverDirectPhase(null); goBackCard(); }}
           onSave={(patch, baseRev, showSuccessScreen, baseSnap) => {
@@ -13953,6 +14096,8 @@ function DispatcherApp() {
             myEmployee={myEmployee}
             user={effectiveUser}
             lastMth={lastMachineMth(assignments, checkerInspectionTarget.machineId || machine?.id, checkerInspectionTarget.id)}
+            prevShots={lastShotPhotos(checkerInspectionTarget.machineId || machine?.id, assignments, handoverProtocols, checkerInspectionTarget.id)}
+            ticketGone={loaded ? !damages.some((d) => d.id === checkerInspectionTarget.damageId) : null /* tikety sa ešte načítavajú — nehlásiť nič */}
             onClose={() => { setCheckerInspectionTarget(null); goBackCard(); }}
             onSave={(patch) => {
               // Dispečer medzitým zákazku zmazal / kontrolu zrušil — nič neukladať potichu.
@@ -13968,7 +14113,10 @@ function DispatcherApp() {
               // Úprava hotovej kontroly (napr. len hodiny) upozornenie nezopakuje — len nový problém.
               const wasProblem = (i) => (checkerInspectionTarget.checklist || [])[i]?.checkerStatus === "problem";
               const newProblem = !checkerInspectionTarget.resolved || (patch.checklist || []).some((it, i) => it.checkerStatus === "problem" && !wasProblem(i));
-              if (hasProblem && job && newProblem) {
+              // Klasifikácia C/D založí servisný tiket — len raz (väzba damageId ako pri ručnom nahlásení).
+              const ticketDue = ["C", "D"].includes(patch.classification) && !checkerInspectionTarget.damageId && !!machine;
+              // Pri tikete stačí jeho „Nové poškodenie“ (dostanú ho tí istí) — nie dve upozornenia na jednu udalosť (k59).
+              if (hasProblem && job && newProblem && !ticketDue) {
                 notifyDispatchers({
                   kind: "damage_new",
                   attachTo: checkerInspectionTarget.id, // uloží ho databáza spolu s kontrolou (aj z offline fronty)
@@ -13977,7 +14125,10 @@ function DispatcherApp() {
                   link: { module: "poziciovna", view: "jobs", jobId: job.id, binderTab: "kontroly" },
                 }, { job, extraRoles: ["dispecer_servisu", "veduci_servisu"] });
               }
-              persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null } : a)));
+              const ticket = ticketDue
+                ? reportDamage(machine, checkerTicketText({ ...checkerInspectionTarget, ...patch }), undefined, { silent: true, atDepo: true, job: job || undefined })
+                : null;
+              persistAssignments((assignments) => assignments.map((a) => (a.id === checkerInspectionTarget.id ? { ...a, ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null, ...(ticket ? { damageId: ticket.id } : {}) } : a)));
               setCheckerInspectionTarget(null);
               // Osobný odber: po kontrole hneď odovzdanie zákazníkovi (protokol).
               if (job?.selfPickup && !isReturn && !handoverForJob?.handoverDone && !checkerInspectionTarget.resolved) { // úprava hotovej kontroly protokol neotvára
@@ -15931,15 +16082,31 @@ function ProtocolModal({ html, params, onClose }) {
 // Náhľad/tlač VYPLNENÉHO servisného protokolu (openPrintableServiceProtocol) — rovnaký
 // princíp ako ProtocolModal vyššie (iframe namiesto window.open, ktoré je v appke
 // blokované), len bez "predvyplnené" odznaku, ktorý sem nepatrí.
-function PhotoLightboxModal({ src, onClose }) {
+function PhotoLightboxModal({ src: src0, list, onClose }) {
   // Tmavé pozadie bez presvitania stránky, horná lišta so „✕ Zavrieť“, fotka na celú plochu; klik mimo fotky zatvára.
+  const [idx, setIdx] = useState(() => Math.max(0, (list || []).findIndex((x) => x.url === src0)));
+  const n = list?.length || 0;
+  const src = n ? list[idx].url : src0;
+  const go = (d) => setIdx((i) => (i + d + n) % n);
+  // Esc zavrie len fotku — capture, aby nezavrel aj okno pod ňou (ako PrintProtocolModal).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onClose(); }
+      else if (n > 1 && e.key === "ArrowRight") go(1);
+      else if (n > 1 && e.key === "ArrowLeft") go(-1);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [n, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+  const navBtn = { minHeight: 48, minWidth: 48, fontSize: 22, background: "transparent", color: "#fff", border: "1px solid #fff", cursor: "pointer" };
   return (
     <div
       className="fullscreen-overlay"
       style={{ position: "fixed", inset: 0, background: "#111", zIndex: 300, display: "flex", flexDirection: "column", cursor: "zoom-out" }}
       onClick={onClose}
     >
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "max(12px, env(safe-area-inset-top)) 16px 8px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, padding: "max(12px, env(safe-area-inset-top)) 16px 8px" }}>
+        {n > 0 && <div style={{ flex: 1, minWidth: 0, color: "#fff", fontSize: 14 }}><span className="tnum" style={{ opacity: 0.75 }}>{idx + 1} / {n}</span> · {list[idx].caption}</div>}
         <button
           className="btn"
           style={{ minHeight: 48, fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", cursor: "pointer" }}
@@ -15951,11 +16118,17 @@ function PhotoLightboxModal({ src, onClose }) {
       <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 16px max(16px, env(safe-area-inset-bottom))" }}>
         <img
           src={src}
-          alt="Náhľad fotky"
+          alt={n ? list[idx].caption : "Náhľad fotky"}
           style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, cursor: "default" }}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
+      {n > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 16, padding: "0 16px max(16px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn" style={navBtn} onClick={() => go(-1)} aria-label="Predošlá fotka">‹</button>
+          <button type="button" className="btn" style={navBtn} onClick={() => go(1)} aria-label="Ďalšia fotka">›</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -16670,7 +16843,9 @@ function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items
 function checkerProblemText(job, assignments, damages) {
   if (!job) return null;
   const insp = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
-  const probs = (insp?.checklist || []).map((it, i) => (it?.checkerStatus === "problem" ? it.checkerNote?.trim() || HANDOVER_CHECKLIST_ITEMS[i] : null)).filter(Boolean);
+  const probs = (insp?.checklist || []).map((it, i) => (it?.checkerStatus === "problem" ? it.checkerNote?.trim() || checkItemLabel(it, i) : null)).filter(Boolean);
+  // C/D: klasifikácia s poznámkou aj bez bodu s problémom — stroj sa neblokuje, varovanie je jediná poistka (k59 S1).
+  if (["C", "D"].includes(insp?.classification)) probs.push(`klasifikácia ${insp.classification} — ${CHECK_CLASSES[insp.classification]}${insp.classificationNote?.trim() ? ` (${insp.classificationNote.trim()})` : ""}`);
   const dmg = (damages || []).filter((d) => d.machineId === job.machineId && !d.resolved && (d.type === "poskodenie" || d.type === "externa") && (!insp?.damageId || d.id !== insp.damageId)).map((d) => d.popis?.trim() || "porucha").filter((x) => !probs.includes(x));
   if (!probs.length && !dmg.length) return null;
   return `${probs.length ? "Checker našiel problém" : "Stroj má otvorené poškodenie"}: ${[...probs, ...dmg].join("; ")} — pred odovzdaním zavolajte dispečerovi`;
@@ -19767,23 +19942,343 @@ function ChecklistEditor({ checklist: raw, statusKey, noteKey, onChange, onAllOk
 }
 
 // Fotky: „Odfotiť“ otvorí na mobile rovno fotoaparát, „Z galérie“ výber súborov.
-function PhotoPickButtons({ onFiles, miss }) {
+// onCamera: vlastný fotoaparát platformy (obdĺžnik + predošlá fotka), ak ho zariadenie má — inak fotoaparát telefónu.
+function PhotoPickButtons({ onFiles, miss, onCamera, cameraLabel = "Odfotiť", galleryLabel = "Z galérie" }) {
   const pick = (e) => { onFiles(e.target.files); e.target.value = ""; };
   return (
     <div data-miss={miss || undefined} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-        <NavIcon id="kamera" /> Odfotiť
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+        onClick={(e) => { if (onCamera && navigator.mediaDevices?.getUserMedia) { e.preventDefault(); onCamera(); } }}>
+        <NavIcon id="kamera" /> {cameraLabel}
         <input type="file" accept="image/*" capture="environment" onChange={pick} style={{ display: "none" }} />
       </label>
       <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", borderColor: "var(--line-strong)" }}>
-        <NavIcon id="galeria" /> Z galérie
+        <NavIcon id="galeria" /> {galleryLabel}
         <input type="file" accept="image/*" multiple onChange={pick} style={{ display: "none" }} />
       </label>
     </div>
   );
 }
 
-function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, checkerWarn, assignments, onEnsurePortalLink }) {
+// Fotky stroja po záberoch: 9 pomenovaných okienok (prázdne ukáže predošlú fotku záberu) + fotky poškodení navyše.
+// items = [{ url, shot }] (shot null = navyše); onChange je setter stavu (funkčné aktualizácie pri viacerých nahrávaniach).
+function ShotPhotos({ items, onChange, upload, readOnly, prev, missing }) {
+  const [cam, setCam] = useState(null); // kľúč záberu otvoreného fotoaparátu
+  const byShot = {};
+  items.forEach((x) => { if (x.shot && !byShot[x.shot]) byShot[x.shot] = x.url; });
+  const extra = items.filter((x) => !x.shot || byShot[x.shot] !== x.url);
+  const firstEmpty = (except) => MACHINE_SHOTS.find(([k]) => !byShot[k] && k !== except)?.[0] || null;
+  const lightList = [...MACHINE_SHOTS.filter(([k]) => byShot[k]).map(([k, l]) => ({ url: byShot[k], caption: l })), ...extra.map((x, i) => ({ url: x.url, caption: `Fotka navyše ${i + 1}` }))];
+  // target: kľúč záberu (nahradí), undefined = voľné zábery po poradí a zvyšok navyše, null = navyše.
+  async function add(files, target) {
+    for (const file of Array.from(files || [])) {
+      const url = await upload(file);
+      if (!url) continue;
+      onChange((cur) => {
+        const taken = new Set(cur.filter((x) => x.shot).map((x) => x.shot));
+        if (target && taken.has(target)) return cur.map((x) => (x.shot === target ? { url, shot: target } : x));
+        const shot = target === null ? null : target || MACHINE_SHOTS.find(([k]) => !taken.has(k))?.[0] || null;
+        return [...cur, { url, shot }];
+      });
+    }
+  }
+  const remove = (url) => onChange((cur) => cur.filter((x) => x.url !== url));
+  const doneN = MACHINE_SHOTS.filter(([k]) => byShot[k]).length;
+  return (
+    <>
+      <div className="shot-grid">
+        {MACHINE_SHOTS.map(([k, label], i) => {
+          const url = byShot[k];
+          return (
+            <div key={k} className={`shot${url ? " on" : ""}`} data-miss={(!url && missing) || undefined}>
+              {url ? (
+                <img src={url} alt={label} onClick={() => openPhotoLightbox(url, lightList)} />
+              ) : (
+                <button type="button" className="shot-add" disabled={readOnly} onClick={() => setCam(k)} aria-label={`Odfotiť záber: ${label}`}>
+                  {prev?.[k] && <img src={prev[k].url} alt="" className="shot-prev" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                  <span aria-hidden="true">{readOnly ? "—" : "＋"}</span>
+                </button>
+              )}
+              <span className="shot-l">{i + 1}. {label}</span>
+              {url && !readOnly && <button type="button" className="shot-x" onClick={async () => { if (await askConfirm({ title: "Odstrániť fotku?", message: `Fotka záberu „${label}“ sa odstráni a záber bude treba odfotiť znova.`, confirmLabel: "Odstrániť" })) remove(url); }} title="Odstrániť fotku" aria-label={`Odstrániť fotku: ${label}`}>✕</button>}
+            </div>
+          );
+        })}
+      </div>
+      {!readOnly && <PhotoPickButtons onFiles={(f) => add(f)} onCamera={() => setCam(firstEmpty() || MACHINE_SHOTS[0][0])} miss={missing} cameraLabel={doneN < MACHINE_SHOTS.length ? "Odfotiť zábery" : "Odfotiť"} />}
+      {(!readOnly || extra.length > 0) && <div className="fhint" style={{ margin: "8px 0 6px", fontWeight: 600, color: "var(--text)" }}>Fotky poškodení a detaily <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>· nepovinné, ľubovoľný počet</span></div>}
+      {extra.length > 0 && (
+        <div className="fphotos">
+          {extra.map((x, i) => (
+            <div key={x.url + i} className="fphoto">
+              <img src={x.url} alt={`Fotka navyše ${i + 1}`} onClick={() => openPhotoLightbox(x.url, lightList)} />
+              {!readOnly && <button type="button" onClick={() => remove(x.url)} title="Odstrániť fotku" aria-label="Odstrániť fotku">✕</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {!readOnly && <PhotoPickButtons onFiles={(f) => add(f, null)} cameraLabel="Odfotiť detail" galleryLabel="Detail z galérie" />}
+      {cam && (
+        <ShotCamera
+          shot={cam}
+          prev={prev?.[cam]}
+          doneN={doneN}
+          onPick={(k) => setCam(k)}
+          onShot={async (blob) => { await add([blob], cam); const next = firstEmpty(cam); setCam(next); }}
+          onClose={() => setCam(null)}
+        />
+      )}
+    </>
+  );
+}
+// Fotoaparát platformy: obdĺžnik na zarovnanie stroja (rovnaký pre všetky modely) a v rohu predošlá fotka toho istého záberu.
+function ShotCamera({ shot, prev, doneN, onPick, onShot, onClose }) {
+  const videoRef = useRef(null);
+  const fileRef = useRef(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEscClose(true, onClose);
+  useEffect(() => {
+    let stream = null; let gone = false;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } }, audio: false })
+      .then((s) => { if (gone) { s.getTracks().forEach((t) => t.stop()); return; } stream = s; if (videoRef.current) { videoRef.current.srcObject = s; videoRef.current.play?.().catch(() => {}); } })
+      .catch(() => setErr("Fotoaparát sa nepodarilo spustiť (povolenie alebo zariadenie)."));
+    return () => { gone = true; stream?.getTracks().forEach((t) => t.stop()); };
+  }, []);
+  async function snap() {
+    const v = videoRef.current;
+    if (!v?.videoWidth || busy) return;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9));
+    setBusy(true);
+    try { await onShot(blob); } finally { setBusy(false); }
+  }
+  const idx = MACHINE_SHOTS.findIndex(([k]) => k === shot);
+  return (
+    <div className="fullscreen-overlay shot-cam" role="dialog" aria-modal="true" aria-label={`Fotoaparát — ${SHOT_LABEL[shot]}`}>
+      <div className="shot-cam-top">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Záber {idx + 1} / {MACHINE_SHOTS.length} · hotové {doneN}</div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{SHOT_LABEL[shot]}</div>
+        </div>
+        <button type="button" className="btn shot-cam-btn" onClick={onClose}>✕ Zavrieť</button>
+      </div>
+      <div className="shot-cam-view">
+        {err ? (
+          <div style={{ color: "#fff", padding: 20, textAlign: "center" }}>
+            <div style={{ marginBottom: 12 }}>{err}</div>
+            <button type="button" className="btn btn-accent" style={{ minHeight: 48 }} onClick={() => fileRef.current?.click()}>Odfotiť fotoaparátom telefónu</button>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setBusy(true); try { await onShot(f); } finally { setBusy(false); } } }} />
+          </div>
+        ) : (
+          <video ref={videoRef} playsInline muted autoPlay />
+        )}
+        {!err && <div className="shot-cam-frame" aria-hidden="true" />}
+        {prev && <figure className="shot-cam-prev"><img src={prev.url} alt={`Predošlá fotka: ${SHOT_LABEL[shot]}`} onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }} /><figcaption>{prev.who ? `${prev.who} · ` : ""}{prev.date ? fmtDate(String(prev.date).slice(0, 10)) : "minule"}</figcaption></figure>}
+      </div>
+      <div className="shot-cam-bottom">
+        <button type="button" className="btn shot-cam-btn" disabled={idx <= 0} onClick={() => onPick(MACHINE_SHOTS[idx - 1][0])} aria-label="Predošlý záber">‹</button>
+        <button type="button" className="shot-cam-snap" disabled={!!err || busy} onClick={snap} aria-label={`Odfotiť: ${SHOT_LABEL[shot]}`}>{busy ? "…" : ""}</button>
+        <button type="button" className="btn shot-cam-btn" disabled={idx >= MACHINE_SHOTS.length - 1} onClick={() => onPick(MACHINE_SHOTS[idx + 1][0])} aria-label="Ďalší záber">›</button>
+      </div>
+    </div>
+  );
+}
+// Posledná fotka každého záberu tohto stroja (vzor pre fotoaparát) — z kontrol checkera aj protokolov šoféra.
+function lastShotPhotos(machineId, assignments, handoverProtocols, exclude) {
+  if (!machineId) return {};
+  const src = [];
+  (assignments || []).forEach((a) => { if (a.kind === "kontrolaStroja" && a.machineId === machineId && a.id !== exclude && a.checkerPhotoShots) src.push([a.checkerAt || a.checkerDate || "", a.checkerPhotos, a.checkerPhotoShots, a.checkerBy]); });
+  (handoverProtocols || []).forEach((h) => {
+    if (h.machineId !== machineId || h.id === exclude) return;
+    if (h.handoverPhotoShots) src.push([h.handoverDate || "", h.handoverPhotos, h.handoverPhotoShots, h.handoverDriverName]);
+    if (h.returnPhotoShots) src.push([h.returnDoneAt || h.returnDate || "", h.returnPhotos, h.returnPhotoShots, h.returnDriverName]);
+  });
+  src.sort((x, y) => String(y[0]).localeCompare(String(x[0])));
+  const out = {};
+  src.forEach(([date, photos, shots, who]) => { const { map } = shotPhotoMap(photos, shots); for (const k in map) if (!out[k] && !String(map[k]).startsWith("data:")) out[k] = { url: map[k], date, who }; });
+  return out;
+}
+const toShotItems = (photos, shots) => (photos || []).map((url, i) => ({ url, shot: (shots || [])[i] || null }));
+
+// Checklist kontroly checkera: kapitoly s „V poriadku“ / „Problém“, body s OK / Problém (Drobná/Závažná + poznámka) / Nevzťahuje sa.
+function CheckerChecklistEditor({ checklist, onChange }) {
+  const byKey = Object.fromEntries(checklist.map((it) => [it.key, it]));
+  const [open, setOpen] = useState(() => new Set(CHECKER_CHAPTERS.filter((ch) => ch.items.some((x) => ["problem", "na"].includes(byKey[x.key]?.checkerStatus))).map((ch) => ch.n)));
+  const toggle = (n, on) => setOpen((s) => { const x = new Set(s); if (on ?? !x.has(n)) x.add(n); else x.delete(n); return x; });
+  const setItem = (key, patch) => onChange(checklist.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  const fillOk = (keys) => onChange(checklist.map((it) => (keys.includes(it.key) && !it.checkerStatus ? { ...it, checkerStatus: "ok" } : it)));
+  const anyEmpty = checklist.some((it) => !it.checkerStatus);
+  return (
+    <>
+      {anyEmpty && (
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 48, color: "var(--s-done)", borderColor: "#9CCBA9" }} onClick={() => { fillOk(CHECKER_ITEMS.map((x) => x.key)); setOpen(new Set(CHECKER_CHAPTERS.filter((ch) => ch.items.some((x) => byKey[x.key]?.checkerStatus === "problem")).map((ch) => ch.n))); }}>
+            ✓ Všetko v poriadku
+          </button>
+          <span className="fhint" style={{ marginTop: 0 }}>alebo po kapitolách — „Problém“ otvorí body kapitoly</span>
+        </div>
+      )}
+      <div className="ckl">
+        {CHECKER_CHAPTERS.map((ch) => {
+          const its = ch.items.map((x) => byKey[x.key] || {});
+          const probN = its.filter((it) => it.checkerStatus === "problem").length;
+          const naN = its.filter((it) => it.checkerStatus === "na").length;
+          const done = its.every(checkItemDone);
+          const isOpen = open.has(ch.n);
+          return (
+            <div key={ch.n} className={`cki chk-ch${probN ? " prob" : ""}`} data-miss={!done || undefined}>
+              <button type="button" className="ckt chk-tt" aria-expanded={isOpen} onClick={() => toggle(ch.n)}>
+                <b>{ch.n}. {ch.title}</b>
+                <span className="fhint" style={{ margin: 0 }}>{isOpen ? "skryť body ▴" : `${ch.items.length} bodov ▾`}{naN ? ` · nevzťahuje sa ${naN}` : ""}</span>
+              </button>
+              <div className="cks" role="group" aria-label={ch.title}>
+                <button type="button" aria-pressed={done && !probN} className={done && !probN ? "okon" : ""} onClick={() => { fillOk(ch.items.map((x) => x.key)); if (!probN) toggle(ch.n, false); }}>V poriadku</button>
+                <button type="button" aria-pressed={probN > 0} className={probN ? "pon" : ""} onClick={() => toggle(ch.n, true)}>{probN ? `⚠ Problém · ${probN}` : "Problém"}</button>
+              </div>
+              {isOpen && (
+                <div className="chk-items">
+                  {ch.items.map((x) => {
+                    const it = byKey[x.key] || {};
+                    const st = it.checkerStatus;
+                    return (
+                      <div key={x.key} className={`chk-it${st === "problem" ? " prob" : ""}`} data-miss={!checkItemDone(it) || undefined}>
+                        <div className="chk-il"><span className="tnum">{x.key.slice(1)})</span> {x.label}</div>
+                        <div className="cks chk-3" role="group" aria-label={x.label}>
+                          <button type="button" aria-pressed={st === "ok"} className={st === "ok" ? "okon" : ""} onClick={() => setItem(x.key, { checkerStatus: "ok" })}>OK</button>
+                          <button type="button" aria-pressed={st === "problem"} className={st === "problem" ? "pon" : ""} onClick={() => setItem(x.key, { checkerStatus: "problem" })}>Problém</button>
+                          <button type="button" aria-pressed={st === "na"} className={st === "na" ? "naon" : ""} onClick={() => setItem(x.key, { checkerStatus: "na" })}>Nevzťahuje sa</button>
+                        </div>
+                        {st === "problem" && (
+                          <>
+                            <div className="seg chk-sev" role="group" aria-label={`Závažnosť — ${x.label}`} data-miss={!SEVERITY_LABEL[it.severity] || undefined}>
+                              {Object.entries(SEVERITY_LABEL).map(([k, l]) => <button key={k} type="button" aria-pressed={it.severity === k} className={it.severity === k ? "on" : ""} onClick={() => setItem(x.key, { severity: k })}>{l}</button>)}
+                            </div>
+                            <textarea value={it.checkerNote || ""} onChange={(e) => setItem(x.key, { checkerNote: e.target.value })} placeholder="Popíšte problém, napr. ľavé zadné koleso — zarezaný behúň" aria-label={`Popis problému — ${x.label}`} rows={3} className="chk-note" />
+                            {!checkItemDone(it) && <div className="fhint" style={{ marginTop: 4, color: "var(--danger-text)" }}>{!SEVERITY_LABEL[it.severity] ? "Vyberte Drobná alebo Závažná" : "Bez popisu problému sa nedá uložiť"}.</div>}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+// Čo v novej kontrole chýba (zoznam pod „Uložiť“).
+function checkerMissing(checklist, clean) {
+  const empty = CHECKER_CHAPTERS.filter((ch) => ch.items.some((x) => !checklist.find((it) => it.key === x.key)?.checkerStatus)).map((ch) => ch.n);
+  const prob = checklist.filter((it) => it.checkerStatus === "problem" && !checkItemDone(it));
+  const noSev = prob.filter((it) => !SEVERITY_LABEL[it.severity]).map((it) => it.key);
+  const noNote = prob.filter((it) => !String(it.checkerNote || "").trim()).map((it) => it.key);
+  return [
+    empty.length > 0 && `body checklistu (${empty.length > 1 ? "kapitoly" : "kapitola"} ${empty.join(", ")})`,
+    noSev.length > 0 && `Drobná / Závažná pri ${noSev.length > 1 ? "bodoch" : "bode"} ${noSev.join(", ")}`,
+    noNote.length > 0 && `popis problému pri ${noNote.length > 1 ? "bodoch" : "bode"} ${noNote.join(", ")}`,
+    !cleanDone(clean) && "čistota a kompletnosť",
+  ];
+}
+// Kapitola 8: čistota a kompletnosť (výber z dokumentu, nie OK/Problém).
+function CleanlinessEditor({ value, onChange, readOnly }) {
+  const v = value || {};
+  const set = (patch) => onChange({ ...v, ...patch });
+  const seg = (label, key, opts) => (
+    <div style={{ marginBottom: 10 }} data-miss={(!readOnly && !v[key]) || undefined}>
+      <div className="fhint" style={{ margin: "0 0 4px", color: "var(--text)", fontWeight: 600 }}>{label}</div>
+      <div className="seg chk-wrap" role="group" aria-label={label}>
+        {opts.map(([k, l]) => <button key={k} type="button" disabled={readOnly} aria-pressed={v[key] === k} className={v[key] === k ? "on" : ""} onClick={() => set({ [key]: k })}>{l}</button>)}
+      </div>
+    </div>
+  );
+  return (
+    <div className="ckl" style={{ padding: "10px 12px" }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>8. Čistota a kompletnosť</div>
+      {seg("Stupeň znečistenia", "level", CLEAN_LEVELS)}
+      <div style={{ marginBottom: 10 }} data-miss={(!readOnly && v.level && v.level !== "cisty" && !(v.kinds || []).length) || undefined}>
+        <div className="fhint" style={{ margin: "0 0 4px", color: "var(--text)", fontWeight: 600 }}>Druh znečistenia{v.level && v.level !== "cisty" ? " *" : ""}</div>
+        <div className="seg chk-wrap" role="group" aria-label="Druh znečistenia">
+          {CLEAN_KINDS.map(([k, l]) => { const on = (v.kinds || []).includes(k); return <button key={k} type="button" disabled={readOnly} aria-pressed={on} className={on ? "on" : ""} onClick={() => set({ kinds: on ? v.kinds.filter((x) => x !== k) : [...(v.kinds || []), k] })}>{l}</button>; })}
+        </div>
+      </div>
+      {seg("Kľúče a ovládače", "keys", [["ok", "Kompletné"], ["chyba", "Chýbajú"]])}
+      {seg("Dokumentácia a príslušenstvo", "docs", [["ok", "Kompletné"], ["chyba", "Chýba"]])}
+      <Field label="Iné zistenia">
+        <input value={v.other || ""} readOnly={readOnly} onChange={(e) => set({ other: e.target.value })} style={{ width: "100%" }} />
+      </Field>
+    </div>
+  );
+}
+// Prehľad hotovej kontroly (náhľad): len kapitoly s problémom / nevzťahuje sa rozpísané.
+function CheckerChecklistRecap({ assignment }) {
+  const cl = assignment.checklist || [];
+  const c = assignment.cleanliness || {};
+  const lbl = (opts, k) => opts.find(([x]) => x === k)?.[1] || "—";
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12, overflow: "hidden", fontSize: 13 }}>
+      {CHECKER_CHAPTERS.map((ch) => {
+        const its = ch.items.map((x) => ({ ...x, it: cl.find((y) => y.key === x.key) || {} }));
+        const probs = its.filter((x) => x.it.checkerStatus === "problem");
+        const na = its.filter((x) => x.it.checkerStatus === "na");
+        return (
+          <div key={ch.n} style={{ padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span>{ch.n}. {ch.title}</span>
+              <b style={{ color: probs.length ? "var(--danger-text)" : "var(--ok)", whiteSpace: "nowrap" }}>{probs.length ? `Problém · ${probs.length}` : "V poriadku"}</b>
+            </div>
+            {probs.map((x) => <div key={x.key} style={{ color: "var(--danger-text)", marginTop: 2 }}>{x.key.slice(1)}) {x.label} — <b>{SEVERITY_LABEL[x.it.severity] || "—"}</b>: {x.it.checkerNote}</div>)}
+            {na.length > 0 && <div className="fhint" style={{ margin: "2px 0 0" }}>Nevzťahuje sa: {na.map((x) => x.key.slice(1) + ")").join(", ")}</div>}
+          </div>
+        );
+      })}
+      <div style={{ padding: "6px 12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <span>8. Čistota a kompletnosť</span>
+          {(() => { const bad = ["umytie", "nadmerne"].includes(c.level) || c.keys === "chyba" || c.docs === "chyba"; return <b style={{ color: bad ? "var(--danger-text)" : "var(--ok)", whiteSpace: "nowrap" }}>{bad ? "Problém" : "V poriadku"}</b>; })()}
+        </div>
+        Čistota: {lbl(CLEAN_LEVELS, c.level)}{(c.kinds || []).length ? ` (${c.kinds.map((k) => lbl(CLEAN_KINDS, k)).join(", ")})` : ""} · kľúče {c.keys === "chyba" ? <b style={{ color: "var(--danger-text)" }}>chýbajú</b> : c.keys === "ok" ? "kompletné" : "—"} · dokumentácia {c.docs === "chyba" ? <b style={{ color: "var(--danger-text)" }}>chýba</b> : c.docs === "ok" ? "kompletná" : "—"}{c.other ? ` · ${c.other}` : ""}
+      </div>
+    </div>
+  );
+}
+// Porovnanie fotiek zákazky: riadky = zábery, stĺpce v časovom poradí; stĺpec bez fotiek sa skryje.
+function ShotCompare({ columns }) {
+  const cols = columns.map((c) => ({ ...c, ...shotPhotoMap(c.photos, c.shots) })).filter((c) => (c.photos || []).length > 0);
+  if (!cols.length) return <div className="fhint">Zatiaľ bez fotiek stroja.</div>;
+  const anyShots = cols.some((c) => Object.keys(c.map).length);
+  const all = [];
+  MACHINE_SHOTS.forEach(([k, l]) => cols.forEach((c) => { if (c.map[k]) all.push({ url: c.map[k], caption: `${l} · ${c.title}` }); }));
+  cols.forEach((c) => c.extra.forEach((url, i) => all.push({ url, caption: `${anyShots ? "Ďalšie fotky" : "Fotky"} ${i + 1} · ${c.title}` })));
+  const cell = (url, alt) => (url ? <img src={url} alt={alt} onClick={() => openPhotoLightbox(url, all)} /> : <span className="shc-none">—</span>);
+  return (
+    <div className="shc" style={{ "--shc-n": cols.length }}>
+      <div className="shc-row shc-head">
+        <span className="shc-lbl">Záber</span>
+        {cols.map((c) => <span key={c.title} className="shc-col"><b>{c.title}</b>{c.who || c.date ? <small>{c.who}{c.who && c.date ? " · " : ""}{c.date && <span style={{ whiteSpace: "nowrap" }}>{fmtDate(String(c.date).slice(0, 10))}</span>}</small> : null}</span>)}
+      </div>
+      {anyShots && MACHINE_SHOTS.map(([k, l]) => (
+        <div key={k} className="shc-row">
+          <span className="shc-lbl">{l}</span>
+          {cols.map((c) => <span key={c.title} className="shc-col">{cell(c.map[k], `${l} · ${c.title}`)}</span>)}
+        </div>
+      ))}
+      {cols.some((c) => c.extra.length) && (
+        <div className="shc-row">
+          <span className="shc-lbl">{anyShots ? "Ďalšie fotky" : "Fotky"}</span>
+          {cols.map((c) => <span key={c.title} className="shc-col shc-extra">{c.extra.length ? c.extra.map((url, i) => <img key={i} src={url} alt={`${c.title} ${i + 1}`} onClick={() => openPhotoLightbox(url, all)} />) : <span className="shc-none">—</span>}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClose, onSave, onDelete, canDelete, forcePhase, onReportTransportIssue, checkerInspection, checkerWarn, assignments, onEnsurePortalLink, prevShots }) {
   // Problém s prepravou — v záhlaví vedľa krížika (šofér), nech padne do oka.
   const issueBtn = onReportTransportIssue && can(user, "transport_issue_report") ? (
     <button className="btn btn-ghost header-damage-btn" onClick={onReportTransportIssue}>
@@ -19862,43 +20357,27 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Fotky stavu stroja pri zvoze od zákazníka (len fáza "vrátenie") — porovnanie
   // s fotkami checkera z vývozu (kontrola stroja pred vývozom).
   // Fotky stavu stroja danej fázy: pri zvoze vždy (returnPhotos), pri vývoze len keď zákazník nebol prítomný (handoverPhotos).
-  const [returnPhotos, setReturnPhotos] = useState((isReturnPhase ? existing?.returnPhotos : existing?.handoverPhotos) || []);
+  // 9 pomenovaných záberov + fotky navyše (rozhodnutie 6. 11.); staré protokoly majú všetky fotky bez záberu.
+  const [shotItems, setShotItems] = useState(() => (isReturnPhase ? toShotItems(existing?.returnPhotos, existing?.returnPhotoShots) : toShotItems(existing?.handoverPhotos, existing?.handoverPhotoShots)));
+  const savedShots = sortShotItems(shotItems);
+  const returnPhotos = savedShots.map((x) => x.url);
+  const shotsDone = MACHINE_SHOTS.filter(([k]) => shotItems.some((x) => x.shot === k)).length;
   // Zákazník nebol prítomný — protokol bez podpisu nájomcu, zato s povinnými fotkami.
   const [customerAbsent, setCustomerAbsent] = useState(!!(isReturnPhase ? existing?.returnCustomerAbsent : existing?.handoverCustomerAbsent));
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
-  async function handleReturnPhotoFiles(files) {
+  // Offline: fotka ostane ako dátová URL v zázname a vo fronte sa neskôr nahrá (storeMachinePhoto).
+  async function uploadShot(file) {
     setPhotoUploadError("");
-    for (const file of Array.from(files)) {
-      setUploadingPhotos((n) => n + 1);
-      try {
-        const blob = await compressImageToBlob(file);
-        const pathPrefix = photoFolder(machine, job);
-        // Logický názov namiesto holého UUID (časová pečiatka, dá sa dohľadať a
-        // zoradiť aj mimo appky) — rovnaký princíp ako pri protokoloch vyššie.
-        const photoId = String(Date.now());
-        try {
-          const path = `${pathPrefix}/${photoId}.jpg`;
-          await uploadToStorageWithRetry("inspections", path, blob, "image/jpeg");
-          const { data: pub } = supabase.storage.from("inspections").getPublicUrl(path);
-          setReturnPhotos((prev) => [...prev, pub.publicUrl]);
-        } catch (e) {
-          // Offline — nahranie do Storage sa nedá skúsiť na počkanie, kým človek
-          // vypĺňa formulár. Fotka sa dovtedy zobrazuje ako dátová URL (base64)
-          // priamo v zázname (ten sa odošle bežnou cestou), a naviac sa zaradí
-          // do fronty — pri návrate signálu sa nahrá do Storage a v zázname sa
-          // tichým prepíše na skutočný odkaz, presne ako pri online priebehu.
-          console.error("Nahranie fotky stavu stroja do Storage zlyhalo (asi offline) — čaká vo fronte:", e);
-          const dataUrl = await blobToDataUrl(blob);
-          setReturnPhotos((prev) => [...prev, dataUrl]);
-          queuePhotoMigration({ photoId, table: "handoverProtocols", recordId: existing?.id || newProtocolId, field: isReturnPhase ? "returnPhotos" : "handoverPhotos", oldValue: dataUrl, pathPrefix });
-        }
-      } catch (e) {
-        console.error("Spracovanie fotky zlyhalo", e);
-        setPhotoUploadError("Nahranie fotky zlyhalo, skúste to znova.");
-      } finally {
-        setUploadingPhotos((n) => n - 1);
-      }
+    setUploadingPhotos((n) => n + 1);
+    try {
+      return await storeMachinePhoto(file, { machine, job, table: "handoverProtocols", recordId: existing?.id || newProtocolId, field: isReturnPhase ? "returnPhotos" : "handoverPhotos" });
+    } catch (e) {
+      console.error("Spracovanie fotky zlyhalo", e);
+      setPhotoUploadError("Nahranie fotky zlyhalo, skúste to znova.");
+      return null;
+    } finally {
+      setUploadingPhotos((n) => n - 1);
     }
   }
 
@@ -19923,7 +20402,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     setPhase(next);
     setCustomerSig(next === "vratenie" ? existing?.returnCustomerSignature || null : existing?.handoverCustomerSignature || null);
     setDriverSig(next === "vratenie" ? existing?.returnDriverSignature || null : existing?.handoverDriverSignature || null);
-    setReturnPhotos((next === "vratenie" ? existing?.returnPhotos : existing?.handoverPhotos) || []);
+    setShotItems(next === "vratenie" ? toShotItems(existing?.returnPhotos, existing?.returnPhotoShots) : toShotItems(existing?.handoverPhotos, existing?.handoverPhotoShots));
     setCustomerAbsent(!!(next === "vratenie" ? existing?.returnCustomerAbsent : existing?.handoverCustomerAbsent));
     setCustomerName((next === "vratenie" ? existing?.returnCustomerName : existing?.handoverCustomerName) || defaultCustomerName);
     setDriverName((next === "vratenie" ? existing?.returnDriverName : existing?.handoverDriverName) || user?.name || "");
@@ -19936,8 +20415,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Povinné fotky: pri vrátení vždy; pri prevzatí bez zákazníka alebo keď stroj nemá hotovú kontrolu checkera
   // (vtedy sú fotky šoféra jediný doklad o stave). Oprava starého protokolu počet nevynucuje.
   const noCheckerInspection = !isReturnPhase && !job?.selfPickup && !(checkerInspection?.resolved && !checkerInspection?.skipped);
-  const photosRequired = isReturnPhase || customerAbsent || noCheckerInspection;
-  const photosNeeded = !isCorrection && photosRequired ? Math.max(0, MIN_MACHINE_PHOTOS - returnPhotos.length) : 0;
+  // Šofér fotí 9 záberov pri vývoze aj zvoze; osobný odber/vrátenie v depe nie — fotí checker pri kontrole (rozhodnutie 6. 11.).
+  const photosRequired = !(isReturnPhase ? job?.selfReturn : job?.selfPickup) || customerAbsent;
+  const photosNeeded = !isCorrection && photosRequired ? MACHINE_SHOTS.length - shotsDone : 0;
   // Oprava: chýbajúci podpis doplniť môže, nemusí (rozhodnutie 5. 11.); zrušenie „nebol prítomný“ ale podpis nájomcu pýta.
   const customerSigOptional = isCorrection && !(isReturnPhase ? existing.returnCustomerAbsent : existing.handoverCustomerAbsent);
   const customerOk = (customerAbsent ? returnPhotos.length > 0 : customerSigLocked || (customerSig ? !!customerName.trim() : customerSigOptional)) && photosNeeded === 0;
@@ -19958,6 +20438,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       if (!existing?.returnDone) patch.returnDoneAt = new Date(serverNowMs()).toISOString(); // poškodenie počas prenájmu vs. po vrátení v ten istý deň (ERP)
       patch.returnDate = existing?.returnDate || todayISO();
       patch.returnPhotos = returnPhotos;
+      if (shotItems.some((x) => x.shot) || existing?.returnPhotoShots) patch.returnPhotoShots = savedShots.map((x) => x.shot || null);
       // Depo, ktoré šofér videl pri zvoze — DB (step73) upozorní dispečera, ak ho medzitým niekto zmenil (zvoz bez signálu).
       if (!existing?.returnDone) patch.returnDepoSeen = job?.returnDepo || job?.fromDepo || null;
     } else {
@@ -19966,6 +20447,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       patch.handoverCustomerSignature = customerAbsent ? null : customerSig;
       if (!customerSigLocked && (customerSig || customerAbsent || !isCorrection)) patch.handoverCustomerName = customerAbsent ? "" : customerName.trim();
       if (returnPhotos.length || existing?.handoverPhotos?.length) patch.handoverPhotos = returnPhotos;
+      if (shotItems.some((x) => x.shot) || existing?.handoverPhotoShots) patch.handoverPhotoShots = savedShots.map((x) => x.shot || null);
       // Fotky šoféra nahrádzajú kontrolu checkera — vedieť to aj neskôr (DB pravidlo fotiek).
       if (!existing?.handoverDone && noCheckerInspection) patch.handoverWithoutInspection = true;
       patch.handoverDriverSignature = driverSig;
@@ -20258,21 +20740,13 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       )}
 
       <div ref={photosStepRef} style={{ scrollMarginTop: 60 }} />
-      <FormStep n={2} title={`Fotky stavu stroja pri ${isReturnPhase ? "zvoze" : "vývoze"}`} right={<span className="fhint" style={{ marginTop: 0 }}>{isCorrection ? (customerAbsent ? "povinné" : "") : photosRequired ? `povinné, aspoň ${MIN_MACHINE_PHOTOS}` : "nepovinné"}</span>} />
-      <div className="fphotos">
-        {returnPhotos.map((url, i) => (
-          <div key={i} className="fphoto">
-            <img src={url} alt={`Foto ${i + 1}`} onClick={() => openPhotoLightbox(url)} />
-            <button type="button" onClick={() => setReturnPhotos((prev) => prev.filter((_, idx) => idx !== i))} title="Odstrániť fotku" aria-label="Odstrániť fotku">✕</button>
-          </div>
-        ))}
-      </div>
-      <PhotoPickButtons onFiles={handleReturnPhotoFiles} miss={photosNeeded > 0 || (customerAbsent && returnPhotos.length === 0)} />
+      <FormStep n={2} title={`Fotky stavu stroja pri ${isReturnPhase ? "zvoze" : "vývoze"}`} right={<span className="fhint" style={{ marginTop: 0 }}>{isCorrection ? (customerAbsent ? "povinné" : "") : photosRequired ? `povinné zábery ${shotsDone} / ${MACHINE_SHOTS.length}` : "nepovinné (fotí checker pri kontrole)"}</span>} />
+      <ShotPhotos items={shotItems} onChange={setShotItems} upload={uploadShot} prev={isCorrection ? null : prevShots} missing={photosNeeded > 0 || (customerAbsent && returnPhotos.length === 0)} />
       {uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
       {photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
       {photosNeeded > 0 && (
         <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>
-          {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — " : ""}Pridajte fotky stroja — povinné aspoň {MIN_MACHINE_PHOTOS} (spredu, zozadu, oba boky), chýba {photosNeeded}.
+          {noCheckerInspection && !customerAbsent ? "Stroj nemá hotovú kontrolu checkera — odfoťte" : "Odfoťte"} všetkých {MACHINE_SHOTS.length} záberov stroja, chýba {photosNeeded}.
         </div>
       )}
 
@@ -20338,13 +20812,13 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         cancel={false}
         progress={[
           `Checklist ${checklist.filter((it) => ckDone(it, statusKey, noteKey)).length}/${HANDOVER_CHECKLIST_ITEMS.length}`,
-          !isCorrection && photosRequired ? `Fotky ${Math.min(returnPhotos.length, MIN_MACHINE_PHOTOS)}/${MIN_MACHINE_PHOTOS}` : customerAbsent ? `Fotky ${Math.min(returnPhotos.length, 1)}/1` : "",
+          !isCorrection && photosRequired ? `Zábery ${shotsDone}/${MACHINE_SHOTS.length}` : customerAbsent ? `Fotky ${Math.min(returnPhotos.length, 1)}/1` : "",
           `Podpisy ${(customerAbsent ? 0 : customerSig ? 1 : 0) + (driverSig ? 1 : 0)}/${customerAbsent ? 1 : 2}`,
         ].filter(Boolean).join(" · ")}
         missing={canSave ? [] : [
           uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
           ...ckMissing(checklist, statusKey, noteKey),
-          photosNeeded > 0 && `fotky stroja (${photosNeeded})`,
+          photosNeeded > 0 && `zábery stroja (${photosNeeded})`,
           photosNeeded === 0 && customerAbsent && returnPhotos.length === 0 && "fotka stroja",
           !customerAbsent && !customerSigLocked && !customerName.trim() && (customerSig || !customerSigOptional) && "meno nájomcu",
           !customerAbsent && !customerSig && !customerSigOptional && "podpis nájomcu",
@@ -20386,14 +20860,22 @@ function lastMachineMth(assignments, machineId, excludeId) {
   return last ? { value: last.noMth ? null : Number(last.mth), noMth: !!last.noMth, date: last.checkerDate || last.date, by: last.checkerBy || "" } : null;
 }
 const fmtMth = (n) => Number(n).toLocaleString("sk-SK", { maximumFractionDigits: 1 });
-function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, lastMth, onClose, onSave, onReportServiceStatus, onOpenHandover }) {
+function CheckerInspectionModal({ assignment, job, machine, handoverDone, handoverProtocol, myEmployee, user, lastMth, prevShots, ticketGone, onClose, onSave, onReportServiceStatus, onOpenHandover }) {
   const phase = assignment.phase === "vratenie" ? "vratenie" : "vyvoz";
+  // Hotová kontrola v starom tvare (14 bodov, voľné fotky) sa zobrazuje aj upravuje po starom (k59).
+  const legacy = !!assignment.resolved && !assignment.skipped && Array.isArray(assignment.checklist) && !isNewChecklist(assignment.checklist);
   const [checklist, setChecklist] = useState(() =>
-    assignment.checklist
+    legacy
       ? assignment.checklist.map((it) => ({ ...it, checkerStatus: it.checkerStatus ?? null, checkerNote: it.checkerNote ?? "" }))
-      : HANDOVER_CHECKLIST_ITEMS.map(() => ({ checkerStatus: null, checkerNote: "" }))
+      : CHECKER_ITEMS.map((x) => ({ key: x.key, checkerStatus: null, severity: null, checkerNote: "", ...(isNewChecklist(assignment.checklist) ? assignment.checklist.find((it) => it.key === x.key) : null) }))
   );
   const [photos, setPhotos] = useState(assignment.checkerPhotos || []);
+  const [shotItems, setShotItems] = useState(() => toShotItems(assignment.checkerPhotos, assignment.checkerPhotoShots));
+  const [clean, setClean] = useState(assignment.cleanliness || {});
+  const [fuel, setFuel] = useState(assignment.fuel != null ? String(assignment.fuel) : "");
+  // null = platforma navrhuje; checker môže zmeniť (D len ručne s poznámkou).
+  const [cls, setCls] = useState(assignment.classification && assignment.classification !== assignment.classificationSuggested ? assignment.classification : null);
+  const [clsNote, setClsNote] = useState(assignment.classificationNote || "");
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [photoUploadError, setPhotoUploadError] = useState("");
   // Hodiny sú POVINNÉ na každej kontrole (nie len keď je diel) — fakturant ich
@@ -20463,7 +20945,25 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       }
     }
   }
-  const checklistComplete = HANDOVER_CHECKLIST_ITEMS.every((_, i) => ckDone(checklist[i], "checkerStatus", "checkerNote"));
+  async function uploadShot(file) {
+    setPhotoUploadError("");
+    setUploadingPhotos((n) => n + 1);
+    try {
+      return await storeMachinePhoto(file, { machine, job, table: "assignments", recordId: assignment.id, field: "checkerPhotos" });
+    } catch (e) {
+      console.error("Spracovanie fotky zlyhalo", e);
+      setPhotoUploadError("Nahranie fotky zlyhalo, skúste to znova.");
+      return null;
+    } finally {
+      setUploadingPhotos((n) => n - 1);
+    }
+  }
+  const checklistComplete = legacy ? HANDOVER_CHECKLIST_ITEMS.every((_, i) => ckDone(checklist[i], "checkerStatus", "checkerNote")) : checklist.every(checkItemDone) && cleanDone(clean);
+  const suggested = legacy ? null : suggestCheckClass(checklist, clean);
+  const clsValue = cls || suggested;
+  const clsValid = legacy || (!!clsValue && (clsValue !== "D" || !!clsNote.trim()));
+  const fuelValid = legacy || (/^\d{1,3}$/.test(fuel.trim()) && Number(fuel) <= 100);
+  const shotsDone = MACHINE_SHOTS.filter(([k]) => shotItems.some((x) => x.shot === k)).length;
   // "1,5" (slovenská čiarka) aj "1.5".
   const hoursNum = Number(String(workHours).replace(",", "."));
   // Len bežný zápis (napr. 1, 1,5, 0.25) a najviac 24 h — „1e3“ ani preklep 150 nesmie ísť do ERP.
@@ -20477,8 +20977,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const mthValid = noMth || (mthFilled && (!mthSuspicious || mthConfirmed));
   // Hotová kontrola: pri úprave nesmie klesnúť pod 4 fotky (staršia s menej fotkami nie pod pôvodný počet).
   const photosMin = assignment.resolved && !assignment.skipped ? Math.min(MIN_MACHINE_PHOTOS, (assignment.checkerPhotos || []).length) : MIN_MACHINE_PHOTOS;
-  const photosNeeded = phase === "vyvoz" ? Math.max(0, photosMin - photos.length) : 0;
-  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && mthValid && photosNeeded === 0;
+  // Nová kontrola: 9 záberov pred vývozom aj po vrátení (rozhodnutie 6. 11.).
+  const photosNeeded = !legacy ? MACHINE_SHOTS.length - shotsDone : phase === "vyvoz" ? Math.max(0, photosMin - photos.length) : 0;
+  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && mthValid && photosNeeded === 0 && fuelValid && clsValid;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
   const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
 
@@ -20493,7 +20994,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   }
 
   function handleSaveClick() {
-    if (phase === "vyvoz" && photos.length === 0) {
+    if (legacy && phase === "vyvoz" && photos.length === 0) {
       setConfirmNoPhotos(true);
       return;
     }
@@ -20501,16 +21002,27 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   }
 
   function buildPatch() {
+    const done = !!assignment.resolved && !assignment.skipped;
     return {
       checklist,
-      checkerPhotos: photos,
-      checkerBy: myEmployee?.name || user?.name || "",
+      ...(legacy ? { checkerPhotos: photos } : {
+        checkerPhotos: sortShotItems(shotItems).map((x) => x.url),
+        checkerPhotoShots: sortShotItems(shotItems).map((x) => x.shot || null),
+        cleanliness: clean,
+        fuel: Number(fuel),
+        classification: clsValue,
+        classificationSuggested: suggested,
+        classificationNote: clsNote.trim(),
+      }),
+      // Oprava hotovej kontroly nemení checkera a čas vykonania (tlač ich ukazuje) — úprava sa eviduje zvlášť (k59 D5).
+      ...(done ? { editedBy: myEmployee?.name || user?.name || "", editedAt: new Date(serverNowMs()).toISOString() } : {}),
+      checkerBy: (done && assignment.checkerBy) || myEmployee?.name || user?.name || "",
       checkerDate: assignment.checkerDate || todayISO(),
       workHours: hoursNum,
       usedParts,
       mth: noMth ? null : mthNum,
       noMth,
-      checkerAt: new Date(serverNowMs()).toISOString(), // poradie dvoch kontrol toho istého stroja v jeden deň (posledný stav MTH)
+      checkerAt: (done && assignment.checkerAt) || new Date(serverNowMs()).toISOString(), // poradie dvoch kontrol toho istého stroja v jeden deň (posledný stav MTH)
     };
   }
   function handleSave() {
@@ -20581,26 +21093,47 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         </button>
       )}
       {!waitingForReturnProtocol && (<>
+      {legacy ? (<>
       <FormStep n={1} title="Predmet kontroly" right={showForm && <span className="spill tnum">{checklist.filter((it) => ckDone(it, "checkerStatus", "checkerNote")).length} / {HANDOVER_CHECKLIST_ITEMS.length}</span>} />
       {!showForm ? (
         <HandoverProtocolChecklistRecap checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" />
       ) : (
         <ChecklistEditor checklist={checklist} statusKey="checkerStatus" noteKey="checkerNote" onChange={setChecklist} />
       )}
+      </>) : (<>
+      <FormStep n={1} title="Kontrola stroja" right={showForm && <span className="spill tnum">{CHECKER_CHAPTERS.filter((ch) => ch.items.every((x) => checkItemDone(checklist.find((it) => it.key === x.key)))).length + (cleanDone(clean) ? 1 : 0)} / {CHECKER_CHAPTERS.length + 1}</span>} />
+      {!showForm ? (
+        <CheckerChecklistRecap assignment={assignment} />
+      ) : (
+        <>
+          <CheckerChecklistEditor checklist={checklist} onChange={setChecklist} />
+          <CleanlinessEditor value={clean} onChange={setClean} />
+        </>
+      )}
+      </>)}
 
       <FormStep
         n={2}
         title={<>{phase === "vratenie" ? "Fotky po vrátení — checker" : "Fotky pred vývozom — checker"}{assignment.checkerBy ? ` · ${assignment.checkerBy}` : ""}{assignment.checkerDate ? ` · ${fmtDate(String(assignment.checkerDate).slice(0, 10))}` : ""}</>}
-        right={<span className="fhint" style={{ marginTop: 0 }}>{phase === "vratenie" ? "voliteľné, ak šofér niečo prehliadol" : `aspoň ${photosMin}`}</span>}
+        right={<span className={legacy ? "fhint" : "spill tnum"} style={{ marginTop: 0 }}>{!legacy ? `${shotsDone} / ${MACHINE_SHOTS.length}` : phase === "vratenie" ? "voliteľné, ak šofér niečo prehliadol" : `aspoň ${photosMin}`}</span>}
       />
       {phase === "vratenie" && (
         <MachinePhotoGroup
           title={selfTransport ? "Pri vrátení v depe — protokol o vrátení" : "Pri zvoze — šofér"}
           who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate}
-          photos={handoverProtocol?.returnPhotos}
-          empty={selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1) — zatiaľ žiadne." : "Zatiaľ žiadne — šofér ich odfotí pri zvoze."}
+          photos={handoverProtocol?.returnPhotos} shots={handoverProtocol?.returnPhotoShots}
+          empty={!legacy ? undefined : selfTransport ? "Fotky pri vrátení sa robia v protokole o vrátení (krok 1) — zatiaľ žiadne." : "Zatiaľ žiadne — šofér ich odfotí pri zvoze."}
         />
       )}
+      {!legacy && (
+        <>
+          <ShotPhotos items={shotItems} onChange={setShotItems} upload={uploadShot} readOnly={!showForm} prev={prevShots} missing={showForm && photosNeeded > 0} />
+          {showForm && uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
+          {showForm && photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
+          {showForm && photosNeeded > 0 && <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>Odfoťte všetkých {MACHINE_SHOTS.length} záberov stroja — chýba {photosNeeded}.</div>}
+        </>
+      )}
+      {legacy && (<>
       {!showForm && photos.length === 0 && <div className="fhint" style={{ marginBottom: 8 }}>Bez fotiek.</div>}
       <div className="fphotos">
         {photos.map((url, i) => (
@@ -20620,11 +21153,20 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           {photosNeeded > 0 && <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>Pridajte fotky stroja pred vývozom — povinné aspoň {photosMin} (chýba {photosNeeded}).</div>}
         </>
       )}
+      </>)}
       {phase === "vyvoz" && !selfTransport && (handoverProtocol?.handoverPhotos || []).length > 0 && (
-        <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
+        <MachinePhotoGroup title="Pri vývoze — šofér" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} shots={handoverProtocol?.handoverPhotoShots} />
       )}
 
-      <FormStep n={3} title="Motohodiny" />
+      <FormStep n={3} title={legacy ? "Motohodiny" : "Stav stroja"} />
+      {!legacy && (showForm ? (
+        <Field label="Palivo / batéria (%) *">
+          <input type="text" inputMode="numeric" value={fuel} onChange={(e) => setFuel(e.target.value.replace(/[^\d]/g, "").slice(0, 3))} data-miss={!fuelValid || undefined} placeholder="napr. 60" aria-label="Palivo / batéria v percentách" style={{ width: 120 }} />
+          {fuel.trim() !== "" && !fuelValid && <div className="fhint" style={{ color: "var(--danger-text)" }}>Zadajte 0 až 100 %.</div>}
+        </Field>
+      ) : (
+        <div style={{ fontSize: 14, marginBottom: 6 }}>Palivo / batéria: {assignment.fuel != null ? `${assignment.fuel} %` : "—"}</div>
+      ))}
       {showForm ? (
         <div style={{ marginBottom: 10 }}>
           <Field label="Počet MTH (stav počítadla) *">
@@ -20679,7 +21221,37 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         </div>
       )}
 
-      {hasProblem && canEdit && (
+      {!legacy && (
+        <>
+          <FormStep n={5} title="Klasifikácia stavu" right={showForm && suggested && <span className="fhint" style={{ marginTop: 0 }}>návrh platformy: {suggested}</span>} />
+          {showForm ? (
+            <>
+              <div className="chk-cls" role="radiogroup" aria-label="Klasifikácia stavu" data-miss={!clsValid || undefined}>
+                {Object.entries(CHECK_CLASSES).map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={clsValue === k} className={`chk-cl chk-cl-${k}${clsValue === k ? " on" : ""}`} onClick={() => setCls(k === suggested ? null : k)}>
+                    <b>{k}</b><span>{l}{k === suggested && <small>návrh platformy</small>}{(k === "C" || k === "D") && <small>založí servisný tiket{k === "D" ? " · len s poznámkou" : ""}</small>}</span>
+                  </button>
+                ))}
+              </div>
+              <Field label={clsValue === "D" ? "Poznámka ku klasifikácii *" : "Poznámka ku klasifikácii"}>
+                <input value={clsNote} aria-label="Poznámka ku klasifikácii" onChange={(e) => setClsNote(e.target.value)} data-miss={(clsValue === "D" && !clsNote.trim()) || undefined} placeholder={clsValue === "D" ? "Prečo je stroj odstavený, napr. nefunguje núdzové zastavenie" : ""} style={{ width: "100%" }} />
+              </Field>
+              {["C", "D"].includes(clsValue) && (
+                <div className="fnote fnote-y">{assignment.damageId ? (ticketGone === null ? "Nový servisný tiket sa z tejto kontroly nezaloží." : ticketGone ? "Tiket z tejto kontroly bol zmazaný — nový sa nezaloží." : "Servisný tiket z tejto kontroly už existuje — nový sa nezaloží.") : "Pri uložení sa založí servisný tiket (poškodenie) z bodov s problémom."}</div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 14, marginBottom: 10 }}>
+              <b>{assignment.classification ? `${assignment.classification} — ${CHECK_CLASSES[assignment.classification]}` : "—"}</b>
+              {assignment.classificationSuggested && assignment.classificationSuggested !== assignment.classification ? <span style={{ color: "var(--text-dim)" }}> (návrh platformy {assignment.classificationSuggested})</span> : ""}
+              {assignment.classificationNote ? <div style={{ color: "var(--text-dim)" }}>{assignment.classificationNote}</div> : null}
+              {assignment.damageId && ticketGone !== null && <div className="fhint">{ticketGone ? "Tiket z tejto kontroly bol zmazaný." : "Z kontroly bol založený servisný tiket."}</div>}
+            </div>
+          )}
+        </>
+      )}
+
+      {legacy && hasProblem && canEdit && (
         assignment.damageId ? (
           <div className="fhint" style={{ marginBottom: 10 }}>
             Z tejto kontroly už bola nahlásená porucha.
@@ -20712,20 +21284,24 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         <FormFoot
           cancel={false}
           progress={[
-            `Checklist ${checklist.filter((it) => ckDone(it, "checkerStatus", "checkerNote")).length}/${HANDOVER_CHECKLIST_ITEMS.length}`,
-            phase === "vyvoz" ? `Fotky ${Math.min(photos.length, photosMin)}/${photosMin}` : "",
+            legacy ? `Checklist ${checklist.filter((it) => ckDone(it, "checkerStatus", "checkerNote")).length}/${HANDOVER_CHECKLIST_ITEMS.length}` : `Body ${checklist.filter(checkItemDone).length}/${checklist.length}`,
+            !legacy ? `Zábery ${shotsDone}/${MACHINE_SHOTS.length}` : phase === "vyvoz" ? `Fotky ${Math.min(photos.length, photosMin)}/${photosMin}` : "",
             `MTH ${mthValid ? "✓" : "✗"}`,
+            !legacy && `Palivo ${fuelValid ? "✓" : "✗"}`,
             `Hodiny ${hoursValid ? "✓" : "✗"}`,
+            !legacy && `Klasifikácia ${!checklistComplete ? "—" : clsValid ? clsValue : "✗"}`, // návrh A pri 0 bodoch ešte nie je návrh (k59 D11)
           ].filter(Boolean).join(" · ")}
           missing={[
             uploadingPhotos > 0 && "počkať, kým sa nahrajú fotky",
-            ...ckMissing(checklist, "checkerStatus", "checkerNote"),
-            photosNeeded > 0 && `fotky (${photosNeeded})`,
+            ...(legacy ? ckMissing(checklist, "checkerStatus", "checkerNote") : checkerMissing(checklist, clean)),
+            photosNeeded > 0 && (legacy ? `fotky (${photosNeeded})` : `zábery (${photosNeeded})`),
             !mthValid && (mthSuspicious ? "potvrdenie MTH" : "MTH"),
+            !fuelValid && "palivo / batéria",
             !hoursValid && (String(workHours).trim() ? "hodiny (najviac 24, napr. 1,5)" : "hodiny"),
             !partsValid && "názov dielu",
+            !clsValid && (clsValue === "D" ? "poznámka ku klasifikácii D" : "klasifikácia"),
           ].filter(Boolean)}
-          left={hasProblem && canEdit && !assignment.damageId && (
+          left={legacy && hasProblem && canEdit && !assignment.damageId && (
             <button type="button" className="btn btn-danger-outline" onClick={(e) => canSaveForm ? setConfirmReportDamage(true) : e.currentTarget.closest(".job-form-foot")?.querySelector(".ff-btns [data-incomplete]")?.click()}>
               <span className="hd-full">⚠ Uložiť a nahlásiť poruchu</span><span className="hd-short">⚠ Nahlásiť poruchu</span>
             </button>
@@ -20870,7 +21446,7 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
     const text = inspection.skipped
       ? `⊘ Nevykonaná — stroj odovzdaný bez kontroly (${techName})`
       : inspection.resolved
-      ? `Vykonaná (${techName})`
+      ? `Vykonaná (${techName})${CHECK_CLASSES[inspection.classification] ? ` · ${inspection.classification} — ${CHECK_CLASSES[inspection.classification]}` : ""}`
       : `${overdue ? "Po termíne" : "Naplánovaná"} na ${fmtDate(inspection.date)} (${techName})`;
     return onOpenCheckerInspection ? (
       <span onClick={() => onOpenCheckerInspection(inspection)} style={{ color: overdue ? "inherit" : "var(--accent)", cursor: "pointer", textDecoration: "underline" }}>
@@ -20962,19 +21538,19 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
             <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
               <div>
                 <CardField label="Kontrola stroja pred vývozom" value={inspectionField(inspectionVyvoz, checkerVyvoz)} warn={inspectionVyvoz && !inspectionVyvoz.resolved && inspectionVyvoz.date < todayISO()} />
-                <div style={{ marginTop: 10 }}>
-                  <MachinePhotoGroup title="Checker" who={inspectionVyvoz?.checkerBy} date={inspectionVyvoz?.checkerDate} photos={inspectionVyvoz?.checkerPhotos} />
-                  <MachinePhotoGroup title="Šofér pri vývoze" who={handoverProtocol?.handoverDriverName} date={handoverProtocol?.handoverDate} photos={handoverProtocol?.handoverPhotos} />
-                </div>
               </div>
               <div>
                 <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} warn={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
-                <div style={{ marginTop: 10 }}>
-                  <MachinePhotoGroup title="Šofér pri zvoze" who={handoverProtocol?.returnDriverName} date={handoverProtocol?.returnDate} photos={handoverProtocol?.returnPhotos} />
-                  <MachinePhotoGroup title="Checker" who={inspectionVratenie?.checkerBy} date={inspectionVratenie?.checkerDate} photos={inspectionVratenie?.checkerPhotos} />
-                </div>
               </div>
             </div>
+            {/* Porovnanie fotiek: zábery v riadkoch, stĺpce v časovom poradí (rozhodnutie 6. 11.). */}
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 6px" }}>Porovnanie fotiek stroja</div>
+            <ShotCompare columns={[
+              { title: "Checker pred vývozom", who: inspectionVyvoz?.checkerBy, date: inspectionVyvoz?.checkerDate, photos: inspectionVyvoz?.checkerPhotos, shots: inspectionVyvoz?.checkerPhotoShots },
+              { title: job.selfPickup ? "Odovzdanie v depe" : "Šofér pri vývoze", who: handoverProtocol?.handoverDriverName, date: handoverProtocol?.handoverDate, photos: handoverProtocol?.handoverPhotos, shots: handoverProtocol?.handoverPhotoShots },
+              { title: job.selfReturn ? "Vrátenie v depe" : "Šofér pri zvoze", who: handoverProtocol?.returnDriverName, date: handoverProtocol?.returnDate, photos: handoverProtocol?.returnPhotos, shots: handoverProtocol?.returnPhotoShots },
+              { title: "Checker po vrátení", who: inspectionVratenie?.checkerBy, date: inspectionVratenie?.checkerDate, photos: inspectionVratenie?.checkerPhotos, shots: inspectionVratenie?.checkerPhotoShots },
+            ]} />
           </>
         ) : binderTab === "protokol" ? (
           <>
@@ -25147,7 +25723,8 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
                             can(user, "protocol_edit_locked") ? history
                               .filter((d) => !d.resolved && PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type))
                               .map((d) => ({ id: d.id, label: d.popis, sub: DAMAGE_TYPE_LABELS[d.type] || "poškodenie", date: d.dateReported })) : [],
-                            can(user, "protocol_edit_locked")
+                            can(user, "protocol_edit_locked"),
+                            isAdminUser(user)
                           )
                         }
                         style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
@@ -25669,7 +26246,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
+            <button className="btn btn-ghost" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}>Zobraziť protokol</button>
             {p.imageUrl && (
               <button className="btn btn-ghost" onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
@@ -26574,7 +27151,8 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
                       openPrintableServiceProtocol(
                         p,
                         can(user, "protocol_edit_locked") ? externaDamages.map((d) => ({ id: d.id, label: d.customer, sub: [d.model, d.serialNumber].filter(Boolean).join(" · "), date: d.dateReported })) : [],
-                        can(user, "protocol_edit_locked")
+                        can(user, "protocol_edit_locked"),
+                        isAdminUser(user)
                       )
                     }
                     title="Zobraziť protokol"
@@ -27624,7 +28202,7 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
                   {diff && !showHistory && (
                     <div style={{ fontSize: 13, color: "var(--warn)", marginBottom: 4, whiteSpace: "normal" }}>Zmenené po spracovaní: {diff.join("; ")}</div>
                   )}
-                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Náhľad</button>{" "}
+                  <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}>Náhľad</button>{" "}
                   {showHistory ? (
                     <button className="btn btn-outline" onClick={() => onRevert(p.id)}>Vrátiť</button>
                   ) : (
@@ -28724,7 +29302,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
             Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-outline" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}>Zobraziť protokol</button>
+            <button className="btn btn-outline" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}>Zobraziť protokol</button>
             {p.imageUrl && (
               <button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
@@ -29727,7 +30305,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   {(protocolLogs || []).filter((p) => p.assignmentId === a.id || (a.damageId && p.damageId === a.damageId)).map((p) => (
                     <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                       <button
-                        onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"))}
+                        onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--text)", textDecoration: "underline", border: "none", background: "none", cursor: "pointer", padding: 0 }}
                       >
                         Protokol ({fmtDate(p.createdAt)})
@@ -32383,8 +32961,9 @@ function LeadTechTodayPanel({ today, tomorrow, assignments, damages, employees, 
 --------------------------------------------------------- */
 const POZ_OFFICE_ROLES = ["dispecer_pozicovne", "veduci_pozicovne"];
 // Skupina fotiek stroja s označením, kto a kedy fotil (kontroly checkera, protokol šoféra).
-function MachinePhotoGroup({ title, who, date, photos, empty }) {
+function MachinePhotoGroup({ title, who, date, photos, shots, empty }) {
   const list = photos || [];
+  const lbl = (i) => SHOT_LABEL[(shots || [])[i]] || ""; // meno záberu (k59) — staré fotky bez neho
   if (!list.length && !empty) return null;
   return (
     <div style={{ marginBottom: 12 }}>
@@ -32394,7 +32973,10 @@ function MachinePhotoGroup({ title, who, date, photos, empty }) {
       {list.length ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {list.map((url, i) => (
-            <img key={i} src={url} alt={`${title} ${i + 1}`} onClick={() => openPhotoLightbox(url)} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} />
+            <figure key={i} style={{ margin: 0, width: 72 }}>
+              <img src={url} alt={lbl(i) || `${title} ${i + 1}`} onClick={() => openPhotoLightbox(url, list.map((u, j) => ({ url: u, caption: lbl(j) || `${title} ${j + 1}` })))} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer", display: "block" }} />
+              {lbl(i) && <figcaption style={{ fontSize: 12, lineHeight: 1.2, marginTop: 2, color: "var(--text)", overflowWrap: "anywhere" }}>{lbl(i)}</figcaption>}
+            </figure>
           ))}
         </div>
       ) : <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{empty}</div>}
@@ -33081,7 +33663,7 @@ function openPrintablePartHandover(rec) {
   const qtyTotal = items.reduce((s, it) => s + (phQty(it.qty) || 0), 0);
   const when = rec.handedAt ? fmtDateTime(rec.handedAt) : (rec.date ? fmtDate(rec.date) : "");
   const method = rec.method === "delivery" ? `Doručenie${rec.deliveryAddress ? ` – ${rec.deliveryAddress}` : ""}` : `Osobný odber${rec.depo ? ` – depo ${rec.depo}` : ""}`;
-  const sig = (url, label) => `<div class="sigbox"><div class="siglabel">${label}</div>${safeImgUrl(url) ? `<img class="sigimg" src="${escAttr(url)}">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+  const sig = (url, label) => `<div class="sigbox"><div class="siglabel">${label}</div>${safeImgUrl(sigUrl(url)) ? `<img class="sigimg" src="${escAttr(sigUrl(url))}">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   const customerSig = rec.customerAbsent
     ? `<div class="sigbox"><div class="siglabel">Prevzal (odberateľ)</div><div class="signone" style="color:#c62828">Odberateľ nebol prítomný — bez podpisu</div>${(rec.absentPhotos || []).filter(safeImgUrl).map((u) => `<img class="photo" src="${escAttr(u)}">`).join("")}</div>`
     : sig(rec.customerSignature, `Prevzal (odberateľ)${rec.customerName ? `: ${esc(rec.customerName)}` : ""}`);
@@ -34242,7 +34824,11 @@ const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete:
 const AUDIT_FIELD_LABELS = { handoverDone: "prevzatie hotové", returnDone: "vrátenie hotové", handoverDate: "dátum prevzatia", returnDate: "dátum vrátenia", protocolNumber: "číslo protokolu", checklist: "checklist", handoverCustomerAbsent: "zákazník neprítomný", returnCustomerAbsent: "zákazník neprítomný pri vrátení", assignedDate: "dátum pridelenia", assignmentId: "úloha", archivedDate: "dátum archivácie", archivedReason: "dôvod archivácie", archivedNote: "poznámka k archivácii", stav: "stav", status: "stav", resolved: "vyriešené", technicianId: "technik", technicianIds: "technici", popis: "popis", customer: "zákazník", machineId: "stroj", driverId: "šofér", returnDriverId: "šofér zvozu", startDate: "od", endDate: "do", depo: "depo", role: "rola", active: "prístup", archived: "archivovaný", name: "meno", phone: "telefón", email: "email", linkedUserId: "prepojený účet", note: "poznámka", customerId: "zákazník", jobId: "zákazka", damageId: "tiket", urcenieStrojId: "určené pre stroj", revizia: "revízia ZZ", reviziaEZ: "revízia EZ", uradnaSkuska: "úradná skúška", trackRevisions: "sledovať revíziu ZZ", trackRevisionsEZ: "sledovať revíziu EZ", trackUradnaSkuska: "sledovať úradnú skúšku", code: "sériové číslo", manufacturer: "výrobca", alsoEzTechnik: "revízny technik EZ",
   // výdaj dielov a servisný protokol
   items: "diely", dlNumber: "číslo dodacieho listu", erpDoc: "doklad ERP", customerName: "prevzal", handedBy: "odovzdal", handedById: "odovzdal (účet)", workNotes: "poznámka", erpProcessed: "spracované v ERP", correctedBy: "opravil", checkedBy: "skontroloval", processedBy: "spracoval", handoverNote: "poznámka pri odovzdaní", customerAbsent: "odberateľ neprítomný", absentPhotos: "fotky", signedItems: "podpísané diely", signedCustomer: "podpísaný odberateľ", assigneeName: "odovzdá", method: "spôsob", deliveryAddress: "adresa doručenia", contactName: "kontakt", contactPhone: "telefón kontaktu", orderNumber: "číslo objednávky", machineText: "stroj",
-  workDescription: "popis práce", customerSignatoryName: "meno podpisujúceho", technicianName: "technik", clientName: "zákazník", totalHours: "hodiny", travelHours: "hodiny cesty", travelKm: "km", machineHours: "motohodiny", workItems: "práce", materials: "materiál", usedParts: "použité diely", expectedStart: "začiatok", expectedEnd: "koniec" };
+  workDescription: "popis práce", customerSignatoryName: "meno podpisujúceho", technicianName: "technik", clientName: "zákazník", totalHours: "hodiny", travelHours: "hodiny cesty", travelKm: "km", machineHours: "motohodiny", workItems: "práce", materials: "materiál", usedParts: "použité diely", expectedStart: "začiatok", expectedEnd: "koniec",
+  // k59: fotky a zábery stroja, kontrola checkera
+  handoverPhotos: "fotky pri prevzatí", returnPhotos: "fotky pri vrátení", handoverPhotoShots: "zábery pri prevzatí", returnPhotoShots: "zábery pri vrátení",
+  checkerPhotos: "fotky checkera", checkerPhotoShots: "zábery checkera", fuel: "palivo / batéria (%)", cleanliness: "čistota a kompletnosť",
+  classification: "klasifikácia", classificationSuggested: "návrh klasifikácie", classificationNote: "poznámka ku klasifikácii", clientContact: "kontaktná osoba" };
 // Odkazy, ktorých ID nič nehovorí — len či pribudli/zmizli (technik a dátum úlohy sú vlastné polia).
 const AUDIT_REF_ONLY = { assignmentId: ["úloha v pláne", "pridaná", "odobraná", "zmenená"], publicToken: ["odkaz pre zákazníka", "vydaný", "zrušený", "nový"],
   // podpisy protokolu o odovzdaní: v audite len značka (step128-a), nie obrázok
@@ -35496,10 +36082,86 @@ function GlobalStyle() {
       .cks > button.okon { background: var(--s-done-bg); color: var(--s-done); font-weight: 700; }
       .cks > button.pon { background: var(--danger-bg); color: var(--danger-text); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--danger); }
       .cki textarea { width: 100%; }
+      /* k59: kapitoly kontroly checkera — body s OK / Problém / Nevzťahuje sa, závažnosť a klasifikácia A–D. */
+      .chk-tt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: 0; padding: 4px 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+      .chk-items { flex: 1 1 100%; border-top: 1px solid var(--border); margin: 4px -12px -8px; }
+      .chk-it { padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+      .chk-it:first-child { border-top: 0; }
+      .chk-it.prob { background: var(--danger-bg); }
+      .chk-il { flex: 1 1 200px; font-size: 14px; }
+      .chk-it textarea { width: 100%; }
+      .cks.chk-3 > button { min-width: 0; padding: 0 10px; }
+      .cks > button.naon { background: var(--panel-2); color: var(--text); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+      .chk-sev { width: 100%; }
+      /* Vybraná závažnosť farebne — Drobná oranžová, Závažná červená (aj v tmavom režime cez premenné). */
+      .chk-sev > button.on:first-child { background: var(--s-wait-bg); color: var(--s-wait); box-shadow: inset 0 0 0 1.5px var(--s-wait); }
+      .chk-sev > button.on:last-child { background: var(--danger-bg); color: var(--danger-text); box-shadow: inset 0 0 0 1.5px var(--danger); }
+      .chk-it textarea.chk-note { field-sizing: content; min-height: 4.5em; max-height: 10em; }
+      .seg.chk-wrap { flex-wrap: wrap; }
+      .seg.chk-wrap > button { flex: 1 1 auto; border-top: 1px solid var(--border); }
+      /* Stupeň znečistenia (4 možnosti) na úzkom mobile 2 × 2 — „Nadmerné znečistenie“ nenaráža na okraj. */
+      @media (max-width: 400px) {
+        .seg.chk-wrap:has(> :nth-child(4)):not(:has(> :nth-child(5))) { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .seg.chk-wrap:has(> :nth-child(4)):not(:has(> :nth-child(5))) > button { padding: 4px 8px; }
+        .seg.chk-wrap:has(> :nth-child(4)):not(:has(> :nth-child(5))) > button:nth-child(odd) { border-left: 0; }
+      }
+      .chk-cls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .chk-cl { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+      .chk-cl b { font-size: 22px; line-height: 1; min-width: 20px; }
+      .chk-cl small { display: block; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+      .chk-cl.on { box-shadow: inset 0 0 0 2px var(--text); background: var(--panel-2); }
+      .chk-cl-A.on { box-shadow: inset 0 0 0 2px var(--ok); background: var(--s-done-bg); }
+      .chk-cl-B.on { box-shadow: inset 0 0 0 2px var(--s-wait); background: var(--s-wait-bg); }
+      .chk-cl-C.on, .chk-cl-D.on { box-shadow: inset 0 0 0 2px var(--danger); background: var(--danger-bg); }
       .fphotos { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
       .fphoto { position: relative; width: 84px; height: 84px; }
       .fphoto img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
       .fphoto button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
+      /* k59: 9 pomenovaných záberov stroja (checker aj šofér); prázdne okienko ukáže predošlú fotku záberu. */
+      .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-bottom: 10px; }
+      .shot { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+      .shot > img, .shot-add { width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; border: 1px solid var(--border); object-fit: cover; cursor: pointer; display: block; }
+      .shot-add { position: relative; overflow: hidden; border: 1.5px dashed var(--line-strong); background: var(--panel-2); color: var(--text-dim); font-size: 26px; padding: 0; }
+      .shot-add:disabled { cursor: default; }
+      .shot-add .shot-prev { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; }
+      .shot-add span { position: relative; }
+      .modal-panel:has(.ff-tried) .shot[data-miss] .shot-add { border-color: var(--danger); }
+      .shot-l { font-size: 12px; line-height: 1.25; color: var(--text); }
+      .shot.on .shot-l::after { content: " ✓"; color: var(--ok); font-weight: 700; }
+      /* ✕ záberu: viditeľný krúžok 28 px, dotyková plocha 44 px (rukavice) */
+      .shot-x { position: absolute; top: -16px; right: -16px; width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; background: radial-gradient(circle, var(--panel) 0 13px, var(--line-strong) 13px 14px, transparent 14.5px); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
+      .shot-cam { position: fixed; inset: 0; z-index: 320; background: #000; color: #fff; display: flex; flex-direction: column; }
+      .shot-cam-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(10px, env(safe-area-inset-top)) 14px 8px; }
+      .shot-cam-btn { min-height: 48px; min-width: 48px; background: transparent !important; color: #fff !important; border: 1px solid #fff !important; font-size: 15px; }
+      .shot-cam-btn:disabled { opacity: .35; }
+      .shot-cam-view { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      .shot-cam-view video { width: 100%; height: 100%; object-fit: cover; }
+      .shot-cam-frame { position: absolute; inset: 14% 7%; border: 2px dashed rgba(255,255,255,.9); border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,.28); pointer-events: none; }
+      .shot-cam-prev { position: absolute; top: 10px; right: 10px; margin: 0; width: 30%; max-width: 160px; background: rgba(0,0,0,.55); border: 2px solid #fff; border-radius: 8px; overflow: hidden; }
+      .shot-cam-prev img { width: 100%; display: block; aspect-ratio: 4 / 3; object-fit: cover; }
+      .shot-cam-prev figcaption { font-size: 13px; font-weight: 600; padding: 2px 6px; }
+      .shot-cam-bottom { display: flex; align-items: center; justify-content: space-around; padding: 14px 16px max(16px, env(safe-area-inset-bottom)); }
+      .shot-cam-snap { width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; background: var(--accent); color: #fff; font-size: 20px; cursor: pointer; }
+      .shot-cam-snap:disabled { opacity: .4; }
+      /* Telefón na šírku: lišta a tlačidlá v stĺpci vpravo, kamera má celú výšku. */
+      @media (orientation: landscape) and (max-height: 500px) {
+        .shot-cam { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+        .shot-cam-view { grid-column: 1; grid-row: 1 / 3; }
+        .shot-cam-top { grid-column: 2; grid-row: 1; flex-direction: column; align-items: stretch; max-width: 180px; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 6px 10px; }
+        .shot-cam-bottom { grid-column: 2; grid-row: 2; flex-direction: column; justify-content: center; gap: 10px; padding: 6px max(10px, env(safe-area-inset-right)) 8px 10px; }
+      }
+      /* Porovnanie fotiek v karte zákazky: riadky zábery, stĺpce checker → šofér → šofér → checker; na mobile náhľady vedľa seba. */
+      .shc { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      .shc-row { display: grid; grid-template-columns: minmax(84px, 140px) repeat(var(--shc-n), minmax(0, 160px)); gap: 6px; padding: 6px 8px; border-top: 1px solid var(--border); align-items: center; }
+      .shc-row:first-child { border-top: 0; }
+      .shc-head { background: var(--panel-2); align-items: start; }
+      .shc-lbl { font-size: 12px; color: var(--text); }
+      .shc-col { min-width: 0; font-size: 12px; }
+      .shc-col small { display: block; color: var(--text-dim); font-size: 12px; }
+      .shc-col img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; display: block; }
+      .shc-extra { display: flex; flex-wrap: wrap; gap: 4px; }
+      .shc-extra img { width: calc(50% - 2px); }
+      .shc-none { color: var(--text-dim); }
       .ftable th { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; background: var(--panel-2); padding: 10px 8px; }
       .ftable td { padding: 8px; vertical-align: top; font-size: 14px; }
       .modal-panel .ftable :is(input, select) { min-height: 40px; font-size: 14px; }
@@ -35879,6 +36541,14 @@ function GlobalStyle() {
         .cks > button { min-width: 82px; padding: 0 8px; }
         .ckt { min-width: 0; flex: 1 1 110px; }
         .cki { padding: 8px 10px; gap: 8px; }
+        .chk-items { margin: 4px -10px -8px; }
+        .chk-it .cks.chk-3 { width: 100%; margin-left: 0; }
+        .chk-it .cks.chk-3 > button { flex: 1; }
+        .chk-ch > .cks { width: 100%; }
+        .chk-ch > .cks > button { flex: 1; }
+        .shot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .shc-row { grid-template-columns: 72px repeat(var(--shc-n), minmax(0, 1fr)); padding: 6px; gap: 4px; }
+        .shc-lbl, .shc-col { font-size: 12px; }
         .side-foot .jc-report { display: none; }
         .jc-report-m { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
         .jc-report-m .btn { flex: 1 1 140px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
@@ -36306,3 +36976,4 @@ export default function App() {
 
 // Len pre automatické testy (src/logika.test.js) — platforma ich nepoužíva.
 export const _test = { passwordProblem, authErrorSk, fmtDate, whatsNewFor, icoKey, statBuckets, techFond, monthEndISO, numMth, isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, findMachineConflict, erpHours, erpTechKey, jobStillOut, machineRevDueBy, jobMthPair, decodeImportCsv, parseImportCsvText, importDepo, machineModelKey };
+export const _testK59 = { suggestCheckClass, shotPhotoMap, checkerTicketText, CHECKER_ITEMS, isNewChecklist, checkItemDone, sortShotItems, checkerProblemText };

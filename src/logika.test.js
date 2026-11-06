@@ -1,7 +1,7 @@
 // Automatické testy výpočtovej logiky platformy (npm test). Na GitHube bežia pred
 // každým nasadením — keď niečo zlyhá, nová verzia sa nenasadí.
 import { describe, it, expect } from "vitest";
-import { _test } from "./App.jsx";
+import { _test, _testK59 } from "./App.jsx";
 
 const { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, passwordProblem, authErrorSk, fmtDate } = _test;
 
@@ -283,5 +283,56 @@ describe("čítanie CSV pri importoch", () => {
     expect(machineModelKey("GS-1932")).toBe(machineModelKey("gs 19.32"));
     expect(machineModelKey("Z45/25_J")).toBe(machineModelKey("z4525j"));
     expect(machineModelKey("Kĺbová 16 m")).not.toBe(machineModelKey("Kĺbová 18 m"));
+  });
+});
+
+describe("kontrola checkera k59", () => {
+  const { suggestCheckClass, shotPhotoMap, checkerTicketText, CHECKER_ITEMS, isNewChecklist, checkItemDone, sortShotItems, checkerProblemText } = _testK59;
+  const cl = (patch = {}) => CHECKER_ITEMS.map((x) => ({ key: x.key, checkerStatus: "ok", ...(patch[x.key] || {}) }));
+  it("54 bodov ako v DB (8, 7, 8, 7, 7, 9, 8)", () => {
+    expect(CHECKER_ITEMS.length).toBe(54);
+    expect(CHECKER_ITEMS.at(-1).key).toBe("7h");
+  });
+  it("návrh klasifikácie: nič → A, drobná alebo umytie → B, závažná → C", () => {
+    expect(suggestCheckClass(cl(), { level: "bezne", keys: "ok", docs: "ok" })).toBe("A");
+    expect(suggestCheckClass(cl({ "2a": { checkerStatus: "problem", severity: "drobna" } }), {})).toBe("B");
+    expect(suggestCheckClass(cl(), { level: "umytie" })).toBe("B");
+    expect(suggestCheckClass(cl(), { keys: "chyba" })).toBe("B");
+    expect(suggestCheckClass(cl({ "2a": { checkerStatus: "problem", severity: "drobna" }, "5c": { checkerStatus: "problem", severity: "zavazna" } }), {})).toBe("C");
+    expect(suggestCheckClass(cl({ "3c": { checkerStatus: "na" } }), {})).toBe("A");
+  });
+  it("bod: Problém len so závažnosťou a poznámkou", () => {
+    expect(checkItemDone({ checkerStatus: "na" })).toBe(true);
+    expect(checkItemDone({ checkerStatus: "problem", severity: "drobna", checkerNote: " " })).toBe(false);
+    expect(checkItemDone({ checkerStatus: "problem", checkerNote: "x" })).toBe(false);
+    expect(checkItemDone({ checkerStatus: "problem", severity: "zavazna", checkerNote: "x" })).toBe(true);
+  });
+  it("zábery: paralelné pole kľúčov, fotky navyše a staré bez kľúčov", () => {
+    const keys = ["lava", "prava", "predna", "zadna", "kos", "mth", "nosna", "valce", "zdvih"];
+    const urls = keys.map((k) => k + ".jpg");
+    const n = (p, s) => Object.keys(shotPhotoMap(p, s).map).length;
+    expect(n(urls, keys)).toBe(9);
+    expect(n(urls, [...keys.slice(0, 8), "lava"])).toBe(8);
+    expect(n(urls, undefined)).toBe(0);
+    const m = shotPhotoMap(["x.jpg", ...urls], [null, ...keys]);
+    expect(m.map.predna).toBe("predna.jpg");
+    expect(m.extra).toEqual(["x.jpg"]);
+    expect(shotPhotoMap(["a", "b"], undefined).extra).toEqual(["a", "b"]);
+  });
+  it("tiket z kontroly: klasifikácia a body s problémom", () => {
+    const t = checkerTicketText({ phase: "vratenie", classification: "D", classificationNote: "Odstaviť", checklist: cl({ "1b": { checkerStatus: "problem", severity: "zavazna", checkerNote: "Prasklina" } }) });
+    expect(t).toMatch(/^Kontrola po vrátení: D — Odstavené z prevádzky \(Odstaviť\)\. 1b Vizuálny stav pred umytím — Rám.*\(Závažná\): Prasklina$/);
+    expect(isNewChecklist([{ checkerStatus: "ok" }])).toBe(false);
+  });
+  it("uloženie: zábery v poradí MACHINE_SHOTS, fotky navyše na koniec (poradie medzi sebou ostáva)", () => {
+    const r = sortShotItems([{ url: "p", shot: null }, { url: "z", shot: "zdvih" }, { url: "l", shot: "lava" }, { url: "q", shot: null }, { url: "pr", shot: "prava" }]);
+    expect(r.map((x) => x.url)).toEqual(["l", "pr", "z", "p", "q"]);
+  });
+  it("šofér: pri C/D varovanie s klasifikáciou aj bez bodu s problémom", () => {
+    const job = { id: "j", machineId: "m" };
+    const insp = (classification, checklist = cl()) => [{ jobId: "j", kind: "kontrolaStroja", classification, classificationNote: "Nevydávať", damageId: "d1", checklist }];
+    expect(checkerProblemText(job, insp("A"), [])).toBe(null);
+    expect(checkerProblemText(job, insp("D"), [{ id: "d1", machineId: "m", type: "poskodenie" }])).toMatch(/^Checker našiel problém: klasifikácia D — Odstavené z prevádzky \(Nevydávať\) — pred odovzdaním/);
+    expect(checkerProblemText(job, insp("C", cl({ "1a": { checkerStatus: "problem", severity: "zavazna", checkerNote: "Prasklina" } })), [])).toMatch(/^Checker našiel problém: Prasklina; klasifikácia C/);
   });
 });

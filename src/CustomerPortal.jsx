@@ -37,6 +37,12 @@ const filled = (s) => /[\p{L}\p{N}]/u.test((s || "").replace(/[\u115F\u1160\u316
 // Podpis uložený v úložisku platformy (odkaz) — len vlastné úložisko, nie cudzia URL (ako safeImgUrl v App.jsx).
 const ownStorageImg = (u) => typeof u === "string" && u.startsWith(`${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/protocols/`) && /^https?:\/\/[^"'<>\s]+$/.test(u);
 const safeSig = (u) => /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(u || "") || ownStorageImg(u);
+// Podpis z úložiska vždy z vlastného úložiska podľa cesty (hostiteľ v odkaze nerozhoduje); null = nezobraziť.
+const sigSrc = (u) => {
+  const m = typeof u === "string" && u.match(/^https?:\/\/[^/"'<>\s]+\/storage\/v1\/object\/public\/(protocols\/podpisy\/[0-9a-f]{64}\.png)$/);
+  const v = m ? `${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/object/public/${m[1]}` : u;
+  return safeSig(v) ? v : null;
+};
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
 // Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
 const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
@@ -80,7 +86,7 @@ function buildOfficialProtocolHtml(data) {
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
   const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div>${confirmLine(c) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${safeSig(dataUrl) ? `<img src="${dataUrl}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${sigSrc(dataUrl) ? `<img src="${sigSrc(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
   }
   function checklistCol(statusKey, noteKey) {
     return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
@@ -285,7 +291,17 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
   );
 }
 
-function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, onConfirm }) {
+function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, photoLabels, onConfirm }) {
+  // Zväčšená fotka v okne (aj staršia base64 — odkaz data: v novej karte prehliadač zablokuje).
+  const [zoom, setZoom] = useState(null);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e) => { if (e.key === "Escape") setZoom(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoom]);
+  // Popis záberu posiela server (get_portal_job) v poradí fotiek; staré protokoly bez záberov popis nemajú.
+  const shown = (photos || []).map((u, i) => ({ u: safePhotoUrl(u), l: (photoLabels || [])[i] || "" })).filter((x) => x.u);
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
@@ -313,19 +329,36 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : safeSig(custSig) ? <img src={custSig} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : sigSrc(custSig) ? <img src={sigSrc(custSig)} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
-          {safeSig(driverSig) ? <img src={driverSig} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          {sigSrc(driverSig) ? <img src={sigSrc(driverSig)} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
         </div>
       </div>
       {custAbsent && (photos || []).length > 0 && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Fotky stroja pri {title === "Prevzatie" ? "odovzdaní" : "vrátení"}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {photos.map(safePhotoUrl).filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt={`Fotka ${i + 1}`} style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }} /></a>)}
+            {shown.map(({ u, l }, i) => (
+              <figure key={i} style={{ margin: 0, width: 84 }}>
+                <button type="button" onClick={() => setZoom({ u, l, i })} style={{ display: "block", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                  <img src={u} alt={`Fotka ${i + 1}${l ? ` · ${l}` : ""}`} style={{ display: "block", width: 84, height: 84, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }} />
+                </button>
+                {l && <figcaption style={{ fontSize: 12, color: "#5A5A5A", lineHeight: 1.25, marginTop: 2, overflowWrap: "anywhere" }}>{l}</figcaption>}
+              </figure>
+            ))}
           </div>
+        </div>
+      )}
+      {zoom && (
+        <div role="dialog" aria-modal="true" aria-label={`Fotka ${zoom.i + 1}${zoom.l ? ` · ${zoom.l}` : ""}`} onClick={() => setZoom(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#111", display: "flex", flexDirection: "column", padding: 12, cursor: "zoom-out" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, color: "#fff", fontSize: 14, marginBottom: 8 }}>
+            <span style={{ flex: 1, minWidth: 0 }}>{zoom.i + 1} / {shown.length}{zoom.l ? ` · ${zoom.l}` : ""}</span>
+            <button type="button" onClick={() => setZoom(null)} style={{ minHeight: 44, padding: "0 14px", fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", borderRadius: 6, cursor: "pointer" }}>✕ Zavrieť</button>
+          </div>
+          <img src={zoom.u} alt={zoom.l || `Fotka ${zoom.i + 1}`} onClick={(e) => e.stopPropagation()} style={{ flex: 1, minHeight: 0, width: "100%", objectFit: "contain", cursor: "default" }} />
         </div>
       )}
       {custAbsent && !confirm && onConfirm && <div id={`potvrdit-${title}`}><ConfirmProtocolBox phaseLabel={title} onSubmit={onConfirm} hasPhotos={(photos || []).map(safePhotoUrl).some(Boolean)} /></div>}
@@ -793,6 +826,7 @@ export default function CustomerPortal({ token }) {
                   custAbsent={data.handoverCustomerAbsent}
                   confirm={data.handoverCustomerConfirm}
                   photos={data.handoverPhotos}
+                  photoLabels={data.handoverPhotoLabels}
                   onConfirm={(a, n, sg, c) => confirmProtocol("handover", a, n, sg, c)}
                   driverSig={data.handoverDriverSignature}
                 />
@@ -809,6 +843,7 @@ export default function CustomerPortal({ token }) {
                     custAbsent={data.returnCustomerAbsent}
                     confirm={data.returnCustomerConfirm}
                     photos={data.returnPhotos}
+                    photoLabels={data.returnPhotoLabels}
                     onConfirm={(a, n, sg, c) => confirmProtocol("return", a, n, sg, c)}
                     driverSig={data.returnDriverSignature}
                   />
