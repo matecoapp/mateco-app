@@ -1,7 +1,7 @@
 // Automatické testy výpočtovej logiky platformy (npm test). Na GitHube bežia pred
 // každým nasadením — keď niečo zlyhá, nová verzia sa nenasadí.
 import { describe, it, expect } from "vitest";
-import { _test, _testK59 } from "./App.jsx";
+import { _test, _testK59, _testK60a } from "./App.jsx";
 
 const { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, passwordProblem, authErrorSk, fmtDate } = _test;
 
@@ -334,5 +334,36 @@ describe("kontrola checkera k59", () => {
     expect(checkerProblemText(job, insp("A"), [])).toBe(null);
     expect(checkerProblemText(job, insp("D"), [{ id: "d1", machineId: "m", type: "poskodenie" }])).toMatch(/^Checker našiel problém: klasifikácia D — Odstavené z prevádzky \(Nevydávať\) — pred odovzdaním/);
     expect(checkerProblemText(job, insp("C", cl({ "1a": { checkerStatus: "problem", severity: "zavazna", checkerNote: "Prasklina" } })), [])).toMatch(/^Checker našiel problém: Prasklina; klasifikácia C/);
+  });
+  it("šofér: pri B len informácia bez volania dispečerovi; otvorené poškodenie ostáva varovaním (k60 D3)", () => {
+    const job = { id: "j", machineId: "m" };
+    const insp = (classification, checklist = cl()) => [{ jobId: "j", kind: "kontrolaStroja", classification, checklist }];
+    const b = checkerProblemText(job, insp("B", cl({ "1a": { checkerStatus: "problem", severity: "drobna", checkerNote: "Škrabanec" } })), []);
+    expect(b).toBe("Kontrola checkera — drobné nedostatky: Škrabanec; klasifikácia B — Čistenie / drobné opravy");
+    expect(checkerProblemText(job, insp("B"), [])).toMatch(/^Kontrola checkera — drobné nedostatky: klasifikácia B/);
+    expect(checkerProblemText(job, insp("B"), [{ id: "x", machineId: "m", type: "poskodenie", popis: "Únik oleja" }])).toBe("Stroj má otvorené poškodenie: Únik oleja — pred odovzdaním zavolajte dispečerovi");
+  });
+});
+
+describe("kontrola checkera k60 (a)", () => {
+  const { fuelFields, fuelText, cleanDone, checkerTicketText, sortShotItems, shotPhotoMap } = _testK60a;
+  it("pohon: litre, batéria, hybrid, staré % (1.0.867)", () => {
+    expect(fuelText({ fuelType: "palivo", fuelL: 45 })).toBe("Palivo: 45 L");
+    expect(fuelText({ fuelType: "bateria", batteryPct: 80 })).toBe("Batéria: 80 %");
+    expect(fuelFields({ fuelType: "hybrid", fuelL: 12.5, batteryPct: 0 })).toEqual([["Palivo", "12,5 L"], ["Batéria", "0 %"]]);
+    expect(fuelText({ fuel: 60 })).toBe("Palivo / batéria: 60 %");
+  });
+  it("druh znečistenia len pri umytí a nadmernom", () => {
+    const base = { keys: "ok", docs: "ok" };
+    expect(cleanDone({ ...base, level: "cisty" })).toBe(true);
+    expect(cleanDone({ ...base, level: "bezne" })).toBe(true);
+    expect(cleanDone({ ...base, level: "umytie" })).toBe(false);
+    expect(cleanDone({ ...base, level: "nadmerne", kinds: ["olej"] })).toBe(true);
+  });
+  it("fotka poškodenia naviazaná na bod: v tikete „foto“, v poli fotiek navyše na koniec", () => {
+    const a = { phase: "vyvoz", classification: "C", checklist: [{ key: "1b", checkerStatus: "problem", severity: "zavazna", checkerNote: "prasklina" }], checkerPhotoShots: ["lava", "1b"] };
+    expect(checkerTicketText(a)).toContain("(Závažná, foto): prasklina");
+    expect(sortShotItems([{ url: "d", shot: "1b" }, { url: "l", shot: "lava" }]).map((x) => x.shot)).toEqual(["lava", "1b"]);
+    expect(shotPhotoMap(["l", "d"], ["lava", "1b"])).toEqual({ map: { lava: "l" }, extra: ["d"] });
   });
 });

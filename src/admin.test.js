@@ -11,6 +11,12 @@ describe("audit log — zmena", () => {
     const done = { action: "update", table_name: "damages", old_data: { resolved: false }, new_data: { technicianId: "e1", resolved: true } };
     expect(auditChange(done, null, {})).toBe("stav: Pridelené → Opravené");
   });
+  it("fotky protokolu počtom — aj doplnená base64 fotka (značka „obrázok …“, k60)", () => {
+    const e = { action: "update", table_name: "handoverProtocols", old_data: { returnPhotos: ["u1"], returnPhotoShots: ["lava"] }, new_data: { returnPhotos: ["u1", "obrázok 1a2b3c4d"], returnPhotoShots: ["lava", null] } };
+    expect(auditChange(e, null, {})).toBe("fotky pri vrátení: 1 fotka pridaná · zábery pri vrátení (zmenené)");
+    const m = { action: "update", table_name: "handoverProtocols", old_data: { returnPhotos: ["obrázok 1a2b3c4d"] }, new_data: { returnPhotos: ["https://x/u2"] } };
+    expect(auditChange(m, null, {})).toBe("fotky pri vrátení (zmenené)");
+  });
   it("bez old_data porovná s predošlým zápisom; čas a interné polia preskočí", () => {
     const e = { action: "update", table_name: "employees", old_data: null, new_data: { role: "sofer", updatedAt: "2", _notify: 1 } };
     expect(auditChange(e, { role: "technik", updatedAt: "1" }, {})).toBe("rola: Technik → Šofér");
