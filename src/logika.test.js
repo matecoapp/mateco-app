@@ -1,7 +1,7 @@
 // Automatické testy výpočtovej logiky platformy (npm test). Na GitHube bežia pred
 // každým nasadením — keď niečo zlyhá, nová verzia sa nenasadí.
 import { describe, it, expect } from "vitest";
-import { _test, _testK59, _testK60a } from "./App.jsx";
+import { _test, _testK59, _testK60a, _testK61a } from "./App.jsx";
 
 const { isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, passwordProblem, authErrorSk, fmtDate } = _test;
 
@@ -365,5 +365,25 @@ describe("kontrola checkera k60 (a)", () => {
     expect(checkerTicketText(a)).toContain("(Závažná, foto): prasklina");
     expect(sortShotItems([{ url: "d", shot: "1b" }, { url: "l", shot: "lava" }]).map((x) => x.shot)).toEqual(["lava", "1b"]);
     expect(shotPhotoMap(["l", "d"], ["lava", "1b"])).toEqual({ map: { lava: "l" }, extra: ["d"] });
+  });
+});
+
+describe("kontrola checkera k61 (a)", () => {
+  const { inspectionClosedText, checkerProblemText } = _testK61a;
+  it("zrušená (dôvod, kto, kedy) vs. nevykonaná", () => {
+    expect(inspectionClosedText({ skipped: true, skippedReason: "stroj vymenený za S-115", cancelledBy: "Dana Dispečerka", cancelledAt: "2026-11-07T09:15:00.000Z" })).toBe("Zrušená — stroj vymenený za S-115 (Dana Dispečerka, 7. 11.)");
+    expect(inspectionClosedText({ skipped: true, skippedReason: "Stroj odovzdaný bez kontroly checkera" })).toBe("Nevykonaná — stroj odovzdaný bez kontroly checkera"); // k61 terén D1: malé písmeno uprostred vety
+    expect(inspectionClosedText({ skipped: true })).toBe("Nevykonaná — stroj odovzdaný bez kontroly checkera");
+  });
+  it("šofér: A/B so Závažným bodom (checker znížil C) — poznámka checkera, nie drobné nedostatky", () => {
+    const job = { id: "j", machineId: "m" };
+    const zav = [{ key: "1b", checkerStatus: "problem", severity: "zavazna", checkerNote: "Prasklina krytu" }];
+    const insp = (classification, note) => [{ jobId: "j", kind: "kontrolaStroja", classification, classificationNote: note, checklist: zav }];
+    expect(checkerProblemText(job, insp("A", "len kryt"), [])).toBe("Checker klasifikoval stav ako A — poznámka: len kryt");
+    expect(checkerProblemText(job, insp("B", " kozmetické "), [])).toBe("Checker klasifikoval stav ako B — poznámka: kozmetické");
+    // k61 terén D2: pri inom otvorenom poškodení červené varovanie + poznámka checkera (nestratí sa)
+    expect(checkerProblemText(job, insp("A", "x"), [{ id: "d9", machineId: "m", type: "poskodenie", popis: "Únik" }])).toBe("Stroj má otvorené poškodenie: Únik — pred odovzdaním zavolajte dispečerovi. Checker klasifikoval stav ako A — poznámka: x");
+    // zrušená kontrola (výmena stroja) sa pre šoféra neberie
+    expect(checkerProblemText(job, [{ ...insp("C", "")[0], cancelledAt: "2026-11-07T09:00:00Z" }], [])).toBe(null);
   });
 });

@@ -31,13 +31,36 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.868";
+const APP_VERSION = "1.0.869";
 const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/"; // aj v CustomerPortal.jsx
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.869", items: [
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Kontrola checkera: „Nevzťahuje sa“ označíte len pri bode v kapitole „Problém“. Kapitola „Problém“ sa uloží len s aspoň jedným bodom s problémom; „V poriadku“ pokrýva aj body, ktoré stroj nemá (zruší aj N/A)." },
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Pri bode s problémom už nie je „Odfotiť poškodenie“ — poškodenie odfoťte v bloku „Fotky poškodení“ pod 9 zábermi. Pri bode Závažná je povinná aspoň jedna fotka poškodenia. Staršie kontroly s fotkou pri bode sa zobrazujú a tlačia ako doteraz („foto“)." },
+    { roles: ["technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu", "admin"], text: "Hotovú kontrolu pred vývozom po odchode stroja mení len administrátor (fotky, zábery, body, klasifikácia, palivo, MTH, hodiny). V okne je zámok „Mení len administrátor“; spracovanie do ERP ostáva." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Nový protokol o odovzdaní so spätným dátumom potrebuje 9 záberov stroja ako každý iný (výnimka „pre obnovu“ zrušená — obnovu zálohy a Koša robí administrátor). Import „prevzaté mimo systému“ ostáva bez fotiek." },
+    { roles: ["sofer", "externy_sofer", "admin"], text: "Keď checker zníži klasifikáciu so Závažným bodom na A alebo B, uvidíte oranžovú informáciu „Checker klasifikoval stav ako A — poznámka: …“ (nie „drobné nedostatky“)." },
+    { roles: ["technik", "veduci_technik_ba", "dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu", "admin"], text: "Zrušená kontrola (výmena stroja na zákazke, nerealizovaná zákazka) zmizne checkerovi z Dnes aj z Plánu servisu. V karte zákazky a v okne kontroly je „Zrušená — dôvod (kto, kedy)“, napr. „Zrušená — stroj vymenený za S-115 (Dana Dispečerka, 7. 11.)“; nový stroj dostane novú kontrolu, ak má depo checkera (inak ju zariadi servis). „Nevykonaná — stroj odovzdaný bez kontroly checkera“ len keď stroj odišiel bez kontroly. Zrušenú kontrolu už nemožno dodatočne vykonať." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "admin"], text: "Tiket s ďalším otvoreným tiketom toho istého stroja ukáže upozornenie „Stroj má ďalší otvorený tiket z …“ a tlačidlo Porovnať a zlúčiť — oba tikety vedľa seba (na mobile pod sebou): popis, kto a kedy nahlásil, body a fotky z kontroly checkera, žiadosť zákazníka z portálu, stav a technik." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "admin"], text: "Po potvrdení „Ide o ten istý problém — zlúčiť“ ostane starší tiket: pripíše sa doňho popis novšieho (s označením odkiaľ), prejdú fotky a body z kontroly, žiadosť z portálu, servisné protokoly (aj v ERP) a úlohy technikov bez duplicít; novší ide do Koša s poznámkou „zlúčený do …“. Zlúčenie je v databáze naraz a zapíše sa do Audit logu." },
+    { roles: ["technik", "veduci_technik_ba"], text: "Keď servis zlúči váš tiket so starším (ten istý problém), dostanete upozornenie — vaše úlohy ostávajú a patria k ostávajúcemu tiketu." },
+    { roles: ["admin"], text: "Kôš: pri zlúčenom tikete je poznámka „zlúčený do …“. Obnova tiketu z kontroly checkera alebo zlúčeného tiketu sa najprv opýta, ak k tej istej kontrole / stroju už existuje iný otvorený tiket („po obnove budú dva“)." },
+    { roles: ["admin", "veduci_pozicovne", "dispecer_pozicovne", "veduci_servisu", "dispecer_servisu", "fakturant_servis", "fakturant_pozicovna"], text: "Stroje sú zoradené podľa kódu, zamestnanci, šoféri, rámcové zmluvy a blacklist podľa mena (slovenská abeceda), autá podľa ŠPZ." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "admin"], text: "Prepravy: v rámci dňa je vývoz pred zvozom; dlaždice v Zákazkách otvoria zoznam zoradený podľa termínu (po termíne a končiace podľa konca, bez šoféra podľa dňa vývozu, rezervácie podľa začiatku); karta šoféra ukazuje zákazky podľa dňa vývozu; dovolenky dispečerov sú zoradené podľa začiatku." },
+    { roles: ["veduci_servisu", "dispecer_servisu", "veduci_technik_ba", "fakturant_servis", "admin"], text: "Revízie a úradné skúšky: vyriešené (filter „Vyriešené“) sú pod otvorenými, najnovšie vykonané navrchu. ERP podklady: nespracované od najstaršieho, História od posledne spracovaného." },
+    { roles: ["fakturant_servis", "dispecer_servisu", "veduci_servisu", "admin"], text: "ERP — kontroly: zrušená kontrola, ktorú checker nevykonal, sa do ERP neráta. Vykonaná kontrola, ktorú zrušila výmena stroja, v ERP ostáva aj s hodinami, lebo práca bola urobená. Do ERP kontroly spracúva len servis." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "admin"], text: "Zákazníci, dispečeri, modely, telefónny zoznam a ďalšie zoznamy podľa mena sú v slovenskej abecede (C, Č, H, Ch)." },
+    { roles: ["admin"], text: "„Prevzaté mimo systému“ (protokol bez fotiek so spätným dátumom) zakladá len administrátor pri importe zákaziek." },
+    { roles: ["admin"], text: "Audit log: záznamy s rovnakým časom sú v stálom poradí. Pole „nahlásil (účet)“ je preložené." },
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Kontrola uložená bez signálu: ak ju medzitým dispečer zrušil, na Dnes je pri nej dôvod (kto, kedy) a tlačidlo „Zahodiť“. Ak medzitým stroj odišiel bez kontroly, vaša kontrola sa po pripojení uloží." },
+    { roles: ["technik", "veduci_technik_ba", "admin"], text: "Päta formulára kontroly ukazuje „Fotky poškodení ✓/✗“ hneď pri bode Závažná; červený „!“ pri bloku Fotky poškodení len kým povinná fotka chýba." },
+    { roles: ["dispecer_servisu", "veduci_servisu", "admin"], text: "Zlúčenie tiketov prevezme zákazníka, miesto, obchodníka a kontakt vždy spolu z jedného tiketu; pri rôznych zákazníkoch v okne vyberiete, ktorého ponechať (predvolene novší)." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Zrušenú kontrolu stroja už mení len administrátor; zrušením sa nemení výsledok, ktorý uložil checker." },
+  ] },
   { v: "1.0.868", items: [
     { roles: ["technik", "veduci_technik_ba", "admin"], text: "Kontrola checkera: pri kapitole namiesto zoznamu bodov ⓘ „Čo kontrolovať“; „Problém“ otvorí podskupinu „Čo presne je zlé?“ — body sú predvolene OK, označíte len Problém alebo N/A. Kapitola „Problém“ musí mať aspoň jeden bod s problémom." },
     { roles: ["technik", "veduci_technik_ba", "admin"], text: "Pri bode s problémom tlačidlo „Odfotiť poškodenie“ — fotka sa uloží medzi fotky poškodení a v tlači aj tikete je bod označený „foto“. Pri bode Závažná je fotka povinná." },
@@ -2078,6 +2101,14 @@ function fuelFields(a) {
   ].filter(Boolean);
 }
 const fuelText = (a) => fuelFields(a).map(([l, v]) => `${l}: ${v}`).join(" · ");
+// Uzavretá bez kontroly: zrušená dispečerom (dôvod, kto, kedy) vs. nevykonaná — stroj odišiel bez kontroly / lehota (k61 A6).
+const inspectionClosedText = (a) => (a.cancelledAt
+  ? `Zrušená — ${a.skippedReason || "zrušená dispečerom"} (${[a.cancelledBy, fmtDate(a.cancelledAt).replace(/ \d{4}$/, "")].filter(Boolean).join(", ")})`
+  : `Nevykonaná — ${a.skippedReason ? a.skippedReason.charAt(0).toLowerCase() + a.skippedReason.slice(1) : "stroj odovzdaný bez kontroly checkera"}`);
+// Hodiny kontroly do ERP a výkazu: len vykonaná — zrušená bez vykonania (výmena stroja, nerealizovaná) nie (k61 admin V1).
+// Zlúčený popis („…\n\nZlúčené z tiketu …“) v jednoriadkových náhľadoch oddelený „ · “; plný text v detaile (k61 servis D3).
+const oneLinePopis = (t, max) => { const s = (t || "").replace(/\s*\n+\s*/g, " · "); return max && s.length > max ? `${s.slice(0, max).replace(/\s+\S*$/, "")}…` : s; }; // skrátenie s „…“ nie uprostred slova
+const checkHoursForErp = (a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null && (!a.cancelledAt || a.cancelledAfterDone === true); // vykonanú pred zrušením určí server (k62 admin V1)
 // Fotodokumentácia zákazky do tlače protokolu a kontroly: kto fotil stroj pri odchode a pri návrate (k60 B).
 let _photoDocSrc = { assignments: [], handoverProtocols: [], jobs: [] };
 function photoDocLine(jobId) {
@@ -2504,6 +2535,23 @@ const workdaysAfter = (a, b) => {
   return n;
 };
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+// Spoločné zoradenie zoznamov (1.0.869): kľúče po poradí, pri zhode ďalší, nakoniec id (uid je náhodné); "-pole" = zostupne, [fn, -1] = zostupne; prázdne vždy na koniec.
+const _skColl = new Intl.Collator("sk", { numeric: true });
+// Čas „Z“ aj „+01:00“ ako číslo; čistý dátum ako začiatok dňa (miestny čas), nech sa dá porovnať s časom (k61 terén D4).
+const _sortVal = (v) => (v === "" || v == null ? null : typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? Date.parse(v) : typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v) ? Date.parse(v + "T00:00:00") : v);
+const byKeys = (...keys) => (a, b) => {
+  for (const k of [...keys, "id"]) {
+    const [get, dir] = typeof k === "function" ? [k, 1] : Array.isArray(k) ? k : k[0] === "-" ? [(x) => x?.[k.slice(1)], -1] : [(x) => x?.[k], 1];
+    const x = _sortVal(get(a)), y = _sortVal(get(b));
+    if (x === y) continue;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    const c = typeof x === "number" && typeof y === "number" ? x - y : _skColl.compare(String(x), String(y));
+    if (c) return c * dir;
+  }
+  return 0;
+};
+export const _testK61c = { byKeys };
 // ERP tok (checklisty kontrolóra aj servisné protokoly): keď je záznam už
 // označený ako spracovaný (erpProcessed) a niektoré zo sledovaných polí sa
 // zmení oproti snímke z momentu spracovania (erpSnapshot), automaticky sa
@@ -2516,6 +2564,7 @@ const toNumOrText = (v) => {
   return /^-?\d+([.,]\d+)?$/.test(t) ? Number(t.replace(",", ".")) : v.trim();
 };
 const canonJSON = (v) => JSON.stringify(v ?? null, (k, x) => (typeof x === "string" ? toNumOrText(x) : x));
+const ERP_LOCKED_CHECK_MSG = "Kontrola je už spracovaná v ERP — hodiny, diely a MTH teraz nezmeníte. Ak treba opraviť, ozvite sa servisu: vráti ju medzi nespracované.";
 function revertErpIfChanged(record, patch, fields) {
   if (!record?.erpProcessed || !record.erpSnapshot) return {};
   // Staršie snímky nemajú všetky polia (napr. MTH od v1.0.770) — tie sa neporovnávajú.
@@ -2558,7 +2607,7 @@ function currentJobFor(jobs, machineId, today) {
   const candidates = jobs
     .filter((j) => j.machineId === machineId && j.status !== "completed")
     .filter((j) => j.startDate <= today)
-    .sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+    .sort(byKeys("-startDate", "-createdAt"));
   return candidates[0] || null;
 }
 // Aktuálne miesto stroja PRÁVE TERAZ — podľa bežiacej zákazky, inak podľa depa.
@@ -2660,7 +2709,7 @@ function isSelfTransportPhase(job, phase) {
 function myCheckerAssignment(job, myEmployee, phase, assignments) {
   if (!job || !myEmployee) return null;
   const want = phase === "prevzatie" ? "vyvoz" : "vratenie";
-  return (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === want && a.technicianId === myEmployee.id) || null;
+  return (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === want && a.technicianId === myEmployee.id && !a.cancelledAt) || null;
 }
 function canFillHandoverPhase(job, myEmployee, phase, user, assignments) {
   if (!job || !myEmployee || !user) return false;
@@ -2699,7 +2748,7 @@ function nextJobFor(jobs, machineId, today) {
   const candidates = jobs
     .filter((j) => j.machineId === machineId && j.status !== "completed")
     .filter((j) => j.startDate > today)
-    .sort((a, b) => (a.startDate > b.startDate ? 1 : -1));
+    .sort(byKeys("startDate", "createdAt"));
   return candidates[0] || null;
 }
 
@@ -3641,7 +3690,12 @@ async function applyPendingOutbox(table, rows) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   for (const it of pending) {
     if (it.deleted) byId.delete(it.id);
-    else if (it.item) byId.set(it.item.id, (({ _notify, ...rec }) => rec)(it.item)) /* eslint-disable-line no-unused-vars */;
+    else if (it.item) {
+      const rec = (({ _notify, ...r }) => r)(it.item); /* eslint-disable-line no-unused-vars */
+      // Zrušenie kontroly z DB (dôvod, kto, kedy) lokálna kópia z fronty neprekryje (k62 dizajn D3, terén S1).
+      const f = byId.get(rec.id);
+      byId.set(rec.id, f?.cancelledAt ? { ...rec, resolved: f.resolved, skipped: f.skipped, skippedReason: f.skippedReason, cancelledAt: f.cancelledAt, cancelledBy: f.cancelledBy } : rec);
+    }
   }
   return [...byId.values()];
 }
@@ -5521,6 +5575,8 @@ function DispatcherApp() {
   const [outboxShown, setOutboxShown] = useState(0); // to isté, ako to vidí človek (protokol = 1 zmena)
   const [outboxBlockedList, setOutboxBlockedList] = useState([]);
   const [outboxBlocked, setOutboxBlocked] = useState(0); // z toho odmietnuté protokoly — čakajú na dispečing
+  // Zrušená kontrola uložená bez signálu sa len zahodí (Dnes) — pás „zavolajte kanceláriu“ pre ňu nie (k62 terén S1).
+  const outboxBlockedCall = outboxBlocked - outboxBlockedList.filter((x) => x.table === "assignments" && /bola zrušená/.test(x.msg || "")).length;
   const [machines, setMachines] = useState([]);
   const [vehicles, setVehicles] = useState([]); // vozový park (STK/EK)
   const [portalRequests, setPortalRequests] = useState([]); // žiadosti zákazníka z portálu (problém / predĺženie)
@@ -5675,6 +5731,7 @@ function DispatcherApp() {
   const handoverProtocolsRef = useRef(handoverProtocols);
   handoverProtocolsRef.current = handoverProtocols;
   // Zákazky so stroji už u zákazníka (podpísané prevzatie) — Gantt ich nesmie posúvať.
+  const planAssignments = useMemo(() => assignments.filter((a) => !a.cancelledAt), [assignments]); // zrušená kontrola zmizne z Dnes aj z plánu (k61 A6)
   const departedJobIds = useMemo(() => new Set(handoverProtocols.filter((h) => h.handoverDone).map((h) => h.jobId)), [handoverProtocols]);
   const ezMeasurementsRef = useRef([]);
   const [machineModels, setMachineModels] = useState([]); // knižnica modelov strojov — kategória + parametre, len Požičovňové stroje
@@ -6378,6 +6435,8 @@ function DispatcherApp() {
       showNotice(`${what}${code ? ` (${code})` : ""} sa neuložil${end} — váš účet momentálne nemá prístup.\n\nZáznam ostáva v tomto zariadení a odošle sa po obnovení prístupu. Nič nemažte a obráťte sa na administrátora.`);
       return;
     }
+    // Kontrolu medzičasom zrušil dispečer — zámerné odmietnutie, rieši ho len sekcia „Neuložené“ na Dnes so „Zahodiť“ (k62 terén S1).
+    if (table === "assignments" && /bola zrušená/.test(why || "")) return;
     showNotice(`${what}${code ? ` (${code})` : ""} sa neuložil${end}${why ? ` — ${why}` : ` — databáza ${end === "a" ? "ju" : "ho"} odmietla`}.\n\nZáznam ostáva v tomto zariadení a odošle sa sám, keď to bude možné. Nič nemažte a zavolajte kanceláriu.`);
     pushNotificationRef.current?.({ roles: ["dispecer_servisu", "veduci_servisu"], kind: "assignment_service", title: `${what} z terénu sa neuložil${end}`,
       message: `${currentUser?.name || "Kolega"} má v zariadení ${acc}${code ? ` (${code})` : ""}, ${which} databáza odmietla${why ? `: ${why}` : ""}. Skontrolujte pridelenie a ozvite sa.` });
@@ -7367,6 +7426,34 @@ function DispatcherApp() {
   const persistAssignments = useCallback(makeRecordPersist("assignments", setAssignments), []);
   const persistDamages = useCallback(makeRecordPersist("damages", setDamages), []);
   const persistTrash = useCallback(makeRecordPersist("trash", setTrash), []);
+  // Otvorený detail tiketu, ktorý kolega medzičasom zlúčil alebo zmazal (realtime) — zavrie sa s hláškou, nič sa doňho neuloží (k61 servis D2).
+  const seenDetailRef = useRef(null);
+  // Kôš číta len admin — ostatní spoznajú ostávajúci tiket podľa pripísaného „Zlúčené z tiketu z …“, ktorý príde (realtime) hneď po zmazaní (k62 portál D3).
+  const mergeWaitRef = useRef(null);
+  const mergedInto = (d) => damages.find((x) => x.id === trash.find((t) => t.originalId === d.id && t.mergedInto)?.mergedInto)
+    || damages.find((x) => x.id !== d.id && x.machineId === d.machineId && !x.resolved && (x.popis || "").includes(`Zlúčené z tiketu z ${fmtDate(d.dateReported)}`));
+  // Okno nad tiketom (ukončenie, pridelenie, revízia, úprava externej), ktorý kolega medzitým zlúčil alebo zmazal — nič sa neuloží potichu (k62 servis S2, D1).
+  async function damageGone(snap) {
+    const into = snap && mergedInto(snap);
+    if (!into) { showNotice("Tento tiket medzičasom zmazal kolega — zmena sa neuložila."); return; }
+    if (await askConfirm({ title: "Tiket bol zlúčený", confirmLabel: "Otvoriť ostávajúci tiket",
+      message: `Tiket bol zlúčený do tiketu z ${fmtDate(into.dateReported)} — zmena sa neuložila. Otvorte ostávajúci tiket a urobte ju tam.` })) setServiceEventDetail(into);
+  }
+  useEffect(() => {
+    const mergedMsg = (into) => `Tiket bol zlúčený do tiketu z ${fmtDate(into.dateReported)} — nájdete ho v zozname poškodení.`;
+    const wait = mergeWaitRef.current;
+    const late = wait && mergedInto(wait.d);
+    if (late) { clearTimeout(wait.timer); mergeWaitRef.current = null; showNotice(mergedMsg(late)); }
+    if (!serviceEventDetail) { seenDetailRef.current = null; return; }
+    if (damages.some((x) => x.id === serviceEventDetail.id)) { seenDetailRef.current = serviceEventDetail.id; return; }
+    if (seenDetailRef.current !== serviceEventDetail.id) return;
+    const d = serviceEventDetail;
+    const into = mergedInto(d);
+    setServiceEventDetail(null);
+    if (into) { showNotice(mergedMsg(into)); return; }
+    if (wait) clearTimeout(wait.timer);
+    mergeWaitRef.current = { d, timer: setTimeout(() => { if (mergeWaitRef.current?.d === d) { mergeWaitRef.current = null; showNotice("Tento tiket medzičasom zlúčil alebo zmazal kolega — detail sa zavrel."); } }, 2500) };
+  }, [damages, serviceEventDetail, trash]);
   const persistTransportNotes = useCallback(makeRecordPersist("transportNotes", setTransportNotes), []);
   const persistEzMeasurements = useCallback(makeRecordPersist("ezMeasurements", setEzMeasurements), []);
   const persistPartHandovers = useCallback(makeRecordPersist("partHandovers", setPartHandovers), []);
@@ -7530,6 +7617,14 @@ function DispatcherApp() {
       showNotice("Táto zákazka už má iný protokol o odovzdaní/vrátení. Obnovu nie je možné vykonať — najprv zmažte ten novší.");
       return;
     }
+    // Tiket z kontroly checkera alebo zlúčený: k tej istej kontrole / stroju je už iný otvorený tiket — obnova až po potvrdení (k61 B2).
+    if (trashEntry.originalTable === "damages" && record?.machineId && (trashEntry.mergedInto || assignments.some((a) => a.kind === "kontrolaStroja" && a.damageId === record.id) || /^Kontrola (po vrátení|pred vývozom):/.test(record.popis || ""))) {
+      const other = damages.find((x) => x.id === trashEntry.mergedInto && !x.resolved)
+        || damages.find((x) => x.id !== record.id && x.machineId === record.machineId && x.type === "poskodenie" && !x.resolved && !x.prepCheck);
+      const viaCheck = other && assignments.some((a) => a.kind === "kontrolaStroja" && a.damageId === other.id);
+      if (other && !(await askConfirm({ title: "Obnoviť tiket?", confirmLabel: "Obnoviť aj tak",
+        message: `${trashEntry.mergedInto === other.id ? `Tento tiket bol zlúčený do tiketu z ${fmtDate(other.dateReported)}, ktorý je stále otvorený` : `${viaCheck ? "K tejto kontrole" : "K tomuto stroju"} už existuje tiket z ${fmtDate(other.dateReported)}`} („${oneLinePopis(other.popis, 80) || "—"}“) — po obnove budú dva.` }))) return;
+    }
     // Poškodenie zmazané pred 24. 10. (bez uložených úloh) sa obnoví ako nepridelené; novšie vráti aj pridelenie.
     if (trashEntry.originalTable === "damages" && record && !restoreExtra) {
       record = { ...record, technicianId: null, technicianIds: [], assignedDate: null, assignmentId: null };
@@ -7552,6 +7647,7 @@ function DispatcherApp() {
     }
     // Najprv overený zápis do databázy — položka z Koša zmizne, len ak obnova naozaj prešla.
     // Bez času vytvorenia → server ho nedoplní (čas obnovy by bol nepravdivý).
+    if (trashEntry.originalTable === "damages" && record && trashEntry.mergedInto) record = { ...record, restoredFromMerge: true }; // tá istá porucha sa v „Stroj sa často kazí“ nepočíta dvakrát (k62 portál R1)
     const okW = record ? await writeRecordRowWithRetry(trashEntry.originalTable, { ...record, _restored: true }) : false;
     if (okW !== true) {
       const why = _deniedMsg.get(`${trashEntry.originalTable}:${record?.id}`);
@@ -8021,7 +8117,12 @@ function DispatcherApp() {
     }
     if (link.assignmentId) {
       const a = assignments.find((x) => x.id === link.assignmentId);
-      if (a?.kind === "kontrolaStroja") {
+      if (a?.kind === "kontrolaStroja" && a.cancelledAt) {
+        // Staré upozornenie k zrušenej kontrole (výmena stroja, nerealizovaná) — otvorí aktuálnu kontrolu zákazky, zrušenú nie (k61 portál D2).
+        const cur = assignments.find((x) => x.kind === "kontrolaStroja" && x.jobId === a.jobId && (x.phase || "vyvoz") === (a.phase || "vyvoz") && !x.cancelledAt);
+        if (cur) setCheckerInspectionTarget(cur);
+        else showNotice(`Táto kontrola stroja bola zrušená — ${a.skippedReason || "zrušená dispečerom"}.`);
+      } else if (a?.kind === "kontrolaStroja") {
         // Kontrola stroja — rovno formulár kontroly, nie všeobecný detail.
         setCheckerInspectionTarget(a);
       } else if (a) {
@@ -8635,6 +8736,12 @@ function DispatcherApp() {
       if (data.damageId) {
         const { data: dRow, error: dErr } = await supabase.from("damages").select("id").eq("id", data.damageId).maybeSingle();
         damageGone = !dErr && !dRow;
+        // Tiket medzičasom zlúčený — úlohu už merge_damages presunul k ostávajúcemu tiketu; protokol ide tam a úloha je hotová (k61 servis S1).
+        if (damageGone && data.assignmentId) {
+          const { data: aRow } = await supabase.from("assignments").select("data").eq("id", data.assignmentId).maybeSingle();
+          const movedTo = aRow?.data?.damageId;
+          if (movedTo && movedTo !== data.damageId) { data = { ...data, damageId: movedTo }; damageGone = false; }
+        }
       }
       const record = {
         // Pevné ID z fronty — opakované odoslanie prepíše ten istý záznam, nevznikne duplicita.
@@ -9279,6 +9386,7 @@ function DispatcherApp() {
   function updateExternalService(id, data) {
     // Len polia zmenené oproti stavu pri otvorení — otvorený formulár inak ticho prepísal zmenu kolegu.
     const snap = editExternalTarget || {};
+    if (!damages.some((d) => d.id === id)) { damageGone(editExternalTarget); setEditExternalTarget(null); return; }
     const cur = damages.find((d) => d.id === id) || snap;
     const F = ["model", "serialNumber", "location", "customer", "assignedDepo", "popis"];
     const v = (x) => x || "";
@@ -9380,6 +9488,26 @@ function DispatcherApp() {
     // minulá hotová úloha sa neotvorí znova; „Ostatné protokoly“ ho ukážu (isLooseProtocol).
     if (linked.length) persistProtocolLogs((cur) => cur.map((p) => (p.damageId === id ? { ...p, damageId: null } : p)));
   }
+  // Zlúčenie dvoch tiketov stroja v jednej transakcii v DB (k61 B1); kancelária len online.
+  async function mergeDamages(aId, bId, customerFrom) {
+    if (officeOffline("damages", null, true)) return false;
+    let res;
+    try { res = await supabase.rpc("merge_damages", { p_a: aId, p_b: bId, p_customer_from: customerFrom || null }); } catch (e) { res = { error: e }; }
+    if (res.error) {
+      showNotice(res.error.code ? `Tikety sa nezlúčili — ${res.error.message}` : "Spojenie sa nepodarilo — tikety sa nezlúčili. Skúste to znova.");
+      return false;
+    }
+    const { keepId, dropId, keep, removedAssignmentIds: rm = [] } = res.data;
+    setDamages((cur) => cur.filter((x) => x.id !== dropId).map((x) => (x.id === keepId ? { ...keep, id: keepId } : x)));
+    setAssignments((cur) => cur.filter((a) => !rm.includes(a.id)).map((a) => (a.damageId === dropId ? { ...a, damageId: keepId } : a)));
+    setProtocolLogs((cur) => cur.map((p) => (p.damageId === dropId ? { ...p, damageId: keepId } : p)));
+    setPortalRequests((cur) => cur.map((r) => (r.linkedDamageId === dropId ? { ...r, linkedDamageId: keepId } : r)));
+    setJobs((cur) => cur.map((j) => (j.transportIssueDamageId === dropId ? { ...j, transportIssueDamageId: keepId } : j)));
+    _trashChangedListener?.();
+    setServiceEventDetail((cur) => (cur ? { ...keep, id: keepId } : cur));
+    showToast("Tikety boli zlúčené — novší je v Koši.");
+    return true;
+  }
   function setDamageNote(id, note) {
     persistDamages((damages) => damages.map((d) => (d.id === id ? { ...d, poznamkaDispecera: note } : d)));
   }
@@ -9401,6 +9529,7 @@ function DispatcherApp() {
   function resolveDamage(damageId, stav, opravaDatum, opravaKomentar, baseRev) {
     if (officeOffline("damages", null, true)) return false; // zmena existujúceho tiketu len online
     const d = damages.find((x) => x.id === damageId);
+    if (!d) { damageGone(resolveDamageTarget); setResolveDamageTarget(null); return false; }
     if (d && baseRev !== undefined && (d._rev || 0) !== baseRev) {
       showNotice("Toto poškodenie medzičasom zmenil niekto iný. Obnovte stránku (F5) a upravte znova, nech sa nič neprepíše.");
       return false;
@@ -9634,7 +9763,7 @@ function DispatcherApp() {
   }
   function completeRevision(damageId, performedDate, parts) {
     const d = damages.find((x) => x.id === damageId);
-    if (!d) return;
+    if (!d) { damageGone(completeRevisionTarget); setCompleteRevisionTarget(null); return; }
     const machine = machines.find((m) => m.id === d.machineId);
     const isMerged = d.revizeType === "ZZ+EZ";
     const doneZZ = isMerged ? !!parts?.zz : d.revizeType === "ZZ";
@@ -9809,7 +9938,7 @@ function DispatcherApp() {
   function assignDamage(damageId, technicianIds, date, baseIds) {
     if (officeOffline("damages", null, true)) return; // pridelenie len online (aj vedúci technik BA v teréne)
     const damage = damages.find((d) => d.id === damageId);
-    if (!damage) { showNotice("Toto poškodenie medzičasom niekto zmazal."); setDamageAssignTarget(null); return; }
+    if (!damage) { damageGone(damageAssignTarget); setDamageAssignTarget(null); return; }
     // Medzičasom ho niekto uzavrel — pridelenie by technikovi vytvorilo úlohu na hotovej veci.
     if (damage.resolved) { showNotice("Toto poškodenie medzičasom niekto uzavrel — pridelenie sa neuložilo."); setDamageAssignTarget(null); return; }
     if (!damageInMyDepos(damage)) { showNotice("Tento tiket je mimo vašich dep — prideľuje ho servis."); setDamageAssignTarget(null); return; }
@@ -10321,7 +10450,7 @@ function DispatcherApp() {
   // Univerzálne vyhľadávanie — jeden index naprieč strojmi, zákazkami, zákazníkmi a poškodeniami.
   const searchIndex = useMemo(() => {
     const items = [];
-    enrichedMachines.forEach((m) => {
+    [...enrichedMachines].sort(byKeys("code")).forEach((m) => {
       if (m.archived) return;
       items.push({
         type: "machine",
@@ -10332,7 +10461,7 @@ function DispatcherApp() {
         searchText: `${m.code} ${m.type} ${m.depo || ""}`.toLowerCase(),
       });
     });
-    jobs.forEach((j) => {
+    [...jobs].sort(byKeys("-startDate", "-createdAt")).forEach((j) => {
       const m = machineById[j.machineId];
       items.push({
         type: "job",
@@ -10343,7 +10472,7 @@ function DispatcherApp() {
         searchText: `${j.customer || ""} ${m?.code || ""} ${m?.type || ""}`.toLowerCase(),
       });
     });
-    customers.forEach((c) => {
+    [...customers].sort(byKeys("firma")).forEach((c) => {
       items.push({
         type: "customer",
         id: c.id,
@@ -10354,7 +10483,7 @@ function DispatcherApp() {
         searchText: `${c.firma || ""} ${c.cisloOdberatela || ""} ${c.ico || ""} ${(c.contacts || []).map((k) => k.name).join(" ")}`.toLowerCase(),
       });
     });
-    damages.forEach((d) => {
+    [...damages].sort(byKeys("-dateReported", "-createdAt")).forEach((d) => {
       const m = d.machineId ? machineById[d.machineId] : null;
       items.push({
         type: "damage",
@@ -10365,7 +10494,7 @@ function DispatcherApp() {
         searchText: `${d.code || ""} ${d.popis || ""} ${m?.code || ""} ${d.customer || ""}`.toLowerCase(),
       });
     });
-    (protocolLogs || []).forEach((p) => {
+    [...(protocolLogs || [])].sort(byKeys("-createdAt")).forEach((p) => {
       const m = p.machineId ? machineById[p.machineId] : null;
       const linkedDamage = p.damageId ? damages.find((d) => d.id === p.damageId) : null;
       items.push({
@@ -10886,7 +11015,7 @@ function DispatcherApp() {
       });
     // Zákazky, ktoré vznikli/vrátili sa, kým depo nemalo checkera, kontrolu ešte nemajú.
     const today = todayISO();
-    const has = (jobId, phase) => assignmentsRef.current.some((a) => a.jobId === jobId && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === phase);
+    const has = (jobId, phase) => assignmentsRef.current.some((a) => a.jobId === jobId && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === phase && !a.cancelledAt);
     jobs.forEach((job) => {
       if (job.notRealized) return;
       if (job.status !== "completed" && changed.has(job.fromDepo) && (job.departureDate || job.startDate || "") >= today && !has(job.id, "vyvoz")) {
@@ -10940,7 +11069,7 @@ function DispatcherApp() {
       link: { module: "administrativa", view: "checkeri" },
     });
   }
-  function ensureCheckerAssignment(job, dc = depoCheckers, subs = checkerSubstitutions, jobsList = jobs) {
+  function ensureCheckerAssignment(job, dc = depoCheckers, subs = checkerSubstitutions, jobsList = jobs, notifyNoChecker = false) {
     // Stroj už odišiel (podpísané prevzatie) — kontrola pred vývozom už nemá zmysel.
     if (handoverProtocolsRef.current.some((h) => h.jobId === job.id && h.handoverDone)) return;
     // Vlastná doprava: kontrolu aj odovzdanie zákazníkovi robí checker v deň
@@ -10948,29 +11077,40 @@ function DispatcherApp() {
     // Nadväzujúci prenájom: iná zákazka toho istého stroja končí v deň vývozu → kontrola až po jej zvoze.
     const inspectionDate = jobInspectionDate(job, jobsList);
     const checkerId = resolveCheckerId(dc, subs, job.fromDepo, inspectionDate);
-    if (!checkerId) return;
     // assignmentsRef (nie "assignments" z closure) — v jednom kroku môže bežať
     // aj ensureReturnCheckerAssignment a nesmú si navzájom prepísať zápis.
     const assignments = assignmentsRef.current;
-    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
-    // Zmenený stroj na zákazke — kontrola patrí k novému stroju; už vykonaná
-    // kontrola starého stroja sa vráti na nevykonanú.
+    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz" && !a.cancelledAt);
+    // Zmenený stroj na zákazke — kontrola pôvodného stroja sa zruší (dôvod, kto, kedy; aj vykonaná ostane
+    // so svojím výsledkom) a nový stroj dostane novú kontrolu (k61 A6).
     const machineChanged = !!existing && existing.machineId !== job.machineId;
+    const cancelled = machineChanged
+      ? { ...existing, resolved: true, skipped: true, skippedReason: `stroj vymenený za ${machineById[job.machineId]?.code || "iný stroj"}`, cancelledBy: currentUser?.name || "", cancelledAt: new Date(serverNowMs()).toISOString() }
+      : null;
+    if (!checkerId) {
+      // Nový stroj z depa bez checkera — kontrola pôvodného stroja sa zruší aj tak, novú nezakladáme (k61 dizajn S1).
+      if (cancelled) {
+        assignmentsRef.current = assignments.map((a) => (a.id === cancelled.id ? cancelled : a));
+        persistAssignments((cur) => cur.map((a) => (a.id === cancelled.id ? cancelled : a)));
+        const oldChecker = !existing.resolved && technicianByIdTop[existing.technicianId];
+        if (oldChecker) pushNotification({ kind: "checker_inspection", roles: [], userName: oldChecker.name, title: "Zrušená kontrola stroja", message: `Kontrola stroja ${machineById[existing.machineId]?.code || "—"} (${job.customer || "—"}) odpadá — zákazka má iný stroj (${machineById[job.machineId]?.code || "—"}).`, link: { module: "servis", view: "plan", plannerDate: existing.date } });
+      }
+      // Vývoz z depa bez checkera (nová zákazka, výmena stroja, zmena depa) — servis kontrolu zariadi ako pri vrátení (k62 požičovňa R1).
+      if (notifyNoChecker && (cancelled || !existing)) pushNotification({ roles: ["veduci_servisu", "dispecer_servisu"], kind: "checker_inspection", title: "Depo bez checkera", message: `Stroj ${machineById[job.machineId]?.code || "—"} (${job.customer || "—"}) odchádza z depa ${job.fromDepo || "—"}, ktoré nemá checkera — kontrolu pred vývozom treba prideliť ručne.`, link: { module: "servis", view: "plan", plannerDate: inspectionDate } });
+      return;
+    }
     if (existing && !machineChanged) {
       if (existing.resolved) return;
       if (existing.technicianId === checkerId && existing.date === inspectionDate && !!existing.self === !!job.selfPickup) return;
     }
     // Existujúcu (nevykonanú) kontrolu len presunieme/prehodíme — to isté ID,
     // nič rozpracované sa nestratí. Upozornenie ide len novému checkerovi.
-    const reset = machineChanged && existing.resolved
-      ? { resolved: false, checklist: null, checkerPhotos: [], checkerBy: null, checkerDate: null, workHours: null, usedParts: [], mth: null, noMth: null, erpProcessed: false, erpProcessedAt: null, erpProcessedBy: null, erpSnapshot: null, erpOrderNumber: null, damageId: null,
-          checkerPhotoShots: [], fuel: null, fuelType: null, fuelL: null, batteryPct: null, mthConfirmed: null, cleanliness: null, classification: null, classificationSuggested: null, classificationNote: null, checkerAt: null }
-      : {};
-    const record = existing
-      ? { ...existing, technicianId: checkerId, date: inspectionDate, self: !!job.selfPickup, machineId: job.machineId, ...reset }
+    const record = existing && !machineChanged
+      ? { ...existing, technicianId: checkerId, date: inspectionDate, self: !!job.selfPickup }
       : { id: uid(), technicianId: checkerId, date: inspectionDate, kind: "kontrolaStroja", phase: "vyvoz", jobId: job.id, machineId: job.machineId, resolved: false, self: !!job.selfPickup };
-    assignmentsRef.current = [...assignments.filter((a) => a.id !== record.id), record];
-    persistAssignments((cur) => [...cur.filter((a) => a.id !== record.id), record]);
+    const put = (list) => [...list.filter((a) => a.id !== record.id && a.id !== cancelled?.id), ...(cancelled ? [cancelled] : []), record];
+    assignmentsRef.current = put(assignments);
+    persistAssignments(put);
     const checker = technicianByIdTop[checkerId];
     if (checker && (existing?.technicianId !== checkerId || machineChanged)) {
       const machine = machineById[job.machineId];
@@ -11020,7 +11160,7 @@ function DispatcherApp() {
     const date = job.selfReturn ? job.pickupDate || job.endDate || todayISO() : todayISO();
     const checkerId = resolveCheckerId(dc, subs, depo, date);
     const assignments = assignmentsRef.current;
-    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
+    const existing = assignments.find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie" && !a.cancelledAt);
     if (!checkerId) {
       // Depo bez checkera — nevykonaná úloha pôvodného checkera neplatí a vedúci servisu musí kontrolu zariadiť.
       const code = machineById[job.machineId]?.code || "—";
@@ -11078,7 +11218,7 @@ function DispatcherApp() {
     setShowAddJob(null);
     showToast("Zákazka bola vytvorená.");
     const list = [...jobs, record];
-    ensureCheckerAssignment(record, depoCheckers, checkerSubstitutions, list);
+    ensureCheckerAssignment(record, depoCheckers, checkerSubstitutions, list, true);
     // Nová zákazka môže byť predchádzajúcim prenájmom inej zákazky toho istého stroja.
     list.filter((o) => o.id !== record.id && o.machineId === record.machineId && o.status !== "completed" && !o.notRealized && (o.departureDate || o.startDate || "") >= todayISO())
       .forEach((o) => ensureCheckerAssignment(o, depoCheckers, checkerSubstitutions, list));
@@ -11131,7 +11271,7 @@ function DispatcherApp() {
       // Kontrolu pred vývozom riešiť len pri SKUTOČNEJ zmene (formulár posiela všetky polia).
       const changed = (k) => patch[k] !== undefined && patch[k] !== before[k];
       if (merged.status !== "completed" && (changed("fromDepo") || changed("startDate") || changed("selfPickup") || changed("departureDate") || changed("machineId"))) {
-        ensureCheckerAssignment(merged, depoCheckers, checkerSubstitutions, jobs.map((j) => (j.id === id ? merged : j)));
+        ensureCheckerAssignment(merged, depoCheckers, checkerSubstitutions, jobs.map((j) => (j.id === id ? merged : j)), changed("machineId") || changed("fromDepo"));
       }
       // Zmenený koniec/zvoz/stav — nadväzujúca zákazka toho istého stroja môže mať kontrolu v iný deň.
       if (changed("endDate") || changed("pickupDate") || changed("status") || changed("notRealized") || changed("machineId")) {
@@ -11448,7 +11588,9 @@ function DispatcherApp() {
       // kontrola pred vývozom sa zruší. Stroj ostáva na svojom depe.
       if (updateJob(jobId, { status: "completed", notRealized: true, endDate: data.endDate, returnDriverId: null, selfReturn: false, ...before }) === false) { showNotice("Bez pripojenia — zákazka sa neukončila, skúste znova."); return; }
       if (job && !job.notRealized) notifyJobDropped(job, "sa nerealizovala");
-      persistAssignments((cur) => cur.filter((a) => !(a.jobId === jobId && a.kind === "kontrolaStroja" && !a.resolved)));
+      // Kontrola ostane v karte zákazky ako zrušená (dôvod, kto, kedy) — checkerovi zmizne z Dnes aj z plánu (k61 A6).
+      const cancel = { resolved: true, skipped: true, skippedReason: "zákazka sa nerealizovala", cancelledBy: currentUser?.name || "", cancelledAt: new Date(serverNowMs()).toISOString() };
+      persistAssignments((cur) => cur.map((a) => (a.jobId === jobId && a.kind === "kontrolaStroja" && !a.resolved ? { ...a, ...cancel } : a)));
       // Čakajúce žiadosti zákazníka z portálu uzavrie DB (step116, jobs_not_realized_close_requests).
     } else {
       // Bez protokolu o prevzatí: stroj podľa platformy ešte neodišiel (vývoz by zmizol z Prepráv).
@@ -11527,6 +11669,8 @@ function DispatcherApp() {
       // Šofér dostal „Zrušená preprava“ — preprava znova platí.
       const driver = driverById[activeDriver(job.driverId)];
       if (driver) pushNotification({ attachTo: jobId, roles: [], userName: driver.name, kind: "assignment_transport", title: "Obnovená preprava", message: `Zákazka ${job.customer || "—"} (stroj ${machineById[job.machineId]?.code || "—"}) sa predsa realizuje — vývoz opäť platí (${fmtDate(job.departureDate || job.startDate)}).`, link: { module: "poziciovna", view: "prepravy" } });
+      // Obchodník dostal „Zákazka sa nerealizovala“ — zákazka predsa platí (k62 portál D2).
+      if (job.obchodnik && job.obchodnik !== currentUser?.name) pushNotification({ attachTo: jobId, kind: "rental_end", roles: [], userName: job.obchodnik, title: "Zákazka sa predsa realizuje", message: `${machineById[job.machineId]?.code || "—"} · ${job.customer || "—"}: ukončenie bolo zrušené — zákazka platí, vývoz ${fmtDate(job.departureDate || job.startDate)}. Predchádzajúce „Zákazka sa nerealizovala“ už neplatí.`, link: { module: "poziciovna", view: "jobs", jobId } });
     }
   }
   // Skutočný dátum vývozu/zvozu — nezávislý od oficiálneho začiatku/konca nájmu
@@ -11570,7 +11714,7 @@ function DispatcherApp() {
     const date = isReturn ? job.pickupDate || job.endDate : job.departureDate || job.startDate;
     const depo = isReturn ? job.returnDepo || job.fromDepo : job.fromDepo;
     // Checker = komu je kontrola naozaj pridelená; bez úlohy podľa depa a dňa.
-    const checkerId = assignments.find((a) => a.kind === "kontrolaStroja" && a.jobId === job.id && (a.phase === "vratenie") === isReturn)?.technicianId
+    const checkerId = assignments.find((a) => a.kind === "kontrolaStroja" && a.jobId === job.id && (a.phase === "vratenie") === isReturn && !a.cancelledAt)?.technicianId
       || resolveCheckerId(depoCheckers, checkerSubstitutions, depo, isReturn ? date : jobInspectionDate(job, jobs));
     const checker = checkerId ? technicianByIdTop?.[checkerId] : null;
     const checkerEmail = checker ? checker.email || nameToEmail(checker.name) : "";
@@ -11846,7 +11990,7 @@ function DispatcherApp() {
     const diely = ((isAdminUser(effectiveUser) || ["dispecer_servisu", "veduci_servisu", "veduci_technik_ba"].includes(r)) ? spareParts.filter((x) => x.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE && (!depos || depos.includes(x.depo))).length : 0)
       + partHandovers.filter((x) => (phCanManage(effectiveUser) && x.status === "check") || (phCanBill(effectiveUser) && x.status === "billing")).length;
     const podklady = billing
-      ? assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null && !a.erpProcessed).length + erpServiceProtocols(protocolLogs, damages).filter((x) => !x.erpProcessed).length : 0;
+      ? assignments.filter((a) => checkHoursForErp(a) && !a.erpProcessed).length + erpServiceProtocols(protocolLogs, damages).filter((x) => !x.erpProcessed).length : 0;
     const erpPozicovna = isAdminUser(effectiveUser) || r === "fakturant_pozicovna" ? handoverProtocols.filter((h) => h.returnDone && !h.erpProcessed).length : 0;
     return { dnes, prepravy, diely, podklady, erpPozicovna };
   })();
@@ -11947,14 +12091,14 @@ function DispatcherApp() {
         </div>
       )}
 
-      {outboxCount > 0 && ((outboxStrip && outboxShown > 0) || outboxBlocked > 0) && (
+      {outboxCount > 0 && ((outboxStrip && outboxShown > 0) || outboxBlockedCall > 0) && (
         <div className="sync-strip" role="status">
           {outboxShown > 0 && <>
             {!navigator.onLine && <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.6a10 10 0 0 1 14 0" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="m3 3 18 18" /></svg>}
             <span>{!navigator.onLine && "Bez signálu · "}{changesText(Math.max(1, outboxShown))} na odoslanie</span>
             <span className="sync-more">{navigator.onLine ? "— odosiela sa… (pomalé spojenie)" : "— odošle sa samo, keď sa platforma pripojí"}. Netreba nič robiť, len platformu nezmazať.</span>
           </>}
-          {outboxBlocked > 0 && <span style={{ fontSize: 13 }}>Záznam sa neuložil — databáza ho odmietla (prácu medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Záznam ostáva v tomto zariadení; zavolajte kanceláriu.</span>}
+          {outboxBlockedCall > 0 && <span style={{ fontSize: 13 }}>Záznam sa neuložil — databáza ho odmietla (prácu medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Záznam ostáva v tomto zariadení; zavolajte kanceláriu.</span>}
         </div>
       )}
 
@@ -12010,6 +12154,15 @@ function DispatcherApp() {
         {module === "dnes" && DNES_ROLES.includes(effectiveUser?.role) && (
           <TodayView
             blockedItems={outboxBlockedList}
+            allAssignments={assignments}
+            onDiscardBlocked={async (table, item) => {
+              // Kontrolu medzičasom zrušili — dodatočne sa nevykonáva, záznam z fronty zmizne až po potvrdení (k61 terén S3).
+              if (!(await askConfirm({ title: "Zahodiť neuloženú kontrolu?", message: "Kontrolu medzičasom zrušili — údaje z tohto zariadenia sa neodošlú a vymažú sa.", confirmLabel: "Zahodiť" }))) return;
+              await idbDelete("outbox", `${table}:${item.id}`);
+              _rejectedNotified.delete(`${table}:${item.id}`);
+              refreshOutboxCount();
+              loadRecordTable(table).then((rows) => applyPendingOutbox(table, rows)).then((rows) => table === "assignments" && setAssignments(rows), () => {}); // ostatné neodoslané zmeny ostávajú
+            }}
             jobDispatcher={jobDispatcher}
             onRetryBlocked={async () => {
               await flushOutbox();
@@ -12027,7 +12180,7 @@ function DispatcherApp() {
             onDriverReport={effectiveUser?.role === "externy_sofer" ? () => setShowDriverReport(true) : null}
             today={today}
             tomorrow={tomorrow}
-            assignments={assignments}
+            assignments={planAssignments}
             damages={damages}
             jobs={jobs}
             machineById={enrichedMachineById}
@@ -12330,7 +12483,7 @@ function DispatcherApp() {
               <TechnicianPlanner
                 extraFilters={techFilters}
                 technicians={technicians}
-                assignments={assignments}
+                assignments={planAssignments}
                 machines={enrichedMachines}
                 damages={damages}
                 weeklyDuty={weeklyDuty}
@@ -12360,7 +12513,7 @@ function DispatcherApp() {
               <div className="quick-filters" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>{techFilters}</div>
               <TechniciansOverview
                 technicians={technicians}
-                assignments={assignments}
+                assignments={planAssignments}
                 machines={enrichedMachines}
                 damages={damages}
                 weeklyDuty={weeklyDuty}
@@ -12893,7 +13046,7 @@ function DispatcherApp() {
       )}
       {showDriverReport && (
         <DriverReportModal
-          drivers={employees.filter((e) => e.role === "externy_sofer").sort((a, b) => !!a.archived - !!b.archived || a.name.localeCompare(b.name))}
+          drivers={employees.filter((e) => e.role === "externy_sofer").sort(byKeys((e) => (e.archived ? 1 : 0), "name"))}
           selfOnly={currentUser?.role === "externy_sofer"}
           selfId={myEmployee?.id || null}
           issuedBy={effectiveUser?.role === "externy_sofer" ? "" : currentUser?.name || ""}
@@ -13357,7 +13510,7 @@ function DispatcherApp() {
           key={machineCard.id}
           machine={enrichedMachines.find((m) => m.id === machineCard.id) || machineCard}
           machineModels={machineModels}
-          history={damages.filter((d) => d.machineId === machineCard.id).sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1))}
+          history={damages.filter((d) => d.machineId === machineCard.id).sort(byKeys("-dateReported", "-createdAt"))}
           jobs={jobs}
           handoverProtocols={handoverProtocols}
           protocolLogs={protocolLogs}
@@ -13617,6 +13770,9 @@ function DispatcherApp() {
       {serviceEventDetail && (
         <ServiceEventDetailModal
           d={damages.find((dd) => dd.id === serviceEventDetail.id) || serviceEventDetail}
+          damages={damages}
+          portalRequests={portalRequests}
+          onMerge={mergeDamages}
           technicianById={technicianByIdTop}
           machineById={enrichedMachineById}
           protocolLogs={protocolLogs}
@@ -13658,6 +13814,7 @@ function DispatcherApp() {
             })
           }
           onSaveNote={(id, note) => {
+            if (!damages.some((x) => x.id === id)) { showNotice("Poznámka sa neuložila — tiket medzičasom zlúčil alebo zmazal kolega."); setServiceEventDetail(null); return; }
             setDamageNote(id, note);
             setServiceEventDetail((prev) => (prev ? { ...prev, poznamkaDispecera: note } : prev));
           }}
@@ -13882,6 +14039,7 @@ function DispatcherApp() {
           key={liveJob.id + ":" + jobCardNonce}
           job={liveJob}
           machine={machineById[liveJob.machineId]}
+          machineById={machineById}
           customerRec={customers.find((c) => c.id === liveJob.customerId) || customers.find((c) => (c.firma || "").trim().toLowerCase() === (liveJob.customer || "").trim().toLowerCase())}
           driverById={driverById}
           drivers={drivers}
@@ -14010,7 +14168,7 @@ function DispatcherApp() {
             resolveTransportIssue(liveJob.id);
             setJobDetail((prev) => (prev ? { ...prev, transportIssueNote: null, transportIssueAt: null, transportIssueBy: null } : prev));
           }}
-          portalRequests={portalRequests.filter((r) => r.jobId === liveJob.id && (r.status === "pending" || r.status === "in_progress"))}
+          portalRequests={portalRequests.filter((r) => r.jobId === liveJob.id && (r.status === "pending" || r.status === "in_progress")).sort(byKeys("createdAt"))}
           onApprovePortalExtension={(r, j) => setApproveExtensionTarget({ request: r, job: j })}
           onRejectPortalRequest={(r, note) => rejectPortalRequest(r, note)}
           onConvertPortalProblem={(r) => convertPortalRequestToDamage(r)}
@@ -14066,7 +14224,7 @@ function DispatcherApp() {
               if (real) setJobs((prev) => prev.map((j) => (j.id === jobId && !j.publicToken ? { ...j, publicToken: real } : j)));
             });
           }}
-          checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz")}
+          checkerInspection={assignments.find((a) => a.jobId === showHandoverProtocol.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz" && !a.cancelledAt)}
           checkerWarn={checkerProblemText(showHandoverProtocol, assignments, damages)}
           prevShots={lastShotPhotos(showHandoverProtocol.machineId, assignments, handoverProtocols)}
           assignments={assignments}
@@ -14140,7 +14298,7 @@ function DispatcherApp() {
       {technicianCard && (
         <TechnicianCardModal
           technician={technicianCard}
-          assignments={assignments}
+          assignments={planAssignments} // bez zrušených kontrol (k61 terén S2)
           machines={enrichedMachines}
           today={today}
           vehicleSpz={vehicleByEmployeeId[technicianCard.id]?.spz}
@@ -14150,7 +14308,7 @@ function DispatcherApp() {
       {assignSlot && (
         <AssignSlotModal
           slot={assignSlot}
-          assignments={assignments}
+          assignments={planAssignments} // bez zrušených kontrol (k61 terén S2)
           machines={machines}
           damages={damages}
           machineById={enrichedMachineById}
@@ -14165,7 +14323,7 @@ function DispatcherApp() {
       )}
       {ezDayTarget && (
         <EzDayModal
-          items={ezMeasurements.filter((m) => m.assignedTechnicianId === ezDayTarget.technicianId && (ezDayTarget.date ? m.assignedDate === ezDayTarget.date : !m.processed && m.assignedDate && m.assignedDate <= todayISO()))}
+          items={ezMeasurements.filter((m) => m.assignedTechnicianId === ezDayTarget.technicianId && (ezDayTarget.date ? m.assignedDate === ezDayTarget.date : !m.processed && m.assignedDate && m.assignedDate <= todayISO())).sort(byKeys("assignedDate", "date", "createdAt"))}
           technicianName={employees.find((e) => e.id === ezDayTarget.technicianId)?.name}
           date={ezDayTarget.date}
           myEmployee={myEmployee}
@@ -14176,7 +14334,8 @@ function DispatcherApp() {
       )}
       {checkerInspectionTarget && (() => {
         const job = jobs.find((j) => j.id === checkerInspectionTarget.jobId);
-        const machine = job ? enrichedMachineById[job.machineId] : null;
+        // Stroj kontroly, nie aktuálny stroj zákazky — po výmene stroja patrí zrušená (aj vykonaná) kontrola pôvodnému (k61 portál S1).
+        const machine = enrichedMachineById[checkerInspectionTarget.machineId || job?.machineId] || null;
         // Pozor: kontrola checkera sa NESMIE ukladať do handoverProtocols — tá
         // tabuľka je pre appku signál "odovzdanie/vrátenie už prebehlo" (viaceré
         // miesta v appke berú existenciu záznamu ako hotové prevzatie). Kontrola
@@ -14198,13 +14357,14 @@ function DispatcherApp() {
             onClose={() => { setCheckerInspectionTarget(null); goBackCard(); }}
             onSave={(patch) => {
               // Dispečer medzitým zákazku zmazal / kontrolu zrušil — nič neukladať potichu.
-              if (!assignments.some((a) => a.id === checkerInspectionTarget.id)) {
+              if (!assignments.some((a) => a.id === checkerInspectionTarget.id && !a.cancelledAt)) {
                 showNotice("Túto kontrolu medzičasom zrušil dispečer (zákazka bola zmazaná alebo zmenená). Kontrola sa neuložila.");
                 setCheckerInspectionTarget(null);
                 goBackCard();
                 return;
               }
               const erpPatch = revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]);
+              if (erpPatch.erpProcessed === false && !can(effectiveUser, "erp_view")) { showNotice(ERP_LOCKED_CHECK_MSG); return; } // medzi nespracované vracia len servis (k62 terén R1)
               const hasProblem = (patch.checklist || []).some((it) => it.checkerStatus === "problem");
               const isReturn = checkerInspectionTarget.phase === "vratenie";
               // Úprava hotovej kontroly (napr. len hodiny) upozornenie nezopakuje — len nový problém.
@@ -14249,12 +14409,13 @@ function DispatcherApp() {
             onReportServiceStatus={
               (popis, patch) => {
                     // Rovnaká kontrola ako pri Uložiť — zrušená kontrola / zmazaný stroj nesmie skončiť ticho.
-                    if (!assignments.some((a) => a.id === checkerInspectionTarget.id) || !machine) {
+                    if (!assignments.some((a) => a.id === checkerInspectionTarget.id && !a.cancelledAt) || !machine) {
                       showNotice("Túto kontrolu medzičasom zrušil dispečer (zákazka bola zmazaná alebo zmenená). Kontrola sa neuložila a poškodenie sa nenahlásilo.");
                       setCheckerInspectionTarget(null);
                       goBackCard();
                       return;
                     }
+                    if (patch && revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]).erpProcessed === false && !can(effectiveUser, "erp_view")) { showNotice(ERP_LOCKED_CHECK_MSG); return; }
                     const record = reportDamage(machine, popis, undefined, { silent: true, atDepo: true, job: checkerInspectionTarget.phase === "vratenie" ? jobs.find((j) => j.id === checkerInspectionTarget.jobId) || null : null });
                     const savePatch = patch
                       ? { ...patch, ...revertErpIfChanged(checkerInspectionTarget, patch, ["workHours", "usedParts", "mth", "noMth"]), resolved: true, skipped: false, skippedReason: null }
@@ -14681,7 +14842,7 @@ function NotificationPrefsModal({ currentUser, pushEnabled, onEnablePush, onDisa
 function NotificationBell({ notifications, unreadCount, currentUserId, onMarkRead, onMarkAllRead, onNavigate }) {
   const [open, setOpen] = useState(false);
   useEscClose(open, setOpen); // Esc zavrie menu (ako ⋯)
-  const sorted = [...(notifications || [])].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)); // časy z DB („+02:00“) aj z platformy („Z“)
+  const sorted = [...(notifications || [])].sort(byKeys([(n) => Date.parse(n.createdAt) || 0, -1])); // časy z DB („+02:00“) aj z platformy („Z“); pri zhode id (k61 terén D3)
   // C16: upozornenia rovnakého druhu a názvu z toho istého dňa sa zlúčia do jedného
   // riadku „Názov (N)“, ktorý sa dá rozbaliť (napr. 10 pridelení servisu).
   const [expanded, setExpanded] = useState(() => new Set());
@@ -15005,7 +15166,7 @@ function trashSubline(t) {
   const d = t.originalData || {};
   const popis = d.popis || d.description || d.note || "";
   const term = d.startDate ? `${fmtDate(d.startDate)}–${fmtDate(d.endDate || d.startDate)}` : ""; // zákazka: termín a miesto
-  return [d.model, d.customer || d.location, term, d.toLocation, popis.length > 40 ? `${popis.slice(0, 40).trim()}…` : popis].filter((x) => x && x !== t.label).join(" · ");
+  return [t.note, d.model, d.customer || d.location, term, d.toLocation, popis.length > 40 ? `${popis.slice(0, 40).trim()}…` : popis].filter((x) => x && x !== t.label).join(" · ");
 }
 function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete }) {
   const [typeFilter, setTypeFilter] = useState("all");
@@ -15013,7 +15174,7 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
     return trash
       .filter((t) => canSeeTrashEntry(t, currentUser))
       .filter((t) => typeFilter === "all" || t.recordType === typeFilter)
-      .sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1)); // najnovšie hore
+      .sort(byKeys("-deletedAt")); // najnovšie hore
   }, [trash, currentUser, typeFilter]);
 
   const availableTypes = useMemo(() => {
@@ -15071,8 +15232,8 @@ function TrashView({ trash, currentUser, onRestore, onPermanentDelete, askDelete
                   {t.label || "—"}
                   {trashSubline(t) && <div className="cell-sub" style={{ fontWeight: 400 }}>{trashSubline(t)}</div>}
                 </td>
-                <td data-label="Kto zmazal">{t.deletedByName || "—"}</td>
-                <td data-label="Kedy" className="tnum">{fmtDate(t.deletedAt)}</td>
+                <td data-label={t.mergedInto ? "Zlúčil(a)" : "Kto zmazal"}>{t.mergedInto && t.deletedByName ? <><span className="tc-pc-only">zlúčil(a) </span>{t.deletedByName}</> : t.deletedByName || "—"}</td>
+                <td data-label="Kedy" className="tnum" style={{ whiteSpace: "nowrap" }}>{fmtDate(t.deletedAt)}</td>
                 <td data-label="Zostáva" className="tnum">
                   {left <= 3 ? <span className="spill spill-warn">{leftTxt}</span> : leftTxt}
                 </td>
@@ -15121,7 +15282,7 @@ function RecordsTableView({ title, importWhat, fields, items, onAdd, onUpdate, o
             {items.length === 0 && (
               <tr><td className="td-plain" colSpan={fields.length + 1} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne záznamy.</td></tr>
             )}
-            {items.map((item) => (
+            {[...items].sort(byKeys((x) => x[customerNameKey])).map((item) => (
               <tr key={item.id} className={customerNameKey === "nazovZakaznika" ? "row-problem" : ""}>
                 {fields.map((f, i) => {
                   const v = item[f.key];
@@ -16298,7 +16459,7 @@ function Dashboard({
 }) {
   const [showArchived, setShowArchived] = useState(false);
   const depoOptions = DEPO_OPTIONS;
-  let visibleMachines = showArchived ? filteredMachines : filteredMachines.filter((m) => !m.archived);
+  let visibleMachines = (showArchived ? [...filteredMachines] : filteredMachines.filter((m) => !m.archived)).sort(byKeys("code"));
   if (depoFilter) {
     visibleMachines = visibleMachines.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
   }
@@ -16514,10 +16675,10 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
     return true;
   }
 
-  const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && matchesSearchAndDepo(j));
-  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j));
-  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && !j.selfPickup && (j.departureDate || j.startDate) >= today && matchesSearchAndDepo(j));
-  const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j));
+  const overdueJobs = jobs.filter((j) => effectiveStatus(j, today) === "overdue" && matchesSearchAndDepo(j)).sort(byKeys("endDate", "createdAt"));
+  const endingSoonJobs = jobs.filter((j) => effectiveStatus(j, today) === "active" && j.endDate && daysBetween(today, j.endDate) <= 5 && matchesSearchAndDepo(j)).sort(byKeys("endDate", "createdAt"));
+  const noDriverJobs = jobs.filter((j) => j.status !== "completed" && !j.driverId && !j.selfPickup && (j.departureDate || j.startDate) >= today && matchesSearchAndDepo(j)).sort(byKeys((j) => j.departureDate || j.startDate, "createdAt"));
+  const noEndDateJobs = jobs.filter((j) => j.status !== "completed" && !j.endDate && matchesSearchAndDepo(j)).sort(byKeys("startDate", "createdAt"));
   function matchesSearchAndDepoRes(r) {
     if (obchodnikFilter && r.obchodnik !== obchodnikFilter) return false;
     const m = machineById[r.machineId];
@@ -16533,8 +16694,8 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
     }
     return true;
   }
-  const approvedReservations = (reservations || []).filter((r) => r.status === "approved" && matchesSearchAndDepoRes(r));
-  const pendingReservations = (reservations || []).filter((r) => r.status === "pending" && matchesSearchAndDepoRes(r));
+  const approvedReservations = (reservations || []).filter((r) => r.status === "approved" && matchesSearchAndDepoRes(r)).sort(byKeys((r) => r.expectedStart || r.startDate, "createdAt"));
+  const pendingReservations = (reservations || []).filter((r) => r.status === "pending" && matchesSearchAndDepoRes(r)).sort(byKeys((r) => r.expectedStart || r.startDate, "createdAt"));
   const quickTiles = [
     { id: "pendingReservations", label: "Rezervácie čakajúce na schválenie", color: "var(--warn)", items: pendingReservations, isReservation: true },
     { id: "overdue", label: "Zákazka po termíne", color: "var(--warn)", items: overdueJobs },
@@ -16589,7 +16750,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
       (j) => (j.fromDepo || "").toLowerCase() === depoFilter.toLowerCase() || (j.returnDepo || "").toLowerCase() === depoFilter.toLowerCase()
     );
   }
-  const sorted = [...filtered].sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+  const sorted = [...filtered].sort(byKeys("-startDate", "-createdAt"));
   const bucketCount = (id) => jobs.filter((j) => statusBucket(j) === id && matchesSearchAndDepo(j)).length;
   return (
     <div>
@@ -16856,7 +17017,7 @@ function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items
     const row = (t) => (
       <TodayCompactRow key={t.id} id={`transport-${t.id}`} problem={t.overdue} defaultOpen={t.id === highlightTransportId}
         title={`${t.type === "vyvoz" ? "Vývoz" : "Zvoz"} · ${machineById[t.machineId]?.code || "—"}`}
-        sub={[t.customer, t.date !== today ? fmtDate(t.date) : "", t.checkerWarn && !isDone(t) ? (t.checkerWarn.startsWith(CHECKER_INFO_PREFIX) ? "drobné nedostatky stroja" : t.checkerWarn.startsWith("Checker") ? "⚠ problém pri kontrole stroja" : "⚠ otvorené poškodenie") : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
+        sub={[t.customer, t.date !== today ? fmtDate(t.date) : "", t.checkerWarn && !isDone(t) ? (t.checkerWarn.startsWith(CHECKER_INFO_PREFIX) ? "drobné nedostatky stroja" : t.checkerWarn.startsWith(CHECKER_LOWERED_PREFIX) ? "poznámka checkera ku stavu stroja" : t.checkerWarn.startsWith("Checker") ? "⚠ problém pri kontrole stroja" : "⚠ otvorené poškodenie") : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
     );
     const nowAll = items.filter((t) => t.overdue || t.date === today);
     const doneNow = nowAll.filter(isDone);
@@ -16947,19 +17108,28 @@ function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items
 // Vývoz stroja, pri ktorom kontrola checkera našla problém alebo má stroj otvorené poškodenie — šofér len dostane varovanie (k38 terén S1).
 function checkerProblemText(job, assignments, damages) {
   if (!job) return null;
-  const insp = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
+  const insp = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz" && !a.cancelledAt);
   const probs = (insp?.checklist || []).map((it, i) => (it?.checkerStatus === "problem" ? it.checkerNote?.trim() || checkItemLabel(it, i) : null)).filter(Boolean);
   // C/D: klasifikácia s poznámkou aj bez bodu s problémom — stroj sa neblokuje, varovanie je jediná poistka (k59 S1).
   const cls = insp?.classification && `klasifikácia ${insp.classification} — ${CHECK_CLASSES[insp.classification]}${insp.classificationNote?.trim() ? ` (${insp.classificationNote.trim()})` : ""}`;
   if (["C", "D"].includes(insp?.classification)) probs.push(cls);
   const dmg = (damages || []).filter((d) => d.machineId === job.machineId && !d.resolved && (d.type === "poskodenie" || d.type === "externa") && (!insp?.damageId || d.id !== insp.damageId)).map((d) => d.popis?.trim() || "porucha").filter((x) => !probs.includes(x));
   // A/B bez otvoreného poškodenia: len informácia (oranžová), bez volania dispečerovi (k60 D3).
+  // Checker znížil C (Závažný bod) na A/B s poznámkou — nie „drobné nedostatky“ (k61 A5).
+  if (["A", "B"].includes(insp?.classification) && !dmg.length && (insp.checklist || []).some((it) => it?.checkerStatus === "problem" && it.severity === "zavazna")) {
+    return `${CHECKER_LOWERED_PREFIX}${insp.classification}${insp.classificationNote?.trim() ? ` — poznámka: ${insp.classificationNote.trim()}` : ""}`;
+  }
+  // A/B so Závažným bodom pri inom otvorenom poškodení: varovanie k poškodeniu + poznámka checkera (nestratí sa, k61 terén D2).
+  if (["A", "B"].includes(insp?.classification) && (insp.checklist || []).some((it) => it?.checkerStatus === "problem" && it.severity === "zavazna")) {
+    return `Stroj má otvorené poškodenie: ${dmg.join("; ")} — pred odovzdaním zavolajte dispečerovi. ${CHECKER_LOWERED_PREFIX}${insp.classification}${insp.classificationNote?.trim() ? ` — poznámka: ${insp.classificationNote.trim()}` : ""}`;
+  }
   if (["A", "B"].includes(insp?.classification) && !dmg.length) return probs.length || insp.classification === "B" ? `${CHECKER_INFO_PREFIX}${[...probs, cls].join("; ")}` : null;
   if (!probs.length && !dmg.length) return null;
   return `${probs.length ? "Checker našiel problém" : "Stroj má otvorené poškodenie"}: ${[...probs, ...dmg].join("; ")} — pred odovzdaním zavolajte dispečerovi`;
 }
 const CHECKER_INFO_PREFIX = "Kontrola checkera — drobné nedostatky: ";
-const checkerWarnCls = (w) => (w.startsWith(CHECKER_INFO_PREFIX) ? "fnote fnote-y" : "fnote fnote-r");
+const CHECKER_LOWERED_PREFIX = "Checker klasifikoval stav ako ";
+const checkerWarnCls = (w) => (w.startsWith(CHECKER_INFO_PREFIX) || w.startsWith(CHECKER_LOWERED_PREFIX) ? "fnote fnote-y" : "fnote fnote-r");
 function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight, onReportIssue, preview }) {
   const machine = machineById[t.machineId];
   const isVyvoz = t.type === "vyvoz";
@@ -17169,7 +17339,7 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
   const canManageTransportNotes = can(user, "machine_transport_note");
   const assignedTransportNotes = useMemo(() => {
     if (!canManageTransportNotes) return [];
-    return (transportNotes || []).filter((t) => t.driverId && !t.driverDone);
+    return (transportNotes || []).filter((t) => t.driverId && !t.driverDone).sort(byKeys("date", "createdAt"));
   }, [transportNotes, canManageTransportNotes]);
   const [search, setSearch] = useState("");
   useEffect(() => {
@@ -17264,7 +17434,8 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
         }
       }
     });
-    return list.sort((a, b) => (a.date < b.date ? -1 : 1));
+    const createdOf = Object.fromEntries(jobs.map((j) => [j.id, j.createdAt]));
+    return list.sort(byKeys("date", "type", (t) => createdOf[t.jobId])); // v rámci dňa vývoz pred zvozom
   }, [jobs, today, handoverProtocols, jobDispatcher, assignments, damages]); // eslint-disable-line react-hooks/exhaustive-deps
   const transports = useMemo(() => allTransports.filter((t) => !t.self), [allTransports]);
   const selfTransports = allTransports.filter((t) => t.self);
@@ -17370,7 +17541,7 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
 
   // Checker = komu je kontrola naozaj pridelená; bez úlohy podľa depa a dňa.
   function checkerIdOf(t) {
-    const insp = (assignments || []).find((a) => a.kind === "kontrolaStroja" && a.jobId === t.jobId && (a.phase === "vratenie") === (t.type !== "vyvoz"));
+    const insp = (assignments || []).find((a) => a.kind === "kontrolaStroja" && a.jobId === t.jobId && (a.phase === "vratenie") === (t.type !== "vyvoz") && !a.cancelledAt);
     return insp?.technicianId || resolveCheckerId(depoCheckers, checkerSubstitutions, t.type === "vyvoz" ? t.from : t.to, t.date);
   }
   function transportLine(t, inOverdueSection) {
@@ -17721,7 +17892,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
   const depoOptions = [...new Set(mine.map((e) => e.depo).filter(Boolean))].sort(depoSort);
   const visible = mine.filter(
     (e) => (!q || e.name.toLowerCase().includes(q)) && (!roleFilter || e.role === roleFilter) && (!depoFilter || e.depo === depoFilter)
-  );
+  ).sort(byKeys("name"));
   const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
 
   // Kontrola duplicitných zamestnancov — rovnaké meno (bez ohľadu na veľkosť
@@ -18053,7 +18224,7 @@ function AddEmployeeModal({ existing, draft, canSetEz, assignableRoles, profiles
 
 function DriversView({ drivers, jobs, today, vehicleByEmployeeId, onOpenCard }) {
   const [showArchived, setShowArchived] = useState(false);
-  const visible = drivers.filter((d) => (showArchived ? true : !d.archived));
+  const visible = drivers.filter((d) => (showArchived ? true : !d.archived)).sort(byKeys("name"));
   return (
     <div>
       <div className="tbar" style={{ justifyContent: "flex-end" }}>
@@ -18108,7 +18279,7 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
   const q = search.trim().toLowerCase();
   const visible = (q ? customers.filter((c) => (c.firma || "").toLowerCase().includes(q)) : customers)
     .slice()
-    .sort((a, b) => (a.firma || "").localeCompare(b.firma || ""));
+    .sort(byKeys("firma"));
   // Po 200 ako Zákazky (rozhodnutie 24. 10.) — pri tisícoch zákazníkov sa nevykresľujú všetci naraz.
   const [shown, setShown] = useState(200);
   useEffect(() => setShown(200), [q]);
@@ -18348,7 +18519,7 @@ function CustomerSummary({ firma, jobs, damages, handoverProtocols, machineById 
         </div>
       )}
       {late.length > 0 && <div className="fnote fnote-y" style={{ margin: 0 }}>{plural(late.length, "vrátenie", "vrátenia", "vrátení")} po termíne (priemerne o {(() => { const v = Math.round(late.reduce((a, b) => a + b, 0) / late.length * 10) / 10; return Number.isInteger(v) ? plural(v, "deň", "dni", "dní") : `${fmt1(v)} dňa`; })()})</div>}
-      {dmg.length > 0 && <div className="fnote fnote-r" style={{ margin: 0 }}>Poškodenia: {dmg.slice(0, 5).map((d) => `${machineById?.[d.machineId]?.code || d.code || "—"} (${fmtDate(d.dateReported)})`).join(", ")}{dmg.length > 5 ? "…" : ""}</div>}
+      {dmg.length > 0 && <div className="fnote fnote-r" style={{ margin: 0 }}>Poškodenia: {[...dmg].sort(byKeys("-dateReported", "-createdAt")).slice(0, 5).map((d) => `${machineById?.[d.machineId]?.code || d.code || "—"} (${fmtDate(d.dateReported)})`).join(", ")}{dmg.length > 5 ? "…" : ""}</div>}
       {top.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Najčastejšie:</span>
@@ -19158,7 +19329,7 @@ function PhoneDirectoryModal({ employees, onClose }) {
   const list = (employees || [])
     .filter((e) => !e.archived && e.phone)
     .filter((e) => !q || e.name.toLowerCase().includes(q) || roleLabel(e.role).toLowerCase().includes(q) || (e.depo || "").toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byKeys("name"));
   return (
     <Modal title="Telefónny zoznam" onClose={onClose}>
       <Field label="Hľadať meno, rolu alebo depo">
@@ -19187,7 +19358,7 @@ function DriverCardModal({ driver, jobs, today, onClose, vehicleSpz }) {
   const d = driver;
   const upcoming = jobs
     .filter((j) => j.driverId === d.id && j.status !== "completed" && (!j.endDate || j.endDate >= today))
-    .sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+    .sort(byKeys((j) => j.departureDate || j.startDate, "createdAt"));
   const upcomingCount = upcoming.length;
   upcoming.splice(8);
 
@@ -19350,7 +19521,7 @@ function AddMachineModal({ existing, machineModels, machines, onClose, onSave, o
             style={{ width: "100%" }}
           >
             <option value="">— vybrať model —</option>
-            {[...machineModels].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((mm) => (
+            {[...machineModels].sort(byKeys("name")).map((mm) => (
               <option key={mm.id} value={mm.name}>{mm.name}</option>
             ))}
             {!canCreateModel && type && !machineModels.some((mm) => mm.name === type) && <option value={type}>{type}</option>}
@@ -19502,7 +19673,7 @@ function VehiclesView({ vehicles, employees, today, onAdd, onEdit, onOpenCard, o
             {vehicles.length === 0 && (
               <tr><td className="td-plain" colSpan={5} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>Zatiaľ žiadne autá.</td></tr>
             )}
-            {vehicles.map((v) => {
+            {[...vehicles].sort(byKeys("spz")).map((v) => {
               const stkEk = vehicleDateStatus(v.stkEkDate, today);
               return (
                 <tr key={v.id}>
@@ -19542,7 +19713,7 @@ function AddVehicleModal({ existing, employees, vehicles = [], onClose, onSave }
       <Field label="Priradená osoba *">
         <select value={assignedEmployeeId} onChange={(e) => setAssignedEmployeeId(e.target.value)} style={{ width: "100%" }}>
           <option value="">— vybrať —</option>
-          {employees.filter((e) => !e.archived).sort((a, b) => a.name.localeCompare(b.name)).map((e) => (
+          {employees.filter((e) => !e.archived).sort(byKeys("name")).map((e) => (
             <option key={e.id} value={e.id}>{e.name}</option>
           ))}
         </select>
@@ -20074,7 +20245,7 @@ function PhotoPickButtons({ onFiles, miss, onCamera, cameraLabel = "Odfotiť", g
 // samostatný blok „Fotky poškodení“ (fotky navyše; v kontrole aj naviazané na bod — kľúč bodu v *PhotoShots, k60 A2).
 // items = [{ url, shot }] (shot null = navyše); onChange je setter stavu (funkčné aktualizácie pri viacerých nahrávaniach).
 // Zmazanie a výmena až vo zväčšenej fotke (k60 A5). optional = text zbaleného nepovinného bloku, reason = prečo je fotenie povinné,
-// locked = fotky uloženej fázy protokolu (len doplniť, k60 D4), damageWarn = bod s problémom bez fotky poškodenia.
+// locked = fotky uloženej fázy protokolu (len doplniť, k60 D4), damageWarn = bod s problémom bez fotky poškodenia ("zavazna" = fotka povinná, k61 A2).
 function ShotPhotos({ items, onChange, upload, readOnly, prev, missing, optional, reason, locked, damageWarn }) {
   const [cam, setCam] = useState(null); // kľúč záberu otvoreného fotoaparátu
   const [open, setOpen] = useState(() => items.some((x) => SHOT_LABEL[x.shot]));
@@ -20158,9 +20329,9 @@ function ShotPhotos({ items, onChange, upload, readOnly, prev, missing, optional
       </div>}
       {locked?.size > 0 && !readOnly && <div className="fhint sig-locked-note" style={{ marginBottom: 8 }}><NavIcon id="zamok" size={14} /> Uložené fotky sa nedajú zmazať ani vymeniť — chýbajúci záber alebo fotku môžete doplniť. Mení len administrátor.</div>}
       {(!readOnly || extra.length > 0) && (
-        <div className={`shot-dmg${damageWarn && !extra.length && !readOnly ? " warn" : ""}`}>
+        <div className={`shot-dmg${damageWarn && !extra.length && !readOnly ? " warn" : ""}`} data-miss={(damageWarn === "zavazna" && !extra.length && !readOnly) || undefined}>
           <div className="shot-dmg-h"><span className="shot-dmg-i" aria-hidden="true">!</span><span className="fstep-t">Fotky poškodení</span><span className="spill tnum">{extra.length}</span></div>
-          <div className="fhint" style={{ margin: "0 0 8px" }}>{damageWarn && !extra.length && !readOnly ? "V kontrole je bod s problémom — odfoťte detail poškodenia." : "Detail každého problému. Nepovinné, ľubovoľný počet."}</div>
+          <div className="fhint" style={{ margin: "0 0 8px" }}>{damageWarn && !extra.length && !readOnly ? (damageWarn === "zavazna" ? "V kontrole je bod Závažná — odfoťte aspoň jednu fotku poškodenia (povinné)." : "V kontrole je bod s problémom — odfoťte detail poškodenia.") : damageWarn === "zavazna" && !readOnly ? "Detail každého problému — pri bode Závažná aspoň jedna fotka." : "Detail každého problému. Nepovinné, ľubovoľný počet."}</div>
           <div className="fphotos">
             {extra.map((x, i) => (
               <div key={x.url + i} className="fphoto">
@@ -20264,9 +20435,10 @@ function lastShotPhotos(machineId, assignments, handoverProtocols, exclude) {
 const toShotItems = (photos, shots) => (photos || []).map((url, i) => ({ url, shot: (shots || [])[i] || null }));
 
 // Checklist kontroly checkera (k60 A1–A3): kapitola „V poriadku“ / „Problém“, pri kapitole ⓘ „Čo kontrolovať“ (len na čítanie).
-// „Problém“ otvorí podskupinu — body sú predvolene OK, checker označí len Problém (Drobná/Závažná + poznámka + fotka) alebo N/A.
-// probOpen = kapitoly s otvorenou podskupinou (stav v okne kontroly — kapitola „Problém“ bez označeného bodu sa nedá uložiť).
-function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen, itemPhotos, onItemPhoto }) {
+// „Problém“ otvorí podskupinu — body sú predvolene OK, checker označí len Problém (Drobná/Závažná + poznámka) alebo N/A.
+// N/A len v kapitole s problémom; „V poriadku“ pokrýva aj body, ktoré stroj nemá (k61 A1). Fotky poškodení len v bloku fotiek (k61 A2).
+// probOpen = kapitoly s otvorenou podskupinou (stav v okne kontroly — kapitola „Problém“ bez bodu s problémom sa nedá uložiť).
+function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen }) {
   const byKey = Object.fromEntries(checklist.map((it) => [it.key, it]));
   const [info, setInfo] = useState(() => new Set());
   const toggleInfo = (n) => setInfo((s) => { const x = new Set(s); if (x.has(n)) x.delete(n); else x.add(n); return x; });
@@ -20277,7 +20449,7 @@ function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen, it
   async function chapterOk(ch, probN) {
     if (probN && !(await askConfirm({ title: "Kapitola v poriadku?", message: `${plural(probN, "bod s problémom sa zruší", "body s problémom sa zrušia", "bodov s problémom sa zruší")} (závažnosť a poznámka).`, confirmLabel: "V poriadku" }))) return;
     const keys = ch.items.map((x) => x.key);
-    onChange(checklist.map((it) => (keys.includes(it.key) && it.checkerStatus !== "na" ? { ...it, checkerStatus: "ok", severity: null, checkerNote: "" } : it)));
+    onChange(checklist.map((it) => (keys.includes(it.key) ? { ...it, checkerStatus: "ok", severity: null, checkerNote: "" } : it)));
     setOpenCh(ch.n, false);
   }
   return (
@@ -20296,7 +20468,7 @@ function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen, it
           const probN = its.filter((it) => it.checkerStatus === "problem").length;
           const na = ch.items.filter((x) => byKey[x.key]?.checkerStatus === "na");
           const isProb = probN > 0 || probOpen.has(ch.n);
-          const noMark = isProb && !probN && !na.length;
+          const noMark = isProb && !probN;
           const done = its.every(checkItemDone) && !noMark;
           return (
             <div key={ch.n} className={`cki chk-ch${probN ? " prob" : ""}`} data-miss={!done || undefined}>
@@ -20325,10 +20497,8 @@ function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen, it
                   {ch.items.map((x) => {
                     const it = byKey[x.key] || {};
                     const st = it.checkerStatus;
-                    const photos = itemPhotos[x.key] || [];
-                    const needPhoto = st === "problem" && it.severity === "zavazna" && !photos.length;
                     return (
-                      <div key={x.key} className={`chk-it${st === "problem" ? " prob" : ""}${st === "na" ? " na" : ""}`} data-miss={(!checkItemDone(it) || needPhoto) || undefined}>
+                      <div key={x.key} className={`chk-it${st === "problem" ? " prob" : ""}${st === "na" ? " na" : ""}`} data-miss={!checkItemDone(it) || undefined}>
                         <div className="chk-il"><span className="tnum">{x.key.slice(1)})</span> {st === "problem" ? <b>{x.label}</b> : x.label}</div>
                         <span className={`chk-st${st === "na" ? " na" : ""}`}>{st === "na" ? "nevzťahuje sa" : st === "problem" ? "" : "OK"}</span>
                         <div className="cks chk-3" role="group" aria-label={x.label}>
@@ -20341,14 +20511,8 @@ function CheckerChecklistEditor({ checklist, onChange, probOpen, setProbOpen, it
                               {Object.entries(SEVERITY_LABEL).map(([k, l]) => <button key={k} type="button" aria-pressed={it.severity === k} className={it.severity === k ? "on" : ""} onClick={() => setItem(x.key, { severity: k })}>{l}</button>)}
                             </div>
                             <textarea value={it.checkerNote || ""} onChange={(e) => setItem(x.key, { checkerNote: e.target.value })} placeholder="Popíšte problém, napr. ľavé zadné koleso — zarezaný behúň" aria-label={`Popis problému — ${x.label}`} rows={3} className="chk-note" />
-                            <div className="chk-ph">
-                              {photos.map((url, i) => <img key={url + i} src={url} alt={`Fotka poškodenia — ${x.label}`} onClick={() => openPhotoLightbox(url)} />)}
-                              <label className="btn btn-outline chk-ph-btn" data-miss={needPhoto || undefined}>
-                                <NavIcon id="kamera" size={16} /> Odfotiť poškodenie{it.severity === "zavazna" ? " *" : ""}
-                                <input type="file" accept="image/*" capture="environment" onChange={(e) => { onItemPhoto(e.target.files, x.key); e.target.value = ""; }} style={{ display: "none" }} />
-                              </label>
-                            </div>
-                            {(!checkItemDone(it) || needPhoto) && <div className="fhint" style={{ marginTop: 4, color: "var(--danger-text)" }}>{!SEVERITY_LABEL[it.severity] ? "Vyberte Drobná alebo Závažná" : !String(it.checkerNote || "").trim() ? "Bez popisu problému sa nedá uložiť" : "Pri závažnom probléme odfoťte poškodenie"}.</div>}
+                            {!checkItemDone(it) ? <div className="fhint" style={{ marginTop: 4, color: "var(--danger-text)" }}>{!SEVERITY_LABEL[it.severity] ? "Vyberte Drobná alebo Závažná" : "Bez popisu problému sa nedá uložiť"}.</div>
+                              : it.severity === "zavazna" && <div className="fhint" style={{ marginTop: 4 }}>Poškodenie odfoťte v bloku „Fotky poškodení“ (krok 2) — pri Závažnej aspoň jedna fotka.</div>}
                           </>
                         )}
                       </div>
@@ -21209,7 +21373,9 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const [confirmReportDamage, setConfirmReportDamage] = useState(false);
   // Upravovať môže len ten checker, ktorému bola kontrola pridelená, alebo admin —
   // ktokoľvek iný (dispečer, iný technik prezerajúci si plán) ju vidí len na náhľad.
-  const canEdit = isAdminUser(user) || (!!myEmployee && assignment.technicianId === myEmployee.id);
+  // Zrušenú kontrolu (dispečer) už nikto dodatočne nevykoná (k61 A6).
+  const cancelled = !!assignment.cancelledAt;
+  const canEdit = !cancelled && (isAdminUser(user) || (!!myEmployee && assignment.technicianId === myEmployee.id));
   // Vývoz: upravovať sa dá dovtedy, kým sa stroj neodovzdal zákazníkovi
   // (prevzatie v odovzdávacom protokole) — potom je to NAVŽDY uzamknuté
   // (hardLocked), bez možnosti opravy, lebo stroj už fyzicky odišiel.
@@ -21223,7 +21389,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   // sa len už vykonaná kontrola — nevykonanú musí checker vedieť spraviť vždy.
   const returnDateStr = handoverProtocol?.returnDate || job?.pickupDate || job?.endDate || assignment.date;
   const timeLocked = phase === "vratenie" && !!assignment.resolved && !!returnDateStr && workdaysAfter(returnDateStr, todayISO()) > 2 && !isAdminUser(user);
-  const hardLocked = (phase !== "vratenie" && !!handoverDone) || timeLocked;
+  // Po odchode stroja mení hotovú kontrolu len admin (k61 A3, aj DB).
+  const hardLocked = (phase !== "vratenie" && !!handoverDone && !isAdminUser(user)) || timeLocked;
   const [editing, setEditing] = useState(canEdit && !assignment.resolved);
   // Vlastná doprava: pri odbere checker po kontrole odovzdá stroj zákazníkovi
   // (protokol), pri vrátení najprv protokol so zákazníkom a až potom kontrola.
@@ -21310,20 +21477,14 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
   const dm = (d) => (d ? fmtDate(String(d).slice(0, 10)).replace(/ \d{4}$/, "") : "");
   const photosOptionalText = photosRequired ? null
     : `Fotky stroja — nepovinné.${handoverProtocol?.returnDone && (handoverProtocol.returnPhotos || []).length ? ` Pri zvoze stroj odfotil šofér${handoverProtocol.returnDriverName ? ` ${handoverProtocol.returnDriverName}` : ""}${handoverProtocol.returnDate ? ` ${dm(handoverProtocol.returnDate)}` : "."}` : ""} Foťte len, ak nájdete niečo nové.`;
-  // Fotky poškodení naviazané na bod (kľúč bodu v checkerPhotoShots); pri bode Závažná povinné (k60 A3, aj DB).
-  const itemPhotos = {};
-  shotItems.forEach((x) => { if (x.shot && !SHOT_LABEL[x.shot]) (itemPhotos[x.shot] = itemPhotos[x.shot] || []).push(x.url); });
-  const severeOld = (key) => wasDone && (assignment.checklist || []).some((it) => it?.key === key && it.checkerStatus === "problem" && it.severity === "zavazna")
-    && !(assignment.checkerPhotoShots || []).some((k, i) => k === key && (assignment.checkerPhotos || [])[i]);
-  const severeNoPhoto = legacy ? [] : checklist.filter((it) => it.checkerStatus === "problem" && it.severity === "zavazna" && !itemPhotos[it.key] && !severeOld(it.key)).map((it) => it.key);
-  const probNoMark = legacy ? [] : [...probOpen].filter((n) => !checklist.some((it) => it.key?.startsWith(String(n)) && ["problem", "na"].includes(it.checkerStatus))).sort();
-  async function addItemPhotos(files, key) {
-    for (const file of Array.from(files || [])) {
-      const url = await uploadShot(file);
-      if (url) setShotItems((cur) => [...cur, { url, shot: key }]);
-    }
-  }
-  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && mthValid && photosNeeded === 0 && fuelValid && clsValid && !severeNoPhoto.length && !probNoMark.length;
+  // Pri bode Závažná aspoň 1 fotka v bloku „Fotky poškodení“ (k61 A2, aj DB) — aj staré fotky naviazané na bod (kľúč bodu, 1.0.868).
+  // Úprava hotovej kontroly, ktorej fotka chýbala už pri uložení, ju nevyžaduje (ako DB).
+  const isSevere = (cl) => (cl || []).some((it) => it?.checkerStatus === "problem" && it.severity === "zavazna");
+  const severeOld = wasDone && isSevere(assignment.checklist) && !(assignment.checkerPhotos || []).some((u, i) => u && !SHOT_LABEL[(assignment.checkerPhotoShots || [])[i]]);
+  const needDmgPhoto = !legacy && isSevere(checklist) && !shotItems.some((x) => !SHOT_LABEL[x.shot]) && !severeOld;
+  // Kapitola „Problém“ len s aspoň jedným bodom s problémom — samotné N/A nestačí (k61 A1).
+  const probNoMark = legacy ? [] : [...probOpen].filter((n) => !checklist.some((it) => it.key?.startsWith(String(n)) && it.checkerStatus === "problem")).sort();
+  const canSaveForm = uploadingPhotos === 0 && checklistComplete && hoursValid && partsValid && mthValid && photosNeeded === 0 && fuelValid && clsValid && !needDmgPhoto && !probNoMark.length;
   const [confirmNoPhotos, setConfirmNoPhotos] = useState(false);
   const hasProblem = checklist.some((it) => it.checkerStatus === "problem");
 
@@ -21400,6 +21561,12 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           </div>
         )}
       </div>
+      {/* Zámok hneď pod hlavičkou, nie až na konci dlhého okna (k61 dizajn) */}
+      {hardLocked && !cancelled && (
+        <div className={`fhint${timeLocked ? "" : " sig-locked-note"}`} style={{ marginBottom: 10 }}>
+          {timeLocked ? "Uplynuli 2 pracovné dni od vrátenia — kontrolu už nie je možné upravovať." : <><NavIcon id="zamok" size={14} /> Stroj už bol odovzdaný zákazníkovi — kontrola je uzamknutá. Mení len administrátor.</>}
+        </div>
+      )}
 
       {waitingForReturnProtocol ? (
         <div className="fnote fnote-i">
@@ -21441,8 +21608,8 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       {/* Nevykonaná (preskočená / zrušená) kontrola sa netvári ako hotová — bez kapitol „V poriadku“ (k60 terén S2). */}
       {skippedView ? (
         <div className="fnote fnote-y" style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>⊘ Nevykonaná — {assignment.skippedReason || "bez kontroly checkera"}</div>
-          {phase === "vyvoz" && !handoverDone && !selfTransport && <div style={{ color: "var(--text-dim)" }}>Pri odovzdaní stroja treba v protokole odfotiť 9 záberov.</div>}
+          <div style={{ fontSize: 15, fontWeight: 600 }}>⊘ {inspectionClosedText(assignment)}</div>
+          {phase === "vyvoz" && !handoverDone && !selfTransport && !cancelled && <div style={{ color: "var(--text-dim)" }}>Pri odovzdaní stroja treba v protokole odfotiť 9 záberov.</div>}
         </div>
       ) : (<>
       {legacy ? (<>
@@ -21464,7 +21631,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
             const prob = new Set(next.filter((it) => it.checkerStatus === "problem").map((it) => it.key));
             const loose = (x) => x.shot && !SHOT_LABEL[x.shot] && !prob.has(x.shot);
             setShotItems((cur) => (cur.some(loose) ? cur.map((x) => (loose(x) ? { ...x, shot: null } : x)) : cur));
-          }} probOpen={probOpen} setProbOpen={setProbOpen} itemPhotos={itemPhotos} onItemPhoto={addItemPhotos} />
+          }} probOpen={probOpen} setProbOpen={setProbOpen} />
           <CleanlinessEditor value={clean} onChange={setClean} />
         </>
       )}
@@ -21486,7 +21653,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
       {!legacy && (
         <>
           <ShotPhotos items={shotItems} onChange={setShotItems} upload={uploadShot} readOnly={!showForm} prev={prevShots} missing={showForm && photosNeeded > 0}
-            optional={photosOptionalText} damageWarn={hasProblem} />
+            optional={photosOptionalText} damageWarn={!legacy && isSevere(checklist) && !severeOld ? "zavazna" : hasProblem} />
           {showForm && uploadingPhotos > 0 && <div className="fhint">Nahrávam fotky…</div>}
           {showForm && photoUploadError && <div className="fhint" style={{ color: "var(--danger-text)" }}>{photoUploadError}</div>}
           {showForm && photosNeeded > 0 && <div className="fhint need-hint" style={{ color: "var(--danger-text)" }}>Odfoťte všetkých {MACHINE_SHOTS.length} záberov stroja — chýba {photosNeeded}.</div>}
@@ -21651,12 +21818,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         )
       )}
 
-      {hardLocked && (
-        <div className="fhint" style={{ marginTop: 10 }}>
-          {phase === "vratenie" ? "Uplynuli 2 pracovné dni od vrátenia — kontrolu už nie je možné upravovať." : "Stroj už bol odovzdaný zákazníkovi — kontrolu už nie je možné upravovať."}
-        </div>
-      )}
-      {!hardLocked && !canEdit && (
+      {!hardLocked && !canEdit && !cancelled && (
         <div className="fhint" style={{ marginTop: 10 }}>
           Upraviť môže len pridelený checker alebo administrátor.
         </div>
@@ -21675,6 +21837,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
             `MTH ${mthValid ? "✓" : "✗"}`,
             !legacy && `${fuelType === "bateria" ? "Batéria" : fuelType === "hybrid" ? "Palivo a batéria" : fuelType ? "Palivo" : "Pohon"} ${fuelValid ? "✓" : "✗"}`,
             `Hodiny ${hoursValid ? "✓" : "✗"}`,
+            !legacy && isSevere(checklist) && !severeOld && `Fotky poškodení ${needDmgPhoto ? "✗" : "✓"}`, // hneď, nie až po Uložiť (k61 dizajn)
             !legacy && `Klasifikácia ${!checklistComplete ? "—" : clsValid ? clsValue : "✗"}`, // návrh A pri 0 bodoch ešte nie je návrh (k59 D11)
           ].filter(Boolean).join(" · ")}
           missing={[
@@ -21687,7 +21850,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
             !partsValid && "názov dielu",
             !clsValid && (clsValue === "D" ? "poznámka ku klasifikácii D" : clsLowered ? "poznámka k zníženiu klasifikácie" : "klasifikácia"),
             probNoMark.length > 0 && `bod s problémom v ${probNoMark.length > 1 ? "kapitolách" : "kapitole"} ${probNoMark.join(", ")} (alebo V poriadku)`,
-            severeNoPhoto.length > 0 && `fotka poškodenia pri ${severeNoPhoto.length > 1 ? "bodoch" : "bode"} ${severeNoPhoto.join(", ")}`,
+            needDmgPhoto && "fotka poškodenia (bod Závažná)",
           ].filter(Boolean)}
           left={legacy && hasProblem && canEdit && !assignment.damageId && (
             <button type="button" className="btn btn-danger-outline" onClick={(e) => canSaveForm ? setConfirmReportDamage(true) : e.currentTarget.closest(".job-form-foot")?.querySelector(".ff-btns [data-incomplete]")?.click()}>
@@ -21786,7 +21949,7 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
     </Modal>
   );
 }
-function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, onRotatePortalToken, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage, onResolveDispute}) {
+function JobDetailModal({ job, machine, machineById, customerRec, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, onRotatePortalToken, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage, onResolveDispute}) {
   const [binderTab, setBinderTab, forgetBinder] = useBinderTab("job:" + job.id); // null | "kontroly" | "protokol" | "zakaznik"
   const showPortalPanel = binderTab === "zakaznik";
   const [confirmDispute, setConfirmDispute] = useState(null); // "handover" | "return" — potvrdenie „Vybavené“ pri nesúhlase zákazníka
@@ -21823,21 +21986,26 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
   const checkerZvoz = checkerZvozId ? technicianById?.[checkerZvozId] : null;
   // Samotné priradenie kontroly (kind: "kontrolaStroja") k tejto zákazke — patrí k nej
   // rovnako, ako je vidieť na karte stroja, len tu naviac s odkazom rovno na zákazku.
-  const inspectionVyvoz = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && (a.phase || "vyvoz") === "vyvoz");
-  const inspectionVratenie = (assignments || []).find((a) => a.jobId === job.id && a.kind === "kontrolaStroja" && a.phase === "vratenie");
+  // Po výmene stroja má zákazka aj zrušenú kontrolu pôvodného stroja — platí nezrušená, zrušená sa ukáže zvlášť (k61 A6).
+  const jobChecks = (assignments || []).filter((a) => a.jobId === job.id && a.kind === "kontrolaStroja");
+  // Zrušená ako hlavná len pri tom istom stroji (nerealizovaná zákazka) — po výmene stroja patrí medzi zrušené (k62 požičovňa D1).
+  const pickCheck = (ph) => { const l = jobChecks.filter((a) => (a.phase || "vyvoz") === ph); return l.find((a) => !a.cancelledAt) || l.filter((a) => !a.machineId || a.machineId === job.machineId).sort(byKeys("-cancelledAt"))[0]; };
+  const inspectionVyvoz = pickCheck("vyvoz");
+  const inspectionVratenie = pickCheck("vratenie");
+  const cancelledChecks = jobChecks.filter((a) => a.cancelledAt && a !== inspectionVyvoz && a !== inspectionVratenie).sort(byKeys("-cancelledAt"));
   const checklistVyvozReady = (inspectionVyvoz?.checklist || []).some((it) => it.checkerStatus);
   const checklistVratenieReady = (inspectionVratenie?.checklist || []).some((it) => it.checkerStatus);
   function inspectionField(inspection, checker) {
-    if (!inspection) return checker ? `Zatiaľ nevytvorená (checker ${checker.name})` : "— zatiaľ nevytvorená —";
+    if (!inspection) return checker ? `Zatiaľ nevytvorená (checker ${checker.name})` : "Kontrola zatiaľ nie je — depo bez checkera, kontrolu zariadi servis";
     const techName = technicianById?.[inspection.technicianId]?.name || "—";
     const overdue = !inspection.resolved && inspection.date < todayISO();
     const text = inspection.skipped
-      ? `⊘ Nevykonaná — ${inspection.skippedReason || "stroj odovzdaný bez kontroly"} (${techName})`
+      ? `⊘ ${inspectionClosedText(inspection)}${inspection.cancelledAt ? "" : ` (${techName})`}${inspection.cancelledAt && inspection.machineId && inspection.machineId !== job.machineId && machineById?.[inspection.machineId] ? ` · kontrola stroja ${machineById[inspection.machineId].code}` : ""}` // pôvodný stroj (k61 dizajn D2)
       : inspection.resolved
       ? `Vykonaná (${techName})${CHECK_CLASSES[inspection.classification] ? ` · ${inspection.classification} — ${CHECK_CLASSES[inspection.classification]}` : ""}`
       : `${overdue ? "Po termíne" : "Naplánovaná"} na ${fmtDate(inspection.date)} (${techName})`;
     return onOpenCheckerInspection ? (
-      <span onClick={() => onOpenCheckerInspection(inspection)} style={{ color: overdue ? "inherit" : "var(--accent)", cursor: "pointer", textDecoration: "underline" }}>
+      <span onClick={() => onOpenCheckerInspection(inspection)} style={{ color: inspection.cancelledAt ? "var(--text-dim)" : overdue ? "inherit" : "var(--accent)", cursor: "pointer", textDecoration: "underline" }}>
         {text}
       </span>
     ) : text;
@@ -21931,6 +22099,11 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
               <div>
                 <CardField label="Kontrola stroja po vrátení" value={inspectionField(inspectionVratenie, checkerZvoz)} warn={inspectionVratenie && !inspectionVratenie.resolved && inspectionVratenie.date < todayISO()} />
               </div>
+              {cancelledChecks.map((a) => (
+                <div key={a.id}>
+                  <CardField label={`Zrušená kontrola ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}`} value={inspectionField(a)} />
+                </div>
+              ))}
             </div>
             {/* Porovnanie fotiek: zábery v riadkoch, stĺpce v časovom poradí (rozhodnutie 6. 11.). */}
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-dim)", margin: "14px 0 6px" }}>Porovnanie fotiek stroja</div>
@@ -22084,7 +22257,7 @@ function JobDetailModal({ job, machine, customerRec, driverById, drivers, dispat
               .map(([f, , lbl]) => ({ tone: "warn", text: <>{lbl} stroja {machine[f] < today ? "platila do" : "vyprší"} {nbDates(fmtDate(machine[f]))} — pred koncom prenájmu ({nbDates(fmtDate(job.endDate))})</>,
                 actions: [onOpenMachineCard && { label: "Karta stroja", onClick: () => onOpenMachineCard(machine) }] }))
             : []),
-          ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).map((d) => ({ tone: "red",
+          ...(machineDamages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa")).sort(byKeys("-dateReported", "-createdAt")).map((d) => ({ tone: "red",
             text: <>Stroj má otvorené poškodenie: <b>{d.popis || "—"}</b></>, actions: [onOpenDamage && { label: "Detail poškodenia", onClick: () => onOpenDamage(d) }] })),
           ...[["handover", "prevzatí"], ["return", "vrátení"]].filter(([ph]) => handoverProtocol?.[ph + "CustomerConfirm"]?.status === "disputed" && !handoverProtocol[ph + "DisputeDone"]).map(([ph, lbl]) => {
             const c = handoverProtocol[ph + "CustomerConfirm"];
@@ -24620,7 +24793,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
 
           const m = item.machine;
           const idx = item.idx;
-          const mJobs = (jobsByMachine[m.id] || []).slice().sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+          const mJobs = (jobsByMachine[m.id] || []).slice().sort(byKeys("startDate", "createdAt"));
           const mReservations = reservationsByMachine[m.id] || [];
           const rowBg = idx % 2 === 1 ? "var(--panel-2)" : "transparent";
           // Porucha: červený pás tam, kde stroj nie je v prenájme — vykreslený rovnako ako pás zákazky (aj uhlopriečka
@@ -25391,11 +25564,11 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         const ha = liftHeight(a), hb = liftHeight(b);
         if (ha !== hb) return ha - hb; // nižšie hore
         const ta = (a.type || "").trim(), tb = (b.type || "").trim();
-        if (ta !== tb) return ta.localeCompare(tb);
-        return (a.code || "").localeCompare(b.code || "");
+        if (ta !== tb) return _skColl.compare(ta, tb);
+        return _skColl.compare(a.code || "", b.code || "");
       });
     }
-    return [...list].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+    return [...list].sort(byKeys("code"));
   }, [machines, depoFilter, search, sortMode, machineModels, jobs, reservations]);
 
   // Pevná šírka stĺpca (nie minmax(...,1fr)) — mobilný Safari vedel pri
@@ -25892,7 +26065,7 @@ function MachineTimeline({ machineId, jobs, history, handoverProtocols, assignme
 function MachineCardModal({ machine, machineModels, history, jobs, handoverProtocols, protocolLogs, myEmployee, user, assignments, hasServiceProtocol, onAssignDamage, onAssignmentAction, onClose, onBack, onReportDamage, onAddJob, onAddReservation, onEditJob, onCompleteJob, onOpenDamage, onOpenJob, onArchive, onUnarchive, onDelete, onToggleTrackRevisions, onToggleTrackRevisionsEZ, onToggleTrackUradnaSkuska, onEditMachine, onOpenHandoverProtocol, onAssignProtocolToDamage, ezMeasurements }) {
   const m = machine;
   const [expandedSection, setExpandedSection, forgetBinder] = useBinderTab("machine:" + m.id); // null | "servis" | "prenajom" | "revizieEz"
-  const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
+  const machineEzMeasurements = (ezMeasurements || []).filter((x) => x.machineId === m.id).sort(byKeys("-date", "-createdAt"));
   const [assignProtocolTarget, setAssignProtocolTarget] = useState(null); // protokol z "Ostatné protokoly", ktorý sa práve prideľuje ku zákazke
   // Sledovaná revízia/skúška bez zapísaného dátumu je reálne rovnako po termíne
   // ako keby mala dávno uplynutý dátum (nikdy sa nevykonala) — nie neutrálny stav.
@@ -25926,12 +26099,12 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         actions: [!assigned && onAssignDamage && can(user, "damage_assign") && { label: "Prideliť technikovi", onClick: () => onAssignDamage(d) }, { label: "Detail", onClick: () => onOpenDamage(d) }] });
     });
     if (me) (assignments || []).filter((a) => a.technicianId === me && a.machineId === m.id && a.date && a.date <= today && a.date >= addDaysISO(today, -14)
-      && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol?.(a))).forEach((a) => {
+      && (a.kind === "kontrolaStroja" ? !a.resolved : !a.kind && !hasServiceProtocol?.(a))).sort(byKeys("date", "createdAt")).forEach((a) => {
       out.push({ text: <>Vaša úloha {relDay(a.date, today)}: <b>{a.kind === "kontrolaStroja" ? `kontrola ${a.phase === "vratenie" ? "po vrátení" : "pred vývozom"}` : "servis"}</b>{a.firma ? ` · ${a.firma}` : ""}</>,
         actions: [onAssignmentAction && { label: a.kind === "kontrolaStroja" ? "Skontrolovať" : "Vypísať protokol", onClick: () => onAssignmentAction(a) }] });
     });
     const hpOf = (j) => (handoverProtocols || []).find((h) => h.jobId === j.id);
-    (jobs || []).filter((j) => j.machineId === m.id && j.status !== "completed" && !j.notRealized).forEach((j) => {
+    (jobs || []).filter((j) => j.machineId === m.id && j.status !== "completed" && !j.notRealized).sort(byKeys((j) => j.departureDate || j.startDate, "createdAt")).forEach((j) => {
       const dep = j.departureDate || j.startDate;
       const hp = hpOf(j);
       if (me && j.driverId === me && !hp?.handoverDone && dep && dep <= today && onOpenHandoverProtocol)
@@ -26107,7 +26280,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {protocolLogs
                   .filter((p) => p.machineId === m.id && isLooseProtocol(p, assignments))
-                  .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+                  .sort(byKeys("-createdAt"))
                   .map((p) => (
                     <div key={p.id} className="panel" style={{ padding: 10, display: "flex", alignItems: "center", gap: 10 }}>
                       <button
@@ -26156,7 +26329,7 @@ function MachineCardModal({ machine, machineModels, history, jobs, handoverProto
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {jobs
             .filter((j) => j.machineId === m.id)
-            .sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
+            .sort(byKeys("-startDate", "-createdAt"))
             .map((j) => {
               const hp = (handoverProtocols || []).find((h) => h.jobId === j.id);
               const badgeLabel = !hp ? "Bez protokolu" : !hp.returnDone ? "Čaká na vrátenie" : "Hotovo";
@@ -26280,7 +26453,7 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, on
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [showList, setShowList] = useState(false);
-  const options = [...machines].filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const options = [...machines].filter((m) => !m.archived).sort(byKeys("code"));
   const q = text.trim().toLowerCase();
   const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
   const selected = options.find((m) => m.id === selectedId);
@@ -26409,7 +26582,7 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [showList, setShowList] = useState(false);
-  const options = [...machines].filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const options = [...machines].filter((m) => !m.archived).sort(byKeys("code"));
   const q = text.trim().toLowerCase();
   const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
   const selected = options.find((m) => m.id === selectedId);
@@ -26533,7 +26706,7 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs, assignments, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
+function ServiceEventDetailModal({ d, damages, portalRequests, onMerge, technicianById, machineById, protocolLogs, assignments, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
   const [binderTab, setBinderTab, forgetBinder] = useBinderTab("dmg:" + d?.id);
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
@@ -26556,14 +26729,18 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
   const [contactDraft, setContactDraft] = useState(d.customerContact || "");
   const [contactEditing, setContactEditing] = useState(false);
   const [showAssignProtocolPicker, setShowAssignProtocolPicker] = useState(false);
+  const [mergeWith, setMergeWith] = useState(null);
+  // Ďalší otvorený tiket toho istého stroja — kancelária servisu a admin ich porovnajú a zlúčia (k61 B1).
+  const mergeCandidates = d.type === "poskodenie" && !d.resolved && !d.prepCheck && d.machineId && onMerge && (isAdminUser(user) || ["dispecer_servisu", "veduci_servisu"].includes(user?.role))
+    ? (damages || []).filter((x) => x.id !== d.id && x.machineId === d.machineId && x.type === "poskodenie" && !x.resolved && !x.prepCheck) : [];
   const canEditNote = !isSimple && onSaveNote && (can(user, "damage_status") || can(user, "external_status"));
   const canEditContact = !isSimple && onSaveContact && (can(user, "damage_status") || can(user, "external_status"));
   // Pre stroj z databázy filtrujeme podľa machineId. Externá zákazka (bez machineId)
   // nemá "svoj" stroj na filtrovanie — ponúkni všetky celkom nepriradené protokoly
   // (rovnaká množina ako "Ostatné externé protokoly" v module Externé servisné zákazky).
   const unassignedProtocolsForMachine = d.machineId
-    ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && isLooseProtocol(p, assignments))
-    : (protocolLogs || []).filter((p) => !p.machineId && isLooseProtocol(p, assignments));
+    ? (protocolLogs || []).filter((p) => p.machineId === d.machineId && isLooseProtocol(p, assignments)).sort(byKeys("-createdAt"))
+    : (protocolLogs || []).filter((p) => !p.machineId && isLooseProtocol(p, assignments)).sort(byKeys("-createdAt"));
 
   const stavText = isSimple ? (d.resolved ? "Vyriešené" : (techIds.length ? "Pridelené" : "Nové")) : damageLabel(d);
   const stavProblem = !isSimple && damageDisplayStav(d) === "zavazna_porucha";
@@ -26627,7 +26804,7 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         active={binderTab}
         setActive={setBinderTab}
         panel={<>
-      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
+      {(protocolLogs || []).filter((p) => p.damageId === d.id).sort(byKeys("-createdAt")).map((p) => (
         <div key={p.id} style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
             <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
@@ -26692,6 +26869,13 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
           {(protocolLogs || []).filter((p) => p.damageId === d.id).length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Zatiaľ žiadny vypísaný protokol.</div>}
         </>}
         main={<>
+      {mergeCandidates.map((x) => (
+        <div key={x.id} className="merge-hint">
+          <span>⚠ Stroj má ďalší otvorený tiket z {fmtDate(x.dateReported)}{x.reportedBy ? ` (${x.reportedBy})` : ""}: „{oneLinePopis(x.popis, 90) || "—"}“</span>
+          <button type="button" className="btn btn-ghost" onClick={() => setMergeWith(x)}>Porovnať a zlúčiť</button>
+        </div>
+      ))}
+      {mergeWith && <MergeDamagesModal a={d} b={mergeWith} assignments={assignments} portalRequests={portalRequests} technicianById={technicianById} onClose={() => setMergeWith(null)} onMerge={onMerge} />}
       {/* Pás hore už má Nahlásené, miesto, technika a dátum pridelenia, štítok v nadpise stav — tu len ostatné; prázdne polia v riadku „Doplniť“ (ako karta zákazky, k36). */}
       {(() => {
         const field = (label, v, cls) => (v ? <><dt>{label}</dt><dd className={cls}>{v}</dd></> : null);
@@ -26833,6 +27017,74 @@ function ServiceEventDetailModal({ d, technicianById, machineById, protocolLogs,
         </div>
       )}
       </>} />
+    </Modal>
+  );
+}
+
+// Porovnanie dvoch otvorených tiketov stroja a zlúčenie (k61 B1) — ostane starší, ako v DB (merge_damages).
+function MergeDamagesModal({ a, b, assignments, portalRequests, technicianById, onClose, onMerge }) {
+  const [busy, setBusy] = useState(false);
+  const key = (x) => `${x.dateReported || "9999"}|${x.createdAt || "9999"}|${x.id}`;
+  const [older, newer] = key(a) <= key(b) ? [a, b] : [b, a];
+  // Zákaznícke údaje ostanú celé z jedného tiketu — pri rôznych zákazníkoch vyberie dispečer, predvolene novší (kde je stroj teraz) (k62 servis S1/R1).
+  const diffCust = !!older.customer && !!newer.customer && older.customer !== newer.customer;
+  const [custFrom, setCustFrom] = useState(newer.customer ? newer.id : older.id);
+  const custOf = (d) => [d.customer, d.location].filter(Boolean).join(" · ") || "— bez zákazníka —";
+  const col = (d, keep) => {
+    const techIds = d.technicianIds?.length ? d.technicianIds : d.technicianId ? [d.technicianId] : [];
+    const checks = (assignments || []).filter((x) => x.kind === "kontrolaStroja" && x.damageId === d.id);
+    const reqs = (portalRequests || []).filter((r) => r.linkedDamageId === d.id);
+    return (
+      <div className="merge-col" key={d.id}>
+        <div className="merge-col-h">
+          <b>{keep ? "Ostane (starší)" : "Zlúči sa a pôjde do Koša"}</b>
+          <span className={`spill ${damageBadgeCls(d)}`}>{damageLabel(d)}</span>
+        </div>
+        <dl className="side-dl">
+          <dt>Nahlásené</dt><dd className="tnum">{fmtDate(d.dateReported)}{d.reportedBy ? ` · ${d.reportedBy}` : ""}</dd>
+          <dt>Zákazník / miesto</dt><dd>{custOf(d)}{d.customerContact ? <div style={{ color: "var(--text-dim)" }}>Kontakt: {d.customerContact}</div> : null}</dd>
+          <dt>Popis</dt><dd style={{ whiteSpace: "pre-wrap" }}>{d.popis || "—"}</dd>
+          <dt>Pridelený technik</dt><dd>{techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —"}</dd>
+          <dt>Kontrola checkera</dt>
+          <dd>{checks.length ? checks.map((c) => {
+            const probs = (c.checklist || []).filter((it) => it?.checkerStatus === "problem");
+            const photos = shotPhotoMap(c.checkerPhotos, c.checkerPhotoShots).extra;
+            return (
+              <div key={c.id} style={{ marginBottom: 6 }}>
+                {c.phase === "vratenie" ? "Po vrátení" : "Pred vývozom"}{c.classification ? ` · ${c.classification} — ${CHECK_CLASSES[c.classification] || ""}` : ""}{c.checkerBy ? ` (${c.checkerBy}${c.checkerDate ? ", " + fmtDate(c.checkerDate) : ""})` : ""}
+                {probs.map((it) => { const x = CHECKER_ITEMS.find((y) => y.key === it.key); return <div key={it.key} style={{ color: "var(--danger-text)", fontSize: 13 }}>{it.key} {x?.label || ""} — {SEVERITY_LABEL[it.severity] || "—"}{it.checkerNote ? `: ${it.checkerNote}` : ""}</div>; })}
+                {photos.length > 0 && <div className="merge-photos">{photos.map((u, i) => <button type="button" key={i} onClick={() => openPhotoLightbox(u, photos)} aria-label={`Fotka poškodenia ${i + 1}`}><img src={u} alt="" /></button>)}</div>}
+              </div>
+            );
+          }) : "—"}</dd>
+          <dt>Žiadosť z portálu</dt>
+          <dd>{reqs.length ? reqs.map((r) => <div key={r.id}>„{r.message}“ <span style={{ color: "var(--text-dim)" }}>({fmtDate(r.createdAt)})</span></div>) : "—"}</dd>
+        </dl>
+      </div>
+    );
+  };
+  return (
+    <Modal elevated xwide eyebrow={`Stroj ${older.code || "—"}`} title="Porovnať a zlúčiť tikety" onClose={onClose}>
+      <p style={{ marginTop: 0, fontSize: 14 }}>
+        Ostane starší tiket z {fmtDate(older.dateReported)}. Pripíše sa doňho popis novšieho, prejdú fotky a body z kontroly checkera, žiadosť zákazníka z portálu, servisné protokoly a úlohy technikov (bez duplicít). Novší tiket pôjde do Koša s poznámkou „zlúčený do …“.
+      </p>
+      <div className="merge-grid">{col(older, true)}{col(newer, false)}</div>
+      {diffCust ? (
+        <div className="fnote fnote-y" role="group" aria-label="Zákazník po zlúčení" style={{ marginTop: 12 }}>
+          <b>Tikety sú od rôznych zákazníkov.</b> Vyberte, ktorého zákazníka (miesto, obchodník, kontakt) tiket ponechá:
+          {[newer, older].map((d) => (
+            <label key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+              <input type="radio" name="merge-cust" checked={custFrom === d.id} onChange={() => setCustFrom(d.id)} />
+              <span>{custOf(d)} <span style={{ color: "var(--text-dim)" }}>({d === newer ? "novší tiket — kde je stroj teraz" : "starší tiket"})</span></span>
+            </label>
+          ))}
+        </div>
+      ) : (older.customer || newer.customer) && <div className="fhint" style={{ marginTop: 10 }}>Po zlúčení: zákazník {custOf(older.customer ? older : newer)}.</div>}
+      <FormFoot confirm>
+        <button type="button" className="btn btn-accent" disabled={busy} onClick={async () => { setBusy(true); if (await onMerge(older.id, newer.id, diffCust ? custFrom : null)) onClose(); else setBusy(false); }}>
+          {busy ? "Zlučujem…" : "Ide o ten istý problém — zlúčiť"}
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -27046,9 +27298,9 @@ function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDe
           </div>
           {/* Návrh dizajnu 23. 10.: popis poruchy hneď pod názvom, depo · nahlásené v jednom sivom riadku */}
           {isSimple && d.overdue && !d.resolved && d.popis ? (
-            <div className={`spill ${STATUS_CLS.overdue}`} style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "6px 10px", margin: "2px 0 4px" }}>⚠ {nbDates(d.popis)}</div>
+            <div className={`spill ${STATUS_CLS.overdue}`} style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "6px 10px", margin: "2px 0 4px" }}>⚠ {nbDates(oneLinePopis(d.popis))}</div>
           ) : (
-            d.popis && <div title={d.popis.length > 120 ? d.popis : undefined} style={{ fontSize: 15, fontWeight: isSimple ? 400 : 600, marginBottom: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{d.popis}</div>
+            d.popis && <div title={d.popis.length > 120 ? d.popis : undefined} style={{ fontSize: 15, fontWeight: isSimple ? 400 : 600, marginBottom: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{oneLinePopis(d.popis)}</div>
           )}
           <div className="tnum" style={{ fontSize: 13, color: "var(--text-dim)" }}>
             {locationLabel ? `${locationLabel} · ` : ""}Nahlásené <span style={{ whiteSpace: "nowrap" }}>{fmtDate(d.dateReported)}</span>{(d.currentJobLabel || d.customer) && !(locationLabel || "").includes(d.currentJobLabel || d.customer) ? ` · ${d.currentJobLabel || d.customer}` : ""}{d.customerContact ? ` · ${d.customerContact}` : ""}
@@ -27216,7 +27468,7 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
       );
     });
   }
-  const sorted = [...statusFiltered].sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1));
+  const sorted = [...statusFiltered].sort(byKeys("-dateReported", "-createdAt"));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   function locationLabel(d) {
@@ -27373,8 +27625,8 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
       (p.machineSerial || "").toLowerCase().includes(q)
     );
   }
-  unassignedFiltered = [...unassignedFiltered].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const externaDamages = damages.filter((d) => d.type === "externa");
+  unassignedFiltered = [...unassignedFiltered].sort(byKeys("-createdAt"));
+  const externaDamages = damages.filter((d) => d.type === "externa").sort(byKeys("-dateReported", "-createdAt"));
 
   // Ak platforma navigovala sem kvôli konkrétnemu záznamu (klik na notifikáciu),
   // uisti sa, že ho aktuálne filtre neschovávajú (napr. medzitým vyriešený).
@@ -27419,7 +27671,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
       );
     });
   }
-  const sorted = [...statusFiltered].sort((a, b) => (a.dateReported < b.dateReported ? 1 : -1));
+  const sorted = [...statusFiltered].sort(byKeys("-dateReported", "-createdAt"));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   function locationLabel(d) {
@@ -27628,7 +27880,7 @@ function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign })
       (d.serialNumber || "").toLowerCase().includes(query) ||
       (d.code || "").toLowerCase().includes(query)
     );
-  });
+  }).sort(byKeys("-dateReported", "-createdAt"));
   return (
     <Modal eyebrow="Priradiť protokol" title="K externej zákazke" onClose={onClose} wide>
       <div className="fsum">
@@ -27795,7 +28047,7 @@ function EzMeasurementModal({ machine, machines, onClose, onSave }) {
   const [text, setText] = useState(machine?.code || "");
   const [selectedId, setSelectedId] = useState(machine?.id || "");
   const [showList, setShowList] = useState(false);
-  const options = (machines || []).filter((m) => !m.archived).sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const options = (machines || []).filter((m) => !m.archived).sort(byKeys("code"));
   const q = text.trim().toLowerCase();
   const filtered = q ? options.filter((m) => (m.code || "").toLowerCase().includes(q) || (m.type || "").toLowerCase().includes(q)) : options;
   const selectedMachine = machine || options.find((m) => m.id === selectedId);
@@ -28099,7 +28351,7 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
       .filter((m) => (showHistory ? m.processed : !m.processed))
       .filter((m) => assignFilter === "all" || (assignFilter === "unassigned" ? !m.assignedTechnicianId : m.assignedTechnicianId === myEmployee?.id))
       .filter((m) => !q || (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q) || (m.assignedTechnicianName || "").toLowerCase().includes(q))
-      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      .sort(byKeys("-date", "-createdAt"));
   }, [measurements, showHistory, search, assignFilter, myEmployee?.id]);
   const confirming = (measurements || []).find((m) => m.id === confirmId);
 
@@ -28268,8 +28520,8 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   }
   // Triedenie podľa najbližšieho dátumu (ZZ alebo EZ) — EZ tikety majú revizia prázdne.
   const revDate = (d) => [d.revizia, d.reviziaEZ].filter(Boolean).sort()[0] || "";
-  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => (revDate(a) < revDate(b) ? -1 : 1));
-  const soon = filtered.filter((d) => !d.overdue).sort((a, b) => (revDate(a) < revDate(b) ? -1 : 1));
+  const overdue = filtered.filter((d) => d.overdue).sort(byKeys((d) => revDate(d) || "0", "createdAt")); // bez dátumu = po termíne, navrchu
+  const soon = filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], revDate, "createdAt")); // vyriešené pod otvorenými, najnovšie navrchu
   const wide = !overdue.length !== !soon.length; // prázdna skupina len ako riadok nad zoznamom, druhá na celú šírku (k36)
   const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
@@ -28429,7 +28681,7 @@ function erpProtocolDiff(p) {
 }
 
 function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts, onMarkAll, jobs }) {
-  const visible = items.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed));
+  const visible = items.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed)).sort(showHistory ? byKeys("-erpProcessedAt", "-createdAt") : byKeys((a) => a.checkerDate || a.date, "createdAt"));
   const totalHours = visible.reduce((sum, a) => sum + erpHours(a), 0);
   if (!visible.length) {
     return (
@@ -28466,7 +28718,7 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
             const diff = erpChecklistDiff(a);
             return (
               <tr key={a.id}>
-                <td className="td-plain"><strong className="tnum">{m?.code || "—"}</strong><div className="cell-sub">{m?.type || "—"}</div></td>
+                <td className="td-plain"><strong className="tnum">{m?.code || "—"}</strong><div className="cell-sub">{m?.type || "—"}</div>{a.cancelledAt && <div className="cell-sub">zrušená — {a.skippedReason || "zrušená dispečerom"}</div>}</td>
                 <td data-label="Technik">{t?.name || "—"}</td>
                 <td data-label="Hodiny" className="tnum">{String(a.workHours).replace(".", ",")} h{a.mth != null ? <span style={{ color: "var(--text-dim)" }}> · {fmtMth(a.mth)} MTH</span> : ""}</td>
                 {withParts && (
@@ -28518,7 +28770,7 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
     byTech[key].count++;
     byTech[key].hours += erpHours(a);
   });
-  const rows = Object.entries(byTech).sort((a, b) => (technicianById[a[0]]?.name || "").localeCompare(technicianById[b[0]]?.name || ""));
+  const rows = Object.entries(byTech).sort((a, b) => _skColl.compare(technicianById[a[0]]?.name || "", technicianById[b[0]]?.name || ""));
   if (!rows.length) {
     return (
       <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
@@ -28550,7 +28802,7 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
 }
 
 function ErpProtocolTable({ items, showHistory, onMark, onRevert, user }) {
-  const visible = items.filter((p) => (showHistory ? p.erpProcessed : !p.erpProcessed));
+  const visible = items.filter((p) => (showHistory ? p.erpProcessed : !p.erpProcessed)).sort(showHistory ? byKeys("-erpProcessedAt", "-createdAt") : byKeys("createdAt"));
   const totalHours = visible.reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
   if (!visible.length) {
     return (
@@ -28663,7 +28915,7 @@ function ErpChecklistsView({ assignments, jobs, protocolLogs, machineById, techn
   const [revertAsk, setRevertAsk] = useState(null); // {id, fn} — „Vrátiť“ sa opýta oknom platformy
   const askRevert = (fn) => (id) => setRevertAsk({ id, fn });
 
-  const checklists = assignments.filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null);
+  const checklists = assignments.filter((a) => checkHoursForErp(a));
   const hromadne = checklists.filter((a) => !(a.usedParts && a.usedParts.length));
   const solo = checklists.filter((a) => a.usedParts && a.usedParts.length);
   const requestMarkChecklist = (id) => setMarkPrompt({ ids: [].concat(id), kind: "checklist" });
@@ -28755,7 +29007,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
   const [vacSubs, setVacSubs] = useState({}); // {depo: id zástupu} — dá sa vybrať už pri zadaní dovolenky vopred
   const [vacEdit, setVacEdit] = useState(null); // plánovaná dovolenka, ktorej sa menia zástupy
   const [vacPick, setVacPick] = useState(false); // okno otvorené cez "+ Dovolenka" — dispečer sa vyberá v okne
-  const sorted = [...dispatchers].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = [...dispatchers].sort(byKeys("name"));
   const short = (d) => DEPO_SHORT_LABELS[d] || d;
   const dm = (iso) => fmtDate(iso).replace(/ \d{4}$/, ""); // „19. 10.“ bez roka
   const uncovered = TODAY_DEPOS.filter((d) => !dsp.actingForDepo(d, today));
@@ -28824,9 +29076,9 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
   ) : <span style={{ color: "var(--text-dim)" }}>—</span>;
   const vacRows = sorted.flatMap((row) => {
     const act = dsp.vacation(row.id, today);
-    const planned = dsp.vacations.filter((v) => v.dispatcherId === row.id && v.startDate > today).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+    const planned = dsp.vacations.filter((v) => v.dispatcherId === row.id && v.startDate > today).sort(byKeys("startDate", "createdAt"));
     return [...(act ? [{ row, v: act, active: true }] : []), ...planned.map((v) => ({ row, v, active: false }))];
-  });
+  }).sort(byKeys((x) => x.v.startDate, (x) => x.v.createdAt, (x) => x.row.name, (x) => x.v.id));
   const thS = { padding: "12px", fontWeight: 600, textAlign: "left", position: "static" };
   const secH = { margin: 0, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: ".06em", textTransform: "uppercase" };
 
@@ -28850,7 +29102,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
               const a = dsp.actingForDepo(depo, today);
               const o = dsp.owner(depo);
               const ov = o && dsp.vacation(o.id, today);
-              const oPlanned = o ? dsp.vacations.filter((v) => v.dispatcherId === o.id && v.startDate > today).sort((x, y) => (x.startDate < y.startDate ? -1 : 1)) : [];
+              const oPlanned = o ? dsp.vacations.filter((v) => v.dispatcherId === o.id && v.startDate > today).sort(byKeys("startDate", "createdAt")) : [];
               const opts = sorted.filter((x) => x.id === a?.id || (!dsp.vacation(x.id, today) && x.id !== (ov ? o.id : null)));
               return (
                 <tr key={depo} style={{ borderTop: "1px solid var(--border)" }}>
@@ -28991,7 +29243,9 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
         if (!q) return true;
         return [machine?.type, machine?.code, job?.customer, job?.cisloZmluvy].some((v) => (v || "").toLowerCase().includes(q));
       })
-      .sort((a, b) => (b.h.returnDate || "").localeCompare(a.h.returnDate || ""));
+      // nespracované od najstaršieho vrátenia (Rado 7. 11.), História od posledne spracovaného (k62 dizajn D2)
+      .sort(showHistory ? byKeys([(x) => x.h.erpProcessedAt, -1], [(x) => x.h.returnDate, -1], [(x) => x.h.createdAt, -1], [(x) => x.h.id, -1])
+        : byKeys((x) => x.h.returnDate, (x) => x.h.createdAt, (x) => x.h.id));
   }, [returned, jobById, machineById, showHistory, search]);
 
   return (
@@ -29186,8 +29440,8 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
       );
     });
   }
-  const overdue = filtered.filter((d) => d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
-  const thisYear = filtered.filter((d) => !d.overdue).sort((a, b) => ((a.uradnaSkuskaDate || "") < (b.uradnaSkuskaDate || "") ? -1 : 1));
+  const overdue = filtered.filter((d) => d.overdue).sort(byKeys((d) => d.uradnaSkuskaDate || "0", "createdAt"));
+  const thisYear = filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], "uradnaSkuskaDate", "createdAt"));
   const wide = !overdue.length !== !thisYear.length; // ako v Revíziách (k36)
   const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
@@ -29462,7 +29716,7 @@ function MissingProtocolBanner({ damage, protocolLogs, assignments, onAssignProt
   const hasProtocol = (protocolLogs || []).some((p) => p.damageId === damage.id);
   const availableProtocols = (protocolLogs || []).filter(
     (p) => p.machineId === damage.machineId && isLooseProtocol(p, assignments)
-  );
+  ).sort(byKeys("-createdAt"));
   if (hasProtocol || !onAssignProtocol) return null;
   return (
     <>
@@ -29694,7 +29948,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
           <div style={{ fontSize: 14 }}>{d.opravaKomentar || "— bez komentára —"}</div>
         </>
       )}
-      {(protocolLogs || []).filter((p) => p.damageId === d.id).map((p) => (
+      {(protocolLogs || []).filter((p) => p.damageId === d.id).sort(byKeys("-createdAt")).map((p) => (
         <div key={p.id} style={{ marginTop: 14 }}>
           <div className="flegend" style={{ fontSize: 14 }}>
             Vypísaný protokol — {p.technicianName || "—"} ({fmtDate(p.createdAt)})
@@ -29820,7 +30074,7 @@ function TechniciansOverview({ technicians, assignments, machines, damages, week
             </div>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${techDays.length}, 1fr)`, overflowX: "auto" }}>
               {techDays.map((iso, i) => {
-                const dayAssignments = assignments.filter((a) => a.technicianId === t.id && a.date === iso);
+                const dayAssignments = assignments.filter((a) => a.technicianId === t.id && a.date === iso).sort(byKeys("createdAt"));
                 const onDuty = isOnDuty(t.id, iso);
                 const dow = new Date(iso + "T00:00:00").getDay();
                 return (
@@ -29870,7 +30124,7 @@ function TechnicianCardModal({ technician, assignments, machines, today, onClose
   const machineById = useMemo(() => Object.fromEntries(machines.map((m) => [m.id, m])), [machines]);
   const upcoming = assignments
     .filter((a) => a.technicianId === t.id && a.date >= today)
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .sort(byKeys("date", "createdAt"))
     .slice(0, 8);
 
   return (
@@ -29994,6 +30248,7 @@ function TechnicianPlanner({ hasServiceProtocol, onAssignDamage, extraFilters, t
     Object.entries(ezByKey).forEach(([key, g]) => {
       (map[key] = map[key] || []).push({ id: `ez:${key}`, kind: "ezSpracovanie", technicianId: g.technicianId, date: g.date, ezItems: g.items });
     });
+    Object.values(map).forEach((l) => l.sort(byKeys("createdAt")));
     return map;
   }, [assignments, ezMeasurements]);
 
@@ -30475,7 +30730,7 @@ function TechnicianPlanner({ hasServiceProtocol, onAssignDamage, extraFilters, t
         const list = (damages || []).filter((d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa") && !d.technicianId && !(d.technicianIds || []).length
           && (d.machineId || d.type === "externa") && can(user, d.type === "externa" ? "external_assign" : "damage_assign") && damageInDeposOf(user, d, machineById)
           && (!depoFilter || (d.type === "externa" ? !d.assignedDepo || d.assignedDepo === depoFilter : machineById[d.machineId]?.depo === depoFilter))) // rešpektuje zvolené depo; externá bez depa sa nestratí
-          .sort((x, y) => (x.dateReported || "").localeCompare(y.dateReported || ""));
+          .sort(byKeys("dateReported", "createdAt"));
         if (!list.length) return null;
         return (
           <div className="panel" style={{ padding: "14px 16px", marginTop: 16 }}>
@@ -30647,7 +30902,7 @@ function QuickEventNoteModal({ onClose, onSave }) {
 
 function AssignSlotModal({ slot, assignments, machines, damages, machineById, technicians, protocolLogs, user, onClose, onSave, onDelete, onReschedule }) {
   const technician = technicians.find((t) => t.id === slot.technicianId);
-  const dayAssignments = assignments.filter((a) => a.technicianId === slot.technicianId && a.date === slot.date);
+  const dayAssignments = assignments.filter((a) => a.technicianId === slot.technicianId && a.date === slot.date).sort(byKeys("createdAt"));
   const [editingId, setEditingId] = useState(dayAssignments.length ? null : "new");
   const [reschedulingId, setReschedulingId] = useState(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -30700,7 +30955,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   </div>
                   <div className="cell-sub">{machineCurrentLocation(machine) || a.umiestnenie || "—"}{a.firma ? " · " + a.firma : ""}</div>
                   {a.poznamka && <div style={{ fontSize: 14, marginTop: 4 }}>{a.poznamka}</div>}
-                  {(protocolLogs || []).filter((p) => p.assignmentId === a.id || (a.damageId && p.damageId === a.damageId)).map((p) => (
+                  {(protocolLogs || []).filter((p) => p.assignmentId === a.id || (a.damageId && p.damageId === a.damageId)).sort(byKeys("-createdAt")).map((p) => (
                     <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                       <button
                         onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}
@@ -31506,7 +31761,7 @@ function busyDaySets(jobs, hpByJob, today, winStart) {
 const countInSet = (set, s, e) => { if (!set || s > e) return 0; let n = 0; for (let d = s; d <= e; d = addDaysISO(d, 1)) if (set.has(d)) n += 1; return n; };
 // Motohodiny prenájmu: protokol (staršie záznamy), inak kontrola checkera pri vývoze/vrátení — tam sa MTH zapisujú.
 const jobMthPair = (assignments, jobId, h) => {
-  const chk = (ph) => { const x = (assignments || []).find((a) => a.kind === "kontrolaStroja" && a.resolved && a.jobId === jobId && a.phase === ph && !a.noMth); return x ? numMth(x.mth) : null; };
+  const chk = (ph) => { const x = (assignments || []).find((a) => a.kind === "kontrolaStroja" && a.resolved && !a.skipped && a.jobId === jobId && a.phase === ph && !a.noMth); return x ? numMth(x.mth) : null; };
   return [numMth(h?.handoverMth) ?? chk("vyvoz"), numMth(h?.returnMth) ?? chk("vratenie")];
 };
 const numMth = (v) => { const n = Number(String(v ?? "").replace(",", ".").trim()); return v === "" || v == null || !Number.isFinite(n) ? null : n; };
@@ -32067,7 +32322,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   // Hodiny z checklistov (kontrola stroja) — pripočítané k technikovi/checkerovi
   // rovnako, ako protokolové hodiny (je to ten istý človek).
   const checklistHours = (assignments || [])
-    .filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null)
+    .filter((a) => checkHoursForErp(a))
     // Hodiny patria tomu, kto kontrolu naozaj urobil (zástup) — inak pridelenému technikovi.
     .map((a) => ({ technicianName: (a.checkerBy && technicians.some((t) => t.name === a.checkerBy) ? a.checkerBy : technicianNameById[a.technicianId]) || "", hours: Number(String(a.workHours).replace(",", ".")) || 0, date: (a.checkerDate || a.date || "").slice(0, 10) }));
   const periodChecklistHours = checklistHours.filter((c) => c.date && c.date >= start && c.date <= end);
@@ -32201,6 +32456,7 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
     const prevFix = dmg.filter((x) => x.id !== d.id && x.machineId === d.machineId && dmgDone(x) && dmgDone(x) <= r).map(dmgDone).sort().pop();
     if (prevFix && daysBetween(prevFix, r) <= 30) repeats.push({ d, prevFix, days: daysBetween(prevFix, r), m: mById.get(d.machineId) });
   });
+  repeats.sort(byKeys([(x) => x.d.dateReported, -1], [(x) => x.d.createdAt, -1], [(x) => x.d.id, -1]));
   const repByMachine = {};
   repeats.forEach((x) => { const k = x.m ? `${x.m.code || "—"} · ${x.m.type || "—"}` : x.d.code || "—"; repByMachine[k] = (repByMachine[k] || 0) + 1; });
 
@@ -32226,12 +32482,14 @@ function ServisStatistiky({ machines, technicians, protocolLogs, assignments, da
   const revLateDays = revTickets.filter((x) => x.done > x.due).map((x) => daysBetween(x.due, x.done));
 
   // Kontroly checkera s termínom v období: urobené, neurobené (preskočené), ešte otvorené.
-  const chk = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && d10(a.checkerDate || a.date) >= start && d10(a.checkerDate || a.date) <= end);
-  const chkDone = chk.filter((a) => a.resolved && !a.skipped).length;
-  const chkSkipped = chk.filter((a) => a.skipped).length;
+  // Vykonaná a potom zrušená (výmena stroja) sa ráta ako vykonaná — rovnako ako v ERP; nevykonaná zrušená sa neráta (k61 rozhodnutie).
+  const doneCancelled = (a) => !!(a.cancelledAt && a.cancelledAfterDone === true);
+  const chk = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && (!a.cancelledAt || doneCancelled(a)) && d10(a.checkerDate || a.date) >= start && d10(a.checkerDate || a.date) <= end);
+  const chkDone = chk.filter((a) => a.resolved && (!a.skipped || doneCancelled(a))).length;
+  const chkSkipped = chk.filter((a) => a.skipped && !doneCancelled(a)).length;
   const chkOpen = chk.filter((a) => !a.resolved).length;
   const chkPct = chkDone + chkSkipped ? Math.round((chkDone / (chkDone + chkSkipped)) * 100) : 0;
-  const skipB = buckets.map((b) => chk.filter((a) => a.skipped && d10(a.checkerDate || a.date) >= b.s && d10(a.checkerDate || a.date) <= b.e).length);
+  const skipB = buckets.map((b) => chk.filter((a) => a.skipped && !doneCancelled(a) && d10(a.checkerDate || a.date) >= b.s && d10(a.checkerDate || a.date) <= b.e).length);
   const protocolsDelta = statDelta(periodProtocols.length, prevPeriodProtocols.length);
   const hoursDelta = statDelta(Math.round(totalHours), Math.round(prevTotalHours));
   const travelHoursDelta = statDelta(Math.round(totalTravelHours), Math.round(prevTotalTravelHours));
@@ -32455,7 +32713,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
 
   // Určenie sa vyberá naprieč VŠETKÝMI depami, nie len z aktuálneho — dispečeri
   // niekedy stroj neskôr prehodia na iné depo.
-  const machineOptions = [...machines].sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  const machineOptions = [...machines].sort(byKeys("code"));
 
   function updateRow(key, field, value) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
@@ -32625,7 +32883,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
   const filtered = search.trim()
     ? machineModels.filter((mm) => (mm.name || "").toLowerCase().includes(search.trim().toLowerCase()))
     : machineModels;
-  const sorted = [...filtered].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const sorted = [...filtered].sort(byKeys("name"));
   const missingCount = machineModels.filter((mm) => !mm.category).length;
 
   return (
@@ -33128,7 +33386,7 @@ function TechWeekStrip({ assignments, myId, today, onGo, lateN = 0, isWork = (a)
     </section>
   );
 }
-function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
+function TodayView({ blockedItems, allAssignments, onDiscardBlocked, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
   onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo, onDriverReport }) {
   const role = user?.role;
   const isDriver = role === "sofer" || role === "externy_sofer";
@@ -33146,7 +33404,7 @@ function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmploy
       <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{weekday.charAt(0).toUpperCase() + weekday.slice(1)} {fmtDate(today)}{myEmployee?.depo ? ` · depo ${myEmployee.depo}` : ""}{subExtra}</div>
     </div>
   );
-  const waitingParts = phMineWaiting(partHandovers, myEmployee, tomorrow).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const waitingParts = phMineWaiting(partHandovers, myEmployee, tomorrow).sort(byKeys("date", "createdAt"));
   const partItems = waitingParts.map((p) => {
     const title = `${p.customer} — ${(p.items || []).length} ${(p.items || []).length === 1 ? "položka" : (p.items || []).length < 5 ? "položky" : "položiek"}`;
     const sub = `${p.method === "delivery" ? `doručenie${p.deliveryAddress ? ` · ${p.deliveryAddress}` : ""}` : `osobný odber${p.depo ? ` · depo ${p.depo}` : ""}`} · ${phItemsSummary(p.items)}`;
@@ -33156,12 +33414,22 @@ function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmploy
   const asCard = (it) => <TodayCard key={it.key} id={it.domId} tag={it.tag} tagColor={it.tagColor} tagBg={it.tagBg} title={it.title} sub={it.sub} problem={it.problem} actions={it.actions} />;
   const asRow = (it) => <TodayCompactRow key={it.key} id={it.domId} title={it.rowTitle || it.title} sub={it.rowSub ?? it.sub} problem={it.problem}>{asCard(it)}</TodayCompactRow>;
   const partCards = partItems.map(asCard);
+  // Zrušenie (dôvod, kto, kedy) zo servera — lokálny stav má ešte kópiu z fronty bez cancelledAt (k62 terén S1).
+  const [rejLive, setRejLive] = useState({});
+  const rejIds = (blockedItems || []).filter((x) => x.table === "assignments" && x.item?.id).map((x) => x.item.id).join(",");
+  useEffect(() => {
+    if (!rejIds) return;
+    supabase.from("assignments").select("id, data").in("id", rejIds.split(",")).then(({ data }) => { if (data) setRejLive(Object.fromEntries(data.map((r) => [r.id, r.data]))); }, () => {});
+  }, [rejIds]);
+  const isCancelledRej = ({ table, item, msg }) => table === "assignments" && !!(rejLive[item?.id]?.cancelledAt || (allAssignments || []).find((x) => x.id === item?.id)?.cancelledAt || /bola zrušená/.test(msg || ""));
   const blockedSec = blockedItems?.length > 0 && (
     <>
       <div className="today-sec red">Neuložené — v zariadení · {blockedItems.length}</div>
       <div className="panel" style={{ padding: "10px 12px", marginBottom: 14, fontSize: 14 }}>
         {blockedItems.map(({ table, item, msg, at }) => {
           const job = (jobs || []).find((j) => j.id === item?.jobId);
+          const live = table === "assignments" && (rejLive[item?.id] || (allAssignments || []).find((x) => x.id === item?.id));
+          const cancelled = isCancelledRej({ table, item, msg });
           const code = machineById[item?.machineId || job?.machineId]?.code || item?.machineSerial || item?.stroj || item?.customer || "";
           // Komu volať: protokol šoféra → dispečer zákazky, ostatné (práca technika) → dispečer servisu (najprv z môjho depa).
           const srv = (employees || []).filter((e) => !e.archived && e.role === "dispecer_servisu" && e.phone);
@@ -33172,14 +33440,19 @@ function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmploy
             <div key={table + item?.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ flex: "1 1 200px", minWidth: 0 }}>
                 <strong>{REJECTED_LABEL[table]}{code ? ` · ${code}` : ""}</strong>
-                <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{rejectedReason(table, item, msg, job, assignments, myId)}{at ? ` · uložené ${sentWhen(at)}` : ""}</span>
+                <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{cancelled
+                  ? `Kontrola stroja bola zrušená, kým ste boli bez signálu${live?.cancelledAt ? ` — ${live.skippedReason || "zrušená dispečerom"} (${[live.cancelledBy, fmtDate(live.cancelledAt).replace(/ \d{4}$/, "")].filter(Boolean).join(", ")})` : ""} — vaše údaje sa neodošlú`
+                  : rejectedReason(table, item, msg, job, assignments, myId)}{at ? ` · uložené ${sentWhen(at)}` : ""}</span>
               </span>
+              {cancelled && onDiscardBlocked && <button type="button" className="btn btn-ghost" onClick={() => onDiscardBlocked(table, item)}>Zahodiť</button>}
               {call?.phone && <a className="btn btn-ghost" href={`tel:${call.phone}`} title={call.name}><NavIcon id="telefon" size={16} /> {table === "handoverProtocols" ? "Dispečer" : "Servis"}</a>}
             </div>
           );
         })}
-        <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "8px 0" }}>Odošle sa sám, keď kancelária upraví pridelenie. Nič nemažte.</div>
-        <button type="button" className="btn btn-ghost" onClick={onRetryBlocked}>Skúsiť odoslať znova</button>
+        {!blockedItems.every(isCancelledRej) && <>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "8px 0" }}>Odošle sa sám, keď kancelária upraví pridelenie. Nič nemažte.</div>
+          <button type="button" className="btn btn-ghost" onClick={onRetryBlocked}>Skúsiť odoslať znova</button>
+        </>}
       </div>
     </>
   );
@@ -33241,14 +33514,15 @@ function TodayView({ blockedItems, onRetryBlocked, jobDispatcher, user, myEmploy
   // Úloha k už vyriešenému tiketu (kolega ho opravil skôr) nie je „mešká“.
   // Jedna definícia „úlohy“ pre text, Môj týždeň aj odznak: otvorená, tiket nie je vyriešený ani nečaká na diely (technik nemôže nič, dispečer ju naplánuje znova).
   const isWork = (a) => (a.kind === "kontrolaStroja" || !a.kind) && open(a) && !(a.damageId && (damageById[a.damageId]?.resolved || damageById[a.damageId]?.stav === "caka_diely"));
-  const late = mine.filter((a) => a.date < today && isWork(a)).sort((a, b) => a.date.localeCompare(b.date));
-  const todays = mine.filter((a) => a.date === today && isWork(a));
+  const late = mine.filter((a) => a.date < today && isWork(a)).sort(byKeys("date", "createdAt"));
+  const todays = mine.filter((a) => a.date === today && isWork(a)).sort(byKeys("createdAt"));
   // Podľa dňa dokončenia, nie plánovaného dňa (aj meškajúca kontrola urobená dnes, k38 terén D9).
   const doneOn = (a) => (a.kind === "kontrolaStroja" ? (a.checkerAt ? toLocalISO(new Date(a.checkerAt)) : a.checkerDate || a.date) : a.date);
-  const doneToday = mine.filter((a) => (a.kind === "kontrolaStroja" || !a.kind) && !a.skipped && !open(a) && (a.kind ? doneOn(a) === today : hasServiceProtocol(a, today))).length;
-  const tomorrowList = mine.filter((a) => a.date === tomorrow && (a.kind === "kontrolaStroja" || !a.kind));
+  const rejectedIds = new Set((blockedItems || []).filter((x) => x.table === "assignments").map((x) => x.item?.id)); // odmietnuté DB nie sú hotové (k61 terén S3)
+  const doneToday = mine.filter((a) => !rejectedIds.has(a.id) && (a.kind === "kontrolaStroja" || !a.kind) && !a.skipped && !open(a) && (a.kind ? doneOn(a) === today : hasServiceProtocol(a, today))).length;
+  const tomorrowList = mine.filter((a) => a.date === tomorrow && (a.kind === "kontrolaStroja" || !a.kind)).sort(byKeys("createdAt"));
   const infos = mine.filter((a) => a.date === today && a.kind && a.kind !== "kontrolaStroja");
-  const ez = (ezMeasurements || []).filter((m) => myId && m.assignedTechnicianId === myId && !m.processed && m.assignedDate && m.assignedDate <= today);
+  const ez = (ezMeasurements || []).filter((m) => myId && m.assignedTechnicianId === myId && !m.processed && m.assignedDate && m.assignedDate <= today).sort(byKeys("assignedDate", "date", "createdAt"));
   const duty = (weeklyDuty || []).some((w) => myId && w.technicianId === myId && w.weekStart && w.weekStart <= today && (w.weekEnd || addDaysISO(w.weekStart, 6)) >= today);
   const partsToday = waitingParts.filter((p) => (p.date || "") <= today).length; // zajtrajšie výdaje sa nerátajú
   const total = late.length + todays.length + partsToday + (ez.length ? 1 : 0);
@@ -33337,7 +33611,7 @@ function LeadTechTodayPanel({ today, tomorrow, assignments, damages, employees, 
     });
   });
   const techs = (employees || []).filter((e) => (e.role === "technik" || e.role === "veduci_technik_ba") && !e.archived && LEAD_TECH_DEPOS.includes(e.depo))
-    .sort((a, b) => (a.depo || "").localeCompare(b.depo || "") || (a.name || "").localeCompare(b.name || ""));
+    .sort(byKeys("depo", "name"));
   return (
     <>
       {noSub.length > 0 && (
@@ -33585,14 +33859,14 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       const back = j.pickupDate || j.endDate;
       if (j.status === "completed" && !j.notRealized && !j.selfReturn && !hp?.returnDone && back && back >= monthAgo) transports.push({ id: j.id + "-zvoz", type: "zvoz", date: back, driverId: j.returnDriverId, j });
     });
-    const noDriver = transports.filter((t) => !t.driverId && t.date <= tomorrow).sort((a, b) => a.date.localeCompare(b.date));
-    const mismatch = (notifications || []).filter((n) => n.title === "Nesúlad depa pri zvoze" && !(n.readBy || []).includes(user.id));
-    const portal = (portalRequests || []).filter((r) => r.type !== "problem" && r.status === "pending" && jobById[r.jobId] && !jobById[r.jobId].notRealized && isMyJob(jobById[r.jobId]));
-    const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow).sort((a, b) => a.endDate.localeCompare(b.endDate)); // aj dávno po konci — zabudnuté neukončené
-    const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo }));
-    const todayT = transports.filter((t) => t.date === today).sort((a, b) => a.type.localeCompare(b.type));
-    const lateT = transports.filter((t) => t.driverId && t.date < today && t.date >= addDaysISO(today, -14)) /* ako Prepravy (14 dní) */.sort((a, b) => a.date.localeCompare(b.date)); // so šoférom, ale bez protokolu
-    const issues = mine.filter((j) => j.transportIssueNote && !hpByJob[j.id]?.returnDone); // po protokole o vrátení už nie (rozhodnutie 23. 10.)
+    const noDriver = transports.filter((t) => !t.driverId && t.date <= tomorrow).sort(byKeys("date", "type", (t) => t.j.createdAt));
+    const mismatch = (notifications || []).filter((n) => n.title === "Nesúlad depa pri zvoze" && !(n.readBy || []).includes(user.id)).sort(byKeys("-createdAt"));
+    const portal = (portalRequests || []).filter((r) => r.type !== "problem" && r.status === "pending" && jobById[r.jobId] && !jobById[r.jobId].notRealized && isMyJob(jobById[r.jobId])).sort(byKeys("createdAt"));
+    const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow).sort(byKeys("endDate", "createdAt")); // aj dávno po konci — zabudnuté neukončené
+    const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo })).sort(byKeys("expectedStart", "createdAt"));
+    const todayT = transports.filter((t) => t.date === today).sort(byKeys("type", (t) => t.j.createdAt));
+    const lateT = transports.filter((t) => t.driverId && t.date < today && t.date >= addDaysISO(today, -14)) /* ako Prepravy (14 dní) */.sort(byKeys("date", "type", (t) => t.j.createdAt)); // so šoférom, ale bez protokolu
+    const issues = mine.filter((j) => j.transportIssueNote && !hpByJob[j.id]?.returnDone).sort(byKeys((j) => j.departureDate || j.startDate, "createdAt")); // po protokole o vrátení už nie (rozhodnutie 23. 10.)
     tiles.push(
       { n: issues.length, label: "Problém s prepravou", tone: "red", onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
       { n: noDriver.length, label: "Prepravy do zajtra bez šoféra", tone: "red", onClick: () => onGo({ module: "poziciovna", view: "prepravy" }) },
@@ -33659,11 +33933,11 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const srvDamages = (damages || []).filter((d) => inDepo(dDepo(d)));
     const open = (d) => !d.resolved && (d.type === "poskodenie" || d.type === "externa");
     // Externá zákazka bez depa sa ráta pri každom depe — rovnako ako v Pláne servisu (nestratí sa).
-    const unassigned = (damages || []).filter((d) => (inDepo(dDepo(d)) || (d.type === "externa" && !d.assignedDepo)) && open(d) && !d.technicianId && !(d.technicianIds || []).length);
-    const portalProblems = (portalRequests || []).filter((r) => r.type === "problem" && r.status === "pending" && jobById[r.jobId] && !jobById[r.jobId].notRealized && inDepo(mDepo(r.machineId))); // zmazaná (Kôš) alebo nerealizovaná zákazka nie
-    const toCheck = (partHandovers || []).filter((p) => p.status === "check" && inDepo(p.depo));
-    const lateChecks = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.date && a.date < today && inDepo(mDepo(a.machineId || jobById[a.jobId]?.machineId))).sort((a, b) => a.date.localeCompare(b.date));
-    const partReq = (spareParts || []).filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE && inDepo(p.depo));
+    const unassigned = (damages || []).filter((d) => (inDepo(dDepo(d)) || (d.type === "externa" && !d.assignedDepo)) && open(d) && !d.technicianId && !(d.technicianIds || []).length).sort(byKeys("dateReported", "createdAt"));
+    const portalProblems = (portalRequests || []).filter((r) => r.type === "problem" && r.status === "pending" && jobById[r.jobId] && !jobById[r.jobId].notRealized && inDepo(mDepo(r.machineId))).sort(byKeys("createdAt")); // zmazaná (Kôš) alebo nerealizovaná zákazka nie
+    const toCheck = (partHandovers || []).filter((p) => p.status === "check" && inDepo(p.depo)).sort(byKeys((p) => p.handedAt || p.createdAt));
+    const lateChecks = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && !a.resolved && a.date && a.date < today && inDepo(mDepo(a.machineId || jobById[a.jobId]?.machineId))).sort(byKeys("date", "createdAt"));
+    const partReq = (spareParts || []).filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE && inDepo(p.depo)).sort(byKeys((p) => p.requestedAt || p.createdAt));
     const ez = (ezMeasurements || []).filter((m) => !m.processed && inDepo(mDepo(m.machineId)));
     const revLate = srvDamages.filter((d) => d.type === "revizia" && !d.resolved && d.overdue);
     const revSoon = srvDamages.filter((d) => d.type === "revizia" && !d.resolved && !d.overdue);
@@ -33678,12 +33952,12 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
         if (away && resolveCheckerId(depoCheckers, checkerSubstitutions, depo, day) === base && !noSub.some((x) => x.depo === depo)) noSub.push({ depo, day, base, kind: away.kind });
       });
     });
-    const erpChecks = (assignments || []).filter((a) => a.kind === "kontrolaStroja" && a.resolved && a.workHours != null && !a.erpProcessed);
+    const erpChecks = (assignments || []).filter((a) => checkHoursForErp(a) && !a.erpProcessed);
     const erpProtocols = erpServiceProtocols(protocolLogs, damages).filter((p) => !p.erpProcessed);
     // ERP podklady (interné protokoly a kontroly) sú na „Dnes“ len pre fakturanta servisu (a admina) —
     // dispečer a vedúci servisu ich majú prístupné v menu. Výdaje dielov na fakturáciu vidia všetci traja.
     const billing = admin || role === "fakturant_servis";
-    const toBill = (partHandovers || []).filter((p) => p.status === "billing" && inDepo(p.depo)).sort((a, b) => (a.checkedAt || "").localeCompare(b.checkedAt || ""));
+    const toBill = (partHandovers || []).filter((p) => p.status === "billing" && inDepo(p.depo)).sort(byKeys("checkedAt", "createdAt"));
     const empById = Object.fromEntries((employees || []).map((e) => [e.id, e]));
     tiles.push(
       { n: unassigned.length, label: "Nepridelené tikety", tone: "red", onClick: () => onGo({ module: "servis", view: "poskodenia", depo: srvDepo }) },
@@ -33727,7 +34001,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
       sub: `skontrolované ${p.checkedAt ? fmtDate(toLocalISO(new Date(p.checkedAt))) : ""} · DL zatiaľ bez čísla`, actions: [{ label: "Spracovať", onClick: () => onGo({ module: "servis", view: "vydaj", partHandoverId: p.id }) }] }));
     if (!side) {
       const techs = (employees || []).filter((e) => (e.role === "technik" || e.role === "veduci_technik_ba") && !e.archived && inDepo(e.depo))
-        .sort((a, b) => (a.depo || "").localeCompare(b.depo || "") || (a.name || "").localeCompare(b.name || ""));
+        .sort(byKeys("depo", "name"));
       side = (
         <TodayList title="Technici dnes" empty="Žiadni technici." rows={techs.map((t) => {
           return techTodayRow(t, { assignments, damages, weeklyDuty, hasServiceProtocol, today, onGo });
@@ -33741,9 +34015,9 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const me = myEmployee?.name || user?.name;
     const mineJobs = (jobs || []).filter((j) => j.obchodnik === me);
     const ids = new Set(mineJobs.map((j) => j.id));
-    const portal = (portalRequests || []).filter((r) => ids.has(r.jobId) && (r.status === "pending" || r.status === "in_progress"));
-    const ending = mineJobs.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate >= today && j.endDate <= addDaysISO(today, 3)).sort((a, b) => a.endDate.localeCompare(b.endDate));
-    const resv = (reservations || []).filter((r) => r.obchodnik === me && (r.status === "pending" || r.status === "approved"));
+    const portal = (portalRequests || []).filter((r) => ids.has(r.jobId) && (r.status === "pending" || r.status === "in_progress")).sort(byKeys("createdAt"));
+    const ending = mineJobs.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate >= today && j.endDate <= addDaysISO(today, 3)).sort(byKeys("endDate", "createdAt"));
+    const resv = (reservations || []).filter((r) => r.obchodnik === me && (r.status === "pending" || r.status === "approved")).sort(byKeys("expectedStart", "createdAt"));
     const running = mineJobs.filter((j) => j.status !== "completed");
     tiles.push(
       { n: portal.length, label: "Žiadosti z portálu", tone: "red" },
@@ -34316,7 +34590,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
 
 // Rýchla akcia „Výdaj dielov“ — výdaje čakajúce na odovzdanie + nový výdaj priamo v teréne.
 function PartHandoverQuickModal({ partHandovers, myEmployee, onClose, onHandover, onNew }) {
-  const waiting = phMineWaiting(partHandovers, myEmployee).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const waiting = phMineWaiting(partHandovers, myEmployee).sort(byKeys("date", "createdAt"));
   return (
     <Modal eyebrow="Výdaj dielov" title="Odovzdanie dielov zákazníkovi" onClose={onClose}>
       <FormStep title={`Pridelené mne na odovzdanie`} right={<span className="spill tnum">{waiting.length}</span>} />
@@ -34390,7 +34664,7 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
   }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (initialTab) { setTab(initialTab); onInitialTabConsumed?.(); } }, [initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = (partHandovers || []).filter((p) => p.status === tab)
-    .sort((a, b) => (tab === "waiting" ? (a.date || "").localeCompare(b.date || "") : (b.handedAt || b.createdAt || "").localeCompare(a.handedAt || a.createdAt || "")));
+    .sort(tab === "waiting" ? byKeys("date", "createdAt") : byKeys([(p) => p.handedAt || p.createdAt, -1]));
   const bd = (p) => billDraft[p.id] || { dlNumber: p.dlNumber || "", erpDoc: p.erpDoc || "" };
   return (
     <div>
@@ -34552,17 +34826,17 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const selectedDodavatelia = dodavatelFilter || new Set(dodavatelOptions);
   const rows = periodFiltered.filter((p) => selectedDodavatelia.has(p.dodavatel || ""));
 
-  const pending = rows.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE);
-  const zamietnute = rows.filter((p) => p.stav === SPAREPART_STAV.ZAMIETNUTE);
+  const pending = rows.filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_SCHVALENIE).sort(byKeys((p) => p.requestedAt || p.createdAt));
+  const zamietnute = rows.filter((p) => p.stav === SPAREPART_STAV.ZAMIETNUTE).sort(byKeys([(p) => p.requestedAt || p.createdAt, -1]));
   // Objednané hore, zoradené podľa čísla nákupnej objednávky (od najmenšieho).
   const objednane = rows
     .filter((p) => p.stav === SPAREPART_STAV.OBJEDNANE)
-    .sort((a, b) => (a.nakupnaObjednavka || "").localeCompare(b.nakupnaObjednavka || "", undefined, { numeric: true }));
+    .sort(byKeys("nakupnaObjednavka", "-datumObjednania", "-createdAt"));
   // Čaká na objednanie pod tým, zoradené podľa dodávateľa — nech sa dá kopírovať
   // dodávateľ po dodávateľovi bez miešania s už objednanými vecami.
   const cakaNaObjednanie = rows
     .filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_OBJEDNANIE)
-    .sort((a, b) => (a.dodavatel || "").localeCompare(b.dodavatel || ""));
+    .sort(byKeys("dodavatel"));
 
   const columns = [
     { key: "dodavatel", label: "Dodávateľ" },
@@ -34582,7 +34856,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const searchResults = q
     ? searchScope
         .filter((p) => (p.cisloDielu || "").toLowerCase().includes(q) || (p.popisDielu || "").toLowerCase().includes(q))
-        .sort((a, b) => (b.requestedAt || "").localeCompare(a.requestedAt || ""))
+        .sort(byKeys([(p) => p.requestedAt || p.createdAt, -1]))
     : [];
 
   // Kopírovanie stĺpca — malá sivá ikona priamo pri názve stĺpca.
@@ -35185,7 +35459,7 @@ function DepoCheckerSettingsView({ depoCheckers, technicians, checkerSubstitutio
             Aktívne/naplánované náhrady (dovolenka)
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
-            {checkerSubstitutions.map((s) => (
+            {[...checkerSubstitutions].sort(byKeys("startDate", "createdAt")).map((s) => (
               <div key={s.id} className="panel" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 14, boxShadow: "none" }}>
                 <span><strong>{s.depo}</strong>: {technicianName(s.originalTechnicianId)} → {technicianName(s.substituteTechnicianId)}</span>
                 <span className="tnum" style={{ color: "var(--text-dim)" }}>({fmtDate(s.startDate)} – {fmtDate(s.endDate)})</span>
@@ -35220,14 +35494,14 @@ const AUDIT_TABLE_LABELS = {
   employees: "Zamestnanci",
   profiles: "Účty (rola, prístup)",
 };
-const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané" };
+const AUDIT_ACTION_LABELS = { insert: "Vytvorené", update: "Upravené", delete: "Zmazané", merge: "Zlúčené" };
 const AUDIT_FIELD_LABELS = { handoverDone: "prevzatie hotové", returnDone: "vrátenie hotové", handoverDate: "dátum prevzatia", returnDate: "dátum vrátenia", protocolNumber: "číslo protokolu", checklist: "checklist", handoverCustomerAbsent: "zákazník neprítomný", returnCustomerAbsent: "zákazník neprítomný pri vrátení", assignedDate: "dátum pridelenia", assignmentId: "úloha", archivedDate: "dátum archivácie", archivedReason: "dôvod archivácie", archivedNote: "poznámka k archivácii", stav: "stav", status: "stav", resolved: "vyriešené", technicianId: "technik", technicianIds: "technici", popis: "popis", customer: "zákazník", machineId: "stroj", driverId: "šofér", returnDriverId: "šofér zvozu", startDate: "od", endDate: "do", depo: "depo", role: "rola", active: "prístup", archived: "archivovaný", name: "meno", phone: "telefón", email: "email", linkedUserId: "prepojený účet", note: "poznámka", customerId: "zákazník", jobId: "zákazka", damageId: "tiket", urcenieStrojId: "určené pre stroj", revizia: "revízia ZZ", reviziaEZ: "revízia EZ", uradnaSkuska: "úradná skúška", trackRevisions: "sledovať revíziu ZZ", trackRevisionsEZ: "sledovať revíziu EZ", trackUradnaSkuska: "sledovať úradnú skúšku", code: "sériové číslo", manufacturer: "výrobca", alsoEzTechnik: "revízny technik EZ",
   // výdaj dielov a servisný protokol
   items: "diely", dlNumber: "číslo dodacieho listu", erpDoc: "doklad ERP", customerName: "prevzal", handedBy: "odovzdal", handedById: "odovzdal (účet)", workNotes: "poznámka", erpProcessed: "spracované v ERP", correctedBy: "opravil", checkedBy: "skontroloval", processedBy: "spracoval", handoverNote: "poznámka pri odovzdaní", customerAbsent: "odberateľ neprítomný", absentPhotos: "fotky", signedItems: "podpísané diely", signedCustomer: "podpísaný odberateľ", assigneeName: "odovzdá", method: "spôsob", deliveryAddress: "adresa doručenia", contactName: "kontakt", contactPhone: "telefón kontaktu", orderNumber: "číslo objednávky", machineText: "stroj",
   workDescription: "popis práce", customerSignatoryName: "meno podpisujúceho", technicianName: "technik", clientName: "zákazník", totalHours: "hodiny", travelHours: "hodiny cesty", travelKm: "km", machineHours: "motohodiny", workItems: "práce", materials: "materiál", usedParts: "použité diely", expectedStart: "začiatok", expectedEnd: "koniec",
   // k59: fotky a zábery stroja, kontrola checkera
   handoverPhotos: "fotky pri prevzatí", returnPhotos: "fotky pri vrátení", handoverPhotoShots: "zábery pri prevzatí", returnPhotoShots: "zábery pri vrátení",
-  checkerPhotos: "fotky checkera", checkerPhotoShots: "zábery checkera", fuel: "palivo / batéria (%)", cleanliness: "čistota a kompletnosť",
+  reportedByUserId: "nahlásil (účet)", checkerPhotos: "fotky checkera", checkerPhotoShots: "zábery checkera", fuel: "palivo / batéria (%)", cleanliness: "čistota a kompletnosť",
   classification: "klasifikácia", classificationSuggested: "návrh klasifikácie", classificationNote: "poznámka ku klasifikácii", clientContact: "kontaktná osoba" };
 // Odkazy, ktorých ID nič nehovorí — len či pribudli/zmizli (technik a dátum úlohy sú vlastné polia).
 const AUDIT_REF_ONLY = { assignmentId: ["úloha v pláne", "pridaná", "odobraná", "zmenená"], publicToken: ["odkaz pre zákazníka", "vydaný", "zrušený", "nový"],
@@ -35238,6 +35512,7 @@ const AUDIT_REF_ONLY = { assignmentId: ["úloha v pláne", "pridaná", "odobran�
   customerSignature: ["podpis zákazníka", "pridaný", "odobraný", "zmenený"], handerSignature: ["podpis odovzdávajúceho", "pridaný", "odobraný", "zmenený"], technicianSignature: ["podpis technika", "pridaný", "odobraný", "zmenený"] };
 // Čo sa zmenilo pri úprave: old_data = staré hodnoty zmenených polí (step113), inak predošlý načítaný zápis záznamu.
 function auditChange(e, prevData, nameOf) {
+  if (e.action === "merge") return e.new_data?._note || ""; // zlúčenie tiketov (merge_damages)
   if (e.action !== "update") return "";
   const now = e.new_data || {};
   if (!e.old_data && !prevData) return "";
@@ -35334,7 +35609,7 @@ function PlatformStatusView({ profiles = [], employees = [], onGo, onOpenUser })
   const bad = (t) => <div className="spill spill-problem" style={{ display: "block", whiteSpace: "normal", borderRadius: 8, padding: "8px 12px", fontSize: 14 }}>⚠ {t}</div>;
   const box = (title, children, id) => (
     <>
-      <h2 className="today-sec" id={id} style={{ scrollMarginTop: 80 }}>{title}</h2>
+      <h2 className="today-sec" id={id} style={{ scrollMarginTop: 80, paddingRight: 24 }}>{title}</h2>{/* dlhý nadpis sa zalomí pred úchytkou maSkota pri pravom okraji (k62 admin D3) */}
       <div className="panel" style={{ padding: 14, marginBottom: 14, boxShadow: "none", borderRadius: 12 }}>
         {children}
       </div>
@@ -35449,7 +35724,7 @@ function AuditLogView({ profiles, employees = [], machines = [], jobs = [], dama
     if (tableFilter) q = q.in("table_name", [tableFilter]);
     if (from) q = q.gte("changed_at", new Date(`${from}T00:00`).toISOString());
     if (to) q = q.lt("changed_at", new Date(`${addDaysISO(to, 1)}T00:00`).toISOString()); // polnoc nasledujúceho dňa (deň zmeny času má 25 h)
-    q.order("changed_at", { ascending: false })
+    q.order("changed_at", { ascending: false }).order("id", { ascending: false }) // pri rovnakom čase (zlúčenie = viac záznamov naraz) stabilne (k61 admin D3)
       .limit(300)
       .then(({ data, error: err }) => {
         if (cancelled) return;
@@ -35618,7 +35893,7 @@ function UserAdminModal({ profiles, employees = [], currentUser, initialSearch, 
   // Nové účty bez roly navrch (inak sa medzi ostatnými stratia).
   const shown = profiles
     .filter((p) => !q || (p.name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q))
-    .sort((a, b) => (b.role === "nezaradeny") - (a.role === "nezaradeny"));
+    .sort(byKeys((p) => (p.role === "nezaradeny" ? 0 : 1), "name", "email"));
   const setRole = (p, role, lostBefore) => {
     // Dispečer na inú rolu: depá, zástupy a príznak vedúci dispečer sa zrušia — zapamätať si ich pre „Späť“.
     const lost = DISPATCHER_ROLES.includes(p.role) && !DISPATCHER_ROLES.includes(role) && !["admin", "nezaradeny"].includes(role) ? dispatcherRefs?.(p.id) : null;
@@ -36013,6 +36288,7 @@ function GlobalStyle() {
         table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
         table.table-cards td[data-label]::before { content: attr(data-label); font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: left; margin-right: auto; flex-shrink: 0; }
         table.table-cards td.td-plain { display: block; text-align: left; }
+        table.table-cards .tc-pc-only { display: none; } /* text, ktorý na karte už hovorí data-label (Kôš „Zlúčil(a)“) */
         table.table-cards td.td-actions { justify-content: flex-end; }
         /* Vstupy/selecty v karte majú na desktope pevnú (úzku) šírku pre
            tabuľkový layout — na mobile namiesto toho vyplnia zvyšok riadku
@@ -36501,9 +36777,6 @@ function GlobalStyle() {
       .chk-st { font-size: 13px; font-weight: 700; color: var(--ok); }
       .chk-st.na { color: var(--text-dim); font-weight: 600; }
       .chk-it.na .chk-il { color: var(--text-dim); }
-      .chk-ph { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; }
-      .chk-ph img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; }
-      .chk-ph-btn { min-height: 48px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; border-style: dashed; border-color: var(--line-strong); }
       .chk-it { padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
       .chk-it:first-child { border-top: 0; }
       .chk-it.prob { background: var(--danger-bg); }
@@ -36557,6 +36830,7 @@ function GlobalStyle() {
       .shot-dmg { border-top: 1px solid var(--border); margin: 12px 0 10px; padding-top: 12px; }
       .shot-dmg.warn { border: 1.5px solid var(--danger); border-radius: 10px; padding: 10px 12px; background: var(--danger-bg); }
       .shot-dmg-h { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+      .shot-dmg:not(.warn) .shot-dmg-i { background: var(--panel-2); color: var(--text-dim); } /* červené len kým povinná fotka chýba (k62 terén D3) */
       .shot-dmg-i { width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; }
       .shot-dmg-add { display: flex; align-items: center; justify-content: center; border: 1.5px dashed var(--line-strong); border-radius: 8px; background: var(--panel-2); color: var(--text-dim); font-size: 26px; cursor: pointer; }
       .shot-opt { width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; min-height: 56px; margin-bottom: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
@@ -36721,6 +36995,15 @@ function GlobalStyle() {
       .side-dl select { height: 38px; min-width: 220px; max-width: 100%; font-size: 15px; }
       .side-dl a { color: var(--text); }
       .side-dl dd.warn { color: var(--danger-text); font-weight: 600; }
+      .merge-hint { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); border: 1px solid var(--warn); color: var(--text); font-size: 14px; }
+      .merge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+      .merge-col { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+      .merge-col .side-dl { grid-template-columns: 120px minmax(0, 1fr); }
+      @media (max-width: 560px) { .merge-col .side-dl { grid-template-columns: minmax(0, 1fr); } .merge-col .side-dl dt { padding: 10px 0 2px; border-bottom: none; } .merge-col .side-dl dd { padding-top: 0; } } /* mobil: popis nad hodnotou (k62 dizajn) */
+      .merge-col-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
+      .merge-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+      .merge-photos button { padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+      .merge-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 5px; display: block; }
       /* Karta bez záložiek — obsah nesmie lepiť na súhrn v hlavičke. */
       .side-body > :first-child:not(.utabs) { margin-top: 16px; }
       .side-sec { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin: 22px 0 2px; }
@@ -37457,3 +37740,4 @@ export default function App() {
 export const _test = { passwordProblem, authErrorSk, fmtDate, whatsNewFor, icoKey, statBuckets, techFond, monthEndISO, numMth, isRealISODate, rangesOverlap, jobFrom, jobTo, addDaysISO, parseImportDate, daysBetween, effectiveStatus, mergeOnFresh, mergeNotify, _verNum, findMachineConflict, erpHours, erpTechKey, jobStillOut, machineRevDueBy, jobMthPair, decodeImportCsv, parseImportCsvText, importDepo, machineModelKey };
 export const _testK59 = { suggestCheckClass, shotPhotoMap, checkerTicketText, CHECKER_ITEMS, isNewChecklist, checkItemDone, sortShotItems, checkerProblemText };
 export const _testK60a = { fuelFields, fuelText, cleanDone, checkerTicketText, sortShotItems, shotPhotoMap };
+export const _testK61a = { inspectionClosedText, checkerProblemText };

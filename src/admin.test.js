@@ -53,6 +53,10 @@ describe("kôš a roly", () => {
   it("popis pod kódom", () => {
     expect(trashSubline({ label: "S-105", originalData: { model: "Genie", location: "Prešov", popis: "a".repeat(45) } })).toBe(`Genie · Prešov · ${"a".repeat(40)}…`);
     expect(trashSubline({ label: "X", originalData: {} })).toBe("");
+    expect(trashSubline({ label: "S-105", note: "zlúčený do tiketu z 15. 10. 2026", originalData: { location: "Prešov" } })).toBe("zlúčený do tiketu z 15. 10. 2026 · Prešov");
+  });
+  it("zlúčenie tiketov v audite (k61 B1)", () => {
+    expect(auditChange({ action: "merge", table_name: "damages", new_data: { _note: "Zlúčené tikety: S-105 z 20. 10. 2026 → do tiketu z 15. 10. 2026" } }, null, {})).toBe("Zlúčené tikety: S-105 z 20. 10. 2026 → do tiketu z 15. 10. 2026");
   });
   it("rola účtu ≠ karta (admin a chýbajúca karta sa nerátajú)", () => {
     expect(accountRoleDiffers({ role: "dispecer_pozicovne" }, { role: "sofer" })).toBe(true);
