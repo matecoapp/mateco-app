@@ -30,6 +30,8 @@ describe("audit log — zmena", () => {
     expect(auditChange(j, null, {})).toBe("odkaz pre zákazníka: zrušený");
     const h = { action: "update", table_name: "handoverProtocols", old_data: { handoverCustomerSignature: "podpis 1a2b3c4d" }, new_data: { handoverCustomerSignature: "podpis 9f8e7d6c", handoverDone: true } };
     expect(auditChange(h, null, {})).toBe("podpis nájomcu pri prevzatí: zmenený");
+    const k = { action: "update", table_name: "assignments", old_data: { workHours: 1, editedBy: null }, new_data: { kind: "kontrolaStroja", workHours: 1.5, editedBy: "Tomáš" } };
+    expect(auditChange(k, null, {})).toBe("hodiny: 1 → 1,5 · opravil: — → Tomáš");
   });
   it("stavy ľudskými slovami aj keď sa popis poškodenia nezmenil (bod 80)", () => {
     const e = { action: "update", table_name: "damages", old_data: { stav: "nove" }, new_data: { stav: "pridelene", technicianId: "e1" } };

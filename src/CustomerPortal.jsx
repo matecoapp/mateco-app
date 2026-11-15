@@ -1,5 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+// Texty protokolu (SK zhodné s App.jsx, EN preklad) — spoločný modul s platformou.
+import {
+  HANDOVER_CHECKLIST_ITEMS, HANDOVER_CHECKLIST_ITEMS_EN, SHOT_LABEL_EN, MONTHS_EN, HANDOVER_LEGAL_RULES, HANDOVER_LEGAL_RULES_EN,
+  HANDOVER_VOP_NOTE, HANDOVER_VOP_NOTE_EN, HANDOVER_TRANSLATION_NOTE_EN, PRIVACY_URL, PRIVACY_URL_EN, protokolT, paperProtocolLine,
+} from "./protokolTexty.js";
 
 // Samostatná, ľahká stránka bez prihlásenia — zámerne NEIMPORTUJE App.jsx (obrovský
 // súbor s celou appkou), aby zákazník nemusel sťahovať dispečerský bundle len kvôli
@@ -12,25 +17,16 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mateco-portal" } }
 );
 
-// Rovnaký zoznam ako HANDOVER_CHECKLIST_ITEMS v App.jsx — checklist v dátach je
-// pole indexov bez vlastných popisiek, tie sa priraďujú podľa poradia. Ak sa
-// zoznam v App.jsx zmení, treba ho zmeniť aj tu.
-const HANDOVER_CHECKLIST_ITEMS = [
-  "Technický stav zariadenia",
-  "Čistota stroja",
-  "Zaškolenie obsluhy",
-  "Nabitie akumulátorov",
-  "Ovládací pult a ovládanie zariadenia",
-  "Núdzové ovládanie zariadenia",
-  "Stav náplní (olej, elektrolyt, nafta)",
-  "Nabíjačka a pripojovací kábel",
-  "Podložky pod podperné nohy",
-  "Kľúče",
-  "Revízie a denník zdvíhacieho zariadenia",
-  "Návod na obsluhu",
-  "Svetelný panel, rezervné koleso a predné koleso",
-  "aDBlue - regenerácia motora",
-];
+const LANG_KEY = "mateco-portal-lang";
+// Prvé otvorenie podľa jazykov prehliadača (sk/cs → SK, inak EN), potom platí voľba zákazníka.
+function initialLang() {
+  try { const v = localStorage.getItem(LANG_KEY); if (v === "sk" || v === "en") return v; } catch { /* súkromné okno */ }
+  const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""]);
+  return langs.some((l) => /^(sk|cs)\b/i.test(l || "")) ? "sk" : "en";
+}
+const LangCtx = createContext("sk");
+// t("slovensky", "English") — text podľa zvoleného jazyka.
+function useT() { const en = useContext(LangCtx) === "en"; return (sk, eng) => (en ? eng : sk); }
 
 // vyplnený text = aspoň jedno písmeno alebo číslica (neviditeľné a neobvyklé znaky nie) — rovnako ako v DB (k53)
 const filled = (s) => /[\p{L}\p{N}]/u.test((s || "").replace(/[\u115F\u1160\u3164\uFFA0]/g, "")); // hangulské výplne sú „písmená“
@@ -45,29 +41,19 @@ const sigSrc = (u) => {
 };
 const todayBA = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
 // Čas z databázy (ISO) → „28. 10. 2026“ v čase firmy.
-const fmtTs = (ts) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" })) : "");
+const fmtTs = (ts, en) => (ts ? fmtDate(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" }), en) : "");
 
-function fmtDate(iso) {
+// „28. 10. 2026“, v angličtine „28 Oct 2026“.
+function fmtDate(iso, en) {
   if (!iso) return "—";
   const [y, m, d] = String(iso).split("-");
   if (!y || !m || !d) return iso;
+  if (en && MONTHS_EN[Number(m) - 1]) return `${Number(d)} ${MONTHS_EN[Number(m) - 1]} ${y}`;
   return `${Number(d)}. ${Number(m)}. ${y}`;
 }
 
-// Rovnaké právne texty a logo ako v App.jsx (openPrintableHandoverProtocol) —
-// tlač z portálu musí vyzerať identicky s dispečerskou tlačou pre daňovú
-// kontrolu. Ak sa zmenia v App.jsx, treba ich zmeniť aj tu.
-const HANDOVER_LEGAL_RULES = [
-  "V zmysle vyhlášky MPSVaR SR č. 508/2009, obsluhovať vyhradené zariadenie môžu len oprávnené osoby s príslušným osvedčením.",
-  "Podpisom tohto protokolu prechádza zodpovednosť na nájomcu",
-  "Pravidelne dobíjať akumulátory pracovnej plošiny",
-  "Pravidelne kontrolovať a dopĺňať stav elektrolytu",
-  "Pieskovanie z pracovnej plošiny je prísne zakázané",
-  "Náklady na vyčistenie pracovnej plošiny znáša nájomca!",
-];
+// Logo ako v App.jsx — tlač z portálu musí vyzerať identicky s dispečerskou tlačou pre daňovú kontrolu.
 const FONT_CSS_URL = new URL("fonts/barlow.css", document.baseURI).href; // písmo z platformy, nie z Googlu
-const PRIVACY_URL = "https://www.matecoslovakia.sk/zasady-ochrany-osobnych-udajov/";
-const HANDOVER_VOP_NOTE = 'Neoddeliteľnou súčasťou protokolu sú "VŠEOBECNÉ OBCHODNÉ PODMIENKY" (VOP) zverejnené na www.matecoslovakia.sk';
 const MATECO_LOGO_B64 = "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";
 
 function protocolEsc(s) {
@@ -81,15 +67,19 @@ const safePhotoUrl = (u) => (typeof u === "string" && (/^https?:\/\//i.test(u) |
 // (openPrintableHandoverProtocol) — zámerne bez tlačidiel Upraviť/QR/Poslať mailom,
 // tie zákazník nepotrebuje. Otvára sa v novom okne, aby tlač nezávisela od CSS
 // zvyšku portálovej stránky. Ak sa šablóna zmení v App.jsx, treba ju zmeniť aj tu.
-function buildOfficialProtocolHtml(data) {
+function buildOfficialProtocolHtml(data, en) {
   const esc = protocolEsc;
+  const t = (sk, eng) => (en ? eng : sk);
+  const L = protokolT(en); // hlavička a polia — spoločné s tlačou v platforme
+  const fd = (iso) => fmtDate(iso, en);
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
-  const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">Za nájomcu</div><div class="signone" style="color:#c62828">Zákazník nebol prítomný — bez podpisu</div>${confirmLine(c) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
+  const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">${L("Za nájomcu")}</div><div class="signone" style="color:#c62828">${L("Zákazník nebol prítomný — bez podpisu")}</div>${confirmLine(c, en) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c, en))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
   function sigBlock(dataUrl, label, name) {
-    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${sigSrc(dataUrl) ? `<img src="${sigSrc(dataUrl)}" class="sigimg">` : `<div class="signone">— zatiaľ bez podpisu —</div>`}</div>`;
+    return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${sigSrc(dataUrl) ? `<img src="${sigSrc(dataUrl)}" class="sigimg">` : `<div class="signone">${L("— zatiaľ bez podpisu —")}</div>`}</div>`;
   }
+  const paperBlock = (ret) => `<div style="font-size:11px;padding:8px 0;">${esc(paperProtocolLine(ret, ret ? data.returnDate : data.handoverDate, ret ? data.returnDriverName : data.handoverDriverName, ret ? data.returnCustomerName : data.handoverCustomerName, en))}</div>`;
   function checklistCol(statusKey, noteKey) {
-    return HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
+    return (en ? HANDOVER_CHECKLIST_ITEMS_EN : HANDOVER_CHECKLIST_ITEMS).map((label, i) => {
       const item = (data.checklist && data.checklist[i]) || {};
       const status = item[statusKey];
       const mark = status === "ok" ? "✓" : status === "problem" ? "✗" : "—";
@@ -100,9 +90,9 @@ function buildOfficialProtocolHtml(data) {
   }
   // Mobil: A4 sa zmenší na šírku displeja ako FIT_PAGE_JS v App.jsx (screen.width: nové okno by telefón roztiahol na šírku A4); tlač v plnej veľkosti.
   return `<!DOCTYPE html>
-<html lang="sk"><head><meta charset="UTF-8">
+<html lang="${en ? "en" : "sk"}"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Protokol ${esc(data.protocolNumber)}</title>
+<title>${L("Protokol")} ${esc(data.protocolNumber)}</title>
 <link rel="stylesheet" href="${FONT_CSS_URL}">
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
@@ -144,58 +134,61 @@ function buildOfficialProtocolHtml(data) {
   }
 </style></head>
 <body>
-  <div class="toolbar"><button class="btn btn-accent" onclick="window.print()">Tlačiť / uložiť ako PDF</button></div>
+  <div class="toolbar"><button class="btn btn-accent" onclick="window.print()">${t("Tlačiť / uložiť ako PDF", "Print / save as PDF")}</button></div>
   <div class="page">
   <div class="body-content">
   <div class="head">
     <img class="logo" src="data:image/png;base64,${MATECO_LOGO_B64}" alt="mateco">
     <div class="titleblock">
-      <h1>PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA</h1>
-      <div class="sub">Protokol č.: ${esc(data.protocolNumber)}</div>
+      <h1>${L("PROTOKOL O ODOVZDANÍ A PREVZATÍ STROJA")}</h1>
+      <div class="sub">${L("Protokol č.")}: ${esc(data.protocolNumber)}</div>
     </div>
   </div>
   <div class="meta">
-    <div><span class="l">Sériové číslo:</span>${esc(data.machineCode)}</div>
-    <div><span class="l">Typ / Názov:</span>${esc(data.machineType)}</div>
-    <div><span class="l">Nájomca:</span>${esc(data.customer)}</div>
-    <div><span class="l">Nájomná zmluva č.:</span>${esc(data.cisloZmluvy)}</div>
-    <div><span class="l">Miesto prenájmu:</span>${esc(data.address)}</div>
-    <div><span class="l">Objednaná doba prenájmu:</span> ${data.startDate ? fmtDate(data.startDate) : ""} – ${data.endDate ? fmtDate(data.endDate) : "—"}</div>
+    <div><span class="l">${L("Sériové číslo")}:</span>${esc(data.machineCode)}</div>
+    <div><span class="l">${L("Typ / Názov")}:</span>${esc(data.machineType)}</div>
+    <div><span class="l">${L("Nájomca")}:</span>${esc(data.customer)}</div>
+    <div><span class="l">${L("Nájomná zmluva č.")}:</span>${esc(data.cisloZmluvy)}</div>
+    <div><span class="l">${L("Miesto prenájmu")}:</span>${esc(data.address)}</div>
+    <div><span class="l">${L("Objednaná doba prenájmu")}:</span> ${data.startDate ? fd(data.startDate) : ""} – ${data.endDate ? fd(data.endDate) : "—"}</div>
   </div>
   <div class="cols">
     <div>
-      <div class="colhead">PREVZATIE (${data.handoverDate ? fmtDate(data.handoverDate) : "—"})</div>
+      <div class="colhead">${L("PREVZATIE")} (${data.handoverDate ? fd(data.handoverDate) : "—"})</div>
       ${data.migratedWithoutHandover
-        ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.</div>`
+        ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">${L("Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.")}</div>`
+        : data.handoverPaper ? paperBlock(false)
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${data.handoverCustomerAbsent ? absentBlock(data.handoverCustomerConfirm) : sigBlock(data.handoverCustomerSignature, "Za nájomcu", data.handoverCustomerName)}
-        ${sigBlock(data.handoverDriverSignature, "Za prenajímateľa", data.handoverDriverName)}
+        ${data.handoverCustomerAbsent ? absentBlock(data.handoverCustomerConfirm) : sigBlock(data.handoverCustomerSignature, L("Za nájomcu"), data.handoverCustomerName)}
+        ${sigBlock(data.handoverDriverSignature, L("Za prenajímateľa"), data.handoverDriverName)}
       </div>`}
     </div>
     <div>
-      <div class="colhead">VRÁTENIE ${data.returnDone ? `(${data.returnDate ? fmtDate(data.returnDate) : "—"})` : ""}</div>
-      ${data.returnDone
+      <div class="colhead">${L("VRÁTENIE")} ${data.returnDone ? `(${data.returnDate ? fd(data.returnDate) : "—"})` : ""}</div>
+      ${data.returnDone && data.returnPaper ? paperBlock(true)
+        : data.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm) : sigBlock(data.returnCustomerSignature, "Za nájomcu", data.returnCustomerName)}
-        ${sigBlock(data.returnDriverSignature, "Za prenajímateľa", data.returnDriverName)}
+        ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm) : sigBlock(data.returnCustomerSignature, L("Za nájomcu"), data.returnCustomerName)}
+        ${sigBlock(data.returnDriverSignature, L("Za prenajímateľa"), data.returnDriverName)}
       </div>`
-        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.completed && !data.notRealized ? `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.` : "Stroj je v prenájme — zatiaľ nebol vrátený."}</div>`}
+        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.completed && !data.notRealized ? (en ? `Rental ended — the machine is awaiting ${data.selfReturn ? "return to the depot" : "collection"}.` : `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.`) : L("Stroj je v prenájme — zatiaľ nebol vrátený.")}</div>`}
     </div>
   </div>
   <div class="legal">
-    <strong>Zásady prenájmu pracovnej plošiny</strong>
-    <ol>${HANDOVER_LEGAL_RULES.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
-    <div>${esc(HANDOVER_VOP_NOTE)}</div>
+    <strong>${L("Zásady prenájmu pracovnej plošiny")}</strong>
+    <ol>${(en ? HANDOVER_LEGAL_RULES_EN : HANDOVER_LEGAL_RULES).map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
+    <div>${esc(en ? HANDOVER_VOP_NOTE_EN : HANDOVER_VOP_NOTE)}</div>
+    ${en ? `<div style="margin-top:6px;font-style:italic">${esc(HANDOVER_TRANSLATION_NOTE_EN)}</div>` : ""}
   </div>
   </div>
   <div class="footer">
     mateco Slovakia s.r.o. · Strážska cesta 7892 · 960 01 Zvolen<br>
     T +421 (0)45 5410763 · www.matecoslovakia.sk · info@matecoslovakia.sk<br>
-    Zásady ochrany osobných údajov: ${PRIVACY_URL}<br>
-    IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076 · ČSOB banka · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
-    <div class="legal">Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.</div>
+    ${L("Zásady ochrany osobných údajov")}: ${t(PRIVACY_URL, PRIVACY_URL_EN)}<br>
+    ${L("IČO 36620114 · DIČ 2020083076 · IČ DPH SK2020083076")} · ${L("ČSOB banka")} · IBAN SK51 7500 0000 0040 1776 6094 · SWIFT CEKO SKBX
+    <div class="legal">${L("Spoločnosť je zapísaná v Obchodnom registri Okresného súdu Banská Bystrica, vložka číslo 8576/S, oddiel s.r.o.")}</div>
   </div>
   </div>
   <script>(function(){function f(){var v=Math.min(document.documentElement.clientWidth,screen.width||1e4);document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";var w=e.offsetWidth+16;e.style.zoom=w>v?String(v/w):"";});}function r(){document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";});}f();addEventListener("resize",f);addEventListener("beforeprint",r);addEventListener("afterprint",f);})();</script>
@@ -214,14 +207,16 @@ function Ico({ id, size = 16 }) {
 const BTN = { width: "100%", minHeight: 48, padding: "10px 14px", borderRadius: 8, background: "#fff", fontFamily: "inherit", fontWeight: 600, fontSize: 15, cursor: "pointer" };
 
 // v1.0.808: protokol spísaný bez zákazníka — potvrdenie / nesúhlas zákazníka cez portál.
-function confirmLine(c) {
+function confirmLine(c, en) {
   if (!c || !c.status) return "";
-  const at = c.at ? new Date(c.at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const at = c.at ? new Date(c.at).toLocaleString(en ? "en-GB" : "sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: en ? "short" : "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  if (en) return c.status === "confirmed" ? `Confirmed by the customer in the portal on ${at} — ${c.name || ""}` : `Customer disagrees (${at}, ${c.name || ""}): ${c.comment || ""}`;
   return c.status === "confirmed"
     ? `Potvrdené zákazníkom v portáli ${at} — ${c.name || ""}`
     : `Zákazník nesúhlasí (${at}, ${c.name || ""}): ${c.comment || ""}`;
 }
 function SignaturePad({ onChange }) {
+  const t = useT();
   const ref = useRef(null);
   const drawing = useRef(false);
   const moved = useRef(false); // ťuknutie bez ťahu nie je podpis
@@ -233,12 +228,13 @@ function SignaturePad({ onChange }) {
   return (
     <div>
       <canvas ref={ref} width={600} height={200} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
-        style={{ width: "100%", height: 120, border: "1px solid #CFCFCF", borderRadius: 8, background: "#fff", touchAction: "none" }} aria-label="Podpis" />
-      <button type="button" onClick={clear} style={{ ...BTN, width: "auto", minHeight: 36, fontSize: 14, border: "1px solid #CFCFCF", marginTop: 6 }}>Vymazať podpis</button>
+        style={{ width: "100%", height: 120, border: "1px solid #CFCFCF", borderRadius: 8, background: "#fff", touchAction: "none" }} aria-label={t("Podpis", "Signature")} />
+      <button type="button" onClick={clear} style={{ ...BTN, width: "auto", minHeight: 36, fontSize: 14, border: "1px solid #CFCFCF", marginTop: 6 }}>{t("Vymazať podpis", "Clear signature")}</button>
     </div>
   );
 }
 function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
+  const t = useT();
   const [mode, setMode] = useState(null); // null | "agree" | "disagree"
   const [name, setName] = useState("");
   const [sig, setSig] = useState(null);
@@ -254,35 +250,35 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
     const res = await onSubmit(mode === "agree", name.trim(), sig, comment.trim());
     busy.current = false;
     setSending(false);
-    if (res !== true) setError(res === "already_done" ? "Protokol už bol potvrdený." : res === "invalid_token" ? "Tento odkaz už nie je platný." : !navigator.onLine ? "Ste bez signálu — skúste to znova po pripojení." : "Nepodarilo sa odoslať — skúste to znova.");
+    if (res !== true) setError(res === "already_done" ? ["Protokol už bol potvrdený.", "The protocol has already been confirmed."] : res === "invalid_token" ? ["Tento odkaz už nie je platný.", "This link is no longer valid."] : !navigator.onLine ? ["Ste bez signálu — skúste to znova po pripojení.", "You are offline — please try again once you are connected."] : ["Nepodarilo sa odoslať — skúste to znova.", "Sending failed — please try again."]);
   }
   return (
     <div style={{ background: "#FFF8E1", border: "1px solid #E6C25A", borderRadius: 8, padding: 12, marginTop: 10 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{phaseLabel} stroja prebehlo bez Vás</div>
-      <div style={{ fontSize: 14, color: "#3A3A3A", marginBottom: 8 }}>Skontrolujte stav stroja {hasPhotos ? "podľa fotiek a checklistu" : "podľa checklistu"} vyššie a protokol potvrďte, alebo nám napíšte, s čím nesúhlasíte.</div>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{t(`${phaseLabel} stroja prebehlo bez Vás`, `The machine ${phaseLabel === "Prevzatie" ? "handover" : "return"} took place without you`)}</div>
+      <div style={{ fontSize: 14, color: "#3A3A3A", marginBottom: 8 }}>{t(`Skontrolujte stav stroja ${hasPhotos ? "podľa fotiek a checklistu" : "podľa checklistu"} vyššie a protokol potvrďte, alebo nám napíšte, s čím nesúhlasíte.`, `Please check the condition of the machine against the ${hasPhotos ? "photos and checklist" : "checklist"} above and confirm the protocol, or tell us what you disagree with.`)}</div>
       {!mode ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setMode("agree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", background: "#E30613", color: "#fff", border: "none" }}>Potvrdiť protokol</button>
-          <button type="button" onClick={() => setMode("disagree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", border: "1px solid #CFCFCF" }}>Nesúhlasím</button>
+          <button type="button" onClick={() => setMode("agree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", background: "#E30613", color: "#fff", border: "none" }}>{t("Potvrdiť protokol", "Confirm protocol")}</button>
+          <button type="button" onClick={() => setMode("disagree")} style={{ ...BTN, flex: "1 1 160px", width: "auto", border: "1px solid #CFCFCF" }}>{t("Nesúhlasím", "I disagree")}</button>
         </div>
       ) : (
         <div>
-          <label htmlFor={`cf-meno-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>Meno a priezvisko *</label>
+          <label htmlFor={`cf-meno-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>{t("Meno a priezvisko", "Full name")} *</label>
           <input id={`cf-meno-${phaseLabel}`} autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} style={{ width: "100%", minHeight: 44, border: "1px solid #CFCFCF", borderRadius: 8, padding: "0 10px", fontSize: 15, boxSizing: "border-box", marginBottom: 8 }} />
           {mode === "agree" ? (
-            <><label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>Podpis *</label><SignaturePad onChange={setSig} /></>
+            <><label style={{ display: "block", fontSize: 14, marginBottom: 4 }}>{t("Podpis", "Signature")} *</label><SignaturePad onChange={setSig} /></>
           ) : (
-            <><label htmlFor={`cf-koment-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>S čím nesúhlasíte? *</label>
+            <><label htmlFor={`cf-koment-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>{t("S čím nesúhlasíte?", "What do you disagree with?")} *</label>
               <textarea id={`cf-koment-${phaseLabel}`} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} style={{ width: "100%", border: "1px solid #CFCFCF", borderRadius: 8, padding: 10, fontSize: 15, boxSizing: "border-box" }} /></>
           )}
-          {error && <div style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {error}</div>}
+          {error && <div style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {t(...error)}</div>}
           <div style={{ fontSize: 12, color: "#5A5A5A", marginTop: 8 }}>
-            Meno{mode === "agree" ? " a podpis" : " a komentár"} uložíme k protokolu. <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#5A5A5A", textDecoration: "underline", display: "inline-flex", alignItems: "center", minHeight: 44 }}>Ochrana osobných údajov</a>
+            {mode === "agree" ? t("Meno a podpis uložíme k protokolu.", "We will store your name and signature with the protocol.") : t("Meno a komentár uložíme k protokolu.", "We will store your name and comment with the protocol.")} <a href={t(PRIVACY_URL, PRIVACY_URL_EN)} target="_blank" rel="noopener noreferrer" style={{ color: "#5A5A5A", textDecoration: "underline", display: "inline-flex", alignItems: "center", minHeight: 44 }}>{t("Ochrana osobných údajov", "Privacy policy")}</a>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => { setMode(null); setError(null); }} style={{ ...BTN, flex: "1 1 120px", width: "auto", border: "1px solid #CFCFCF" }}>Späť</button>
+            <button type="button" onClick={() => { setMode(null); setError(null); }} style={{ ...BTN, flex: "1 1 120px", width: "auto", border: "1px solid #CFCFCF" }}>{t("Späť", "Back")}</button>
             <button type="button" disabled={!ok || sending} onClick={send} style={{ ...BTN, flex: "2 1 180px", width: "auto", background: ok ? "#E30613" : "#EFEFEF", color: ok ? "#fff" : "#767676", border: "none" }}>
-              {sending ? "Odosiela sa…" : mode === "agree" ? "Potvrdiť podpisom" : "Odoslať nesúhlas"}
+              {sending ? t("Odosiela sa…", "Sending…") : mode === "agree" ? t("Potvrdiť podpisom", "Confirm with signature") : t("Odoslať nesúhlas", "Send disagreement")}
             </button>
           </div>
         </div>
@@ -291,7 +287,9 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
   );
 }
 
-function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, photoLabels, onConfirm }) {
+function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, photoLabels, onConfirm, paper }) {
+  const t = useT();
+  const en = useContext(LangCtx) === "en";
   // Zväčšená fotka v okne (aj staršia base64 — odkaz data: v novej karte prehliadač zablokuje).
   const [zoom, setZoom] = useState(null);
   useEffect(() => {
@@ -301,15 +299,16 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
     return () => document.removeEventListener("keydown", onKey);
   }, [zoom]);
   // Popis záberu posiela server (get_portal_job) v poradí fotiek; staré protokoly bez záberov popis nemajú.
-  const shown = (photos || []).map((u, i) => ({ u: safePhotoUrl(u), l: (photoLabels || [])[i] || "" })).filter((x) => x.u);
+  const shown = (photos || []).map((u, i) => ({ u: safePhotoUrl(u), l: (en && SHOT_LABEL_EN[(photoLabels || [])[i]]) || (photoLabels || [])[i] || "" })).filter((x) => x.u);
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
-        <div style={{ fontSize: 14, color: "#5A5A5A", fontVariantNumeric: "tabular-nums" }}>{fmtDate(date)}</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{t(title, title === "Prevzatie" ? "Handover" : "Return")}</div>
+        <div style={{ fontSize: 14, color: "#5A5A5A", fontVariantNumeric: "tabular-nums" }}>{fmtDate(date, en)}</div>
       </div>
+      {paper ? <div style={{ fontSize: 14, color: "#3A3A3A", overflowWrap: "anywhere" }}>{paper}</div> : <>
       <div style={{ marginBottom: 10 }}>
-        {HANDOVER_CHECKLIST_ITEMS.map((label, i) => {
+        {(en ? HANDOVER_CHECKLIST_ITEMS_EN : HANDOVER_CHECKLIST_ITEMS).map((label, i) => {
           const item = (checklist && checklist[i]) || {};
           const status = item[statusKey];
           const mark = status === "ok" ? "✓" : status === "problem" ? "✗" : "—";
@@ -328,22 +327,23 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
       </div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
-          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis nájomcu</div>
-          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm) || "Zákazník nebol prítomný"}</div> : sigSrc(custSig) ? <img src={sigSrc(custSig)} alt="Podpis nájomcu" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>{t("Podpis nájomcu", "Lessee’s signature")}</div>
+          {custAbsent ? <div style={{ fontSize: 13, color: confirm?.status === "confirmed" ? "#27500A" : "#8E0A12", minHeight: 50, display: "flex", alignItems: "center", overflowWrap: "anywhere" }}>{confirmLine(confirm, en) || t("Zákazník nebol prítomný", "Customer not present")}</div> : sigSrc(custSig) ? <img src={sigSrc(custSig)} alt={t("Podpis nájomcu", "Lessee’s signature")} style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>{t("— bez podpisu —", "— no signature —")}</div>}
         </div>
         <div style={{ flex: 1, minWidth: 0, border: "1px solid #e0e0e0", borderRadius: 6, padding: 6 }}>
-          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Podpis prenajímateľa</div>
-          {sigSrc(driverSig) ? <img src={sigSrc(driverSig)} alt="Podpis prenajímateľa" style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>— bez podpisu —</div>}
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>{t("Podpis prenajímateľa", "Lessor’s signature")}</div>
+          {sigSrc(driverSig) ? <img src={sigSrc(driverSig)} alt={t("Podpis prenajímateľa", "Lessor’s signature")} style={{ width: "100%", height: 50, objectFit: "contain" }} /> : <div style={{ fontSize: 13, color: "#5A5A5A", fontStyle: "italic", height: 50, display: "flex", alignItems: "center" }}>{t("— bez podpisu —", "— no signature —")}</div>}
         </div>
       </div>
+      </>}
       {custAbsent && (photos || []).length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>Fotky stroja pri {title === "Prevzatie" ? "odovzdaní" : "vrátení"}</div>
+          <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 4 }}>{t(`Fotky stroja pri ${title === "Prevzatie" ? "odovzdaní" : "vrátení"}`, `Machine photos at ${title === "Prevzatie" ? "handover" : "return"}`)}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {shown.map(({ u, l }, i) => (
               <figure key={i} style={{ margin: 0, width: 84 }}>
                 <button type="button" onClick={() => setZoom({ u, l, i })} style={{ display: "block", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
-                  <img src={u} alt={`Fotka ${i + 1}${l ? ` · ${l}` : ""}`} style={{ display: "block", width: 84, height: 84, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }} />
+                  <img src={u} alt={`${t("Fotka", "Photo")} ${i + 1}${l ? ` · ${l}` : ""}`} style={{ display: "block", width: 84, height: 84, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }} />
                 </button>
                 {l && <figcaption style={{ fontSize: 12, color: "#5A5A5A", lineHeight: 1.25, marginTop: 2, overflowWrap: "anywhere" }}>{l}</figcaption>}
               </figure>
@@ -352,13 +352,13 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
         </div>
       )}
       {zoom && (
-        <div role="dialog" aria-modal="true" aria-label={`Fotka ${zoom.i + 1}${zoom.l ? ` · ${zoom.l}` : ""}`} onClick={() => setZoom(null)}
+        <div role="dialog" aria-modal="true" aria-label={`${t("Fotka", "Photo")} ${zoom.i + 1}${zoom.l ? ` · ${zoom.l}` : ""}`} onClick={() => setZoom(null)}
           style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#111", display: "flex", flexDirection: "column", padding: 12, cursor: "zoom-out" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, color: "#fff", fontSize: 14, marginBottom: 8 }}>
             <span style={{ flex: 1, minWidth: 0 }}>{zoom.i + 1} / {shown.length}{zoom.l ? ` · ${zoom.l}` : ""}</span>
-            <button type="button" onClick={() => setZoom(null)} style={{ minHeight: 44, padding: "0 14px", fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", borderRadius: 6, cursor: "pointer" }}>✕ Zavrieť</button>
+            <button type="button" onClick={() => setZoom(null)} style={{ minHeight: 44, padding: "0 14px", fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", borderRadius: 6, cursor: "pointer" }}>✕ {t("Zavrieť", "Close")}</button>
           </div>
-          <img src={zoom.u} alt={zoom.l || `Fotka ${zoom.i + 1}`} onClick={(e) => e.stopPropagation()} style={{ flex: 1, minHeight: 0, width: "100%", objectFit: "contain", cursor: "default" }} />
+          <img src={zoom.u} alt={zoom.l || `${t("Fotka", "Photo")} ${zoom.i + 1}`} onClick={(e) => e.stopPropagation()} style={{ flex: 1, minHeight: 0, width: "100%", objectFit: "contain", cursor: "default" }} />
         </div>
       )}
       {custAbsent && !confirm && onConfirm && <div id={`potvrdit-${title}`}><ConfirmProtocolBox phaseLabel={title} onSubmit={onConfirm} hasPhotos={(photos || []).map(safePhotoUrl).some(Boolean)} /></div>}
@@ -367,14 +367,16 @@ function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, dr
 }
 
 const PORTAL_REQUEST_STATUS_LABEL = {
-  pending: { label: "Čaká na vybavenie", color: "#7a5600", bg: "#fff8e1" },
-  in_progress: { label: "V riešení", color: "#7a5600", bg: "#fff8e1" },
-  approved: { label: "Schválené", color: "#27500A", bg: "#eaf3de" },
-  resolved: { label: "Vyriešené", color: "#27500A", bg: "#eaf3de" },
-  rejected: { label: "Zamietnuté", color: "#c62828", bg: "#fdecea" },
+  pending: { label: "Čaká na vybavenie", en: "Awaiting response", color: "#7a5600", bg: "#fff8e1" },
+  in_progress: { label: "V riešení", en: "In progress", color: "#7a5600", bg: "#fff8e1" },
+  approved: { label: "Schválené", en: "Approved", color: "#27500A", bg: "#eaf3de" },
+  resolved: { label: "Vyriešené", en: "Resolved", color: "#27500A", bg: "#eaf3de" },
+  rejected: { label: "Zamietnuté", en: "Declined", color: "#c62828", bg: "#fdecea" },
 };
 
 function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
+  const t = useT();
+  const en = useContext(LangCtx) === "en";
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -390,15 +392,27 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   if (sentH) {
     return (
       <div role="status" style={{ minHeight: sentH, boxSizing: "border-box", border: "1px solid #A9D5B4", background: "#EEF8F0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#1E6B33" }}>Odoslané ✓</div>
-        <div style={{ fontSize: 14, color: "#3A3A3A" }}>{type === "problem" ? "Hlásenie sme dostali." : "Žiadosť o zmenu dátumu sme dostali."} Stav nájdete vyššie vo „Vaše žiadosti“.</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#1E6B33" }}>{t("Odoslané", "Sent")} ✓</div>
+        <div style={{ fontSize: 14, color: "#3A3A3A" }}>{type === "problem" ? t("Hlásenie sme dostali.", "We have received your report.") : t("Žiadosť o zmenu dátumu sme dostali.", "We have received your request to change the date.")} {t("Stav nájdete vyššie vo „Vaše žiadosti“.", "You can follow its status above under ‘Your requests’.")}</div>
       </div>
     );
   }
   // Čakajúca žiadosť je hneď nad formulárom vo „Vaše žiadosti“ — druhý text by ju len opakoval.
   if (jobLocked) return null;
 
-  const REASON_LABEL = {
+  const REASON_LABEL = en ? {
+    already_open: "You have already sent a request that is awaiting a response.",
+    missing_message: "Please describe what is happening.",
+    missing_date: "Please choose a date.",
+    invalid_token: "This link is no longer valid.",
+    invalid_date: "The date cannot be in the past, before the start of the rental or more than a year ahead.",
+    not_realized: "This rental did not go ahead.",
+    too_long: "The message is too long (2,000 characters at most).",
+    already_returned: "The machine has already been returned — requests and reports are no longer possible.",
+    job_completed: "The rental has already ended — the return date can no longer be changed. If you have any questions, please contact your sales representative.",
+    not_delivered: "The machine has not been delivered yet — please contact your sales representative with any questions about delivery.",
+    same_date: "The selected date is the same as the current end of the rental.",
+  } : {
     already_open: "Už máte odoslanú žiadosť, ktorá čaká na vybavenie.",
     missing_message: "Popíšte, prosím, čo sa deje.",
     missing_date: "Zvoľte, prosím, dátum.",
@@ -415,7 +429,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   const maxEnd = new Date(Date.now() + 366 * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   async function handleSubmit() {
     if (busy.current) return;
-    if (type === "extension" && endDate > maxEnd) { setError("Dátum môže byť najviac rok dopredu — dlhší prenájom dohodnite s obchodníkom."); return; }
+    if (type === "extension" && endDate > maxEnd) { setError(["Dátum môže byť najviac rok dopredu — dlhší prenájom dohodnite s obchodníkom.", "The date can be at most a year ahead — please arrange a longer rental with your sales representative."]); return; }
     busy.current = true;
     setSending(true);
     setError(null);
@@ -428,7 +442,8 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
       setMessage("");
       setEndDate("");
     } else {
-      setError(REASON_LABEL[reason] || (navigator.onLine ? "Nepodarilo sa odoslať. Skúste to prosím neskôr." : "Ste bez signálu — skúste to znova po pripojení."));
+      // Kód / dvojica textov — hláška sa preloží aj po prepnutí jazyka (k65 portál D1).
+      setError(REASON_LABEL[reason] ? reason : navigator.onLine ? ["Nepodarilo sa odoslať. Skúste to prosím neskôr.", "Sending failed. Please try again later."] : ["Ste bez signálu — skúste to znova po pripojení.", "You are offline — please try again once you are connected."]);
     }
   }
 
@@ -438,7 +453,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
         onClick={() => { setOpen(true); if (type === "extension") setEndDate(currentEnd && currentEnd >= todayBA() ? currentEnd : todayBA()); }} // po termíne — prešlý koniec sa vybrať nedá, predvyplní sa dnešok
         style={primary ? { ...BTN, border: "none", background: "#E30613", color: "#fff" } : { ...BTN, border: type === "problem" ? "1px solid #C4040F" : "1px solid #1A1A1A", color: type === "problem" ? "#C4040F" : "#1A1A1A" }}
       >
-        {type === "problem" ? "⚠ Nahlásiť problém so strojom" : "Zmeniť dátum vrátenia"}
+        {type === "problem" ? `⚠ ${t("Nahlásiť problém so strojom", "Report a problem with the machine")}` : t("Zmeniť dátum vrátenia", "Change the return date")}
       </button>
     );
   }
@@ -450,68 +465,83 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={3}
-          placeholder="Čo presne sa deje…"
+          placeholder={t("Čo presne sa deje…", "What exactly is happening…")}
           style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, padding: 10, borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
         />
       ) : (
         <>
           <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 6 }}>
-            Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.
+            {t("Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.", "Choose a new return date for the machine — whether you want to extend the rental or return the machine earlier.")}
           </div>
-          {currentEnd && <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Teraz do {fmtDate(currentEnd)}</div>}
+          {currentEnd && <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{t("Teraz do", "Currently until")} {fmtDate(currentEnd, en)}</div>}
           <input
             type="date"
             min={todayBA()}
             max={maxEnd}
-            aria-label="Nový dátum vrátenia"
+            aria-label={t("Nový dátum vrátenia", "New return date")}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, height: 48, padding: "0 10px", borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
           />
         </>
       )}
-      {error && <div style={{ fontSize: 14, color: "#8E0A12", background: "#FDF1F1", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>⚠ {error}</div>}
+      {error && <div style={{ fontSize: 14, color: "#8E0A12", background: "#FDF1F1", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>⚠ {Array.isArray(error) ? t(...error) : REASON_LABEL[error]}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
           disabled={sending || (type === "problem" ? !filled(message) : !endDate || endDate === currentEnd)}
           style={{ ...BTN, flex: 1, border: "none", ...((type === "problem" ? !filled(message) : !endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676", cursor: "default" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
-          {sending ? "Odosiela sa…" : "Odoslať"}
+          {sending ? t("Odosiela sa…", "Sending…") : t("Odoslať", "Send")}
         </button>
         <button
           onClick={() => setOpen(false)}
           disabled={sending}
           style={{ ...BTN, width: "auto", border: "1px solid #CFCFCF", color: "#1A1A1A" }}
         >
-          Zrušiť
+          {t("Zrušiť", "Cancel")}
         </button>
       </div>
     </div>
   );
 }
 
+// Automatické odpovede (DB a platforma) — kód v autoReplyCode; staršie záznamy bez kódu podľa presného SK textu (k65 portál S1).
+const AUTO_REPLY = {
+  job_completed: ["Prenájom bol ukončený.", "The rental has ended."],
+  not_realized: ["Zákazka sa nerealizovala.", "The rental did not go ahead."],
+  job_deleted: ["Zákazka bola zmazaná.", "The order has been cancelled."],
+  returned: ["Stroj už bol vrátený.", "The machine has already been returned."],
+  completed_awaiting_pickup: ["Prenájom je už ukončený — stroj čaká na zvoz. V prípade otázok kontaktujte obchodníka.", "The rental has already ended — the machine is awaiting collection. If you have any questions, please contact your sales representative."],
+};
+const replyText = (r, en) => {
+  const a = AUTO_REPLY[r.autoReplyCode] || Object.values(AUTO_REPLY).find(([sk]) => sk === r.responseNote);
+  return en && a ? a[1] : r.responseNote;
+};
 function RequestHistory({ requests }) {
+  const t = useT();
+  const en = useContext(LangCtx) === "en";
   if (!requests || requests.length === 0) return null;
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ ...SEC, marginTop: 0 }}>Vaše žiadosti</div>
+      <div style={{ ...SEC, marginTop: 0 }}>{t("Vaše žiadosti", "Your requests")}</div>
       {requests.map((r, i) => {
         const st = PORTAL_REQUEST_STATUS_LABEL[r.status] || PORTAL_REQUEST_STATUS_LABEL.pending;
         return (
           <div key={i} style={{ border: "1px solid #eee", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>
-                {r.type === "problem" ? "Nahlásený problém" : `Žiadosť o zmenu termínu vrátenia na ${fmtDate(r.requestedEndDate)}`}
+                {r.type === "problem" ? t("Nahlásený problém", "Reported problem") : t(`Žiadosť o zmenu termínu vrátenia na ${fmtDate(r.requestedEndDate)}`, `Request to change the return date to ${fmtDate(r.requestedEndDate, true)}`)}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: st.color, background: st.bg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{st.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: st.color, background: st.bg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{en ? st.en : st.label}</span>
             </div>
-            {r.createdAt && <div style={{ fontSize: 13, color: "#5A5A5A", marginTop: 2 }}>Odoslané {fmtTs(r.createdAt)}</div>}
+            {r.createdAt && <div style={{ fontSize: 13, color: "#5A5A5A", marginTop: 2 }}>{t("Odoslané", "Sent")} {fmtTs(r.createdAt, en)}</div>}
             {r.type === "problem" && <div style={{ fontSize: 14, color: "#3A3A3A", marginTop: 2, overflowWrap: "anywhere" }}>{r.message}</div>}
-            {r.responseNote && (
+            {/* Znovuotvorený problém (V riešení) — stará odpoveď o oprave už neplatí (k65 portál D3). */}
+            {r.responseNote && r.status !== "in_progress" && (
               <div style={{ fontSize: 14, color: "#1A1A1A", marginTop: 6, borderLeft: `3px solid ${st.color}`, background: "#F7F7F7", borderRadius: "0 6px 6px 0", padding: "6px 10px", overflowWrap: "anywhere" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#5A5A5A" }}>Odpoveď mateco{r.resolvedAt ? ` · ${fmtTs(r.resolvedAt)}` : ""}:</div>
-                {r.responseNote}
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#5A5A5A" }}>{t("Odpoveď mateco", "Reply from mateco")}{r.resolvedAt ? ` · ${fmtTs(r.resolvedAt, en)}` : ""}:</div>
+                {replyText(r, en)}
               </div>
             )}
           </div>
@@ -521,10 +551,40 @@ function RequestHistory({ requests }) {
   );
 }
 
+// Vlajky ako SVG (emoji vlajky Windows nekreslí).
+function Flag({ code }) {
+  return code === "sk" ? (
+    <svg aria-hidden="true" width="21" height="14" viewBox="0 0 30 20" style={{ display: "block", borderRadius: 2, boxShadow: "0 0 0 1px rgba(0,0,0,.15)" }}>
+      <rect width="30" height="20" fill="#EE1C25" /><rect width="30" height="13.4" fill="#0B4EA2" /><rect width="30" height="6.7" fill="#fff" />
+      <path d="M5 4.4h9v6.3c0 3-2.3 4.6-4.5 5.6C7.3 15.3 5 13.7 5 10.7z" fill="#fff" />
+      <path d="M5.7 5.1h7.6v5.6c0 2.5-1.9 3.9-3.8 4.8-1.9-.9-3.8-2.3-3.8-4.8z" fill="#EE1C25" />
+      <path d="M9.5 6.2v6.4 M7.6 8h3.8 M7.1 9.9h4.8" stroke="#fff" strokeWidth=".9" />
+      <path d="M6.1 12.6c.6-.9 1.6-.9 2.2-.2.5-.6 1.7-.6 2.4 0 .6-.7 1.6-.7 2.2.2-.7 1.2-1.9 2.2-3.4 2.9-1.5-.7-2.7-1.7-3.4-2.9z" fill="#0B4EA2" />
+    </svg>
+  ) : (
+    <svg aria-hidden="true" width="21" height="14" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" style={{ display: "block", borderRadius: 2, boxShadow: "0 0 0 1px rgba(0,0,0,.15)" }}>
+      <clipPath id="pf-uk"><path d="M0 0h60v40H0z" /></clipPath>
+      <clipPath id="pf-uk-t"><path d="M30 20h30v20zv20H0zH0V0zV0h30z" /></clipPath>
+      <g clipPath="url(#pf-uk)">
+        <path d="M0 0h60v40H0z" fill="#012169" />
+        <path d="M0 0l60 40M60 0L0 40" stroke="#fff" strokeWidth="8" />
+        <path d="M0 0l60 40M60 0L0 40" clipPath="url(#pf-uk-t)" stroke="#C8102E" strokeWidth="5" />
+        <path d="M30 0v40M0 20h60" stroke="#fff" strokeWidth="12" />
+        <path d="M30 0v40M0 20h60" stroke="#C8102E" strokeWidth="7" />
+      </g>
+    </svg>
+  );
+}
+
 export default function CustomerPortal({ token }) {
   const [state, setState] = useState("loading"); // loading | ok | invalid | error
   const [data, setData] = useState(null);
   useEffect(() => { document.body.style.margin = "0"; }, []); // bez bieleho rámika okolo hlavičky
+  const [lang, setLangState] = useState(initialLang);
+  const en = lang === "en";
+  const t = (sk, eng) => (en ? eng : sk);
+  const setLang = (l) => { setLangState(l); try { localStorage.setItem(LANG_KEY, l); } catch { /* voľba len do obnovenia */ } };
+  useEffect(() => { document.documentElement.lang = lang; document.title = lang === "en" ? "mateco — customer portal" : "mateco — zákaznícky portál"; }, [lang]);
 
   async function confirmProtocol(phase, agree, name, signature, comment) {
     const { data: result, error } = await supabase.rpc("confirm_portal_protocol", {
@@ -624,52 +684,64 @@ export default function CustomerPortal({ token }) {
   // Dispečer prenájom ukončil, stroj čaká na zvoz — predĺženie sa už neponúka (k38 S1).
   const completed = !!data?.completed && !data.returnDone && !data.notRealized;
   // Po termíne: stroj je u zákazníka po zmluvnom konci — zákazník má vedieť, že sa od neho niečo čaká (N2, k34).
-  const overdue = !!data && !completed && !data.returnDone && !data.notRealized && !!data.handoverDone && !!data.endDate && data.endDate < todayBA();
-  const departureLate = !!data && !completed && !data.handoverDone && !data.returnDone && !data.notRealized && !!(data.departureDate || data.startDate) && (data.departureDate || data.startDate) < todayBA();
+  // „Stroj už odišiel? — Áno“ bez protokolu: stroj je u zákazníka, hoci protokol ešte nie je (k65 portál S3).
+  const atCustomer = !!data && (!!data.handoverDone || !!data.departed);
+  const overdue = !!data && !completed && !data.returnDone && !data.notRealized && atCustomer && !!data.endDate && data.endDate < todayBA();
+  const departureLate = !!data && !completed && !atCustomer && !data.returnDone && !data.notRealized && !!(data.departureDate || data.startDate) && (data.departureDate || data.startDate) < todayBA();
   // Ukončená zákazka so zvozom (vrátením) v minulosti — stroj ešte nie je späť (D2, k39).
   const pickupLate = completed && !!(data.pickupDate || data.endDate) && (data.pickupDate || data.endDate) < todayBA();
   // Zvoz už dispečer naplánoval (dátum zvozu dnes alebo neskôr) — zákazník nemusí nič dohadovať.
   const pickupPlanned = overdue && !!data.pickupDate && data.pickupDate >= todayBA();
 
   return (
+    <LangCtx.Provider value={lang}>
     <div style={{ minHeight: "100vh", background: "#F2F2F2", color: "#1A1A1A", fontFamily: "'Barlow', Arial, sans-serif" }}>
-      <header style={{ background: "#E30613", padding: "10px 16px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px" }}>
+      <header style={{ background: "#E30613", padding: "6px 16px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px", flexShrink: 0 }}>
             <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 20, display: "block" }} />
           </span>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>Stav vašej zákazky</span>
+          <span style={{ fontWeight: 600, fontSize: 15, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{t("Stav vašej zákazky", "Your order status")}</span>
+          <div role="group" aria-label="Jazyk / Language" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+            {["sk", "en"].map((l) => (
+              <button key={l} type="button" lang={l} aria-pressed={lang === l} aria-label={l === "sk" ? "Slovensky" : "English"} onClick={() => setLang(l)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0 7px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700,
+                  background: lang === l ? "#fff" : "transparent", color: lang === l ? "#1A1A1A" : "#fff", opacity: lang === l ? 1 : 0.85 }}>
+                <Flag code={l} />{l.toUpperCase()}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "16px 14px 40px" }}>
         {(state === "loading" || state === "verifying") && (
-          <div role="status" style={{ textAlign: "center", padding: 40, color: "#5A5A5A" }}>{state === "verifying" ? "Overujem odkaz…" : "Načítavam…"}</div>
+          <div role="status" style={{ textAlign: "center", padding: 40, color: "#5A5A5A" }}>{state === "verifying" ? t("Overujem odkaz…", "Checking the link…") : t("Načítavam…", "Loading…")}</div>
         )}
         {state === "offline" && (
           <div role="status" style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
-            Ste bez signálu — stav zákazky sa načíta po pripojení.
+            {t("Ste bez signálu — stav zákazky sa načíta po pripojení.", "You are offline — the order status will load once you are connected.")}
           </div>
         )}
         {state === "invalid" && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
-            Tento odkaz už nie je platný.
+            {t("Tento odkaz už nie je platný.", "This link is no longer valid.")}
           </div>
         )}
         {state === "notyet" && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
-            Odkaz bude aktívny od {fmtDate(data?.activeFrom)} — od dňa vývozu stroja.
+            {t(`Odkaz bude aktívny od ${fmtDate(data?.activeFrom)} — od dňa vývozu stroja.`, `The link will be active from ${fmtDate(data?.activeFrom, true)} — the day the machine is delivered.`)}
           </div>
         )}
         {/* v1.0.808: krátka výzva hore — potvrdenie protokolu je až pri protokole na konci stránky */}
         {state === "ok" && data && ((data.handoverCustomerAbsent && !data.handoverCustomerConfirm) || (data.returnCustomerAbsent && !data.returnCustomerConfirm)) && (
           <button type="button" onClick={() => document.getElementById(data.handoverCustomerAbsent && !data.handoverCustomerConfirm ? "potvrdit-Prevzatie" : "potvrdit-Vrátenie")?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ ...BTN, background: "#FFF8E1", border: "1px solid #E6C25A", color: "#1A1A1A", textAlign: "left", marginBottom: 12 }}>
-            ⚠ Protokol prebehol bez Vás — prosíme o potvrdenie ›
+            ⚠ {t("Protokol prebehol bez Vás — prosíme o potvrdenie", "The protocol was completed without you — please confirm it")} ›
           </button>
         )}
         {state === "error" && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
-            Nepodarilo sa načítať stav zákazky. Skúste to prosím neskôr.
+            {t("Nepodarilo sa načítať stav zákazky. Skúste to prosím neskôr.", "The order status could not be loaded. Please try again later.")}
           </div>
         )}
         {state === "ok" && data && (
@@ -677,8 +749,8 @@ export default function CustomerPortal({ token }) {
             <div style={{ padding: "16px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{data.code ? (data.code.includes(" · ") ? "Zákazka" : "Zákazka č.") : data.cisloZmluvy ? "Zmluva č." : "Zákazka"}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || data.customer || (data.startDate ? `Zákazka od ${fmtDate(data.startDate)}` : "—")}</div>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{data.code ? (data.code.includes(" · ") ? t("Zákazka", "Order") : t("Zákazka č.", "Order no.")) : data.cisloZmluvy ? t("Zmluva č.", "Agreement no.") : t("Zákazka", "Order")}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || data.customer || (data.startDate ? t(`Zákazka od ${fmtDate(data.startDate)}`, `Order from ${fmtDate(data.startDate, true)}`) : "—")}</div>
                 </div>
                 <span
                   style={{
@@ -691,51 +763,54 @@ export default function CustomerPortal({ token }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {data.notRealized ? "Nerealizovaná" : data.returnDone || completed ? "Ukončené" : !data.handoverDone ? (data.selfPickup ? "Čaká na vyzdvihnutie" : "Čaká na dodanie stroja") : overdue ? "Po termíne" : "Aktívny prenájom"}
+                  {data.notRealized ? t("Nerealizovaná", "Did not take place") : data.returnDone || completed ? t("Ukončené", "Ended") : !atCustomer ? (data.selfPickup ? t("Čaká na vyzdvihnutie", "Awaiting collection") : t("Čaká na dodanie stroja", "Awaiting delivery")) : overdue ? t("Po termíne", "Overdue") : !data.handoverDone ? t("Stroj je u vás", "The machine is with you") : t("Aktívny prenájom", "Active rental")}
                 </span>
               </div>
 
               <div style={{ background: "#F7F7F7", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                {data.machineCode && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title="Sériové číslo">{data.machineCode}</div>}
+                {data.machineCode && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title={t("Sériové číslo", "Serial number")}>{data.machineCode}</div>}
                 <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
-                  {data.machineType || "Stroj"}
+                  {data.machineType || t("Stroj", "Machine")}
                 </div>
-                {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A" }}>{data.address}</div>}
-                {!data.handoverDone && !data.returnDone && !data.notRealized && !completed && !data.selfPickup && (data.departureDate || data.startDate) && (
-                  <div style={{ fontSize: 14, color: departureLate ? "#8A4100" : "#5A5A5A", fontWeight: departureLate ? 600 : undefined, marginTop: 4 }}>{departureLate ? "Vývoz sa oneskoruje — kontaktujte obchodníka" : `Plánovaný vývoz ${fmtDate(data.departureDate || data.startDate)}`}</div>
+                {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A", overflowWrap: "anywhere" }}>{data.address}</div>}
+                {!atCustomer && !data.returnDone && !data.notRealized && !completed && !data.selfPickup && (data.departureDate || data.startDate) && (
+                  <div style={{ fontSize: 14, color: departureLate ? "#8A4100" : "#5A5A5A", fontWeight: departureLate ? 600 : undefined, marginTop: 4 }}>{departureLate ? t("Vývoz sa oneskoruje — kontaktujte obchodníka", "Delivery is delayed — please contact your sales representative") : t(`Plánovaný vývoz ${fmtDate(data.departureDate || data.startDate)}`, `Planned delivery ${fmtDate(data.departureDate || data.startDate, true)}`)}</div>
                 )}
                 {data.selfPickup && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
-                    {departureLate ? <span style={{ color: "#8A4100", fontWeight: 600 }}>Vyzdvihnutie v depe {data.fromDepo || ""} sa oneskoruje — kontaktujte obchodníka</span> : <>Vyzdvihnutie v depe {data.fromDepo || ""}{data.departureDate ? ` dňa ${fmtDate(data.departureDate)}` : ""}</>}
+                    {departureLate ? <span style={{ color: "#8A4100", fontWeight: 600 }}>{t(`Vyzdvihnutie v depe ${data.fromDepo || ""} sa oneskoruje — kontaktujte obchodníka`, `Collection from the ${data.fromDepo || ""} depot is delayed — please contact your sales representative`)}</span> : <>{t(`Vyzdvihnutie v depe ${data.fromDepo || ""}`, `Collection from the ${data.fromDepo || ""} depot`)}{data.departureDate ? t(` dňa ${fmtDate(data.departureDate)}`, ` on ${fmtDate(data.departureDate, true)}`) : ""}</>}
                   </div>
                 )}
                 {data.selfReturn && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginTop: 4 }}>
-                    Vrátenie do depa {data.returnDepo || data.fromDepo || ""}{data.pickupDate && !departureLate && !pickupLate ? ` dňa ${fmtDate(data.pickupDate)}` : ""}
+                    {t(`Vrátenie do depa ${data.returnDepo || data.fromDepo || ""}`, `Return to the ${data.returnDepo || data.fromDepo || ""} depot`)}{data.pickupDate && !departureLate && !pickupLate ? t(` dňa ${fmtDate(data.pickupDate)}`, ` on ${fmtDate(data.pickupDate, true)}`) : ""}
                   </div>
                 )}
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
                 <div style={{ flex: 1, background: "#F7F7F7", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>Od</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.startDate)}</div>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{t("Od", "From")}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.startDate, en)}</div>
                 </div>
                 <div style={{ flex: 1, background: "#F7F7F7", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>Do</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.endDate)}</div>
+                  <div style={{ fontSize: 13, color: "#5A5A5A" }}>{t("Do", "Until")}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDate(data.endDate, en)}</div>
                 </div>
               </div>
               {overdue && (
                 <div style={{ background: "#FDEBD3", color: "#8A4100", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-                  Prenájom skončil {fmtDate(data.endDate).replace(/ \d{4}$/, "")} — {pickupPlanned
+                  {en ? `The rental ended on ${fmtDate(data.endDate, true).replace(/ \d{4}$/, "")} — ${pickupPlanned
+                    ? `${data.selfReturn ? "return to the depot" : "collection"} is scheduled for ${fmtDate(data.pickupDate, true).replace(/ \d{4}$/, "")}`
+                    : "please arrange the return or an extension."}` : <>Prenájom skončil {fmtDate(data.endDate).replace(/ \d{4}$/, "")} — {pickupPlanned
                     ? `${data.selfReturn ? "vrátenie do depa je naplánované" : "zvoz je naplánovaný"} na ${fmtDate(data.pickupDate).replace(/ \d{4}$/, "")}`
-                    : "dohodnite vrátenie alebo predĺženie."}
+                    : "dohodnite vrátenie alebo predĺženie."}</>}
                 </div>
               )}
               {completed && (
                 <div style={{ background: pickupLate ? "#FDEBD3" : "#EFEFEF", color: pickupLate ? "#8A4100" : "#3A3A3A", borderRadius: 8, padding: "10px 12px", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-                  Prenájom ukončený{pickupLate ? ` — ${data.selfReturn ? "vrátenie do depa sa oneskoruje" : "zvoz sa oneskoruje"}, kontaktujte obchodníka` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "vrátenie do depa" : "zvoz"} ${fmtDate(data.pickupDate || data.endDate).replace(/ \d{4}$/, "")}` : ""}
+                  {en ? `Rental ended${pickupLate ? ` — ${data.selfReturn ? "return to the depot is delayed" : "collection is delayed"}, please contact your sales representative` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "return to the depot" : "collection"} ${fmtDate(data.pickupDate || data.endDate, true).replace(/ \d{4}$/, "")}` : ""}`
+                    : <>Prenájom ukončený{pickupLate ? ` — ${data.selfReturn ? "vrátenie do depa sa oneskoruje" : "zvoz sa oneskoruje"}, kontaktujte obchodníka` : data.pickupDate || data.endDate ? ` — ${data.selfReturn ? "vrátenie do depa" : "zvoz"} ${fmtDate(data.pickupDate || data.endDate).replace(/ \d{4}$/, "")}` : ""}</>}
                 </div>
               )}
 
@@ -744,13 +819,13 @@ export default function CustomerPortal({ token }) {
 
                 {data.notRealized && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 14 }}>
-                    Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.
+                    {t("Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.", "This order did not go ahead — the machine was not released. If you have any questions, please contact your sales representative.")}
                   </div>
                 )}
                 {!data.returnDone && !data.notRealized && (
                   <div style={{ display: "flex", flexDirection: overdue && !pickupPlanned ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
                     {/* Pred dodaním stroja nie je čo nahlásiť servisu — zákazník volá obchodníka (Rado 1. 11.). */}
-                    {(data.handoverDone || data.migratedWithoutHandover) && <RequestForm
+                    {(atCustomer || data.migratedWithoutHandover) && <RequestForm
                       type="problem"
                       jobLocked={(data.requests || []).some((r) => r.type === "problem" && (r.status === "pending" || r.status === "in_progress"))}
                       onSubmit={submitRequest}
@@ -765,27 +840,27 @@ export default function CustomerPortal({ token }) {
                   </div>
                 )}
 
-                <div style={SEC}>Kontakty</div>
+                <div style={SEC}>{t("Kontakty", "Contacts")}</div>
                 {/* Archivovaný obchodník: bez mena a e-mailu, jeho služobný telefón prechádza na nového (Rado 4. 11.). */}
                 {(data.salespersonName || (data.salespersonArchived && data.salespersonPhone)) && (
                   <div style={{ marginBottom: 10, fontSize: 15 }}>
-                    <div style={{ fontWeight: 700 }}>{data.salespersonName || "Pridelený obchodník"}</div>
+                    <div style={{ fontWeight: 700 }}>{data.salespersonName || t("Pridelený obchodník", "Your sales representative")}</div>
                     {data.salespersonPhone && (
                       <div style={{ fontVariantNumeric: "tabular-nums" }}>
                         <a href={`tel:${data.salespersonPhone}`} style={LINK}><Ico id="telefon" /> {data.salespersonPhone}</a>
                       </div>
                     )}
                     {data.salespersonEmail && (
-                      <div>
+                      <div style={{ overflowWrap: "anywhere" }}>
                         <a href={`mailto:${data.salespersonEmail}`} style={LINK}>{data.salespersonEmail}</a>
                       </div>
                     )}
                   </div>
                 )}
                 {/* Pred dodaním stroja zákazník rieši všetko s obchodníkom (Rado 2. 11.); bez kontaktu na obchodníka ostane aspoň linka servisu. */}
-                {(data.handoverDone || data.migratedWithoutHandover || data.returnDone || (!data.salespersonPhone && !data.salespersonEmail)) && (
+                {(atCustomer || data.migratedWithoutHandover || data.returnDone || (!data.salespersonPhone && !data.salespersonEmail)) && (
                 <div style={{ fontSize: 15, marginBottom: 14 }}>
-                  <div style={{ fontWeight: 700 }}>Nahlasovanie porúch</div>
+                  <div style={{ fontWeight: 700 }}>{t("Nahlasovanie porúch", "Fault reporting")}</div>
                   <div style={{ fontVariantNumeric: "tabular-nums" }}><a href="tel:+421905979484" style={LINK}><Ico id="telefon" /> +421 905 979 484</a></div>
                   <div><a href="mailto:servis@matecoslovakia.sk" style={LINK}>servis@matecoslovakia.sk</a></div>
                 </div>
@@ -794,26 +869,27 @@ export default function CustomerPortal({ token }) {
 
               {!data.notRealized && <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                <div style={{ ...SEC, margin: 0 }}>Odovzdávací protokol{data.protocolNumber ? ` č. ${data.protocolNumber}` : ""}</div>
+                <div style={{ ...SEC, margin: 0 }}>{t("Odovzdávací protokol", "Handover protocol")}{data.protocolNumber ? t(` č. ${data.protocolNumber}`, ` no. ${data.protocolNumber}`) : ""}</div>
                 {((data.handoverDone && !data.migratedWithoutHandover) || data.returnDone) && (
                   <button
                     onClick={() => {
                       const w = window.open("", "_blank");
                       if (!w) return;
-                      w.document.write(buildOfficialProtocolHtml(data));
+                      w.opener = null; // noopener by vrátilo null a nedalo by sa doň písať
+                      w.document.write(buildOfficialProtocolHtml(data, en));
                       w.document.close();
                     }}
                     style={{ ...BTN, width: "auto", minHeight: 44, fontSize: 14, border: "1px solid #CFCFCF", color: "#1A1A1A" }}
                   >
-                    <Ico id="tlaciaren" /> Vytlačiť / uložiť ako PDF
+                    <Ico id="tlaciaren" /> {t("Vytlačiť / uložiť ako PDF", "Print / save as PDF")}
                   </button>
                 )}
               </div>
               {!data.handoverDone ? (
-                <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>{data.returnDone ? "Prevzatie nebolo zdokumentované." : "Zatiaľ nevypísaný."}</div>
+                <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>{data.returnDone ? t("Prevzatie nebolo zdokumentované.", "The handover was not documented.") : t("Zatiaľ nevypísaný.", "Not filled in yet.")}</div>
               ) : data.migratedWithoutHandover ? (
                 <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>
-                  Stroj bol prevzatý pred zavedením tohto systému — prevzatie nie je zdokumentované.
+                  {t("Stroj bol prevzatý pred zavedením tohto systému — prevzatie nie je zdokumentované.", "The machine was taken over before this system was introduced — the handover is not documented.")}
                 </div>
               ) : (
                 <ProtocolPhase
@@ -829,6 +905,7 @@ export default function CustomerPortal({ token }) {
                   photoLabels={data.handoverPhotoLabels}
                   onConfirm={(a, n, sg, c) => confirmProtocol("handover", a, n, sg, c)}
                   driverSig={data.handoverDriverSignature}
+                  paper={data.handoverPaper && paperProtocolLine(false, data.handoverDate, data.handoverDriverName, data.handoverCustomerName, en)}
                 />
               )}
               {(data.handoverDone || data.returnDone) && (
@@ -846,11 +923,12 @@ export default function CustomerPortal({ token }) {
                     photoLabels={data.returnPhotoLabels}
                     onConfirm={(a, n, sg, c) => confirmProtocol("return", a, n, sg, c)}
                     driverSig={data.returnDriverSignature}
+                    paper={data.returnPaper && paperProtocolLine(true, data.returnDate, data.returnDriverName, data.returnCustomerName, en)}
                   />
                 ) : (
                   <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Vrátenie</div>
-                    <div style={{ fontSize: 14, color: "#5A5A5A" }}>{completed ? `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.` : "Stroj je v prenájme — zatiaľ nebol vrátený."}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{t("Vrátenie", "Return")}</div>
+                    <div style={{ fontSize: 14, color: "#5A5A5A" }}>{completed ? t(`Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.`, `Rental ended — the machine is awaiting ${data.selfReturn ? "return to the depot" : "collection"}.`) : t("Stroj je v prenájme — zatiaľ nebol vrátený.", "The machine is rented out — not returned yet.")}</div>
                   </div>
                 )
               )}
@@ -861,8 +939,9 @@ export default function CustomerPortal({ token }) {
       </main>
       <footer style={{ fontSize: 12, color: "#5A5A5A", textAlign: "center", padding: "16px 12px 24px", lineHeight: 1.6 }}>
         mateco Slovakia s.r.o. · Strážska cesta 7892, 960 01 Zvolen<br />
-        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={{ ...LINK, textDecoration: "underline", display: "inline-block", padding: "12px 8px", minHeight: 44, boxSizing: "border-box" }}>Zásady ochrany osobných údajov</a>
+        <a href={t(PRIVACY_URL, PRIVACY_URL_EN)} target="_blank" rel="noopener noreferrer" style={{ ...LINK, textDecoration: "underline", display: "inline-block", padding: "12px 8px", minHeight: 44, boxSizing: "border-box" }}>{t("Zásady ochrany osobných údajov", "Privacy policy")}</a>
       </footer>
     </div>
+    </LangCtx.Provider>
   );
 }

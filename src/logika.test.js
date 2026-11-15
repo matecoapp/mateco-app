@@ -141,7 +141,8 @@ describe("kolo 30", () => {
     expect(erpHours({ workHours: "0,5" }) + erpHours({ workHours: 1.5 })).toBe(2);
     const techs = { t1: { id: "t1", name: "Tomáš" }, t3: { id: "t3", name: "Ivan" } };
     expect(erpTechKey({ technicianId: "t1", checkerBy: "Ivan" }, techs)).toBe("t3");
-    expect(erpTechKey({ technicianId: "t1", checkerBy: "Niekto iný" }, techs)).toBe("t1");
+    expect(erpTechKey({ technicianId: "t1", checkerBy: "Niekto iný" }, techs)).toBe("by:Niekto iný"); // k64 P4: vykonal ne-technik — nie pridelený checker
+    expect(erpTechKey({ technicianId: "t1" }, techs)).toBe("t1");
   });
 });
 
