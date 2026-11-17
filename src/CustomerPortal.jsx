@@ -73,11 +73,13 @@ function buildOfficialProtocolHtml(data, en) {
   const L = protokolT(en); // hlavička a polia — spoločné s tlačou v platforme
   const fd = (iso) => fmtDate(iso, en);
   // Rovnaké označenie ako dispečerská tlač: "Za nájomcu: meno" / "Za prenajímateľa: meno".
-  const absentBlock = (c) => `<div class="sigbox"><div class="siglabel">${L("Za nájomcu")}</div><div class="signone" style="color:#c62828">${L("Zákazník nebol prítomný — bez podpisu")}</div>${confirmLine(c, en) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c, en))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
+  // Čas a kto protokol spísal — ako tlač z kancelárie (Rado 16. 11.).
+  const absentWhen = (at) => (at ? new Date(at).toLocaleString(en ? "en-GB" : "sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: en ? "short" : "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+  const absentBlock = (c, at, by) => `<div class="sigbox"><div class="siglabel">${L("Za nájomcu")}</div><div class="signone" style="color:#c62828">${L("Zákazník nebol prítomný — bez podpisu")}${absentWhen(at) ? ` (${esc(absentWhen(at))}` : ""}${by ? `${absentWhen(at) ? ", " : " ("}${en ? "recorded by" : "spísal"} ${esc(by)}` : ""}${absentWhen(at) || by ? ")" : ""}</div>${confirmLine(c, en) ? `<div class="signone" style="color:#1A1A1A">${esc(confirmLine(c, en))}</div>` : ""}${c?.status === "confirmed" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.signature || "") ? `<img src="${c.signature}" class="sigimg">` : ""}</div>`;
   function sigBlock(dataUrl, label, name) {
     return `<div class="sigbox"><div class="siglabel">${esc(label)}${name ? `: ${esc(name)}` : ""}</div>${sigSrc(dataUrl) ? `<img src="${sigSrc(dataUrl)}" class="sigimg">` : `<div class="signone">${L("— zatiaľ bez podpisu —")}</div>`}</div>`;
   }
-  const paperBlock = (ret) => `<div style="font-size:11px;padding:8px 0;">${esc(paperProtocolLine(ret, ret ? data.returnDate : data.handoverDate, ret ? data.returnDriverName : data.handoverDriverName, ret ? data.returnCustomerName : data.handoverCustomerName, en))}</div>`;
+  const paperBlock = (ret) => `<div style="font-size:11px;padding:8px 0;">${esc(paperProtocolLine(ret, ret ? data.returnDate : data.handoverDate, ret ? data.returnCustomerName : data.handoverDriverName, ret ? data.returnDriverName : data.handoverCustomerName, en))}</div>`;
   function checklistCol(statusKey, noteKey) {
     return (en ? HANDOVER_CHECKLIST_ITEMS_EN : HANDOVER_CHECKLIST_ITEMS).map((label, i) => {
       const item = (data.checklist && data.checklist[i]) || {};
@@ -109,7 +111,7 @@ function buildOfficialProtocolHtml(data, en) {
   h1 { font-size: 18px; color: #E30613; margin: 0; text-align: right; }
   .sub { font-size: 12px; color: #555; margin-top: 4px; text-align: right; }
   .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 26px; margin-bottom: 18px; }
-  .meta div span.l { color: #666; display: inline-block; min-width: 140px; }
+  .meta > div { display: flex; } .meta div span.l { color: #666; flex: 0 0 auto; min-width: 140px; } /* dlhý nájomca / miesto sa zalomí pod hodnotu, nie pod popis (k66 dizajn D8) */
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin-bottom: 18px; }
   .colhead { font-weight: bold; font-size: 13px; border-bottom: 2px solid #E30613; padding-bottom: 5px; margin-bottom: 7px; }
   .checkrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
@@ -160,7 +162,7 @@ function buildOfficialProtocolHtml(data, en) {
         : data.handoverPaper ? paperBlock(false)
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
-        ${data.handoverCustomerAbsent ? absentBlock(data.handoverCustomerConfirm) : sigBlock(data.handoverCustomerSignature, L("Za nájomcu"), data.handoverCustomerName)}
+        ${data.handoverCustomerAbsent ? absentBlock(data.handoverCustomerConfirm, data.handoverAbsentAt, data.handoverDriverName) : sigBlock(data.handoverCustomerSignature, L("Za nájomcu"), data.handoverCustomerName)}
         ${sigBlock(data.handoverDriverSignature, L("Za prenajímateľa"), data.handoverDriverName)}
       </div>`}
     </div>
@@ -170,7 +172,7 @@ function buildOfficialProtocolHtml(data, en) {
         : data.returnDone
         ? `${checklistCol("returnStatus", "returnNote")}
       <div class="sigs">
-        ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm) : sigBlock(data.returnCustomerSignature, L("Za nájomcu"), data.returnCustomerName)}
+        ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm, data.returnAbsentAt, data.returnDriverName) : sigBlock(data.returnCustomerSignature, L("Za nájomcu"), data.returnCustomerName)}
         ${sigBlock(data.returnDriverSignature, L("Za prenajímateľa"), data.returnDriverName)}
       </div>`
         : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.completed && !data.notRealized ? (en ? `Rental ended — the machine is awaiting ${data.selfReturn ? "return to the depot" : "collection"}.` : `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.`) : L("Stroj je v prenájme — zatiaľ nebol vrátený.")}</div>`}
@@ -198,7 +200,7 @@ function buildOfficialProtocolHtml(data, en) {
 // Vzhľad podľa základu dizajnu platformy (v1.0.793): nadpisy sekcií Barlow Condensed,
 // telefóny/emaily čiernou, tlačidlá 48 px, rizikové tlačidlo s červeným obrysom.
 const SEC = { fontFamily: "'Barlow Condensed', 'Barlow', Arial, sans-serif", fontSize: 15, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "#5A5A5A", margin: "18px 0 6px" };
-const LINK = { color: "#1A1A1A", textDecoration: "none" };
+const LINK = { color: "#1A1A1A", textDecoration: "none", padding: "13px 0" }; // inline odkaz: väčšia plocha na ťuknutie (44 px) bez zmeny riadkov (k66 dizajn D4)
 // Čiarové ikony z platformy (NAV_ICON_PATHS v App.jsx) namiesto emoji, ktoré každý systém kreslí inak.
 const ICO = { telefon: "M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z", tlaciaren: "M6 9V3h12v6 M6 17H3v-7h18v7h-3 M6 13h12v8H6z" };
 function Ico({ id, size = 16 }) {
@@ -406,7 +408,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
     missing_date: "Please choose a date.",
     invalid_token: "This link is no longer valid.",
     invalid_date: "The date cannot be in the past, before the start of the rental or more than a year ahead.",
-    not_realized: "This rental did not go ahead.",
+    not_realized: "This rental did not take place.",
     too_long: "The message is too long (2,000 characters at most).",
     already_returned: "The machine has already been returned — requests and reports are no longer possible.",
     job_completed: "The rental has already ended — the return date can no longer be changed. If you have any questions, please contact your sales representative.",
@@ -509,8 +511,9 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
 // Automatické odpovede (DB a platforma) — kód v autoReplyCode; staršie záznamy bez kódu podľa presného SK textu (k65 portál S1).
 const AUTO_REPLY = {
   job_completed: ["Prenájom bol ukončený.", "The rental has ended."],
-  not_realized: ["Zákazka sa nerealizovala.", "The rental did not go ahead."],
+  not_realized: ["Zákazka sa nerealizovala.", "The rental did not take place."],
   job_deleted: ["Zákazka bola zmazaná.", "The order has been cancelled."],
+  job_restored: ["Žiadosť bola zrušená, pošlite ju prosím znova.", "The request was cancelled, please send it again."], // zákazka obnovená z Koša (Rado 16. 11.)
   returned: ["Stroj už bol vrátený.", "The machine has already been returned."],
   completed_awaiting_pickup: ["Prenájom je už ukončený — stroj čaká na zvoz. V prípade otázok kontaktujte obchodníka.", "The rental has already ended — the machine is awaiting collection. If you have any questions, please contact your sales representative."],
 };
@@ -819,7 +822,7 @@ export default function CustomerPortal({ token }) {
 
                 {data.notRealized && (
                   <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 14 }}>
-                    {t("Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.", "This order did not go ahead — the machine was not released. If you have any questions, please contact your sales representative.")}
+                    {t("Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.", "This order did not take place — the machine was not handed over. If you have any questions, please contact your sales representative.")}
                   </div>
                 )}
                 {!data.returnDone && !data.notRealized && (
@@ -923,7 +926,7 @@ export default function CustomerPortal({ token }) {
                     photoLabels={data.returnPhotoLabels}
                     onConfirm={(a, n, sg, c) => confirmProtocol("return", a, n, sg, c)}
                     driverSig={data.returnDriverSignature}
-                    paper={data.returnPaper && paperProtocolLine(true, data.returnDate, data.returnDriverName, data.returnCustomerName, en)}
+                    paper={data.returnPaper && paperProtocolLine(true, data.returnDate, data.returnCustomerName, data.returnDriverName, en)}
                   />
                 ) : (
                   <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>

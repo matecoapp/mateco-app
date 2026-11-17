@@ -32,6 +32,11 @@ document.addEventListener(
 // Pošta/SMS pripoja k odkazu bodku, zátvorku či medzeru — berie sa len samotné UUID.
 const portalParam = new URLSearchParams(window.location.search).get("portal");
 const portalToken = portalParam && (portalParam.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || portalParam).toLowerCase();
+// „Pridať na plochu“ z portálu má otvoriť túto zákazku, nie prihlásenie internej platformy (manifest má start_url „./“).
+if (portalToken) {
+  document.querySelector('link[rel="manifest"]')?.remove();
+  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", "mateco zákazka");
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
