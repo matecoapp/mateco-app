@@ -36,12 +36,25 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.872";
+const APP_VERSION = "1.0.873";
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.873", items: [
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Rozpracovaný protokol o odovzdaní / vrátení sa priebežne ukladá do zariadenia (fotky, zaškrtnutia, poznámky, podpisy). Po vybití telefónu alebo zatvorení platformy ponúkne pri ďalšom otvorení „Pokračovať v rozpracovanom protokole (uložené … o hh:mm)“ alebo „Začať odznova“. Po uložení protokolu (aj bez signálu) a pri „Zavrieť bez uloženia“ sa koncept zmaže, po 7 dňoch sám." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Dnes: riadok „Rozpracovaný protokol — zákazník“ s tlačidlom „Pokračovať“, kým koncept v zariadení čaká." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Ak protokol tej fázy medzitým uložil niekto iný (kancelária, papierový protokol, iný telefón) alebo je na zákazke iný stroj, rozpracovaný protokol sa už nepoužije — platforma vysvetlí prečo a ponúkne ho len zahodiť." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Odhlásenie s rozpracovaným protokolom sa opýta („Rozpracované protokoly: 1“) a zmaže len vaše koncepty — koncepty iného používateľa na tom istom zariadení ostanú." },
+    { roles: ["admin", "technik", "veduci_technik_ba"], text: "Kontrola stroja sa priebežne ukladá do zariadenia (body, zábery, čistota, pohon, MTH, hodiny, diely, klasifikácia) — po vybitom telefóne či zatvorení platformy ponúkne „Pokračovať v rozpracovanej kontrole“ alebo „Začať odznova“; na Dnes riadok „Rozpracovaná kontrola — stroj“. Ak kontrolu medzitým preradili, zrušili, uložil ju niekto iný alebo je na nej iný stroj, rozpracovanú kontrolu len zahodíte. Pred odhlásením platforma upozorní aj na rozpracované kontroly." },
+    { roles: ["obchodnik", "fakturant_pozicovna"], text: "Odkaz pre zákazníka do portálu vydáva dispečer alebo vedúci požičovne (a šofér pri protokole) — obchodník a fakturant ho nevydajú ani mimo platformy; existujúci odkaz ďalej skopírujete alebo pošlete e-mailom." },
+    { roles: ["admin", "fakturant_pozicovna"], text: "ERP podklady požičovne: v stĺpci „Motohodiny, palivo“ aj palivo (L) alebo batéria (%) z kontroly checkera pred vývozom → po vrátení s rozdielom." },
+    { roles: ["admin", "fakturant_pozicovna", "veduci_pozicovne", "dispecer_pozicovne"], text: "ERP podklady požičovne: zoznam sa dá zoradiť kliknutím na hlavičku (Stroj, Zákazník, Č. zmluvy, Obdobie – dátum vrátenia, Motohodiny – nárast MTH; v Histórii aj Faktúra a dátum spracovania). Prvý klik ▲, druhý ▼, tretí vráti predvolené poradie." },
+    { roles: ["admin", "veduci_pozicovne", "dispecer_pozicovne", "obchodnik", "fakturant_pozicovna", "veduci_servisu", "dispecer_servisu", "fakturant_servis"], text: "Zákazky a Zákazníci: zoradenie kliknutím na hlavičku stĺpca (Zákazky aj podľa začiatku, konca a obchodníka vo výbere „Zoradiť podľa“)." },
+    { roles: ["admin", "veduci_servisu", "dispecer_servisu", "fakturant_servis", "veduci_technik_ba", "technik"], text: "Servis: zoradenie v ERP podkladoch servisu, Výdaji dielov a Náhradných dieloch kliknutím na hlavičku; v Poškodeniach, Externých zákazkách, Revíziách a Úradných skúškach výberom „Zoradiť podľa“ (dátum, stroj, stav, technik, termín)." },
+    { roles: ["admin", "veduci_pozicovne", "dispecer_pozicovne", "obchodnik", "fakturant_pozicovna", "veduci_servisu", "dispecer_servisu", "fakturant_servis", "veduci_technik_ba", "technik"], text: "Zvolené zoradenie si platforma pamätá na zariadení pre každý zoznam zvlášť; na mobile, kde sú zoznamy ako karty, je nad zoznamom výber „Zoradiť podľa“." },
+  ] },
   { v: "1.0.872", items: [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Papierový protokol pri vrátení: „Odovzdal (zákazník)“ a „Prevzal (prepravca / šofér)“ sa ukladajú správne (predtým obrátene). „Odovzdal“ je predvyplnený kontaktom zákazky." },
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Tlač protokolu z kancelárie pri ukončenej zákazke píše ako portál „Prenájom ukončený — stroj čaká na zvoz / vrátenie do depa“ (SK aj EN)." },
@@ -2857,6 +2870,42 @@ const byKeys = (...keys) => (a, b) => {
   return 0;
 };
 export const _testK61c = { byKeys };
+// Triedenie zoznamu kliknutím na hlavičku (1.0.873): 1. klik vzostupne, 2. zostupne, 3. predvolené poradie zoznamu.
+// Pri zhode ostane predvolené poradie (index v zozname), prázdne vždy na koniec (byKeys); cols = { kľúč: (riadok) => hodnota }.
+const applyListSort = (rows, sort, cols) => {
+  const get = sort && cols[sort.key];
+  if (!get) return rows;
+  return rows.map((v, id) => ({ v, id, k: get(v) })).sort(byKeys([(x) => x.k, sort.dir === "desc" ? -1 : 1])).map((x) => x.v); // hodnota sa počíta raz na riadok
+};
+export const _testK68d = { applyListSort };
+// Voľba sa pamätá na zariadení podľa zoznamu (ako pripnutý zvonček).
+function useListSort(listKey) {
+  const lsKey = "mateco_sort_" + listKey;
+  const read = () => { try { const v = JSON.parse(localStorage.getItem(lsKey) || "null"); return v?.key && (v.dir === "asc" || v.dir === "desc") ? v : null; } catch { return null; } };
+  const [st, setSt] = useState(() => ({ k: lsKey, v: read() }));
+  if (st.k !== lsKey) setSt({ k: lsKey, v: read() }); // iný zoznam v tom istom komponente (História, záložka)
+  const sort = st.k === lsKey ? st.v : null;
+  const setSort = (v) => { setSt({ k: lsKey, v }); try { if (v) localStorage.setItem(lsKey, JSON.stringify(v)); else localStorage.removeItem(lsKey); } catch { /* bez úložiska len do obnovenia */ } };
+  return { sort, setSort, toggle: (key) => setSort(sort?.key !== key ? { key, dir: "asc" } : sort.dir === "asc" ? { key, dir: "desc" } : null) };
+}
+// Hlavička stĺpca ako tlačidlo (Tab + Enter); šípka len pri stĺpci, podľa ktorého je zoradené.
+function SortBtn({ ls, k, children }) {
+  const dir = ls.sort?.key === k ? ls.sort.dir : null;
+  return <button type="button" className="th-sort" onClick={() => ls.toggle(k)} title={dir === "desc" ? "Predvolené poradie" : dir ? "Zoradiť zostupne" : "Zoradiť"}>{children}<span aria-hidden="true">{dir === "asc" ? " ▲" : dir === "desc" ? " ▼" : ""}</span></button>;
+}
+const sortAria = (ls, ...keys) => (keys.includes(ls.sort?.key) ? (ls.sort.dir === "asc" ? "ascending" : "descending") : undefined);
+function SortTh({ ls, k, children, ...rest }) {
+  return <th {...rest} aria-sort={sortAria(ls, k)}><SortBtn ls={ls} k={k}>{children}</SortBtn></th>;
+}
+// Karty bez hlavičiek (mobil, zoznamy kariet): výber „Zoradiť podľa“; when = kedy je vidno (cards | 900 | 1280 | always).
+function SortSelect({ ls, cols, when = "cards" }) {
+  return (
+    <select className={`sort-sel ss-${when}`} aria-label="Zoradiť podľa" title="Zoradiť podľa" value={ls.sort && cols.some(([k]) => k === ls.sort.key) ? `${ls.sort.key}:${ls.sort.dir}` : ""} onChange={(e) => { const [key, dir] = e.target.value.split(":"); ls.setSort(key ? { key, dir } : null); }}>
+      <option value="">↕ Zoradiť podľa…</option>
+      {cols.flatMap(([k, l]) => [<option key={k + ":asc"} value={k + ":asc"}>{l} ▲</option>, <option key={k + ":desc"} value={k + ":desc"}>{l} ▼</option>])}
+    </select>
+  );
+}
 // ERP tok (checklisty kontrolóra aj servisné protokoly): keď je záznam už
 // označený ako spracovaný (erpProcessed) a niektoré zo sledovaných polí sa
 // zmení oproti snímke z momentu spracovania (erpSnapshot), automaticky sa
@@ -3339,11 +3388,13 @@ async function exportPhotosAsZip(sinceIso, onProgress) {
    role/dátumu; ak by tabuľky časom narástli natoľko, že by to vadilo
    úložisku telefónu, toto je miesto na zúženie.
 --------------------------------------------------------- */
-function openOfflineDb() {
+// Koncepty protokolov ("drafts") vo vlastnej databáze — odhlásenie maže offline kópiu dát, koncepty iných ľudí na zariadení nie.
+function openOfflineDb(store) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("mateco_offline", 1);
+    const req = store === "drafts" ? indexedDB.open("mateco_drafts", 1) : indexedDB.open("mateco_offline", 1);
     req.onupgradeneeded = () => {
       const db = req.result;
+      if (store === "drafts") { if (!db.objectStoreNames.contains("drafts")) db.createObjectStore("drafts"); return; }
       if (!db.objectStoreNames.contains("tables")) db.createObjectStore("tables");
       if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox");
     };
@@ -3353,7 +3404,7 @@ function openOfflineDb() {
 }
 async function idbGet(store, key) {
   try {
-    const db = await openOfflineDb();
+    const db = await openOfflineDb(store);
     return await new Promise((resolve, reject) => {
       const req = db.transaction(store, "readonly").objectStore(store).get(key);
       req.onsuccess = () => resolve(req.result);
@@ -3366,7 +3417,7 @@ async function idbGet(store, key) {
 }
 async function idbGetAll(store) {
   try {
-    const db = await openOfflineDb();
+    const db = await openOfflineDb(store);
     return await new Promise((resolve, reject) => {
       const req = db.transaction(store, "readonly").objectStore(store).getAll();
       req.onsuccess = () => resolve(req.result || []);
@@ -3379,7 +3430,7 @@ async function idbGetAll(store) {
 }
 async function idbPut(store, key, value) {
   try {
-    const db = await openOfflineDb();
+    const db = await openOfflineDb(store);
     await new Promise((resolve, reject) => {
       const tx = db.transaction(store, "readwrite");
       tx.objectStore(store).put(value, key);
@@ -3392,7 +3443,7 @@ async function idbPut(store, key, value) {
 }
 async function idbClear(store) {
   try {
-    const db = await openOfflineDb();
+    const db = await openOfflineDb(store);
     await new Promise((resolve, reject) => {
       const tx = db.transaction(store, "readwrite");
       tx.objectStore(store).clear();
@@ -3405,7 +3456,7 @@ async function idbClear(store) {
 }
 async function idbDelete(store, key) {
   try {
-    const db = await openOfflineDb();
+    const db = await openOfflineDb(store);
     await new Promise((resolve, reject) => {
       const tx = db.transaction(store, "readwrite");
       tx.objectStore(store).delete(key);
@@ -3416,6 +3467,24 @@ async function idbDelete(store, key) {
     console.error(`idbDelete(${store}) failed`, key, e);
   }
 }
+
+// Rozpracovaný protokol o odovzdaní/vrátení (koncept) — priebežne v zariadení, nech vybitý telefón ani zabitá
+// platforma nezmažú fotky, zaškrtnutia a podpisy (Rado 17. 11.). Kľúč: zákazka + fáza + používateľ; staršie ako 7 dní preč.
+const HP_DRAFT_MAX_AGE = 7 * 24 * 3600 * 1000;
+const hpDraftKey = (jobId, phase, userId) => `hp:${jobId}:${phase}:${userId}`;
+// Rozpracovaná kontrola checkera — rovnaký mechanizmus, druh konceptu je predpona kľúča ("hp" protokol, "ci" kontrola).
+const ciDraftKey = (assignmentId, userId) => `ci:${assignmentId}:${userId}`;
+const draftKind = (d) => String(d?.key || "").split(":")[0];
+const hpDraftsChanged = () => window.dispatchEvent(new Event("mateco-drafts"));
+async function putHpDraft(d) { await idbPut("drafts", d.key, d); hpDraftsChanged(); }
+async function dropHpDraft(key) { await idbDelete("drafts", key); hpDraftsChanged(); }
+async function myHpDrafts(userId, kind) {
+  const fresh = (d) => Date.now() - new Date(d?.savedAt || 0).getTime() < HP_DRAFT_MAX_AGE;
+  const all = await idbGetAll("drafts");
+  await Promise.all(all.filter((d) => !fresh(d)).map((d) => idbDelete("drafts", d?.key)));
+  return all.filter((d) => fresh(d) && userId && d.userId === userId && (!kind || draftKind(d) === kind));
+}
+const draftSavedText = (iso) => { const t = new Date(iso); return `${t.getDate()}. ${t.getMonth() + 1}. o ${t.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`; };
 
 // Outbox — zápisy do tabuliek (protokoly, checklisty, ...), čo sa nepodarilo
 // odoslať ani po 4 pokusoch. Prežije zavretie appky/reštart telefónu, odošle
@@ -4282,6 +4351,7 @@ async function claimReminder(table, item, patch, guardField, today) {
 async function claimJobPublicToken(jobId, candidateToken, attempt = 1) {
   try {
     const { data, error } = await supabase.rpc("claim_job_public_token", { p_job_id: jobId, p_token: candidateToken });
+    if (error?.code === "42501") return null; // rola odkaz nevydáva (obchodník, fakturant) — nie výpadok, neopakovať
     if (error) throw error;
     // null = DB token nenastavila (bez oprávnenia) — neukazovať QR, ktorý nikde neplatí.
     return data || null;
@@ -4337,7 +4407,7 @@ async function flushPublicTokenClaims() {
     if (it?.kind !== "publicTokenClaim") continue;
     // Odpoveď bez chyby = vybavené (aj null — zákazka už nie je moja/zmazaná); visieť navždy nemá zmysel.
     const { error } = await supabase.rpc("claim_job_public_token", { p_job_id: it.jobId, p_token: it.candidateToken });
-    if (!error) await idbDelete("outbox", `publicTokenClaim:${it.jobId}`);
+    if (!error || error.code === "42501") await idbDelete("outbox", `publicTokenClaim:${it.jobId}`);
   }
   refreshOutboxCount();
 }
@@ -7278,6 +7348,16 @@ function DispatcherApp() {
     return currentUser;
   }, [currentUser, viewAsRole]);
 
+  // Rozpracované protokoly v zariadení (koncepty) — riadok na Dnes; načítanie zároveň zmaže koncepty staršie ako 7 dní.
+  const [hpDrafts, setHpDrafts] = useState([]);
+  useEffect(() => {
+    if (!currentUser?.id) { setHpDrafts([]); return; }
+    const load = () => myHpDrafts(currentUser.id).then(setHpDrafts);
+    load();
+    window.addEventListener("mateco-drafts", load);
+    return () => window.removeEventListener("mateco-drafts", load);
+  }, [currentUser?.id]);
+
   // Sentry: rola a obrazovka ku každej chybe (bez mena), obrazovky aj ako prehľad používania.
   useEffect(() => {
     Sentry.setUser(currentUser ? { id: currentUser.id } : null);
@@ -7492,7 +7572,10 @@ function DispatcherApp() {
       })(), 10000).catch(() => {});
     }
     const pending = userChangeCount(await idbGetAll("outbox"));
-    if (pending && !(await askConfirm({ title: "Odhlásiť sa?", message: `Neodoslané zmeny: ${pending} (čakajú na signál). Po odhlásení sa stratia.`, confirmLabel: "Odhlásiť aj tak" }))) return;
+    const myDrafts = await myHpDrafts(currentUser?.id);
+    const nCi = myDrafts.filter((d) => draftKind(d) === "ci").length, nHp = myDrafts.length - nCi;
+    if ((pending || myDrafts.length) && !(await askConfirm({ title: "Odhlásiť sa?", message: `${[pending && `Neodoslané zmeny: ${pending} (čakajú na signál).`, nHp && `Rozpracované protokoly: ${nHp}.`, nCi && `Rozpracované kontroly: ${nCi}.`].filter(Boolean).join(" ")} Po odhlásení sa stratia.`, confirmLabel: "Odhlásiť aj tak" }))) return;
+    await Promise.all(myDrafts.map((d) => dropHpDraft(d.key))); // zdieľané zariadenie: koncepty len odhláseného používateľa
     // Práve bežiace odosielanie fronty (návrat signálu) nech dobehne ešte s prihlásením.
     await withTimeout(_flushOutboxRun || Promise.resolve(), 8000).catch(() => {});
     didSetLandingModule.current = false;
@@ -13005,6 +13088,18 @@ function DispatcherApp() {
         {module === "dnes" && DNES_ROLES.includes(effectiveUser?.role) && (
           <TodayView
             blockedItems={outboxBlockedList}
+            hpDrafts={hpDrafts}
+            onOpenHpDraft={(d) => {
+              if (draftKind(d) === "ci") {
+                const a = assignments.find((x) => x.id === d.assignmentId);
+                if (a) setCheckerInspectionTarget(a); // preradená / uzavretá / zrušená — vysvetlí okno kontroly
+                else askConfirm({ title: "Zahodiť rozpracovanú kontrolu?", message: "Kontrola už neexistuje (zákazka alebo kontrola bola zmazaná, prípadne uložená ako jedna kontrola za obe). Údaje z tohto zariadenia sa vymažú.", confirmLabel: "Zahodiť" }).then((ok) => ok && dropHpDraft(d.key));
+                return;
+              }
+              const job = jobs.find((j) => j.id === d.jobId);
+              if (job) { setHandoverDirectPhase(d.phase); setShowHandoverProtocol(job); }
+              else askConfirm({ title: "Zahodiť rozpracovaný protokol?", message: "Zákazka už nie je medzi vašimi prepravami (zmazaná alebo pridelená inému). Údaje z tohto zariadenia sa vymažú.", confirmLabel: "Zahodiť" }).then((ok) => ok && dropHpDraft(d.key));
+            }}
             allAssignments={assignments}
             onDiscardBlocked={async (table, item) => {
               // Kontrolu medzičasom zrušili — dodatočne sa nevykonáva, záznam z fronty zmizne až po potvrdení (k61 terén S3).
@@ -15341,6 +15436,7 @@ function DispatcherApp() {
                 ? reportDamage(machine, checkerTicketText({ ...checkerInspectionTarget, ...patch, ...(pair ? { phase: "vratenie" } : {}) }, pair ? handoverProtocols.find((h) => h.jobId === pair.ret.jobId) : isReturn ? handoverForJob : null), undefined, { silent: true, atDepo: true, job: pair ? pairJob : isReturn ? job || null : null })
                 : null;
               pairSave({ ...patch, ...erpPatch, resolved: true, skipped: false, skippedReason: null, ...(ticket ? { damageId: ticket.id } : {}) });
+              dropHpDraft(ciDraftKey(checkerInspectionTarget.id, effectiveUser?.id)); // uložená (aj do fronty bez signálu) — koncept už netreba
               setCheckerInspectionTarget(null);
               // Osobný odber: po kontrole hneď odovzdanie zákazníkovi (protokol).
               if (job?.selfPickup && !isReturn && !handoverForJob?.handoverDone && !checkerInspectionTarget.resolved) { // úprava hotovej kontroly protokol neotvára
@@ -17751,7 +17847,12 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
       (j) => (j.fromDepo || "").toLowerCase() === depoFilter.toLowerCase() || (j.returnDepo || "").toLowerCase() === depoFilter.toLowerCase()
     );
   }
-  const sorted = [...filtered].sort(byKeys("-startDate", "-createdAt"));
+  const ls = useListSort("zakazky");
+  const jobStav = (j) => { const st = effectiveStatus(j, today); return ["planned", "awaitingOut", "active", "overdue", "completed"].indexOf(st === "active" && !j.notRealized && !hpDoneByJob?.[j.id] ? "awaitingOut" : st); }; // poradie v toku zákazky
+  const sorted = applyListSort([...filtered].sort(byKeys("-startDate", "-createdAt")), ls.sort, {
+    stroj: (j) => machineById[j.machineId]?.code, zakaznik: (j) => j.customer, zaciatok: (j) => j.startDate, koniec: (j) => j.endDate,
+    sofer: (j) => (j.selfPickup ? "Vlastná doprava" : driverById[j.driverId]?.name), stav: jobStav, obchodnik: (j) => j.obchodnik,
+  });
   const bucketCount = (id) => jobs.filter((j) => statusBucket(j) === id && matchesSearchAndDepo(j)).length;
   return (
     <div>
@@ -17782,6 +17883,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
       )}
         </div>
         <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+          <SortSelect ls={ls} when="always" cols={[["zakaznik", "Zákazník"], ["stroj", "Stroj"], ["zaciatok", "Začiatok"], ["koniec", "Koniec"], ["obchodnik", "Obchodník"], ["sofer", "Šofér"], ["stav", "Stav"]]} />
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import CSV</button>}
           {can(user, "job_clear_all") && <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Vymazať všetky zákazky", danger: true, onClick: onClearAll }]} />}
         </div>
@@ -17797,7 +17899,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
         <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
           <table className="table-cards jobs-table tc900 jobs-compact">
             <thead>
-              <tr><th>Stroj</th><th>Zákazník · Kam</th><th>Obdobie</th><th>Šofér</th><th>Stav</th><th><span className="sr-only">Akcie</span></th></tr>
+              <tr><SortTh ls={ls} k="stroj">Stroj</SortTh><SortTh ls={ls} k="zakaznik">Zákazník · Kam</SortTh><th aria-sort={sortAria(ls, "zaciatok", "koniec")} style={{ whiteSpace: "nowrap" }}><SortBtn ls={ls} k="zaciatok">Obdobie</SortBtn> · <SortBtn ls={ls} k="koniec">koniec</SortBtn></th><SortTh ls={ls} k="sofer">Šofér</SortTh><SortTh ls={ls} k="stav">Stav</SortTh><th><span className="sr-only">Akcie</span></th></tr>
             </thead>
             <tbody>
               {sorted.slice(0, shown).map((j) => {
@@ -19297,6 +19399,8 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
   function jobCountFor(c) {
     return activeByFirma[c.firma] || 0;
   }
+  const ls = useListSort("zakaznici");
+  const sorted = applyListSort(visible, ls.sort, { firma: (c) => c.firma, ico: (c) => c.ico, odberatel: (c) => c.cisloOdberatela, kontakty: (c) => (c.contacts || []).length || null, zakazky: (c) => activeByFirma[c.firma] || null });
   function isBlacklisted(c) {
     return !!findBlacklistEntry(blacklist, c.firma, c.ico, c.id);
   }
@@ -19305,6 +19409,7 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
     <div>
       <div className="tbar">
         <SearchInput placeholder="Hľadať firmu…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <SortSelect ls={ls} cols={[["firma", "Firma"], ["ico", "IČO"], ["odberatel", "Číslo odberateľa"], ["kontakty", "Kontaktné osoby"], ["zakazky", "Aktívne zákazky"]]} />
         {canAdd && (
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
             {isAdminUser(user) && <button className="btn btn-outline" onClick={onImport}>Import CSV</button>}
@@ -19316,11 +19421,11 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
         <table className="table-cards jobs-table">
           <thead>
             <tr>
-              <th>Firma</th>
-              <th>IČO</th>
-              <th>Číslo odberateľa</th>
-              <th>Kontaktné osoby</th>
-              <th>Aktívne zákazky</th>
+              <SortTh ls={ls} k="firma">Firma</SortTh>
+              <SortTh ls={ls} k="ico">IČO</SortTh>
+              <SortTh ls={ls} k="odberatel">Číslo odberateľa</SortTh>
+              <SortTh ls={ls} k="kontakty">Kontaktné osoby</SortTh>
+              <SortTh ls={ls} k="zakazky">Aktívne zákazky</SortTh>
               <th></th>
             </tr>
           </thead>
@@ -19328,7 +19433,7 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
             {visible.length === 0 && (
               <tr><td className="td-plain" colSpan={6} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>{q ? "Žiadny zákazník nezodpovedá hľadaniu." : "Zatiaľ žiadni zákazníci."}</td></tr>
             )}
-            {visible.slice(0, shown).map((c) => (
+            {sorted.slice(0, shown).map((c) => (
               <tr key={c.id} id={"cust-row-" + c.id} {...rowOpenKeys(() => onOpenCard(c))} onClick={() => onOpenCard(c)} style={{ cursor: "pointer" }}>
                 <td className="td-plain" style={{ fontWeight: 600 }}>{c.firma}</td>
                 <td className="tnum" data-label="IČO">{c.ico || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
@@ -21870,7 +21975,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   const [baseRev] = useState(existing?._rev || 0);
   const [baseSnap] = useState(existing || null); // stav pri otvorení — konflikt len na poliach, ktoré ukladám
   // ID nového protokolu vopred — offline fotka sa naň vie naviazať ešte pred uložením.
-  const [newProtocolId] = useState(() => existing?.id || uid());
+  const [newProtocolId, setNewProtocolId] = useState(() => existing?.id || uid());
   // Šofér prišiel rovno zo záložky Prepravy (vyvoz/zvoz) — preskočíme náhľad a
   // otvoríme priamo formulár pre danú fázu. Ale len ak tá fáza ešte nie je
   // hotová — inak (napr. znova klikne na už odoslaný vývoz) len náhľad, nie
@@ -22063,6 +22168,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     // Potvrdenie len po úspešnom uložení — pri konflikte ostane formulár aj s podpismi.
     savingRef.current = true;
     if (onSave(patch, baseRev, isFirstHandover || isFirstReturn, baseSnap) === false) { savingRef.current = false; return; }
+    if (draftKey) dropHpDraft(draftKey); // uložený (aj do fronty bez signálu) — koncept už netreba
     if (isFirstHandover || isFirstReturn) setScreen(isFirstReturn ? "sentReturn" : "sent");
   }
   // Tá istá fáza uložená z iného zariadenia (realtime) počas vypĺňania — okno sa zavrie, neponúka „opravu“ (k38 terén D4).
@@ -22073,6 +22179,69 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
     showNotice("Protokol už bol uložený z iného zariadenia.");
     onClose();
   }, [existing?.handoverDone, existing?.returnDone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Koncept v zariadení — len nové vyplnenie fázy (oprava uloženej fázy nie). Ukladá sa až po ponuke „Pokračovať / Začať odznova“.
+  const draftKey = user?.id && job?.id ? hpDraftKey(job.id, phase, user.id) : null;
+  const draftable = !!draftKey && screen === "edit" && !isCorrection && !cannotCreateNew;
+  const [draftAsk, setDraftAsk] = useState(null); // { d, why: null | "done" (fázu uložil niekto iný) | "machine" (iný stroj) }
+  const [draftChecked, setDraftChecked] = useState(null);
+  const [draftTick, setDraftTick] = useState(0);
+  useEffect(() => {
+    if (!user?.id || !job?.id) return;
+    let gone = false;
+    myHpDrafts(user.id, "hp").then((list) => {
+      if (gone) return;
+      const mine = list.filter((d) => d.jobId === job.id);
+      const done = mine.find((d) => existing?.[d.phase === "vratenie" ? "returnDone" : "handoverDone"]);
+      const cur = draftable && mine.find((d) => d.key === draftKey);
+      if (done) setDraftAsk({ d: done, why: "done" });
+      else if (cur) setDraftAsk({ d: cur, why: cur.machineId && cur.machineId !== machine?.id ? "machine" : null });
+      else setDraftChecked(draftKey);
+    });
+    return () => { gone = true; };
+  }, [draftKey, draftable, draftTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftTimer = useRef(null);
+  const draftFlush = useRef(null);
+  const draftFirst = useRef(true);
+  useEffect(() => {
+    if (draftFirst.current) { draftFirst.current = false; return; } // otvorenie nie je zmena
+    if (!draftable || draftChecked !== draftKey || savingRef.current) return;
+    const d = { key: draftKey, jobId: job.id, phase, userId: user.id, machineId: machine?.id || null, machineCode: machine?.code || "", customer: job?.customer || "", protocolId: newProtocolId,
+      data: { checklist, shotItems, customerSig, driverSig, customerName, driverName, customerAbsent, noPhotos, protocolNumber } };
+    draftFlush.current = () => { clearTimeout(draftTimer.current); draftTimer.current = null; if (!savingRef.current) putHpDraft({ ...d, savedAt: new Date().toISOString() }); };
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(draftFlush.current, 500);
+  }, [checklist, shotItems, customerSig, driverSig, customerName, driverName, customerAbsent, noPhotos, protocolNumber, machine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Platforma ide do pozadia (systém ju môže zabiť) — čakajúci koncept uložiť hneď.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden" && draftTimer.current) draftFlush.current?.(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => { document.removeEventListener("visibilitychange", onHide); clearTimeout(draftTimer.current); };
+  }, []);
+  function restoreDraft(d) {
+    const x = d.data || {};
+    if (x.checklist) setChecklist(x.checklist);
+    setShotItems(x.shotItems || []);
+    setCustomerSig(x.customerSig || null);
+    setDriverSig(x.driverSig || null);
+    if (typeof x.customerName === "string") setCustomerName(x.customerName);
+    if (typeof x.driverName === "string") setDriverName(x.driverName);
+    setCustomerAbsent(!!x.customerAbsent);
+    setNoPhotos(x.noPhotos || "");
+    setProtocolNumber(x.protocolNumber || "");
+    if (!existing && d.protocolId) setNewProtocolId(d.protocolId); // fotky bez signálu sú naviazané na toto id
+    setDraftAsk(null);
+    setDraftChecked(draftKey);
+  }
+  async function discardDraft(d, restart) {
+    if (!(await askConfirm(restart
+      ? { title: "Začať odznova?", message: "Rozpracované zaškrtnutia, fotky a podpisy z tohto zariadenia sa vymažú.", confirmLabel: "Začať odznova" }
+      : { title: "Zahodiť rozpracovaný protokol?", message: "Údaje z tohto zariadenia sa vymažú.", confirmLabel: "Zahodiť" }))) return;
+    await dropHpDraft(d.key);
+    setDraftAsk(null);
+    if (d.key === draftKey) setDraftChecked(draftKey);
+    else setDraftTick((n) => n + 1); // ešte koncept tejto fázy
+  }
 
   // Zákazka z importu: prevzatie nie je zdokumentované — oprava by pýtala checklist a podpisy prevzatia; vrátenie sa opraviť dá.
   const canEditProtocol = !!existing && can(user, "handover_protocol_edit_locked") && !(existing.migratedWithoutHandover && !existing.returnDone);
@@ -22153,6 +22322,28 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
   // Novy protokol moze realne zalozit len sofer/checker pridelený na vyvoz,
   // a to len v den vyvozu — aj keby sa sem niekto dostal inou cestou nez cez
   // normalne (uz spravne strazene) tlacidla.
+  if (draftAsk) {
+    const { d, why } = draftAsk;
+    const what = d.phase === "vratenie" ? "vrátení" : "prevzatí";
+    const when = draftSavedText(d.savedAt);
+    const bs = { width: "100%", whiteSpace: "normal", minHeight: 52, marginTop: 10 };
+    return (
+      <Modal key="draft" headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
+        <div className={`fnote ${why ? "fnote-y" : "fnote-g"}`} role="status" style={{ marginBottom: 6 }}>
+          {why === "done" ? `Protokol o ${what} medzitým uložil niekto iný (kancelária, papierový protokol alebo iný telefón). Rozpracovaný protokol z tohto zariadenia (uložené ${when}) ho neprepíše — môžete ho len zahodiť. Ak v ňom je niečo dôležité (napr. poškodenie), zavolajte dispečing.`
+            : why === "machine" ? `Na zákazke je medzitým iný stroj (${machine?.code || "—"}). Rozpracovaný protokol z tohto zariadenia (uložené ${when}) bol pre stroj ${d.machineCode || "—"} — na iný stroj sa nepoužije.`
+            : `Máte rozpracovaný protokol o ${what} — ${d.customer || job?.customer || "—"}, uložený v tomto zariadení ${when}.`}
+        </div>
+        {why ? (
+          <button type="button" className="btn btn-accent" style={bs} onClick={() => discardDraft(d, false)}>Zahodiť rozpracovaný protokol{why === "machine" ? " a začať odznova" : ""}</button>
+        ) : (<>
+          <button type="button" className="btn btn-accent" style={bs} onClick={() => restoreDraft(d)}>Pokračovať v rozpracovanom protokole (uložené {when})</button>
+          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--line-strong)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
+        </>)}
+      </Modal>
+    );
+  }
+
   if (cannotCreateNew) {
     return (
       <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose}>
@@ -22264,7 +22455,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   return (
     <>
-    <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} wide form>
+    <Modal headerExtra={issueBtn} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={() => { if (draftKey) dropHpDraft(draftKey); onClose(); }} wide form>
       {transportIssueBlock}
       {reassignedMidway && (
         <div ref={reassignedRef} role="alert" className="fnote fnote-y" style={{ marginBottom: 14 }}>
@@ -22693,12 +22884,98 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
     onSave(buildPatch());
   }
 
+  // Koncept v zariadení (ako protokol o odovzdaní, k68-a) — len nová, ešte neuložená kontrola. Ukladá sa až po ponuke „Pokračovať / Začať odznova“.
+  const draftKey = user?.id && assignment.id ? ciDraftKey(assignment.id, user.id) : null;
+  const draftable = !!draftKey && showForm && !assignment.resolved;
+  const [draftAsk, setDraftAsk] = useState(null); // { d, why: null | "closed" (zrušená/nevykonaná) | "done" | "reassigned" | "machine" }
+  const [draftChecked, setDraftChecked] = useState(null);
+  useEffect(() => {
+    if (!draftKey) return;
+    let gone = false;
+    myHpDrafts(user.id, "ci").then((list) => {
+      if (gone) return;
+      const d = list.find((x) => x.key === draftKey);
+      const why = !d ? null : cancelled || assignment.skipped ? "closed" : assignment.resolved ? "done" : !canEdit ? "reassigned" : d.machineId && machine?.id && d.machineId !== machine.id ? "machine" : null;
+      if (d && (why || draftable)) setDraftAsk({ d, why });
+      else setDraftChecked(draftKey);
+    });
+    return () => { gone = true; };
+  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftTimer = useRef(null);
+  const draftFlush = useRef(null);
+  const draftFirst = useRef(true);
+  useEffect(() => {
+    if (draftFirst.current) { draftFirst.current = false; return; } // otvorenie nie je zmena
+    if (!draftable || draftChecked !== draftKey) return;
+    const d = { key: draftKey, assignmentId: assignment.id, jobId: assignment.jobId || null, phase, userId: user.id, machineId: machine?.id || null, machineCode: machine?.code || "", customer: job?.customer || "",
+      data: { checklist, shotItems, clean, fuelType, fuelL, batteryPct, probOpen: [...probOpen], cls, clsNote, workHours, usedParts, mth, noMth, mthConfirmed } };
+    draftFlush.current = () => { clearTimeout(draftTimer.current); draftTimer.current = null; putHpDraft({ ...d, savedAt: new Date().toISOString() }); };
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(draftFlush.current, 500);
+  }, [checklist, shotItems, clean, fuelType, fuelL, batteryPct, probOpen, cls, clsNote, workHours, usedParts, mth, noMth, mthConfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Platforma ide do pozadia (systém ju môže zabiť) — čakajúci koncept uložiť hneď.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden" && draftTimer.current) draftFlush.current?.(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => { document.removeEventListener("visibilitychange", onHide); clearTimeout(draftTimer.current); };
+  }, []);
+  function restoreDraft(d) {
+    const x = d.data || {};
+    if (Array.isArray(x.checklist)) setChecklist(x.checklist);
+    setShotItems(x.shotItems || []);
+    setClean(x.clean || {});
+    setFuelType(x.fuelType || null);
+    setFuelL(x.fuelL || "");
+    setBatteryPct(x.batteryPct || "");
+    setProbOpen(new Set(x.probOpen || []));
+    setCls(x.cls || null);
+    setClsNote(x.clsNote || "");
+    setWorkHours(x.workHours || "");
+    setUsedParts(x.usedParts || []);
+    setMth(x.mth || "");
+    setNoMth(!!x.noMth);
+    setMthConfirmed(!!x.mthConfirmed);
+    setDraftAsk(null);
+    setDraftChecked(draftKey);
+  }
+  async function discardDraft(d, restart) {
+    if (!(await askConfirm(restart
+      ? { title: "Začať odznova?", message: "Rozpracované body kontroly, zábery, MTH a hodiny z tohto zariadenia sa vymažú.", confirmLabel: "Začať odznova" }
+      : { title: "Zahodiť rozpracovanú kontrolu?", message: "Údaje z tohto zariadenia sa vymažú.", confirmLabel: "Zahodiť" }))) return;
+    await dropHpDraft(d.key);
+    setDraftAsk(null);
+    setDraftChecked(draftKey);
+  }
+  if (draftAsk) {
+    const { d, why } = draftAsk;
+    const when = draftSavedText(d.savedAt);
+    const bs = { width: "100%", whiteSpace: "normal", minHeight: 52, marginTop: 10 };
+    const lost = `Rozpracovaná kontrola z tohto zariadenia (uložené ${when}) sa už neuloží — môžete ju len zahodiť. Ak v nej je niečo dôležité (MTH, poškodenie), zavolajte servis.`;
+    return (
+      <Modal key="draft" eyebrow={phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"} title={machine?.code || "Stroj"} onClose={onClose}>
+        <div className={`fnote ${why ? "fnote-y" : "fnote-g"}`} role="status" style={{ marginBottom: 6 }}>
+          {why === "closed" ? `${inspectionClosedText(assignment)}. ${lost}`
+            : why === "done" ? `Kontrolu medzitým uložil${assignment.checkerBy ? ` ${assignment.checkerBy}` : " niekto iný"} (iný telefón alebo kancelária). Rozpracovaná kontrola z tohto zariadenia (uložené ${when}) ju neprepíše — môžete ju len zahodiť. Ak v nej je niečo dôležité (MTH, poškodenie), zavolajte servis.`
+            : why === "reassigned" ? `Kontrolu medzitým preradili inému technikovi. ${lost}`
+            : why === "machine" ? `Na kontrole je medzitým iný stroj (${machine?.code || "—"}). Rozpracovaná kontrola z tohto zariadenia (uložené ${when}) bola pre stroj ${d.machineCode || "—"} — na iný stroj sa nepoužije.`
+            : `Máte rozpracovanú kontrolu stroja ${d.machineCode || machine?.code || "—"} — ${d.customer || job?.customer || "—"}, uloženú v tomto zariadení ${when}.`}
+        </div>
+        {why ? (
+          <button type="button" className="btn btn-accent" style={bs} onClick={() => discardDraft(d, false)}>Zahodiť rozpracovanú kontrolu{why === "machine" ? " a začať odznova" : ""}</button>
+        ) : (<>
+          <button type="button" className="btn btn-accent" style={bs} onClick={() => restoreDraft(d)}>Pokračovať v rozpracovanej kontrole (uložené {when})</button>
+          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--line-strong)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
+        </>)}
+      </Modal>
+    );
+  }
+
   return (
     <>
     <Modal
       eyebrow={selfTransport ? (phase === "vratenie" ? "Osobné vrátenie v depe" : "Osobný odber v depe") : phase === "vratenie" ? "Kontrola stroja po vrátení" : "Kontrola stroja pred vývozom"}
       title={machine?.code || "Stroj"}
-      onClose={onClose}
+      onClose={() => { if (draftable) dropHpDraft(draftKey); onClose(); }}
       wide
       form={showForm}
     >
@@ -28432,6 +28709,12 @@ function reopenableTicketIds(tickets) {
 // Meranie VTZ EZ sa ponúka len pri revízii s EZ časťou (inak je tu rýchla akcia).
 const isEzRevision = (d) => d?.type === "revizia" && (d.revizeType === "EZ" || d.revizeType === "ZZ+EZ");
 
+// Zoradenie zoznamov tiketov (karty bez hlavičiek — výber „Zoradiť podľa“, 1.0.873).
+const ticketSortCols = (technicianById) => ({
+  datum: (d) => d.dateReported, stroj: (d) => d.code || d.serialNumber, stav: (d) => (d.resolved ? 2 : damageHasTech(d) ? 1 : 0),
+  technik: (d) => technicianById[(d.technicianIds || [])[0] || d.technicianId]?.name, termin: (d) => d.assignedDate, zakaznik: (d) => d.customer,
+});
+const TICKET_SORT = [["datum", "Dátum nahlásenia"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]];
 function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDelete, onOpenDetail, onResolve, onUndoPartial, onComplete, onProtocol, onAttachMachine, onMarkInvoiced, onUnmarkInvoiced, variant = "poskodenie", locationLabel, highlighted, selectable, selected, onToggleSelect }) {
   const cardRef = useRef(null);
   useEffect(() => {
@@ -28700,8 +28983,9 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
       );
     });
   }
-  const sorted = [...statusFiltered].sort(byKeys("-dateReported", "-createdAt"));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+  const ls = useListSort("poskodenia");
+  const sorted = applyListSort([...statusFiltered].sort(byKeys("-dateReported", "-createdAt")), ls.sort, ticketSortCols(technicianById));
 
   function locationLabel(d) {
     const m = machineById[d.machineId];
@@ -28730,6 +29014,7 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
       <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SearchInput placeholder="Hľadať stroj, zákazku, popis…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <div className="depo-seg-wrap"><DepoSeg value={depoFilter} onChange={setDepoFilter} options={depoOptions} /></div>
+        <SortSelect ls={ls} cols={TICKET_SORT} when="always" />
         <div style={{ flex: 1 }} />
         {onOpenSummary && (
           <button className="btn btn-ghost" onClick={onOpenSummary}>
@@ -28903,8 +29188,9 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
       );
     });
   }
-  const sorted = [...statusFiltered].sort(byKeys("-dateReported", "-createdAt"));
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+  const ls = useListSort("externe_zakazky");
+  const sorted = applyListSort([...statusFiltered].sort(byKeys("-dateReported", "-createdAt")), ls.sort, ticketSortCols(technicianById));
 
   function locationLabel(d) {
     const parts = [];
@@ -28940,6 +29226,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
       <div className="tbar">
         <SearchInput placeholder="Hľadať stroj, zákazníka, popis…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
         <div className="depo-seg-wrap" title="Filter podľa depa, ktoré má zákazku na starosti (odkiaľ pôjde technik)."><DepoSeg value={depoFilter} onChange={setDepoFilter} options={depoOptions} /></div>
+        <SortSelect ls={ls} cols={[["datum", "Dátum nahlásenia"], ["zakaznik", "Zákazník"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]]} when="always" />
         <div style={{ flex: 1 }} />
         {onOpenSummary && (
           <button className="btn btn-outline" onClick={onOpenSummary}>
@@ -29755,11 +30042,13 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   }
   // Triedenie podľa najbližšieho dátumu (ZZ alebo EZ) — EZ tikety majú revizia prázdne.
   const revDate = (d) => [d.revizia, d.reviziaEZ].filter(Boolean).sort()[0] || "";
-  const overdue = filtered.filter((d) => d.overdue).sort(byKeys((d) => revDate(d) || "0", "createdAt")); // bez dátumu = po termíne, navrchu
-  const soon = filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], revDate, "createdAt")); // vyriešené pod otvorenými, najnovšie navrchu
+  const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+  const ls = useListSort("revizie");
+  const sortBy = { ...ticketSortCols(technicianById), revizia: revDate };
+  const overdue = applyListSort(filtered.filter((d) => d.overdue).sort(byKeys((d) => revDate(d) || "0", "createdAt")), ls.sort, sortBy); // bez dátumu = po termíne, navrchu
+  const soon = applyListSort(filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], revDate, "createdAt")), ls.sort, sortBy); // vyriešené pod otvorenými, najnovšie navrchu
   const wide = !overdue.length !== !soon.length; // prázdna skupina len ako riadok nad zoznamom, druhá na celú šírku (k36)
   const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
-  const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
     <div>
@@ -29781,6 +30070,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
           ))}
         </div>
         <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        <SortSelect ls={ls} cols={[["revizia", "Termín revízie"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]]} when="always" />
         <div style={{ flex: 1 }} />
         <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
           onDedupe && { label: "Upratať duplicitné tikety", onClick: onDedupe },
@@ -29919,10 +30209,11 @@ function erpProtocolDiff(p) {
 function ShowMoreRows({ total, limit, setLimit }) {
   return total > limit ? <button type="button" className="btn btn-ghost" style={{ width: "100%", margin: "6px 0" }} onClick={() => setLimit((n) => n + 100)}>Zobraziť ďalšie ({total - limit})</button> : null;
 }
-function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts, onMarkAll, jobs }) {
+function ErpChecklistTable({ items, machineById, technicianById, showHistory, onMark, onRevert, withParts, onMarkAll, jobs, ls }) {
   const [limit, setLimit] = useState(100);
   const visible = items.filter((a) => (showHistory ? a.erpProcessed : !a.erpProcessed)).sort(showHistory ? byKeys("-erpProcessedAt", "-createdAt") : byKeys((a) => a.checkerDate || a.date, "createdAt"));
   const totalHours = visible.reduce((sum, a) => sum + erpHours(a), 0);
+  const shown = applyListSort(visible, ls.sort, { stroj: (a) => machineById[a.machineId]?.code, vykonal: (a) => erpTechName(erpTechKey(a, technicianById), technicianById), hodiny: erpHours, objednavka: (a) => a.erpOrderNumber });
   if (!visible.length) {
     return (
       <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
@@ -29943,16 +30234,16 @@ function ErpChecklistTable({ items, machineById, technicianById, showHistory, on
       <table className="table-cards jobs-table">
         <thead>
           <tr>
-            <th>Stroj</th>
-            <th>Vykonal</th>
-            <th>Hodiny</th>
+            <SortTh ls={ls} k="stroj">Stroj</SortTh>
+            <SortTh ls={ls} k="vykonal">Vykonal</SortTh>
+            <SortTh ls={ls} k="hodiny">Hodiny</SortTh>
             {withParts && <th>Diely</th>}
-            {showHistory && <th>Objednávka/výkaz</th>}
+            {showHistory && <SortTh ls={ls} k="objednavka">Objednávka/výkaz</SortTh>}
             <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
-          {(showHistory ? visible.slice(0, limit) : visible).map((a) => {
+          {(showHistory ? shown.slice(0, limit) : shown).map((a) => {
             const m = machineById[a.machineId];
             const who = erpTechName(erpTechKey(a, technicianById), technicianById);
             const diff = erpChecklistDiff(a);
@@ -30006,7 +30297,7 @@ function erpTechKey(a, technicianById) {
   return (by && by.id) || (a.checkerBy ? "by:" + a.checkerBy : a.technicianId || "—");
 }
 const erpTechName = (key, technicianById) => technicianById[key]?.name || (String(key).startsWith("by:") ? key.slice(3) : "— neznámy —");
-function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
+function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect, ls }) {
   const byTech = {};
   items.forEach((a) => {
     const key = erpTechKey(a, technicianById);
@@ -30015,7 +30306,7 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
     if (a.checkerBy && technicianById[key] && a.checkerBy !== technicianById[key].name) byTech[key].old.add(a.checkerBy);
     byTech[key].hours += erpHours(a);
   });
-  const rows = Object.entries(byTech).sort((a, b) => _skColl.compare(erpTechName(a[0], technicianById), erpTechName(b[0], technicianById)));
+  const rows = applyListSort(Object.entries(byTech).sort((a, b) => _skColl.compare(erpTechName(a[0], technicianById), erpTechName(b[0], technicianById))), ls.sort, { vykonal: (r) => erpTechName(r[0], technicianById), pocet: (r) => r[1].count, hodiny: (r) => r[1].hours });
   if (!rows.length) {
     return (
       <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
@@ -30027,7 +30318,7 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
     <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
       <table className="table-cards jobs-table">
         <thead>
-          <tr><th>Vykonal</th><th>{showHistory ? "Spracované kontroly" : "Nespracované kontroly"}</th><th>Hodiny spolu</th><th><span className="sr-only">Akcie</span></th></tr>
+          <tr><SortTh ls={ls} k="vykonal">Vykonal</SortTh><SortTh ls={ls} k="pocet">{showHistory ? "Spracované kontroly" : "Nespracované kontroly"}</SortTh><SortTh ls={ls} k="hodiny">Hodiny spolu</SortTh><th><span className="sr-only">Akcie</span></th></tr>
         </thead>
         <tbody>
           {rows.map(([techId, s]) => (
@@ -30046,10 +30337,13 @@ function ErpTechnicianTiles({ items, technicianById, showHistory, onSelect }) {
   );
 }
 
-function ErpProtocolTable({ items, showHistory, onMark, onRevert, user, damages }) {
+const _num = (v) => (v === "" || v == null || !Number.isFinite(Number(String(v).replace(",", "."))) ? null : Number(String(v).replace(",", ".")));
+const ERP_PROTOCOL_SORT = { stroj: (p) => p.machineSerial, zakaznik: (p) => p.clientName, miesto: (p) => p.location, technik: (p) => p.technicianName, hodiny: (p) => _num(p.totalHours), km: (p) => _num(p.travelKm), cesta: (p) => _num(p.travelHours), objednavka: (p) => p.erpOrderNumber };
+function ErpProtocolTable({ items, showHistory, onMark, onRevert, user, damages, ls }) {
   const [limit, setLimit] = useState(100);
   const visible = items.filter((p) => (showHistory ? p.erpProcessed : !p.erpProcessed)).sort(showHistory ? byKeys("-erpProcessedAt", "-createdAt") : byKeys("createdAt"));
   const totalHours = visible.reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
+  const shown = applyListSort(visible, ls.sort, ERP_PROTOCOL_SORT);
   if (!visible.length) {
     return (
       <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
@@ -30063,21 +30357,21 @@ function ErpProtocolTable({ items, showHistory, onMark, onRevert, user, damages 
       <table className="table-cards jobs-table">
         <thead>
           <tr>
-            <th>Stroj</th>
-            <th>Zákazník</th>
-            <th>Miesto</th>
-            <th>Technik</th>
+            <SortTh ls={ls} k="stroj">Stroj</SortTh>
+            <SortTh ls={ls} k="zakaznik">Zákazník</SortTh>
+            <SortTh ls={ls} k="miesto">Miesto</SortTh>
+            <SortTh ls={ls} k="technik">Technik</SortTh>
             <th>Práca</th>
-            <th>Hodiny</th>
+            <SortTh ls={ls} k="hodiny">Hodiny</SortTh>
             <th>Materiál</th>
-            <th>Km</th>
-            <th style={{ whiteSpace: "normal" }}>Čas na ceste</th>
-            {showHistory && <th>Objednávka/výkaz</th>}
+            <SortTh ls={ls} k="km">Km</SortTh>
+            <SortTh ls={ls} k="cesta" style={{ whiteSpace: "normal" }}>Čas na ceste</SortTh>
+            {showHistory && <SortTh ls={ls} k="objednavka">Objednávka/výkaz</SortTh>}
             <th><span className="sr-only">Akcie</span></th>
           </tr>
         </thead>
         <tbody>
-          {(showHistory ? visible.slice(0, limit) : visible).map((p) => {
+          {(showHistory ? shown.slice(0, limit) : shown).map((p) => {
             const diff = erpProtocolDiff(p);
             const invLabel = protocolInvoicedLabel(p, (damages || []).find((d) => d.id === p.damageId));
             const techNames = (p.technicianName || "").split(/,\s*/).map((n) => n.trim()).filter(Boolean); // spoločný protokol: hodiny sú na 1 technika
@@ -30171,6 +30465,12 @@ function ErpChecklistsView({ assignments, jobs, damages, protocolLogs, machineBy
   const requestMarkChecklist = (id) => setMarkPrompt({ ids: [].concat(id), kind: "checklist" });
   const requestMarkProtocol = (id) => setMarkPrompt({ ids: [].concat(id), kind: "protocol" });
 
+  const tiles = tab === "hromadne" && !selectedTechId;
+  const ls = useListSort((tiles ? "erp_technici" : tab === "protokoly" ? "erp_protokoly" : tab === "solo" ? "erp_kontroly_diely" : "erp_kontroly") + (showHistory ? "_hist" : ""));
+  const hist = showHistory ? [["objednavka", "Objednávka/výkaz"]] : [];
+  const sortCols = tiles ? [["vykonal", "Vykonal"], ["pocet", "Počet kontrol"], ["hodiny", "Hodiny spolu"]]
+    : tab === "protokoly" ? [["stroj", "Stroj"], ["zakaznik", "Zákazník"], ["miesto", "Miesto"], ["technik", "Technik"], ["hodiny", "Hodiny"], ["km", "Km"], ["cesta", "Čas na ceste"], ...hist]
+    : [["stroj", "Stroj"], ["vykonal", "Vykonal"], ["hodiny", "Hodiny"], ...hist];
   const tabs = [
     { id: "hromadne", label: "Kontroly (hromadné)" },
     { id: "solo", label: "Kontroly (s výmenou dielu)" },
@@ -30187,6 +30487,7 @@ function ErpChecklistsView({ assignments, jobs, damages, protocolLogs, machineBy
             </button>
           ))}
         </div>
+        <SortSelect ls={ls} cols={sortCols} />
         <div style={{ flex: 1 }} />
         <button className="btn btn-outline" onClick={() => setShowHistory((v) => !v)}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
@@ -30208,6 +30509,7 @@ function ErpChecklistsView({ assignments, jobs, damages, protocolLogs, machineBy
               onMark={requestMarkChecklist}
               onRevert={askRevert(onRevertChecklist)}
               onMarkAll={requestMarkChecklist}
+              ls={ls}
             />
           </div>
         ) : (
@@ -30216,13 +30518,14 @@ function ErpChecklistsView({ assignments, jobs, damages, protocolLogs, machineBy
             technicianById={technicianById}
             showHistory={showHistory}
             onSelect={setSelectedTechId}
+            ls={ls}
           />
         )
       )}
       {tab === "solo" && (
-        <ErpChecklistTable items={solo} jobs={jobs} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={requestMarkChecklist} onRevert={askRevert(onRevertChecklist)} withParts />
+        <ErpChecklistTable items={solo} jobs={jobs} machineById={machineById} technicianById={technicianById} showHistory={showHistory} onMark={requestMarkChecklist} onRevert={askRevert(onRevertChecklist)} withParts ls={ls} />
       )}
-      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={requestMarkProtocol} onRevert={askRevert(onRevertProtocol)} user={user} damages={damages} />}
+      {tab === "protokoly" && <ErpProtocolTable items={protocolLogs} showHistory={showHistory} onMark={requestMarkProtocol} onRevert={askRevert(onRevertProtocol)} user={user} damages={damages} ls={ls} />}
       {revertAsk && (
         <ConfirmActionModal message="Vrátiť medzi nespracované?" confirmLabel="Áno, vrátiť" onClose={() => setRevertAsk(null)} onConfirm={() => revertAsk.fn(revertAsk.id)} />
       )}
@@ -30512,12 +30815,20 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
       .sort(showHistory ? byKeys([(x) => x.h.erpProcessedAt, -1], [(x) => x.h.returnDate, -1], [(x) => x.h.createdAt, -1], [(x) => x.h.id, -1])
         : byKeys((x) => x.h.returnDate, (x) => x.h.createdAt, (x) => x.h.id));
   }, [returned, jobById, machineById, showHistory, search]);
+  const ls = useListSort(showHistory ? "erp_pozicovna_hist" : "erp_pozicovna");
+  const sortCols = [["stroj", "Stroj"], ["zakaznik", "Zákazník"], ["zmluva", "Č. zmluvy"], ["obdobie", "Dátum vrátenia"], ["mth", "Nárast MTH"], ...(showHistory ? [["faktura", "Faktúra"], ["spracovane", "Dátum spracovania"]] : [])];
+  const shownRows = useMemo(() => applyListSort(rows, ls.sort, {
+    stroj: (x) => x.machine?.code, zakaznik: (x) => x.job?.customer, zmluva: (x) => x.job?.cisloZmluvy, obdobie: (x) => String(x.h.returnDate || "").slice(0, 10),
+    mth: (x) => { const [a, b] = jobMthPair(assignments, x.h.jobId, x.h); return a != null && b != null ? b - a : null; },
+    faktura: (x) => x.h.erpOrderNumber, spracovane: (x) => x.h.erpProcessedAt,
+  }), [rows, ls.sort, assignments]);
 
   return (
     <div>
       <h1 className="page-h1" style={{ marginBottom: 14 }}>ERP podklady</h1>
       <div className="tbar">
         <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 340 }} />
+        <SortSelect ls={ls} cols={sortCols} when="1280" />
         <div style={{ flex: 1 }} />
         <button className="btn btn-outline" onClick={() => setShowHistory((v) => !v)}>
           {showHistory ? "← Späť na nespracované" : "História spracovaných"}
@@ -30537,18 +30848,18 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
         <table className="table-cards jobs-table tc900 tc1280">
           <thead>
             <tr>
-              <th>Stroj</th>
-              <th>Zákazník</th>
-              <th style={{ width: 1, whiteSpace: "nowrap" }}>Č. zmluvy</th>
-              <th>Obdobie</th>
-              <th>Motohodiny</th>
+              <SortTh ls={ls} k="stroj">Stroj</SortTh>
+              <SortTh ls={ls} k="zakaznik">Zákazník</SortTh>
+              <SortTh ls={ls} k="zmluva" style={{ width: 1, whiteSpace: "nowrap" }}>Č. zmluvy</SortTh>
+              <SortTh ls={ls} k="obdobie">Obdobie</SortTh>
+              <SortTh ls={ls} k="mth">Motohodiny, palivo</SortTh>
               <th>Upozornenia</th>
-              {showHistory && <th>Faktúra</th>}
+              {showHistory && <th aria-sort={sortAria(ls, "faktura", "spracovane")} style={{ whiteSpace: "nowrap" }}><SortBtn ls={ls} k="faktura">Faktúra</SortBtn> · <SortBtn ls={ls} k="spracovane">spracované</SortBtn></th>}
               <th><span className="sr-only">Akcie</span></th>
             </tr>
           </thead>
           <tbody>
-            {(showHistory ? rows.slice(0, limit) : rows).map(({ h, job, machine }) => (
+            {(showHistory ? shownRows.slice(0, limit) : shownRows).map(({ h, job, machine }) => (
               <tr key={h.id}>
                 <td className="td-plain">
                   <strong className="tnum">{machine?.code || "—"}</strong>
@@ -30582,7 +30893,7 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
                   const flags = [late > 0 && ["spill-wait", `Vrátené po termíne +${plural(late, "deň", "dni", "dní")}`], dispute && ["spill-problem", "Zákazník nesúhlasí s protokolom"], disputeDone && ["spill-done", "Nesúhlas vybavený"], awaiting && ["spill-wait", "Čaká na potvrdenie zákazníka"], dmgRental && ["spill-problem", "Poškodenie počas prenájmu"], dmg && ["spill-problem", "Poškodenie po vrátení"]].filter(Boolean);
                   return <>
                     <td data-label="Obdobie" className="tnum">{nbDates(`${isRealISODate(out) ? fmtDate(out) : "—"} – ${back ? fmtDate(back) : "—"}`)}{days != null && <div className="cell-sub">{plural(days, "deň", "dni", "dní")}{nbDates(job?.startDate && job?.endDate && (job.startDate !== out || job.endDate !== back) ? ` · zmluvne ${fmtDate(job.startDate)} – ${fmtDate(job.endDate)}` : "")}</div>}</td>
-                    <td data-label="Motohodiny" className="tnum" style={{ whiteSpace: "nowrap" }}>{a != null || b != null ? `${a != null ? fmtMth(a) : "—"} → ${b != null ? fmtMth(b) : "—"}` : "—"}{a != null && b != null && <div className="cell-sub">+{fmtMth(b - a)} MTH</div>}</td>
+                    <td data-label="Motohodiny" className="tnum" style={{ whiteSpace: "nowrap" }}>{a != null || b != null ? `${a != null ? fmtMth(a) : "—"} → ${b != null ? fmtMth(b) : "—"}` : "—"}{a != null && b != null && <div className="cell-sub">+{fmtMth(b - a)} MTH</div>}{jobFuelLines(assignments, h.jobId).map((t) => <div key={t} className="cell-sub">{t}</div>)}</td>
                     <td data-label="Upozornenia">{flags.length ? <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{flags.map(([c, t]) => <span key={t} className={`spill ${c}`} style={{ whiteSpace: "normal", borderRadius: 8 }}>{t}</span>)}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
                   </>;
                 })()}
@@ -30706,11 +31017,13 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
       );
     });
   }
-  const overdue = filtered.filter((d) => d.overdue).sort(byKeys((d) => d.uradnaSkuskaDate || "0", "createdAt"));
-  const thisYear = filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], "uradnaSkuskaDate", "createdAt"));
+  const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
+  const ls = useListSort("uradne_skusky");
+  const sortBy = { ...ticketSortCols(technicianById), skuska: (d) => d.uradnaSkuskaDate };
+  const overdue = applyListSort(filtered.filter((d) => d.overdue).sort(byKeys((d) => d.uradnaSkuskaDate || "0", "createdAt")), ls.sort, sortBy);
+  const thisYear = applyListSort(filtered.filter((d) => !d.overdue).sort(byKeys((d) => (d.resolved ? 1 : 0), [(d) => (d.resolved ? d.vykonanaDatum : ""), -1], "uradnaSkuskaDate", "createdAt")), ls.sort, sortBy);
   const wide = !overdue.length !== !thisYear.length; // ako v Revíziách (k36)
   const picked = filtered.filter((d) => selectedIds.has(d.id) && !d.resolved);
-  const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
 
   return (
     <div>
@@ -30732,6 +31045,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
           ))}
         </div>
         <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
+        <SortSelect ls={ls} cols={[["skuska", "Termín skúšky"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]]} when="always" />
         <div style={{ flex: 1 }} />
         <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
           can(user, "uradnaskuska_clear_all") && { label: "Vymazať všetky úradné skúšky", danger: true, onClick: onClearAll },
@@ -33065,6 +33379,13 @@ const jobMthPair = (assignments, jobId, h) => {
   const chk = (ph) => { const x = (assignments || []).find((a) => isJobInspection(a, jobId, ph) && a.resolved && !a.skipped && !a.noMth); return x ? numMth(x.mth) : null; }; // aj spoločná kontrola za obe zákazky (A3)
   return [numMth(h?.handoverMth) ?? chk("vyvoz"), numMth(h?.returnMth) ?? chk("vratenie")];
 };
+// Palivo / batéria prenájmu do ERP podkladov: kontrola checkera pri vývoze → po vrátení (Rado 17. 11.).
+const jobFuelLines = (assignments, jobId) => {
+  const chk = (ph) => (assignments || []).find((a) => isJobInspection(a, jobId, ph) && a.resolved && !a.skipped);
+  const f0 = fuelValues(chk("vyvoz")), f1 = fuelValues(chk("vratenie"));
+  return [["palivo", "Palivo", "L"], ["bateria", "Batéria", "%"], ["legacy", "Palivo / batéria", "%"]].filter(([k]) => f0[k] != null || f1[k] != null)
+    .map(([k, l, u]) => `${l} ${f0[k] != null ? fmtMth(f0[k]) : "—"} → ${f1[k] != null ? fmtMth(f1[k]) : "—"} ${u}${f0[k] != null && f1[k] != null ? ` (${fmtDiff(Math.round((f1[k] - f0[k]) * 10) / 10, fmtMth)} ${u})` : ""}`);
+};
 const numMth = (v) => { const n = Number(String(v ?? "").replace(",", ".").trim()); return v === "" || v == null || !Number.isFinite(n) ? null : n; };
 const MONTHS_SK = ["jan", "feb", "mar", "apr", "máj", "jún", "júl", "aug", "sep", "okt", "nov", "dec"];
 
@@ -34716,7 +35037,7 @@ function TechWeekStrip({ assignments, weeklyDuty, myId, today, onGo, lateN = 0, 
     </section>
   );
 }
-function TodayView({ blockedItems, allAssignments, onDiscardBlocked, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
+function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDiscardBlocked, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
   onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo, onDriverReport }) {
   const role = user?.role;
   const isDriver = role === "sofer" || role === "externy_sofer";
@@ -34792,10 +35113,37 @@ function TodayView({ blockedItems, allAssignments, onDiscardBlocked, onRetryBloc
     </>
   );
 
+  // Rozpracovaný protokol v zariadení — nenápadná pripomienka, nech sa nezabudne (Rado 17. 11.).
+  const draftSec = (hpDrafts || []).map((d) => {
+    const job = (jobs || []).find((j) => j.id === d.jobId);
+    if (draftKind(d) === "ci") {
+      const a = (allAssignments || []).find((x) => x.id === d.assignmentId);
+      return (
+        <div key={d.key} className="panel hp-draft-row ci-draft-row" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
+          <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <strong>Rozpracovaná kontrola — {nbHyphen(machineById[a?.machineId]?.code || d.machineCode || "—")}</strong>
+            <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.phase === "vratenie" ? "po vrátení" : "pred vývozom", job?.customer || d.customer, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
+          </span>
+          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>{a ? "Pokračovať" : "Zahodiť"}</button>
+        </div>
+      );
+    }
+    return (
+      <div key={d.key} className="panel hp-draft-row" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
+        <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <strong>Rozpracovaný protokol — {job?.customer || d.customer || "—"}</strong>
+          <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.phase === "vratenie" ? "vrátenie" : "prevzatie", machineById[job?.machineId]?.code || d.machineCode, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
+        </span>
+        <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>{job ? "Pokračovať" : "Zahodiť"}</button>
+      </div>
+    );
+  });
+
   if (isDriver) {
     return (
       <div className="today-col" style={{ maxWidth: 720 }}>
         {header()}
+        {draftSec}
         {blockedSec}
         {whoPanel}
         {transportsPanel}
@@ -34884,6 +35232,7 @@ function TodayView({ blockedItems, allAssignments, onDiscardBlocked, onRetryBloc
   return (
     <div className="today-col" style={{ maxWidth: 820 }}>
       {header(<> · <b style={{ color: "var(--text)", fontWeight: 600 }}>{total === 0 ? `${hero ? "Na dnes nemáte nič, ďalšie je až zajtra" : "Na dnes nemáte nič otvorené"}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.` : `Máte ${todayWhat}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}</b></>)}
+      {draftSec}
       {blockedSec}
       {whoPanel}
       <TechWeekStrip assignments={assignments} weeklyDuty={weeklyDuty} myId={myId} today={today} onGo={onGo} lateN={late.length} isWork={isWork} />
@@ -36043,6 +36392,8 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
     // Fronty na kontrolu a fakturáciu od najstaršieho, ako ERP (k64 D6); spracované (história) od najnovšieho.
     .sort(tab === "waiting" ? byKeys("date", "createdAt") : tab === "done" ? byKeys([(p) => p.handedAt || p.createdAt, -1])
       : byKeys((p) => (tab === "billing" && p.checkedAt) || p.handedAt || p.createdAt, "createdAt"));
+  const ls = useListSort("vydaje_dielov");
+  const shown = applyListSort(list, ls.sort, { zakaznik: (p) => p.customer, datum: (p) => p.handedAt || p.date, odovzdal: (p) => p.handedBy || p.assigneeName });
   const bd = (p) => billDraft[p.id] || { dlNumber: p.dlNumber || "", erpDoc: p.erpDoc || "" };
   return (
     <div>
@@ -36054,6 +36405,7 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
             </button>
           ))}
         </div>
+        <SortSelect ls={ls} cols={[["datum", "Dátum"], ["zakaznik", "Zákazník"], ["odovzdal", "Odovzdal"]]} />
         <div style={{ flex: 1 }} />
         {phCanManage(user) && <button className="btn btn-accent" onClick={onNew}>+ Nový výdaj dielov</button>}
       </div>
@@ -36061,9 +36413,9 @@ function PartHandoversView({ partHandovers, user, myEmployee, employees, onAssig
       {list.length > 0 && (
       <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
       <table className="table-cards jobs-table">
-        <thead><tr><th>Zákazník</th><th>Diely</th><th>Odovzdal</th><th><span className="sr-only">Akcie</span></th></tr></thead>
+        <thead><tr><SortTh ls={ls} k="zakaznik">Zákazník</SortTh><th>Diely</th><th aria-sort={sortAria(ls, "odovzdal", "datum")}><SortBtn ls={ls} k="odovzdal">Odovzdal</SortBtn> · <SortBtn ls={ls} k="datum">dátum</SortBtn></th><th><span className="sr-only">Akcie</span></th></tr></thead>
         <tbody>
-      {list.map((p) => (
+      {shown.map((p) => (
         <React.Fragment key={p.id}>
         <tr style={{ outline: p.id === focusId ? "2px solid var(--accent)" : "none", outlineOffset: -2 }}>
           <td className="td-plain">
@@ -36213,9 +36565,13 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
     .sort(byKeys("nakupnaObjednavka", "-datumObjednania", "-createdAt"));
   // Čaká na objednanie pod tým, zoradené podľa dodávateľa — nech sa dá kopírovať
   // dodávateľ po dodávateľovi bez miešania s už objednanými vecami.
-  const cakaNaObjednanie = rows
+  const ls = useListSort("nahradne_diely");
+  const spSort = { depo: (p) => p.depo, dodavatel: (p) => p.dodavatel, cisloPolozky: (p) => p.cisloPolozky, pocetKusov: (p) => _num(p.pocetKusov), cisloDielu: (p) => p.cisloDielu, popisDielu: (p) => p.popisDielu, poznamka: (p) => p.poznamka,
+    urcenie: (p) => (p.urcenie !== undefined ? urcenieLabel(p.urcenie) : ""), stav: (p) => p.stav, datum: (p) => p.datumObjednania, nakupna: (p) => p.nakupnaObjednavka };
+  const objednaneShown = applyListSort(objednane, ls.sort, spSort);
+  const cakaNaObjednanie = applyListSort(rows
     .filter((p) => p.stav === SPAREPART_STAV.CAKA_NA_OBJEDNANIE)
-    .sort(byKeys("dodavatel"));
+    .sort(byKeys("dodavatel")), ls.sort, spSort);
 
   const columns = [
     { key: "dodavatel", label: "Dodávateľ" },
@@ -36233,9 +36589,9 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
     : spareParts.filter((p) => p.depo === myDepo);
   const q = searchQuery.trim().toLowerCase();
   const searchResults = q
-    ? searchScope
+    ? applyListSort(searchScope
         .filter((p) => (p.cisloDielu || "").toLowerCase().includes(q) || (p.popisDielu || "").toLowerCase().includes(q))
-        .sort(byKeys([(p) => p.requestedAt || p.createdAt, -1]))
+        .sort(byKeys([(p) => p.requestedAt || p.createdAt, -1])), ls.sort, spSort)
     : [];
 
   // Kopírovanie stĺpca — malá sivá ikona priamo pri názve stĺpca.
@@ -36264,8 +36620,8 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             <thead>
               <tr>
                 {columns.map((c) => (
-                  <th key={c.key} className={`spc-${c.key}`} style={{ whiteSpace: "normal" }}>
-                    {c.label}
+                  <th key={c.key} className={`spc-${c.key}`} style={{ whiteSpace: "normal" }} aria-sort={sortAria(ls, c.key)}>
+                    <SortBtn ls={ls} k={c.key}>{c.label}</SortBtn>
                     {c.key === "dodavatel" && showDodavatelFilter && (
                       <ColumnFilterButton label="Dodávateľ" options={dodavatelOptions} selected={selectedDodavatelia} onChange={setDodavatelFilter} />
                     )}
@@ -36273,14 +36629,14 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
                     <button className="btn sp-cp" style={CP_BTN} title={`Kopírovať stĺpec ${c.label}`} onClick={() => copyColumn(groupRows, c.key, c.label)}>⧉</button>
                   </th>
                 ))}
-                <th className="spc-urcenie" style={{ whiteSpace: "nowrap" }}>
-                  Určenie {" "}
+                <th className="spc-urcenie" style={{ whiteSpace: "nowrap" }} aria-sort={sortAria(ls, "urcenie")}>
+                  <SortBtn ls={ls} k="urcenie">Určenie</SortBtn>{" "}
                   <button className="btn sp-cp" style={CP_BTN} title="Kopírovať stĺpec Určenie" onClick={() => copyColumn(groupRows.map((p) => ({ urcenieText: urcenieLabel(p.urcenie) })), "urcenieText", "Určenie")}>⧉</button>
                 </th>
-                <th className="spc-stav" style={{ whiteSpace: "normal" }}>Stav objednania</th>
-                {showDate && <th className="spc-datum" style={{ whiteSpace: "normal" }}>Dátum objednania</th>}
-                <th className="spc-nakup" style={{ whiteSpace: "normal" }}>
-                  Nákupná objednávka{"\u00a0"}
+                <SortTh ls={ls} k="stav" className="spc-stav" style={{ whiteSpace: "normal" }}>Stav objednania</SortTh>
+                {showDate && <SortTh ls={ls} k="datum" className="spc-datum" style={{ whiteSpace: "normal" }}>Dátum objednania</SortTh>}
+                <th className="spc-nakup" style={{ whiteSpace: "normal" }} aria-sort={sortAria(ls, "nakupna")}>
+                  <SortBtn ls={ls} k="nakupna">Nákupná objednávka</SortBtn>{"\u00a0"}
                   <button className="btn sp-cp" style={CP_BTN} title="Kopírovať stĺpec Nákupná objednávka" onClick={() => copyColumn(groupRows, "nakupnaObjednavka", "Nákupná objednávka")}>⧉</button>
                 </th>
                 {canManage && <th className="spc-del"></th>}
@@ -36406,6 +36762,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
       <div className="tbar" style={{ marginBottom: 4 }}>
         <SearchInput placeholder="Hľadať diel (číslo, popis) — všetky depá…" value={searchQuery} onChange={setSearchQuery} style={{ flex: "1 1 280px", maxWidth: 480 }} />
         {q && <button className="btn btn-outline" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
+        <SortSelect ls={ls} cols={[["dodavatel", "Dodávateľ"], ["cisloDielu", "Číslo dielu"], ["popisDielu", "Popis dielu"], ["pocetKusov", "Počet kusov"], ["urcenie", "Určenie"], ["stav", "Stav"], ["datum", "Dátum objednania"], ["nakupna", "Nákupná objednávka"]]} />
         {!q && (
           <div className="seg" role="group" aria-label="Obdobie objednania">
             {[["month", "Tento mesiac"], ["all", "Všetko"], ["custom", "Vlastný rozsah"]].map(([id, label]) => (
@@ -36440,15 +36797,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
             <table className="table-cards jobs-table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ whiteSpace: "nowrap" }}>Depo</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Určenie</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Stav</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Dátum objednania</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Nákupná objednávka</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Dodávateľ</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Počet kusov</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Číslo dielu</th>
-                  <th style={{ whiteSpace: "nowrap" }}>Popis dielu</th>
+                  {[["depo", "Depo"], ["urcenie", "Určenie"], ["stav", "Stav"], ["datum", "Dátum objednania"], ["nakupna", "Nákupná objednávka"], ["dodavatel", "Dodávateľ"], ["pocetKusov", "Počet kusov"], ["cisloDielu", "Číslo dielu"], ["popisDielu", "Popis dielu"]].map(([k, l]) => <SortTh key={k} ls={ls} k={k} style={{ whiteSpace: "nowrap" }}>{l}</SortTh>)}
                 </tr>
               </thead>
               <tbody>
@@ -36558,7 +36907,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
         </div>
       )}
 
-      {renderGroupTable(objednane, "Objednané", "var(--ok)", false)}
+      {renderGroupTable(objednaneShown, "Objednané", "var(--ok)", false)}
       {renderGroupTable(cakaNaObjednanie, "Čaká na objednanie", "var(--warn)", true)}
       {zamietnute.length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -37716,6 +38065,7 @@ function GlobalStyle() {
          širokom zostáva nezmenený. */
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none), (max-width: 1000px) and (max-height: 500px) {
         table.table-cards thead { display: none; }
+        .sort-sel.ss-cards { display: inline-block; }
         table.table-cards, table.table-cards tbody { display: block; width: 100%; }
         table.table-cards tr { display: block; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--panel); }
         table.table-cards td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border: none; text-align: right; }
@@ -38051,6 +38401,13 @@ function GlobalStyle() {
       .cell-sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
       .jobs-table th { position: static; }
       .jobs-table th { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: .05em; background: var(--panel); padding: 12px; }
+      /* Triedenie kliknutím na hlavičku (1.0.873) — tlačidlo vyzerá ako text hlavičky. */
+      .th-sort { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; cursor: pointer; }
+      .th-sort:hover { color: var(--accent); }
+      .sort-sel { display: none; flex: none; height: 40px; font-size: 14px; padding: 0 8px; border-radius: 8px; color: var(--text); border: 1px solid var(--control-line); background: var(--panel); max-width: 100%; }
+      .sort-sel.ss-always { display: inline-block; }
+      @media (max-width: 1100px) { .sort-sel.ss-900 { display: inline-block; } }
+      @media (max-width: 1280px) { .sort-sel.ss-1280 { display: inline-block; } }
       .jobs-table td { font-size: 15px; padding: 12px; vertical-align: middle; }
       .jobs-table th:first-child, .jobs-table td:first-child { padding-left: 20px; }
       .jobs-table th:last-child, .jobs-table td:last-child { padding-right: 20px; }
