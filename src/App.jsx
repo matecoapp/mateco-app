@@ -36,12 +36,24 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.873";
+const APP_VERSION = "1.0.874";
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.874", items: [
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Nový servisný protokol po krokoch: Zákazka → Stroj a porucha → Čo ste urobili → Použité diely → Cestovné a stav → Skontrolovať a podpísať. Krok otvoríte aj ťuknutím na pás krokov (na počítači zoznam krokov vľavo a vpravo „Doteraz v protokole“). Čo sa vypĺňa samo (zákazník, technici z pridelenia, dnešný dátum, stroj a model, miesto práce, čas cesty z km, celkový čas), je sivé so značkou „automaticky“ — dá sa prepísať." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Pri počte MTH pomôcka „Naposledy … MTH · kontrola/protokol dátum“ (posledná známa hodnota stroja, nevypĺňa sa). V dieloch tlačidlo „Žiadne diely neboli použité“. Na konci súhrn s „Upraviť“ / „Doplniť“ — „Uložiť a odoslať“ pri chýbajúcom údaji skočí rovno naň." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Podpis technika aj zákazníka na celú obrazovku; pri podpise zákazníka sa vyplní meno preberajúceho a ukáže sa, čo podpisuje." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Rozpracovaný servisný protokol sa priebežne ukladá do zariadenia — pri ďalšom otvorení „Pokračovať“ alebo „Začať odznova“; na Dnes riadok „Rozpracovaný servisný protokol — stroj“. Po uložení protokolu (aj bez signálu) sa koncept zmaže." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Výsledok „Dodať diely“ sa vyberie až po zadaní dielov v okne „Aké diely treba dodať“ (názov, P/N nepovinné, počet kusov). Po uložení protokolu sa z nich vytvorí žiadosť v Náhradných dieloch (technik: Čaká na schválenie, depo podľa karty technika; s väzbou na tiket, stroj a protokol), aj bez signálu. Do tlače protokolu ani e-mailu sa nedostanú." },
+    { roles: ["admin", "veduci_servisu", "dispecer_servisu", "fakturant_servis", "veduci_technik_ba", "technik"], text: "Karta tiketu (Poškodenia): keď tiket čaká na diely z protokolu, blok „Čaká na tieto diely“ — diely, stav žiadosti a odkaz „Otvoriť v Náhradných dieloch“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Svetlý režim: polia, výbery, rámované tlačidlá aj nástroje v lištách (hľadať, ⚙, ⓘ) majú rovnaký tmavší okraj — lepšie viditeľné aj na slnku." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"], text: "Podpis (servisný protokol, protokol o odovzdaní / vrátení, výdaj dielov): plocha na celú obrazovku s popisom „Podpíšte sa prstom“ a čiarou, veľké tlačidlá Zrušiť, Vymazať a Hotovo. Pri otočení telefónu sa rozpísaný podpis zachová; na šírku je zhrnutie protokolu o odovzdaní v jednom riadku, aby bola plocha podpisu vyššia. Na počítači je plocha najviac 900 px široká, na stred, s popisom „Podpíšte sa“." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol: Esc ho zavrie (rozpísaný sa najprv spýta). Pri dátume tlačidlo s kalendárom. Na širokom počítači (od 1440 px) je protokol na stred a tlačidlá hneď pod obsahom." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: vyhľadávanie viacerých strojov naraz – výrazy oddeľ čiarkou (napr. „1330, 2632, 1932“ ukáže GS-1330, GS-2632 aj GS-1932)." },
+  ] },
   { v: "1.0.873", items: [
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Rozpracovaný protokol o odovzdaní / vrátení sa priebežne ukladá do zariadenia (fotky, zaškrtnutia, poznámky, podpisy). Po vybití telefónu alebo zatvorení platformy ponúkne pri ďalšom otvorení „Pokračovať v rozpracovanom protokole (uložené … o hh:mm)“ alebo „Začať odznova“. Po uložení protokolu (aj bez signálu) a pri „Zavrieť bez uloženia“ sa koncept zmaže, po 7 dňoch sám." },
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Dnes: riadok „Rozpracovaný protokol — zákazník“ s tlačidlom „Pokračovať“, kým koncept v zariadení čaká." },
@@ -4852,6 +4864,7 @@ function SearchInput({ value, onChange, placeholder, style }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
+          aria-label={placeholder}
           autoFocus={mobileExpanded}
           style={{ width: "100%", paddingRight: value ? 26 : undefined }}
         />
@@ -7031,7 +7044,8 @@ function DispatcherApp() {
       if (event.origin !== window.location.origin) return;
       if (!event.data) return;
       if (event.data.type === "mateco_protocol_submitted") {
-        handleProtocolSubmission(event.data);
+        const ex = event.source && _spExtras.get(event.source); // diely na dodanie z nového protokolu (nie sú v tlači ani v Power Automate)
+        handleProtocolSubmission(ex?.partsNeeded?.length ? { ...event.data, partsNeeded: ex.partsNeeded } : event.data);
         setTimeout(() => setProtocolModalData(null), 1400); // po odoslaní okno zavrieť (hláška formulára dobehne), nie prázdny formulár s červeným rámom
       } else if (event.data.type === "mateco_switch_to_ticket_protocol") {
         const d = damages.find((x) => x.id === event.data.damageId);
@@ -9440,6 +9454,38 @@ function DispatcherApp() {
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
   // priradeniu ak sa dá, inak aspoň k stroju (sekcia "Ostatné protokoly"). Externé
   // stroje (bez zhody v našej databáze) sa ignorujú — nemajú kam sa priradiť.
+  // Výsledok „Dodať diely“ v protokole → žiadosti v Náhradných dieloch, rovnaké pravidlá ako žiadosť technika (depo, stav).
+  // Id podľa protokolu — opakované spracovanie (fronta bez signálu) nevytvorí duplicitu.
+  function requestProtocolParts(record, parts) {
+    const canManage = can(effectiveUser, "sparepart_manage");
+    if (!canManage && !can(effectiveUser, "sparepart_request")) return;
+    const machine = record.machineId ? machineById[record.machineId] : null;
+    const depo = (canManage ? myEmployee?.depo || machine?.depo : myEmployee?.depo) || "";
+    if (!depo) { showNotice("Protokol je uložený, ale žiadosť o diely sa nevytvorila — nemáte na karte zamestnanca depo. Požiadajte vedúceho servisu, nech vám ho doplní a diely zadajte v Náhradných dieloch."); return; }
+    const have = new Set((sparePartsRef.current || []).map((x) => x.id));
+    const nowIso = new Date(serverNowMs()).toISOString();
+    const rows = parts.map((x, i) => ({
+      id: `${record.id}-d${i + 1}`,
+      depo, dodavatel: "", cisloPolozky: "", pocetKusov: String(x.qty || "1"), cisloDielu: x.pn || "", popisDielu: x.name,
+      poznamka: `Zo servisného protokolu ${fmtDate(record.jobDate) || ""}${record.machineSerial ? ` · ${record.machineSerial}` : ""}`.trim(),
+      urcenie: machine ? { typ: "stroj", strojId: machine.id, strojKod: `${machine.code}${machine.type ? " · " + machine.type : ""}`, externaText: "" } : { typ: "externa", strojId: "", strojKod: "", externaText: [record.clientName, record.machineSerial].filter(Boolean).join(" · ") },
+      stav: canManage ? SPAREPART_STAV.CAKA_NA_OBJEDNANIE : SPAREPART_STAV.CAKA_NA_SCHVALENIE,
+      datumObjednania: "", nakupnaObjednavka: "", rejectionReason: "",
+      requestedBy: myEmployee?.name || "", requestedAt: nowIso,
+      damageId: record.damageId || null, machineId: record.machineId || null, protocolId: record.id,
+    })).filter((x) => !have.has(x.id));
+    if (!rows.length) return;
+    persistSpareParts((list) => [...list.filter((x) => !rows.some((r) => r.id === x.id)), ...rows]);
+    if (!canManage) {
+      pushNotification({ attachTo: rows[0].id,
+        kind: "spare_parts",
+        roles: ["veduci_servisu", "dispecer_servisu", ...((LEAD_TECHNICIAN_DEPOS.veduci_technik_ba || []).includes(depo) ? ["veduci_technik_ba"] : [])],
+        title: "Nová požiadavka na náhradné diely",
+        message: `${myEmployee?.name || "Technik"} žiada ${rows.length === 1 ? `${rows[0].pocetKusov}× ${rows[0].popisDielu}` : plural(rows.length, "položku", "položky", "položiek")} (${depo}) — zo servisného protokolu${record.machineSerial ? `, stroj ${record.machineSerial}` : ""}`,
+        link: { module: "servis", view: "diely", depo, partId: rows[0].id },
+      });
+    }
+  }
   async function handleProtocolSubmission(data) {
     console.log("[protokol] prijatá správa od formulára:", data);
     // Externý stroj nemá machineId (nie je v našej databáze) — uloží sa aj tak,
@@ -9527,6 +9573,7 @@ function DispatcherApp() {
         invoiced: false,
       };
       persistProtocolLogs((protocolLogs) => [...protocolLogs.filter((x) => x.id !== record.id), record]); // opakované spracovanie (pád medzi uložením a zmazaním z fronty) bez duplicity
+      if (data.partsNeeded?.length) requestProtocolParts(record, data.partsNeeded);
       console.log("[protokol] úspešne uložený a priradený:", record);
       // Terén: z fronty ho zoberie až uloženie záznamu (saveRecordRow) — inak by sa pri pomalom nahrávaní podpisu stratil.
       if (!_offlineQueueAllowed) idbDelete("outbox", `protocol:${queueId}`);
@@ -9761,6 +9808,8 @@ function DispatcherApp() {
   const persistHandoverProtocols = useCallback(makeRecordPersist("handoverProtocols", setHandoverProtocols), []);
   const persistMachineModels = useCallback(makeRecordPersist("machineModels", setMachineModels), []);
   const persistSpareParts = useCallback(makeRecordPersist("spareParts", setSpareParts), []);
+  const sparePartsRef = useRef(spareParts);
+  sparePartsRef.current = spareParts;
   // Nájde model podľa názvu rovnako ako poistka v DB (veľkosť písmen, medzery, pomlčky, bodky, podčiarkovníky, lomky
   // sa neberú do úvahy) — presne tak, ako je zapísaný na konkrétnom stroji, sa vždy len zobrazuje.
   function findMachineModelLoose(name) {
@@ -13090,6 +13139,7 @@ function DispatcherApp() {
             blockedItems={outboxBlockedList}
             hpDrafts={hpDrafts}
             onOpenHpDraft={(d) => {
+              if (draftKind(d) === "sp") { openProtocol(d.params || {}); return; } // rozpracovaný servisný protokol — ponúkne Pokračovať / Začať odznova
               if (draftKind(d) === "ci") {
                 const a = assignments.find((x) => x.id === d.assignmentId);
                 if (a) setCheckerInspectionTarget(a); // preradená / uzavretá / zrušená — vysvetlí okno kontroly
@@ -14790,6 +14840,8 @@ function DispatcherApp() {
           protocolLogs={protocolLogs}
           assignments={assignments}
           user={effectiveUser}
+          spareParts={spareParts}
+          onOpenSpareParts={(p) => { setServiceEventDetail(null); setCardHistory([]); navigateFromNotification({ module: "servis", view: "diely", depo: p.depo, partId: p.id }); }}
           onBack={cardHistory.length > 0 ? () => { goBackCard(); setServiceEventDetail(null); } : null}
           onEdit={(d) => {
             pushCard("serviceEvent", serviceEventDetail);
@@ -14963,7 +15015,7 @@ function DispatcherApp() {
         />
       )}
       {protocolModalData && (
-        <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} />
+        <ProtocolModal html={protocolModalData.html} params={protocolModalData.params} onClose={() => setProtocolModalData(null)} user={currentUser} assignments={assignments} protocolLogs={protocolLogs} />
       )}
       {ezMeasurementTarget !== undefined && (
         <EzMeasurementModal
@@ -17354,21 +17406,256 @@ function AssignmentDetailModal({ assignment, machine, damage, technicians, user,
 }
 
 /* ---------------------------------------------------------
-   Protocol modal — full-screen iframe showing the embedded
-   servisný protokol. window.open() is blocked in this sandbox
-   (same restriction as native confirm()), so it's rendered
-   inline instead of as a new tab.
+   Servisný protokol (1.0.875, návrh C) — 6 krokov, koncept v zariadení, okno dielov na dodanie.
+   Pôvodný formulár (PROTOCOL_HTML) beží skrytý v iframe ako „motor“: pri odoslaní sa doň hodnoty
+   zapíšu jeho vlastnými funkciami a odošle ho jeho submitForm() — telo pre Power Automate, záznam
+   protokolu, offline fronta aj tlač ostávajú presne ako doteraz (porovnané do znaku, k70).
 --------------------------------------------------------- */
-function ProtocolModal({ html, params, onClose }) {
-  const entries = Object.entries(params || {}).filter(([, v]) => v);
-  // Odznak o (ne)predvyplnení je len informatívny — nemá zmysel držať ho na
-  // obrazovke natrvalo a uberať tým miesto, sám zmizne po pár sekundách.
-  const [showBadge, setShowBadge] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setShowBadge(false), 2800);
-    return () => clearTimeout(t);
-  }, []);
-  // F5 / zatvorenie stránky pri otvorenom protokole — prehliadač sa opýta (ako Modal), rozpísané údaje v iframe by sa stratili.
+const SP_STEPS = [
+  { t: "Zákazka", nav: "Zákazka", next: "Stroj a porucha" },
+  { t: "Stroj a porucha", nav: "Stroj a porucha", next: "Práca" },
+  { t: "Čo ste urobili", nav: "Čo ste urobili", next: "Diely" },
+  { t: "Použité diely", nav: "Diely", next: "Cestovné a stav" },
+  { t: "Cestovné a stav", nav: "Cestovné a stav", next: "Kontrola" },
+  { t: "Skontrolovať a podpísať", nav: "Kontrola a podpis" },
+];
+// Výsledok zásahu → stav vo formulári (status-btn v PROTOCOL_HTML).
+const SP_OUTCOMES = [
+  { label: "Opravené", status: "Dokončené", tone: "ok", d: "M8 12.5l2.8 2.8L16.5 9", circle: true },
+  { label: "Dodať diely", status: "Čaká na diely", tone: "warn", d: "M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8" },
+  { label: "Potrebná oprava", status: "Nedokončené", tone: "info", d: "M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.4-.6-.6-2.4z" },
+  { label: "Závažná porucha", status: "Závažná porucha", tone: "danger", d: "M12 3l9.5 17h-19zM12 10v4.5M12 17.5v.5" },
+];
+const SP_MATECO = "mateco Slovakia s.r.o.";
+const spDraftKey = (params, userId) => `sp:${params?.damageId || params?.assignmentId || params?.machineId || params?.serial || "novy"}:${userId}`;
+// Okno motora → diely na dodanie (pribalia sa k správe mateco_protocol_submitted; do tlače ani Power Automate nejdú).
+const _spExtras = new WeakMap();
+const spNum = (v) => String(v ?? "").replace(/\s/g, "").replace(",", ".");
+const spNumOk = (v, max) => { const t = spNum(v); return /^\d+(\.\d+)?$/.test(t) && Number(t) <= max; };
+const spTravelOk = (t) => { const v = parseFloat(String(t).replace(",", ".")); return /^\d+([.,]\d+)?(\s*(h|hod)\.?)?$/i.test(t) && v >= 0 && v <= 24; };
+const spDec = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
+const spAutoTravel = (km) => { const v = parseFloat(String(km).replace(",", ".")) || 0; return v > 0 ? (v / 60).toFixed(1).replace(".", ",") : ""; };
+const spSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Čo ešte chýba — rovnaké pravidlá a poradie ako submitForm() v PROTOCOL_HTML (motor ich zopakuje).
+function spIssues(s, me) {
+  const out = [];
+  const add = (step, f, msg) => out.push({ step, f, msg });
+  if (!s.techs.length) add(0, "techs", "technik");
+  else if (me && !s.techs.some((n) => n.trim().toLowerCase() === me.trim().toLowerCase())) add(0, "techs", `medzi technikmi musíte byť aj vy (${me})`);
+  if (s.external) { if (!s.extText.trim()) add(1, "extText", "popis poruchy"); }
+  else {
+    if (!s.fault) add(1, "fault", "kód poruchy");
+    if (!s.type) add(1, "type", "typ poruchy");
+    if (!s.cat) add(1, "cat", "kategória poruchy");
+  }
+  const works = s.works.filter((w) => w.work.trim());
+  if (!works.length) add(2, "work0", "vykonaná práca");
+  s.works.forEach((w, i) => {
+    if (!w.work.trim()) return;
+    if (!String(w.hours).trim()) add(2, "hours" + i, "hodiny pri každej práci");
+    else if (!spNumOk(w.hours, 24) || Number(spNum(w.hours)) <= 0) add(2, "hours" + i, "hodiny práce číslom (napr. 1,5), najviac 24");
+  });
+  if (s.mth.trim() && !spNumOk(s.mth, 1000000)) add(1, "mth", "počet MTH číslom");
+  if (s.km.trim() && !spNumOk(s.km, 5000)) add(4, "km", "km číslom 0–5000");
+  if (s.travelManual && s.travelHours.trim() && !spTravelOk(s.travelHours.trim())) add(4, "travel", "čas cesty v hodinách 0–24 (napr. 1,5)");
+  if (!s.date) add(0, "date", "dátum");
+  if (!s.model.trim()) add(1, s.external ? "model" : "serial", s.external ? "model stroja" : "stroj zo zoznamu (model sa doplní sám)");
+  if (!s.serial.trim()) add(1, "serial", "sériové číslo");
+  if (!s.mth.trim()) add(1, "mth", "počet MTH");
+  if (!s.client.trim()) add(0, "client", "zákazník");
+  if (!s.address.trim()) add(4, "address", "miesto práce");
+  if (!s.outcome) add(4, "outcome", "ako zásah dopadol");
+  return out;
+}
+
+// Zapíše hodnoty do skrytého formulára rovnako, ako by ich technik vyplnil v ňom (udalosti input/blur, jeho funkcie).
+async function spApplyToEngine(win, s, applied) {
+  const doc = win.document;
+  const $ = (id) => doc.getElementById(id);
+  const fire = (el, type) => el.dispatchEvent(new win.Event(type, { bubbles: type !== "focus" && type !== "blur" }));
+  const setVal = (el, v) => { if (!el || el.value === v) return; fire(el, "focus"); el.value = v; fire(el, "input"); fire(el, "change"); fire(el, "blur"); };
+  const engTechs = win.eval("selectedTechs.slice()");
+  engTechs.filter((n) => !s.techs.includes(n)).forEach((n) => win.removeTech(n));
+  s.techs.filter((n) => !engTechs.includes(n)).forEach((n) => win.toggleTech(n));
+  setVal($("client-name"), s.client);
+  setVal($("client-contact"), s.contact);
+  setVal($("job-date"), s.date);
+  setVal($("job-number"), s.jobNumber);
+  if (!!$("external-machine").checked !== !!s.external) { $("external-machine").checked = !!s.external; win.toggleExternalMachine(); }
+  if (s.external) { setVal($("machine-serial"), s.serial); setVal($("machine-model"), s.model); }
+  else if ($("machine-serial").value !== s.serial || $("machine-model").value !== s.model) win.selectMachine(s.serial, s.model, s.machineId || "");
+  setVal($("machine-hours"), s.mth);
+  if (s.external) setVal($("external-fault-text"), s.extText);
+  else {
+    if (s.fault && ($("fault-code").value.split("-")[0] || "") !== s.fault) win.toggleFault(s.fault);
+    if (s.type && $("fault-type").value !== s.type) win.toggleType(s.type);
+    if (s.cat && $("fault-category").value !== s.cat) win.toggleCat(s.cat);
+  }
+  const works = s.works.filter((w, i) => i === 0 || w.work.trim() || String(w.hours).trim());
+  const wRows = () => [...doc.querySelectorAll("#work-rows tr")];
+  while (wRows().length < works.length) win.addWorkRow();
+  while (wRows().length > Math.max(1, works.length)) win.delWorkRow(wRows().at(-1).querySelector(".btn-del"));
+  works.forEach((w, i) => {
+    const row = wRows()[i];
+    const inp = row.querySelector(".work-picker-input");
+    if (inp.value !== w.work) { fire(inp, "focus"); inp.value = w.work; fire(inp, "input"); fire(inp, "blur"); }
+    setVal(row.querySelector("input.num-dec"), String(w.hours));
+  });
+  setVal($("work-notes"), s.notes);
+  const mats = s.mats.filter((m) => m.desc.trim() || m.pn.trim());
+  const mRows = () => [...doc.querySelectorAll("#mat-tbody tr")];
+  while (mRows().length < mats.length) win.addMatRow();
+  while (mRows().length > Math.max(1, mats.length)) win.delMatRow(mRows().at(-1).querySelector(".btn-del"));
+  if (!mats.length) mRows()[0].querySelectorAll("input").forEach((el) => setVal(el, ""));
+  mats.forEach((m, i) => { const ins = mRows()[i].querySelectorAll("input"); setVal(ins[0], m.desc); setVal(ins[1], m.pn); setVal(ins[2], m.qty); });
+  setVal($("travel-km"), s.km);
+  if (s.travelManual) setVal($("travel-hours"), s.travelHours);
+  else if ($("travel-hours").dataset.manual) setVal($("travel-hours"), "");
+  setVal($("client-address"), s.address);
+  const oc = SP_OUTCOMES.find((o) => o.label === s.outcome);
+  const btn = [...doc.querySelectorAll(".status-btn")].find((b) => (b.getAttribute("onclick") || "").includes(`'${oc.status}'`));
+  if (btn && btn.classList.length < 2) btn.click();
+  setVal($("customer-name"), s.custName);
+  for (const [id, url] of [["sig-tech", s.sigTech], ["sig-cust", s.sigCust]]) {
+    if (applied[id] === url) continue;
+    if (!url) { win.clearSig(id); applied[id] = url; continue; }
+    win.openSigOverlay(id);
+    const c = $("sig-overlay-canvas");
+    const img = await new Promise((res, rej) => { const im = new win.Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+    const w = parseFloat(c.style.width) || c.width, h = parseFloat(c.style.height) || c.height;
+    const k = Math.min(w / img.width, h / img.height);
+    c.getContext("2d").drawImage(img, (w - img.width * k) / 2, (h - img.height * k) / 2, img.width * k, img.height * k);
+    win.eval("sigOverlayHasDrawn = true");
+    win.doneSigOverlay();
+    applied[id] = url;
+  }
+  await spSleep(350); // malé pole podpisu sa prekresľuje asynchrónne (img.onload) — submitForm z neho berie obrázok
+}
+
+// Podpis z celej plochy orezaný na ťahy (+okraj) — v malom poli protokolu a v tlači potom nie je drobný.
+async function spCropSig(url) {
+  try {
+    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+    const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+    const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, c.width, c.height);
+    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) { const i = (y * c.width + x) * 4; if (data[i + 3] > 0 && data[i] + data[i + 1] + data[i + 2] < 600) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    if (x1 < 0) return null; // prázdna plocha = bez podpisu
+    const pad = Math.round(Math.max(x1 - x0, y1 - y0) * 0.08) + 8;
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(c.width - 1, x1 + pad); y1 = Math.min(c.height - 1, y1 + pad);
+    const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+    const octx = o.getContext("2d"); octx.fillStyle = "#fff"; octx.fillRect(0, 0, o.width, o.height); octx.drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+    return o.toDataURL("image/png");
+  } catch { return url; }
+}
+// miss = true (len rám) alebo text, čo chýba (rám + „Ešte treba: …“ pre čítačku cez aria-describedby).
+function SpField({ id, label, tag, hint, auto, miss, children }) {
+  const desc = [hint && id + "-h", typeof miss === "string" && id + "-e"].filter(Boolean).join(" ") || undefined;
+  const kids = React.Children.map(children, (c) => (React.isValidElement(c) && c.props.id === id ? React.cloneElement(c, { "aria-invalid": miss ? true : undefined, "aria-describedby": desc }) : c));
+  return (
+    <div className={"sp-f" + (auto ? " sp-auto" : "") + (miss ? " sp-miss" : "")}>
+      <label htmlFor={id}>{label}{tag && <span className="sp-tag">{tag}</span>}</label>
+      {kids}
+      {typeof miss === "string" && <span id={id + "-e"} className="sp-hint sp-hint-err">Ešte treba: {miss}</span>}
+      {hint && <span id={id + "-h"} className="sp-hint">{hint}</span>}
+    </div>
+  );
+}
+
+// Dátum v tvare platformy („18. 11. 2026“) — natívne pole dátumu by v anglickom prehliadači ukázalo americký tvar.
+function SpDateInput({ id, value, onChange, ...aria }) {
+  const show = (v) => (v ? fmtDate(v) : "");
+  const [txt, setTxt] = useState(show(value));
+  const pick = useRef(null);
+  useEffect(() => { setTxt(show(value)); }, [value]);
+  const parse = (t) => { const m = String(t).trim().match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/); if (!m) return null; const iso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; return new Date(iso + "T12:00:00Z").getUTCDate() === +m[1] ? iso : null; };
+  // k70 R5: kalendár = skryté natívne pole dátumu; vybraný dátum sa v textovom poli ukáže ako „D. M. RRRR“.
+  const openPick = () => { const el = pick.current; try { el.showPicker(); } catch { el.focus(); el.click(); } };
+  return (
+    <div className="sp-date">
+      <input id={id} {...aria} placeholder="D. M. RRRR" value={txt} onChange={(e) => { setTxt(e.target.value); const iso = parse(e.target.value); if (iso) onChange(iso); else if (!e.target.value.trim()) onChange(""); }} onBlur={() => setTxt(show(value))} />
+      <button type="button" className="sp-cal" aria-label="Vybrať dátum v kalendári" onClick={openPick}><NavIcon id="calendar" size={24} /></button>
+      <input ref={pick} type="date" tabIndex={-1} aria-hidden="true" data-sp-datepick value={value || ""} onChange={(e) => { if (!e.target.value) return; onChange(e.target.value); e.target.previousElementSibling?.focus({ preventScroll: true }); }} // fokus na tlačidlo kalendára – textové pole by na telefóne otvorilo klávesnicu
+        style={{ position: "absolute", right: 0, bottom: 0, width: 1, height: 1, padding: 0, border: 0, opacity: 0, pointerEvents: "none" }} />
+    </div>
+  );
+}
+function SpPartsDialog({ initial, onCancel, onDone }) {
+  const [list, setList] = useState(initial || []);
+  const [name, setName] = useState("");
+  const [pn, setPn] = useState("");
+  const [qty, setQty] = useState(1);
+  const [err, setErr] = useState("");
+  const take = () => (name.trim() ? [...list, { name: name.trim(), pn: pn.trim(), qty: String(qty) }] : list);
+  const addMore = () => {
+    if (!name.trim()) { setErr("Zadajte názov dielu."); return; }
+    setList(take()); setName(""); setPn(""); setQty(1); setErr("");
+  };
+  const done = () => {
+    if (pn.trim() && !name.trim()) { setErr("Zadajte názov dielu."); return; }
+    const all = take();
+    if (!all.length) { setErr("Zadajte aspoň jeden diel — bez neho sa výsledok „Dodať diely“ nevyberie."); return; }
+    onDone(all);
+  };
+  return (
+    <Modal title="Aké diely treba dodať" onClose={onCancel}>
+      <div data-sp-parts-dialog className="sp-pd">
+        <p className="sp-hint" style={{ margin: 0 }}>Po uložení protokolu sa vytvorí žiadosť v Náhradných dieloch. Do tlače protokolu sa nedostane.</p>
+        {list.map((x, i) => (
+          <div key={i} className="sp-card sp-card-row">
+            <div style={{ flex: 1, minWidth: 0 }}><b>{x.name}</b><span className="sp-hint" style={{ display: "block" }}>{x.pn ? `P/N ${x.pn}` : "bez P/N"}</span></div>
+            <b className="tnum">{x.qty} ks</b>
+            <button type="button" className="sp-icon-btn" aria-label={`Odstrániť diel ${x.name}`} onClick={() => setList(list.filter((_, j) => j !== i))}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        ))}
+        <SpField id="sp-pd-name" label="Názov dielu" miss={!!err && !name.trim()}><input id="sp-pd-name" value={name} placeholder="napr. hydraulická hadica 1/2&quot;" onChange={(e) => { setName(e.target.value); setErr(""); }} /></SpField>
+        {err && <div className="sp-err" role="alert">{err}</div>}
+        <div className="sp-grid2 sp-grid-qty">
+          <SpField id="sp-pd-pn" label="Číslo dielu (P/N)"><input id="sp-pd-pn" value={pn} placeholder="nepovinné" onChange={(e) => setPn(e.target.value)} /></SpField>
+          <div className="sp-f">
+            <label htmlFor="sp-pd-qty">Počet ks</label>
+            <div className="sp-stepper">
+              <button type="button" aria-label="Menej kusov" onClick={() => setQty(Math.max(1, qty - 1))}>−</button>
+              <input id="sp-pd-qty" inputMode="numeric" value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+              <button type="button" aria-label="Viac kusov" onClick={() => setQty(qty + 1)}>+</button>
+            </div>
+          </div>
+        </div>
+        <button type="button" className="sp-dashed" onClick={addMore}>Pridať ďalší diel</button>
+        <button type="button" className="btn btn-accent sp-big" onClick={done}>Hotovo</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs }) {
+  const frameRef = useRef(null);
+  const [eng, setEng] = useState(null); // { win, lists, init }
+  const [s, setS] = useState(null);
+  const [step, setStep] = useState(0);
+  const [seen, setSeen] = useState(0); // najďalší navštívený krok — hotové sa značia len po návšteve
+  useEffect(() => { setSeen((x) => Math.max(x, step)); }, [step]);
+  const [miss, setMiss] = useState(null); // pole, na ktoré sa skočilo pri chýbajúcom údaji
+  const [partsDlg, setPartsDlg] = useState(false);
+  const [sign, setSign] = useState(null); // "sig-tech" | "sig-cust"
+  const [sending, setSending] = useState(false);
+  const [engMsg, setEngMsg] = useState(null); // { text, err }
+  const [savedAt, setSavedAt] = useState(null);
+  const [draftAsk, setDraftAsk] = useState(null);
+  const [draftChecked, setDraftChecked] = useState(false);
+  const appliedRef = useRef({});
+  const partsRef = useRef([]);
+  const doneRef = useRef(false);
+  const headRef = useRef(null);
+  const me = _protocolMe;
+  const draftKey = user?.id ? spDraftKey(params, user.id) : null;
+  const up = (patch) => setS((x) => ({ ...x, ...(typeof patch === "function" ? patch(x) : patch) }));
+
+  // F5 / zatvorenie stránky — prehliadač sa opýta; koncept je aj tak v zariadení.
   useEffect(() => {
     const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
     const draft = () => true;
@@ -17376,64 +17663,502 @@ function ProtocolModal({ html, params, onClose }) {
     _openDrafts.add(draft);
     return () => { window.removeEventListener("beforeunload", onBeforeUnload); _openDrafts.delete(draft); _draftsListener?.(); };
   }, []);
-  return (
-    <div className="protocol-overlay proto-edit" style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, overflow: "hidden" }}>
-      {/* Obal iframe začína AŽ pod stavovým riadkom telefónu (nie súčasť
-          protokolu samotného — appka beží na celú výšku obrazovky, takže inak
-          by hlavička protokolu (aj náš odznak/✕ nižšie) skončila pod hodinami/
-          signálom). */}
-      <div className="protocol-frame-wrap" style={{ position: "absolute", inset: 0, top: "env(safe-area-inset-top)", background: "#fff" }}>
-        <iframe
-          title="Servisný protokol"
-          srcDoc={html}
-          sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-        />
+
+  function onEngineLoad() {
+    const win = frameRef.current?.contentWindow;
+    if (!win || eng) return;
+    const doc = win.document;
+    const v = (id) => doc.getElementById(id)?.value || "";
+    const lists = {
+      faults: win.eval("FAULTS"), types: win.eval("FAULT_TYPES"), cats: win.eval("FAULT_CATS"), auto: win.eval("FAULT_AUTO_MAP"),
+      hiddenTypes: win.eval("FAULT_HIDDEN_TYPES"), hiddenCats: win.eval("FAULT_HIDDEN_CATS"), works: win.eval("WORK_OPTIONS").filter((w) => !/^work\d+$/.test(w)),
+      techs: win.eval("TECHS"), machines: _protocolMachinesList || [],
+    };
+    const init = {
+      techs: win.eval("selectedTechs.slice()"), client: v("client-name"), contact: "", date: v("job-date"), jobNumber: "",
+      external: !!doc.getElementById("external-machine")?.checked, serial: v("machine-serial"), model: v("machine-model"),
+      machineId: win.eval("selectedMachineIdFromPicker") || params?.machineId || null, mth: "", fault: "", type: "", cat: "", extText: "",
+      works: [{ work: "", hours: "" }], notes: "", mats: [], noParts: false, km: "", travelHours: "", travelManual: false,
+      address: v("client-address"), outcome: "", partsNeeded: [], custName: "", sigTech: null, sigCust: null,
+    };
+    // Hlášky motora (odoslané / bez signálu / chyba) sa ukážu tu; jeho vlastné zvýraznenie poľa netreba (je skrytý).
+    win.showToast = (msg, isErr) => {
+      const text = String(msg).replace(/^[⚠✓]\s*/, "");
+      if (/^Odosielam/.test(text)) return;
+      setEngMsg({ text, err: !!isErr });
+      if (isErr || /^Vyplňte|^Medzi technikmi/.test(text)) setSending(false);
+    };
+    win.flagField = () => {};
+    const origPost = win.postSubmissionToApp;
+    win.postSubmissionToApp = (payload, img) => {
+      _spExtras.set(win, { partsNeeded: partsRef.current });
+      doneRef.current = true;
+      if (draftKey) dropHpDraft(draftKey);
+      return origPost(payload, img);
+    };
+    setEng({ win, lists, init });
+    setS(init);
+  }
+
+  // Koncept: ponuka Pokračovať / Začať odznova, potom priebežné ukladanie (ako protokol o odovzdaní, k68-a).
+  useEffect(() => {
+    if (!draftKey) { setDraftChecked(true); return; }
+    let gone = false;
+    myHpDrafts(user.id, "sp").then((list) => {
+      if (gone) return;
+      const d = list.find((x) => x.key === draftKey);
+      if (d) setDraftAsk(d); else setDraftChecked(true);
+    });
+    return () => { gone = true; };
+  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftTimer = useRef(null);
+  const draftFlush = useRef(null);
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (!s || !eng || !draftKey || !draftChecked || doneRef.current) return;
+    if (!dirtyRef.current) { dirtyRef.current = true; if (s === eng.init) return; }
+    const d = { key: draftKey, userId: user.id, params, machineCode: s.serial, customer: s.client === SP_MATECO ? (s.address.match(/^u zákazníka ([^,]+)/) || [])[1] || "" : s.client, data: { ...s, step, seen } };
+    draftFlush.current = () => { clearTimeout(draftTimer.current); draftTimer.current = null; if (doneRef.current) return; const at = new Date().toISOString(); putHpDraft({ ...d, savedAt: at }); setSavedAt(at); };
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(draftFlush.current, 500);
+  }, [s, step, seen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden" && draftTimer.current) draftFlush.current?.(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => { document.removeEventListener("visibilitychange", onHide); if (draftTimer.current) draftFlush.current?.(); };
+  }, []);
+  function resumeDraft(d) {
+    setS((cur) => ({ ...(cur || {}), ...d.data }));
+    setStep(Math.min(5, d.data?.step || 0)); setSeen(Math.min(5, d.data?.seen ?? d.data?.step ?? 0));
+    setSavedAt(d.savedAt);
+    setDraftAsk(null); setDraftChecked(true);
+  }
+  async function restartDraft(d) {
+    if (!(await askConfirm({ title: "Začať odznova?", message: "Rozpracovaný protokol z tohto zariadenia sa vymaže.", confirmLabel: "Začať odznova" }))) return;
+    await dropHpDraft(d.key);
+    setDraftAsk(null); setDraftChecked(true);
+  }
+
+  // Tab ostáva v protokole (ako v SignatureOverlay) — inak odíde na tlačidlá platformy pod ním. Esc = ✕. Okno nad protokolom (diely, potvrdenie) a podpis majú vlastnú pascu.
+  const rootRef = useRef(null);
+  const [modalBase] = useState(() => _modalStack.length);
+  useEffect(() => {
+    if (sign) return;
+    const onKey = (e) => {
+      if ((e.key !== "Tab" && e.key !== "Escape") || !rootRef.current || _modalStack.length > modalBase) return;
+      e.stopImmediatePropagation(); // okno pod protokolom (ak je) by fokus stiahlo k sebe / zavrelo sa samo
+      if (e.key === "Escape" && e.target.dataset?.dlOpen) { e.target.dataset.dlOpen = ""; return; } // Esc zavrie len ponuku našeptávača (ako Modal)
+      if (e.key === "Escape") { e.preventDefault(); closeRef.current?.(); return; } // ako ✕ (rozpísaný sa najprv spýta)
+      const f = [...rootRef.current.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => !el.disabled && el.getClientRects().length > 0 && !el.closest(".sp-engine"));
+      if (!f.length) return;
+      const a = document.activeElement, first = f[0], last = f[f.length - 1];
+      if (!rootRef.current.contains(a) || (e.shiftKey && a === first) || (!e.shiftKey && a === last)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    };
+    const onInput = (e) => { const t = e.target; if (t.list && rootRef.current?.contains(t)) t.dataset.dlOpen = e.inputType && e.inputType !== "insertReplacementText" && t.value ? "1" : ""; }; // našeptávač (datalist) je asi otvorený
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("input", onInput, true);
+    return () => { window.removeEventListener("keydown", onKey, true); window.removeEventListener("input", onInput, true); };
+  }, [sign, modalBase]);
+  // Po zavretí protokolu fokus späť na tlačidlo, ktoré ho otvorilo (ako Modal).
+  const [opener] = useState(() => document.activeElement);
+  useEffect(() => () => setTimeout(() => {
+    const a = document.activeElement;
+    if ((!a || a === document.body) && opener && opener !== document.body && opener.isConnected) opener.focus({ preventScroll: true });
+  }, 0), [opener]);
+  // Po zavretí podpisu fokus späť na jeho tlačidlo — po orezaní podpisu sa tlačidlo vymení, preto aj pri zmene podpisu.
+  const signBack = useRef(null);
+  useEffect(() => {
+    if (sign) { signBack.current = sign; return; }
+    const a = document.activeElement;
+    if (signBack.current && (!a || a === document.body)) document.querySelector(`[data-sp-sign="${signBack.current}"]`)?.focus({ preventScroll: true });
+  }, [sign, s?.sigTech, s?.sigCust]);
+  useEffect(() => { // skok na chýbajúce pole
+    if (!miss) return;
+    const t = setTimeout(() => document.getElementById("sp-" + miss.f)?.focus(), 60);
+    return () => clearTimeout(t);
+  }, [miss, step]);
+
+  async function close() {
+    if (sending && !engMsg?.err) return;
+    if (draftTimer.current) draftFlush.current?.();
+    const back = document.activeElement; // po zrušení otázky fokus späť (Esc v poli → inak na body)
+    if (dirtyRef.current && !doneRef.current && !(await askConfirm({ title: "Zavrieť protokol?", message: "Rozpracovaný protokol ostane uložený v tomto zariadení — pri ďalšom otvorení ho dokončíte.", confirmLabel: "Zavrieť protokol" }))) { if (back?.isConnected && back !== document.body) back.focus({ preventScroll: true }); return; }
+    onClose();
+  }
+  const closeRef = useRef(null);
+  closeRef.current = close;
+
+  const ready = !!(eng && s);
+  useEffect(() => { headRef.current?.focus({ preventScroll: true }); }, [step, ready, draftChecked, draftAsk]);
+  const L = eng?.lists;
+  const issues = ready ? spIssues(s, me) : [];
+  const issueOf = (f) => issues.find((x) => x.f === f);
+  const missMsg = (f) => (miss?.f === f && issueOf(f)?.msg) || null; // rám len kým problém trvá
+  const goStep = (i) => { setStep(i); setMiss(null); };
+  async function submit() {
+    if (!issues.length) {
+      setSending(true); setEngMsg(null);
+      partsRef.current = s.outcome === "Dodať diely" ? s.partsNeeded : [];
+      try { await spApplyToEngine(eng.win, s, appliedRef.current); eng.win.submitForm(); }
+      catch (e) { console.error("[protokol] príprava zlyhala", e); setSending(false); setEngMsg({ text: "Protokol sa nepodarilo pripraviť na odoslanie — skúste znova.", err: true }); }
+      return;
+    }
+    setStep(issues[0].step); setMiss(issues[0]);
+  }
+
+  // Pomôcka pri MTH: posledná známa hodnota stroja (kontrola checkera alebo servisný protokol) — nevypĺňa sa.
+  const lastMth = useMemo(() => {
+    const mid = s?.machineId;
+    if (!mid || s?.external) return null;
+    const chk = lastMachineMth(assignments, mid);
+    const prot = (protocolLogs || []).filter((p) => p.machineId === mid && spNumOk(p.machineHours, 1e7)).sort(byKeys("-createdAt"))[0];
+    const a = chk && chk.value != null ? { v: chk.value, d: String(chk.date || "").slice(0, 10), src: "kontrola" } : null;
+    const b = prot ? { v: Number(spNum(prot.machineHours)), d: toLocalISO(new Date(prot.createdAt)), src: "protokol" } : null;
+    return a && b ? (a.d >= b.d ? a : b) : a || b;
+  }, [s?.machineId, s?.external, assignments, protocolLogs]);
+
+  const machineOpts = L?.machines || [];
+  function pickSerial(val) {
+    if (s.external) { up({ serial: val }); return; }
+    const m = machineOpts.find((x) => x.serial.toLowerCase() === val.trim().toLowerCase());
+    up(m ? { serial: m.serial, model: m.model, machineId: m.id || null } : { serial: val, model: "", machineId: null });
+  }
+  const openTicket = (() => {
+    if (!ready || s.external || !s.machineId) return null;
+    const t = machineOpts.find((x) => x.id === s.machineId)?.openTicket;
+    return t && t.damageId !== params?.damageId ? t : null;
+  })();
+  function setFault(code) {
+    const a = L.auto[code];
+    if (a) up({ fault: code, type: a.type, cat: a.cat });
+    else up((x) => ({ fault: code, ...(x.fault && L.auto[x.fault] ? { type: "", cat: "" } : {}), ...(!code ? { type: "", cat: "" } : {}) }));
+  }
+  const autoFault = !!(s?.fault && L?.auto[s.fault]);
+  const travelShown = s ? (s.travelManual ? s.travelHours : spAutoTravel(s.km)) : "";
+  const totalH = s ? s.works.reduce((t, w) => t + (parseFloat(spNum(w.hours)) || 0), 0) : 0;
+  const mats = s ? s.mats : [];
+  const [matForm, setMatForm] = useState({ desc: "", pn: "", qty: "1" });
+  const commitMat = () => {
+    if (!matForm.desc.trim() && !matForm.pn.trim()) return false;
+    if (mats.length >= 13) { setEngMsg({ text: "Najviac 13 dielov.", err: true }); return false; }
+    up((x) => ({ mats: [...x.mats, { desc: matForm.desc.trim(), pn: matForm.pn.trim(), qty: matForm.qty.trim() }], noParts: false }));
+    setMatForm({ desc: "", pn: "", qty: "1" });
+    return true;
+  };
+  function next() { if (step === 3) commitMat(); goStep(Math.min(5, step + 1)); }
+  function chooseOutcome(o) {
+    if (o.label === "Dodať diely") { setPartsDlg(true); return; }
+    up({ outcome: o.label });
+  }
+
+  const autoV = eng?.init || {};
+  const firm = s ? (s.address.match(/^u zákazníka ([^,]+)/) || [])[1] || (s.client !== SP_MATECO ? s.client : "") : "";
+  const ctxLine = s ? [s.serial || "Nový protokol", firm || (params?.damageId ? "tiket" : params?.assignmentId ? "úloha" : "")].filter(Boolean).join(" · ") : "";
+  const savedTxt = savedAt ? `uložené ${new Date(savedAt).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}` : "";
+  const faultObj = (list, c) => (list || []).find((x) => x.code === c);
+  const stepDone = (i) => ready && i < Math.max(seen, step) + (step === 5 ? 1 : 0) && !issues.some((x) => x.step === i);
+  const sum = ready ? [
+    { i: 0, t: "Zákazka", v: [plural(s.techs.length, "technik", "technici", "technikov"), fmtDate(s.date)].join(" · ") },
+    { i: 1, t: "Stroj a porucha", v: [s.serial, s.mth && `${s.mth} MTH`, s.external ? s.extText : [s.fault, s.type, s.cat].filter(Boolean).join("-")].filter(Boolean).join(" · ") },
+    { i: 2, t: "Práca", v: [totalH ? `${spDec(totalH)} h` : "", s.works.filter((w) => w.work.trim()).map((w) => w.work).join(", ")].filter(Boolean).join(" · ") },
+    { i: 3, t: "Diely", v: mats.length ? mats.map((m) => `${m.desc || m.pn}${m.qty ? ` ${m.qty} ks` : ""}`).join(", ") : s.noParts ? "žiadne neboli použité" : "žiadne" },
+    { i: 4, t: "Cestovné a stav", v: [s.km ? `${s.km} km` : "", s.outcome].filter(Boolean).join(" · ") || "—" },
+  ] : [];
+
+  const stepBody = !ready ? null : [
+    // 1 Zákazka
+    <>
+      <SpField id="sp-client" label="Zákazník" tag={s.client === autoV.client ? "automaticky" : null} auto={s.client === autoV.client} miss={missMsg("client")}>
+        <input id="sp-client" value={s.client} onChange={(e) => up({ client: e.target.value })} />
+      </SpField>
+      <SpField id="sp-contact" label="Kontaktná osoba"><input id="sp-contact" value={s.contact} placeholder="Meno a priezvisko" onChange={(e) => up({ contact: e.target.value })} /></SpField>
+      <div className={"sp-f" + (missMsg("techs") ? " sp-miss" : "")}>
+        <span className="sp-lbl" id="sp-techs-l">Technici{s.techs.join(",") === (autoV.techs || []).join(",") && params?.tech && <span className="sp-tag">z pridelenia</span>}</span>
+        <div className="sp-chips" role="group" aria-labelledby="sp-techs-l">
+          {s.techs.map((n) => (
+            <span key={n} className="sp-chip">{n}{!(me && n.toLowerCase() === me.toLowerCase()) && (
+              <button type="button" aria-label={`Odobrať technika ${n}`} onClick={() => up((x) => ({ techs: x.techs.filter((t) => t !== n) }))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>)}</span>
+          ))}
+          {L.techs.some((n) => !s.techs.includes(n)) && (
+            <select id="sp-techs" className="sp-chip-add" aria-label="Pridať technika" value="" onChange={(e) => e.target.value && up((x) => ({ techs: [...x.techs, e.target.value] }))}>
+              <option value="">Pridať technika</option>
+              {L.techs.filter((n) => !s.techs.includes(n)).map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
+        </div>
+        {issueOf("techs") && <span className="sp-hint sp-hint-err">Ešte treba: {issueOf("techs").msg}</span>}
       </div>
-      {showBadge && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(env(safe-area-inset-top) + 8px)",
-            left: 8,
-            fontSize: 12,
-            color: "#fff",
-            background: entries.length ? "rgba(34,139,34,.85)" : "rgba(180,60,60,.85)",
-            padding: "4px 10px",
-            borderRadius: 4,
-            pointerEvents: "none",
-            transition: "opacity .4s",
-          }}
-        >
-          {entries.length > 0
-            ? "✓ Údaje stroja a úlohy predvyplnené" // interné kľúče (machineId, damageId…) technikovi nič nehovoria
-            : "Žiadne údaje neboli predvyplnené (prázdny formulár)"}
+      <div className="sp-grid2">
+        <SpField id="sp-date" label="Dátum" tag={s.date === autoV.date ? "dnes" : null} auto={s.date === autoV.date} miss={missMsg("date")}><SpDateInput id="sp-date" value={s.date} onChange={(date) => up({ date })} /></SpField>
+        <SpField id="sp-jobNumber" label="Číslo zákazky"><input id="sp-jobNumber" inputMode="numeric" placeholder="nepovinné" value={s.jobNumber} onChange={(e) => up({ jobNumber: e.target.value.replace(/\D/g, "") })} /></SpField>
+      </div>
+    </>,
+    // 2 Stroj a porucha
+    <>
+      <label className="sp-check"><input type="checkbox" checked={s.external} onChange={(e) => up({ external: e.target.checked, serial: "", model: "", machineId: null, extText: "", fault: "", type: "", cat: "" })} /> Externý stroj (manuálne zadanie)</label>
+      <div className="sp-grid2">
+        <SpField id="sp-serial" label={s.external ? "Sériové číslo" : "Stroj"} tag={s.serial && s.serial === autoV.serial ? (params?.damageId ? "z tiketu" : "automaticky") : null} auto={!!s.serial && s.serial === autoV.serial} miss={missMsg("serial")}>
+          <input id="sp-serial" list={s.external ? undefined : "sp-machines"} value={s.serial} placeholder="S/N alebo kód" autoComplete="off" onChange={(e) => pickSerial(e.target.value)} />
+          {!s.external && <datalist id="sp-machines">{machineOpts.map((m) => <option key={m.serial} value={m.serial}>{m.model}</option>)}</datalist>}
+        </SpField>
+        <SpField id="sp-model" label="Model" tag={!s.external ? "automaticky" : null} auto={!s.external} miss={missMsg("model")}>
+          <input id="sp-model" value={s.model} readOnly={!s.external} placeholder={s.external ? "Zadajte model…" : "doplní sa podľa stroja"} onChange={(e) => up({ model: e.target.value })} />
+        </SpField>
+      </div>
+      {openTicket && (
+        <div className="fnote fnote-y" role="status">
+          Na tento stroj je už otvorená zákazka ({openTicket.type === "externa" ? "Externá servisná zákazka" : "Poškodenie stroja požičovne"} {openTicket.code}{openTicket.technicianNames?.length ? ` — pridelená: ${openTicket.technicianNames.join(", ")}` : " — zatiaľ nepridelená"}). Ak riešite práve toto, vypíšte protokol priamo odtiaľ.
+          <div><button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => window.postMessage({ type: "mateco_switch_to_ticket_protocol", damageId: openTicket.damageId }, window.location.origin)}>Prejsť na zákazku</button></div>
         </div>
       )}
-      {/* Len "✕", nie plné tlačidlo s textom — sedí do rovnakého riadku ako
-          názov/adresa firmy v hlavičke samotného protokolu (tá je vykreslená
-          v iframe pod ním), nie ako samostatný pás navyše. */}
-      <button
-        className="btn"
-        title="Zavrieť protokol"
-        onClick={() => askConfirm({ title: "Zavrieť protokol?", message: "Rozpísané údaje sa neuložia.", confirmLabel: "Zavrieť bez uloženia" }).then((ok) => ok && onClose())}
-        style={{
-          position: "absolute",
-          top: "calc(env(safe-area-inset-top) + 6px)",
-          right: 8,
-          width: 32,
-          height: 32,
-          padding: 0,
-          borderRadius: "50%",
-          background: "var(--panel-2)",
-          color: "var(--text)",
-          fontSize: 16,
-          lineHeight: "32px",
-          textAlign: "center",
-        }}
-      >
-        ✕
-      </button>
+      <SpField id="sp-mth" label="Počet MTH" miss={missMsg("mth")} hint={lastMth ? `Naposledy ${fmtMth(lastMth.v)} MTH · ${lastMth.src} ${fmtDate(lastMth.d)}` : null}>
+        <input id="sp-mth" inputMode="decimal" value={s.mth} placeholder="hod." autoComplete="off" onChange={(e) => up({ mth: e.target.value })} />
+      </SpField>
+      {s.external ? (
+        <SpField id="sp-extText" label="Popis poruchy" miss={missMsg("extText")}><textarea id="sp-extText" rows={3} value={s.extText} placeholder="Popis poruchy na externom stroji…" onChange={(e) => up({ extText: e.target.value })} /></SpField>
+      ) : (
+        <>
+          <SpField id="sp-fault" label="Kód poruchy" miss={missMsg("fault")}>
+            <select id="sp-fault" value={s.fault} onChange={(e) => setFault(e.target.value)}>
+              <option value="">— Vybrať —</option>
+              {L.faults.map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
+            </select>
+          </SpField>
+          {s.fault && <span className="sp-hint" style={{ marginTop: -8 }}>{faultObj(L.faults, s.fault)?.desc}</span>}
+          <div className="sp-grid2">
+            <SpField id="sp-type" label="Typ poruchy" miss={missMsg("type")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
+              <select id="sp-type" value={s.type} disabled={autoFault} onChange={(e) => up({ type: e.target.value })}>
+                <option value="">— Vybrať —</option>
+                {L.types.filter((f) => autoFault ? f.code === s.type : !L.hiddenTypes.includes(f.code)).map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
+              </select>
+            </SpField>
+            <SpField id="sp-cat" label="Kategória" miss={missMsg("cat")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
+              <select id="sp-cat" value={s.cat} disabled={autoFault} onChange={(e) => up({ cat: e.target.value })}>
+                <option value="">— Vybrať —</option>
+                {L.cats.filter((f) => autoFault ? f.code === s.cat : !L.hiddenCats.includes(f.code)).map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
+              </select>
+            </SpField>
+          </div>
+        </>
+      )}
+    </>,
+    // 3 Čo ste urobili
+    <>
+      <datalist id="sp-works">{L.works.map((w) => <option key={w} value={w} />)}</datalist>
+      {s.works.map((w, i) => (
+        <div key={i} className={s.works.length > 1 ? "sp-card sp-work" : "sp-work"}>
+          <SpField id={"sp-work" + i} label={s.works.length > 1 ? `Vykonaná práca ${i + 1}` : "Vykonaná práca"} miss={missMsg("work" + i)}>
+            <input id={"sp-work" + i} data-sp-work list="sp-works" value={w.work} placeholder="Vybrať alebo napísať" autoComplete="off" onChange={(e) => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, work: e.target.value } : y)) }))} />
+          </SpField>
+          <div className={"sp-f sp-hours" + (missMsg("hours" + i) ? " sp-miss" : "")}>
+            <label htmlFor={"sp-hours" + i}>Hodiny</label>
+            <div className="sp-stepper">
+              <button type="button" aria-label="Ubrať pol hodiny" onClick={() => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: spDec(Math.max(0, (parseFloat(spNum(y.hours)) || 0) - 0.5)) } : y)) }))}>−</button>
+              <input id={"sp-hours" + i} data-sp-hours inputMode="decimal" value={w.hours} placeholder="0,0" autoComplete="off" onChange={(e) => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: e.target.value } : y)) }))} />
+              <button type="button" aria-label="Pridať pol hodiny" onClick={() => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: spDec(Math.min(24, (parseFloat(spNum(y.hours)) || 0) + 0.5)) } : y)) }))}>+</button>
+            </div>
+          </div>
+          {s.works.length > 1 && <button type="button" className="sp-link" onClick={() => up((x) => ({ works: x.works.filter((_, j) => j !== i) }))}>Odstrániť prácu {i + 1}</button>}
+        </div>
+      ))}
+      {s.works.length < 13 && <button type="button" className="sp-dashed" onClick={() => up((x) => ({ works: [...x.works, { work: "", hours: "" }] }))}>Pridať ďalšiu prácu</button>}
+      <SpField id="sp-notes" label="Poznámky a odporúčania (nepovinné)"><textarea id="sp-notes" rows={2} value={s.notes} placeholder="napr. pri revízii skontrolovať hadice" onChange={(e) => up({ notes: e.target.value })} /></SpField>
+      <div className="sp-total"><span>Celkový čas <span className="sp-tag">automaticky</span></span><b className="tnum">{spDec(totalH)} h</b></div>
+    </>,
+    // 4 Použité diely
+    <>
+      {mats.map((m, i) => (
+        <div key={i} className="sp-card">
+          <div className="sp-card-row"><b style={{ flex: 1 }}>{m.desc || "—"}</b><b className="tnum">{m.qty || "—"} ks</b></div>
+          <div className="sp-card-row"><span className="sp-hint" style={{ flex: 1 }}>{m.pn ? `P/N ${m.pn}` : "bez P/N"}</span>
+            <button type="button" className="sp-link" aria-label={`Upraviť diel ${m.desc || m.pn}`} onClick={() => { setMatForm({ desc: m.desc, pn: m.pn, qty: m.qty }); up((x) => ({ mats: x.mats.filter((_, j) => j !== i) })); }}>Upraviť</button>
+            <button type="button" className="sp-link" aria-label={`Odstrániť diel ${m.desc || m.pn}`} onClick={() => up((x) => ({ mats: x.mats.filter((_, j) => j !== i) }))}>Odstrániť</button>
+          </div>
+        </div>
+      ))}
+      <div className="sp-card sp-card-form">
+        <SpField id="sp-mat-desc" label="Názov dielu"><input id="sp-mat-desc" value={matForm.desc} placeholder="napr. hydraulická hadica" onChange={(e) => setMatForm({ ...matForm, desc: e.target.value })} /></SpField>
+        <div className="sp-grid2 sp-grid-qty">
+          <SpField id="sp-mat-pn" label="Číslo dielu (P/N)"><input id="sp-mat-pn" value={matForm.pn} placeholder="nepovinné" onChange={(e) => setMatForm({ ...matForm, pn: e.target.value })} /></SpField>
+          <SpField id="sp-mat-qty" label="Množstvo"><input id="sp-mat-qty" inputMode="decimal" value={matForm.qty} onChange={(e) => setMatForm({ ...matForm, qty: e.target.value })} /></SpField>
+        </div>
+        <button type="button" className="btn sp-dark" onClick={commitMat}>Pridať diel</button>
+      </div>
+      {!mats.length && (
+        <button type="button" className={"sp-outline" + (s.noParts ? " on" : "")} aria-pressed={s.noParts} onClick={() => up((x) => ({ noParts: !x.noParts }))}>
+          {s.noParts && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+          Žiadne diely neboli použité
+        </button>
+      )}
+    </>,
+    // 5 Cestovné a stav
+    <>
+      <div className="sp-grid2">
+        <SpField id="sp-km" label="Km" miss={missMsg("km")}><input id="sp-km" inputMode="decimal" value={s.km} placeholder="0" autoComplete="off" onChange={(e) => up({ km: e.target.value })} /></SpField>
+        <SpField id="sp-travel" label="Čas cesty (h)" tag={!s.travelManual && travelShown ? "z km" : null} auto={!s.travelManual} miss={missMsg("travel")}>
+          <input id="sp-travel" inputMode="decimal" value={travelShown} placeholder="—" autoComplete="off" onChange={(e) => up({ travelHours: e.target.value, travelManual: !!e.target.value.trim() })} />
+        </SpField>
+      </div>
+      <SpField id="sp-address" label="Miesto práce" tag={s.address && s.address === autoV.address ? "automaticky" : null} auto={!!s.address && s.address === autoV.address} miss={missMsg("address")}>
+        <input id="sp-address" value={s.address} placeholder="Lokalita / adresa" onChange={(e) => up({ address: e.target.value })} />
+      </SpField>
+      <div className={"sp-f" + (missMsg("outcome") ? " sp-miss" : "")}>
+        <span className="sp-lbl sp-lbl-big" id="sp-outcome-l">Ako zásah dopadol</span>
+        <div className="sp-outcomes" role="group" aria-labelledby="sp-outcome-l">
+          {SP_OUTCOMES.map((o, k) => (
+            <button key={o.label} id={k === 0 ? "sp-outcome" : undefined} type="button" className={`sp-ob sp-ob-${o.tone}`} aria-pressed={s.outcome === o.label} onClick={() => chooseOutcome(o)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{o.circle && <circle cx="12" cy="12" r="9" />}<path d={o.d} /></svg>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {s.outcome === "Dodať diely" && (
+          <div className="sp-card sp-needed">
+            <b>Treba dodať</b>
+            <span>{s.partsNeeded.map((x) => `${x.name}${x.pn ? ` (P/N ${x.pn})` : ""} ${x.qty} ks`).join(", ")}</span>
+            <button type="button" className="sp-link" onClick={() => setPartsDlg(true)}>Upraviť diely na dodanie</button>
+          </div>
+        )}
+      </div>
+    </>,
+    // 6 Skontrolovať a podpísať
+    <>
+      <div className="sp-sum">
+        {sum.map((r) => {
+          const bad = issues.find((x) => x.step === r.i);
+          return (
+            <div key={r.i} className="sp-sr">
+              {bad ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16v.5" /></svg>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+              <div><b>{r.t}</b><span className={bad ? "sp-sr-bad" : undefined}>{bad ? `chýba: ${issues.filter((x) => x.step === r.i).map((x) => x.msg).join(", ")}` : r.v}</span></div>
+              <button type="button" className="sp-link" aria-label={`${bad ? "Doplniť" : "Upraviť"}: ${r.t}`} onClick={() => { goStep(r.i); if (bad) setMiss(bad); }}>{bad ? "Doplniť" : "Upraviť"}</button>
+            </div>
+          );
+        })}
+      </div>
+      {s.sigTech ? (
+        <button type="button" className="sp-signed" data-sp-sign="sig-tech" onClick={() => setSign("sig-tech")} aria-label="Podpis technika — podpísané, podpísať znova">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>Technik podpísal<span className="sp-hint">{s.techs.join(", ")}</span>
+        </button>
+      ) : (
+        <button type="button" className="sp-signbtn sp-signbtn-sm" data-sp-sign="sig-tech" onClick={() => setSign("sig-tech")}>Podpis technika<span>{s.techs.join(", ")}</span></button>
+      )}
+      {s.sigCust ? (
+        <button type="button" className="sp-signed sp-signed-cust" data-sp-sign="sig-cust" onClick={() => setSign("sig-cust")} aria-label="Podpis zákazníka — podpísané, podpísať znova">
+          <img src={s.sigCust} alt="" /><span><b>Zákazník podpísal</b><span className="sp-hint">{s.custName || "bez mena"} · podpísať znova</span></span>
+        </button>
+      ) : (
+        <button type="button" className="sp-signbtn" data-sp-sign="sig-cust" onClick={() => setSign("sig-cust")}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h16M6 16l9.5-9.5a2.1 2.1 0 0 1 3 3L9 19H6z" /></svg>
+          Podpis zákazníka<span>otvorí sa na celú obrazovku</span>
+        </button>
+      )}
+    </>,
+  ];
+
+  const engFrame = (
+    <div className="protocol-frame-wrap sp-engine" aria-hidden="true" inert="">
+      <iframe ref={frameRef} title="Servisný protokol – formulár na odoslanie" tabIndex={-1} srcDoc={html} onLoad={onEngineLoad}
+        sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }} />
+    </div>
+  );
+  const steps = (
+    <ol className="sp-steps">
+      {SP_STEPS.map((x, i) => (
+        <li key={i}><button type="button" aria-current={i === step ? "step" : undefined} onClick={() => goStep(i)} className={i === step ? "on" : stepDone(i) && i < 5 ? "done" : ""}>
+          <i aria-hidden="true">{i !== step && stepDone(i) && i < 5 ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12l5 5 9-10" /></svg> : i + 1}</i>
+          <span className="sp-steps-l">{x.nav}</span><span className="sr-only">{i === step ? " (aktuálny krok)" : stepDone(i) && i < 5 ? " (hotové)" : ""}</span>
+        </button></li>
+      ))}
+    </ol>
+  );
+  return (
+    <div ref={rootRef} className="protocol-overlay proto-edit sp" style={{ position: "fixed", inset: 0, zIndex: 200, overflow: "hidden" }} data-sp-wizard data-ready={ready && draftChecked && !draftAsk ? "1" : "0"} role="dialog" aria-modal="true" aria-label="Servisný protokol">
+      {engFrame}
+      <div className="sp-shell">
+        <nav className="sp-nav" aria-label="Kroky protokolu">
+          <div className="sp-nav-head"><span className="sp-nav-code">{s?.serial || "Protokol"}</span><span className="sp-hint">{firm || (params?.damageId ? "tiket" : params?.assignmentId ? "úloha" : "nový protokol")}</span></div>
+          {steps}
+          <span className="sp-saved">{savedTxt && `Priebežne ${savedTxt}`}</span>
+        </nav>
+        <div className="sp-main">
+          <div className="sp-top">
+            <button type="button" className="sp-x" aria-label="Zavrieť protokol" onClick={close}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <span className="sp-ctx">{ctxLine}</span>
+            <span className="sp-saved-top">{savedTxt}</span>
+          </div>
+          <div className="sp-strip-nav">{steps}</div>
+          <div className="sp-body">
+            {!ready || (!draftChecked && !draftAsk) ? <div className="sp-loading" role="status">Načítavam protokol…</div> : draftAsk ? (
+              <div className="sp-draft">
+                <h1 ref={headRef} tabIndex={-1}>Rozpracovaný protokol</h1>
+                <p>V tomto zariadení je rozpracovaný protokol{draftAsk.machineCode ? ` pre ${draftAsk.machineCode}` : ""} (uložené {draftSavedText(draftAsk.savedAt)}).</p>
+                <button type="button" className="btn btn-accent sp-big" onClick={() => resumeDraft(draftAsk)}>Pokračovať</button>
+                <button type="button" className="btn btn-ghost sp-big" onClick={() => restartDraft(draftAsk)}>Začať odznova</button>
+              </div>
+            ) : (
+              <>
+                <div className="sp-head">
+                  <span>{step + 1} zo 6</span>
+                  <h1 ref={headRef} tabIndex={-1}>{SP_STEPS[step].t}</h1>
+                </div>
+                <div className="sp-fields">{stepBody[step]}</div>
+              </>
+            )}
+          </div>
+          {ready && draftChecked && !draftAsk && (
+            <div className="sp-foot">
+              {engMsg && <div className={"sp-msg" + (engMsg.err ? " err" : "")} role={engMsg.err ? "alert" : "status"}>{engMsg.text}</div>}
+              <div className="sp-foot-btns">
+                {step > 0 && <button type="button" className="btn btn-ghost sp-back" onClick={() => goStep(step - 1)}>Späť</button>}
+                {step < 5 ? (
+                  <button type="button" className="btn btn-accent sp-next" data-sp-next onClick={next}>Ďalej: {SP_STEPS[step].next}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-accent sp-next" disabled={sending} onClick={submit}>{sending ? "Odosielam…" : "Uložiť a odoslať"}</button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <aside className="sp-side" aria-label="Doteraz v protokole">
+          {ready && (
+            <div className="sp-side-card">
+              <h2>Doteraz v protokole</h2>
+              {[["Technici", s.techs.join(", ")], ["Dátum", fmtDate(s.date)], ["Stroj", s.serial], ["MTH", s.mth], ["Porucha", s.external ? s.extText : [s.fault && `${s.fault} · ${faultObj(L.faults, s.fault)?.name || ""}`, s.type, s.cat].filter(Boolean).join(" · ")],
+                ["Práca", totalH ? `${spDec(totalH)} h` : ""], ["Diely", mats.length ? plural(mats.length, "diel", "diely", "dielov") : s.noParts ? "žiadne" : ""], ["Km", s.km], ["Výsledok", s.outcome]].map(([k, v]) => (
+                <div key={k} className="sp-sm"><span>{k}</span><b>{v || "—"}</b></div>
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
+      {partsDlg && ready && (
+        <SpPartsDialog initial={s.partsNeeded} onCancel={() => setPartsDlg(false)} onDone={(list) => { up({ partsNeeded: list, outcome: "Dodať diely" }); setPartsDlg(false); }} />
+      )}
+      {sign && ready && (
+        <SignatureOverlay
+          label={sign === "sig-tech" ? "Podpis technika" : "Podpis zákazníka"}
+          initialValue={sign === "sig-tech" ? s.sigTech : s.sigCust}
+          fieldAspect={(() => { const r = eng.win.document.getElementById(sign)?.getBoundingClientRect(); return r && r.width && r.height ? r.width / r.height : 3.2; })()}
+          extra={sign === "sig-cust" ? (
+            <div className="sp-sign-extra">
+              <SpField id="sp-custName" label="Meno zákazníka (preberajúci)"><input id="sp-custName" value={s.custName} placeholder="Meno a priezvisko" onChange={(e) => up({ custName: e.target.value })} /></SpField>
+              <p className="sp-hint">Podpisom potvrdzujete vykonanú prácu: {[s.works.filter((w) => w.work.trim()).map((w) => w.work.toLowerCase()).join(", "), totalH ? `${spDec(totalH)} h` : "", s.serial && `stroj ${s.serial}`, s.outcome && s.outcome.toLowerCase()].filter(Boolean).join(", ")}.</p>
+            </div>
+          ) : null}
+          onCancel={() => setSign(null)}
+          fill
+          onDone={async (url) => { const k = sign; setSign(null); const c = url && url !== (k === "sig-tech" ? s.sigTech : s.sigCust) ? await spCropSig(url) : url; up(k === "sig-tech" ? { sigTech: c } : { sigCust: c }); }}
+        />
+      )}
     </div>
   );
 }
@@ -17927,7 +18652,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
                       </span>
                     </td>
                     <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                      {onOpenJob && <button type="button" className="btn btn-outline who-hide-mobile" style={{ borderColor: "var(--line-strong)" }} onClick={() => onOpenJob(j)}>Otvoriť</button>}{" "}
+                      {onOpenJob && <button type="button" className="btn btn-outline who-hide-mobile" style={{ borderColor: "var(--field-line)" }} onClick={() => onOpenJob(j)}>Otvoriť</button>}{" "}
                       <KebabMenu label="⋯" actions={[
                         can(user, "job_edit") && { label: "Upraviť", onClick: () => onEdit(j) },
                         st !== "completed" && can(user, "job_complete") && { label: "Ukončiť zákazku", onClick: () => onComplete(j) },
@@ -19183,7 +19908,7 @@ function CarrierPickModal({ customers, onPick, onClose }) {
           <button type="button" className="btn btn-outline" style={{ minHeight: 36 }} onClick={() => onPick({ id: c.id, name: c.firma })}>Použiť ju</button>
         </div>
       ))}
-      <FormFoot cancel={false} confirm left={<button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => onPick(null)}>Bez firmy</button>}>
+      <FormFoot cancel={false} confirm left={<button className="btn btn-outline" style={{ borderColor: "var(--field-line)" }} onClick={() => onPick(null)}>Bez firmy</button>}>
         <button className="btn btn-accent" disabled={!newName.trim() || customers.some((c) => (c.firma || "").trim().toLowerCase() === newName.trim().toLowerCase())} onClick={() => onPick({ newName: newName.trim(), ico: newIco.trim() })}>Pridať firmu</button>
       </FormFoot>
     </Modal>
@@ -19241,7 +19966,7 @@ function AddEmployeeModal({ existing, draft, canSetEz, assignableRoles, profiles
             <Field label="Firma (dopravca)">
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ flex: 1, fontSize: 15 }}>{carrier?.name || <span style={{ color: "var(--text-dim)" }}>— bez firmy —</span>}</span>
-                <button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => setPickCarrier(true)}>{carrier ? "Zmeniť" : "Vybrať firmu"}</button>
+                <button className="btn btn-outline" style={{ borderColor: "var(--field-line)" }} onClick={() => setPickCarrier(true)}>{carrier ? "Zmeniť" : "Vybrať firmu"}</button>
               </div>
             </Field>
           )}
@@ -19570,7 +20295,7 @@ function CustomerContactRow({ contact, canEdit, onEdit, onDelete, startEditing }
       {canEdit && (
         <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
           <button className="btn btn-outline" style={{ minHeight: 40, fontSize: 14 }} onClick={() => setEditing(true)}>Upraviť</button>
-          <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minHeight: 40, minWidth: 40, padding: "0 10px", borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať", danger: true, onClick: () => setConfirmingDelete(true) }]} />
+          <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minHeight: 40, minWidth: 40, padding: "0 10px", borderColor: "var(--field-line)" }} actions={[{ label: "Zmazať", danger: true, onClick: () => setConfirmingDelete(true) }]} />
         </div>
       )}
       {confirmingDelete && (
@@ -21072,20 +21797,43 @@ function SignaturePad({ value, onChange, label, summary, miss, readOnly, en }) {
   );
 }
 
-// Fullscreen podpisovanie — canvas vyplní celú obrazovku (na mobile stačí
-// otočiť telefón, canvas sa responzívne roztiahne, žiadny orientation-lock
-// hack). Pri resize/otočení sa obsah zachytí a prekreslí do nových rozmerov
-// (nie vymaže), aby otočenie počas podpisovania podpis nezmazalo.
-function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel, onDone, en }) {
+// Fullscreen podpisovanie — plocha vyplní celú obrazovku na výšku aj na šírku. Pri resize/otočení
+// sa podpis prenesie do novej plochy (nie vymaže); ak sa nezmestí, zmenší sa a vycentruje.
+// Ohraničenie ťahov na plátne (px zariadenia) — null = prázdne.
+function sigInk(c) {
+  const { data } = c.getContext("2d").getImageData(0, 0, c.width, c.height);
+  let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) { const i = (y * c.width + x) * 4; if (data[i + 3] > 0 && data[i] + data[i + 1] + data[i + 2] < 600) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+// Podpis zo src do dst: keep = na pôvodnom mieste, ak sa zmestí; inak vycentrovať (zmenšiť, nikdy nezväčšiť).
+function sigPaint(dst, src, keep) {
+  const b = sigInk(src);
+  const ctx = dst.getContext("2d");
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, dst.width, dst.height);
+  if (b && keep && b.x + b.w <= dst.width && b.y + b.h <= dst.height) ctx.drawImage(src, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+  else if (b) {
+    const m = Math.round(Math.min(dst.width, dst.height) * 0.06);
+    const k = Math.min(1, (dst.width - 2 * m) / b.w, (dst.height - 2 * m) / b.h), w = b.w * k, h = b.h * k;
+    ctx.drawImage(src, b.x, b.y, b.w, b.h, Math.round((dst.width - w) / 2), Math.round((dst.height - h) / 2), w, h);
+  }
+  ctx.restore();
+  return !!b;
+}
+function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel, onDone, en, extra, fill }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drawingRef = useRef(false);
   const hasDrawnRef = useRef(false);
   const editedRef = useRef(false); // „Hotovo“ bez ťahu/vymazania vráti pôvodný podpis (nie jeho prekreslenú kópiu)
+  const snapRef = useRef(null); // podpis pred otočením v pôvodnej veľkosti
+  const freshRef = useRef(false); // ťah od poslednej snímky
   const aspect = fieldAspect > 0 ? fieldAspect : 3.2;
   const rootRef = useRef(null);
   const doneRef = useRef(null);
   useEffect(() => { doneRef.current?.focus(); }, []);
+  const titleId = useId();
 
   // Esc = Zrušiť len plátno (capture + stop, inak by sa pýtalo „Zavrieť okno?“ celého protokolu).
   // Tab ostáva v plátne — inak by sa fokus dostal na tlačidlá protokolu pod ním (Uložiť opravu).
@@ -21093,7 +21841,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
     const onKey = (e) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onCancel(); }
       if (e.key === "Tab" && rootRef.current) {
-        const f = [...rootRef.current.querySelectorAll("button, canvas")];
+        const f = [...rootRef.current.querySelectorAll("button, canvas, input")];
         const i = f.indexOf(document.activeElement);
         e.preventDefault();
         f[i < 0 ? 0 : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
@@ -21106,18 +21854,13 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
-    // Canvas má PRESNE rovnaký pomer strán ako malé pole vo formulári (aspect),
-    // max. čo sa zmestí do dostupnej plochy — nie celú obrazovku bez ohľadu na
-    // tvar. Vďaka tomu je zmenšenie späť do poľa čisté zväčšenie/zmenšenie,
-    // žiadne skreslenie ani orezávanie prázdneho miesta okolo podpisu.
-    function sizeCanvas(dataUrl) {
+    // Plátno = celá dostupná plocha. Do poľa vo formulári sa podpis prenesie až pri „Hotovo“ (pomer strán poľa, done()).
+    function sizeCanvas(src) {
       const ratio = window.devicePixelRatio || 1;
       const pad = 16;
       const wrapRect = wrap.getBoundingClientRect();
-      const availW = Math.max(50, wrapRect.width - pad * 2);
-      const availH = Math.max(50, wrapRect.height - pad * 2);
-      let w = availW, h = w / aspect;
-      if (h > availH) { h = availH; w = h * aspect; }
+      const w = Math.max(50, wrapRect.width - pad * 2);
+      const h = Math.max(50, wrapRect.height - pad * 2);
       canvas.style.width = w + "px";
       canvas.style.height = h + "px";
       canvas.width = w * ratio;
@@ -21130,17 +21873,18 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
       ctx.lineJoin = "round";
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, w, h);
-      if (dataUrl) {
+      if (typeof src === "string") {
         const img = new Image();
-        // Pomer strán zdroja == pomer strán canvasu (oba "aspect"), takže
-        // priame roztiahnutie na w×h nič neskresľuje.
-        img.onload = () => ctx.drawImage(img, 0, 0, w, h);
+        img.onload = () => { const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext("2d").drawImage(img, 0, 0); sigPaint(canvas, c); };
         img.crossOrigin = "anonymous"; // podpis z úložiska (odkaz) — inak by toDataURL pri „Hotovo“ zlyhalo
-        img.src = dataUrl;
-      }
+        img.src = src;
+      } else if (src) sigPaint(canvas, src, true);
     }
+    // Snímka sa berie len po novom ťahu — inak by sa podpis pri každom otočení (na šírku a späť) ďalej zmenšoval.
     function resizeAndRedraw() {
-      sizeCanvas(hasDrawnRef.current ? canvas.toDataURL("image/png") : null);
+      if (!hasDrawnRef.current) return sizeCanvas(null);
+      if (freshRef.current || !snapRef.current) { const c = document.createElement("canvas"); c.width = canvas.width; c.height = canvas.height; c.getContext("2d").drawImage(canvas, 0, 0); snapRef.current = c; freshRef.current = false; }
+      sizeCanvas(snapRef.current);
     }
     // Debounka po otočení telefónu — mobilné prehliadače chvíľu po
     // orientationchange hlásia ešte staré (pred otočením) rozmery, takže
@@ -21176,6 +21920,7 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
     ctx.moveTo(p.x, p.y);
     hasDrawnRef.current = true;
     editedRef.current = true;
+    freshRef.current = true;
     e.preventDefault();
   }
   function move(e) {
@@ -21197,35 +21942,45 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
     ctx.fillRect(0, 0, rect.width, rect.height);
     hasDrawnRef.current = false;
     editedRef.current = true;
+    snapRef.current = null;
   }
   function done() {
     if (!editedRef.current) return onDone(initialValue || null);
-    onDone(hasDrawnRef.current ? canvasRef.current.toDataURL("image/png") : null);
+    if (!hasDrawnRef.current) return onDone(null);
+    const c = canvasRef.current;
+    if (fill) return onDone(c.toDataURL("image/png")); // celá plocha — servisný protokol podpis oreže sám (spCropSig)
+    // Obrázok v pomere strán poľa a v rozmere ako doteraz (najväčší obdĺžnik s pomerom poľa v ploche) — tlač, DB a Power Automate sa nemenia.
+    // k70e: plocha je na PC najviac 900 px, obrázok sa ráta z plnej šírky ako predtým (rozmer pre tlač, DB a PA sa nemení).
+    let w = Math.floor(Math.max(50, rootRef.current.clientWidth - 32) * (window.devicePixelRatio || 1)), h = w / aspect;
+    if (h > c.height) { h = c.height; w = h * aspect; }
+    const o = document.createElement("canvas"); o.width = Math.round(w); o.height = Math.round(h);
+    sigPaint(o, c);
+    onDone(o.toDataURL("image/png"));
   }
 
   return (
-    <div ref={rootRef} lang={en ? "en" : undefined} className="fullscreen-overlay" style={{ position: "fixed", inset: 0, background: "var(--panel)", color: "var(--text)", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div ref={rootRef} lang={en ? "en" : undefined} className="fullscreen-overlay" role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ position: "fixed", inset: 0, background: "var(--panel)", color: "var(--text)", zIndex: 300, display: "flex", flexDirection: "column", overflowY: "auto" }}>
       {/* Hlavička + zhrnutie (čo sa podpisuje) sú nad plochou; canvas si dopočíta zvyšnú výšku sám (wrapRef). */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "max(8px, env(safe-area-inset-top)) 12px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <button type="button" onClick={onCancel} style={{ minHeight: 44, padding: "0 6px", border: 0, background: "none", font: "inherit", fontSize: 16, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>{en ? "Cancel" : "Zrušiť"}</button>
-        <strong style={{ flex: 1, textAlign: "center", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: ".05em", textTransform: "uppercase" }}>{label}</strong>
-        <span style={{ width: 60 }} />
+      <div className="sig-head" style={{ display: "flex", alignItems: "center", gap: 12, padding: "max(10px, env(safe-area-inset-top)) 16px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <strong id={titleId} style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800 }}>{label}</strong>
+        <button type="button" className="btn btn-outline" onClick={onCancel} style={{ minHeight: 48, padding: "0 16px", borderRadius: 12, fontSize: 17, borderWidth: 1.5, borderColor: "var(--field-line)" }}>{en ? "Cancel" : "Zrušiť"}</button>
       </div>
       {summary?.title && (
-        <section aria-label={en ? "What you are signing" : "Čo podpisujete"} style={{ margin: "12px 16px 0", background: "var(--panel-2)", borderRadius: 12, padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px 14px", fontSize: 15, flexShrink: 0 }}>
+        <section className="sig-sum" aria-label={en ? "What you are signing" : "Čo podpisujete"} style={{ margin: "12px 0 0", width: "calc(100% - 32px)", maxWidth: 900, alignSelf: "center", boxSizing: "border-box", background: "var(--panel-2)", borderRadius: 12, padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px 14px", fontSize: 15, flexShrink: 0 }}>
           <div className="tnum" style={{ gridColumn: "1 / -1", fontSize: 18, fontWeight: 700 }}>{summary.title}</div>
           {(summary.rows || []).filter(([, v]) => v).map(([k, v]) => (
             <div key={k}><div style={{ fontSize: 13, color: "var(--text-dim)" }}>{k}</div><strong>{v}</strong></div>
           ))}
         </section>
       )}
-      <div ref={wrapRef} style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, boxSizing: "border-box", touchAction: "none" }}>
+      {extra}
+      <div ref={wrapRef} style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 932, alignSelf: "center", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, boxSizing: "border-box", touchAction: "none" }}>
         <div style={{ position: "relative", lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
           tabIndex={0}
           aria-label={en ? "Signature area" : "Plocha na podpis"}
-          style={{ touchAction: "none", background: "#fff", border: "2px solid var(--border)", borderRadius: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}
+          style={{ touchAction: "none", background: "#fff", border: "2px dashed #8A9097", borderRadius: 16 }}
           onMouseDown={start}
           onMouseMove={move}
           onMouseUp={end}
@@ -21234,15 +21989,14 @@ function SignatureOverlay({ label, summary, initialValue, fieldAspect, onCancel,
           onTouchMove={move}
           onTouchEnd={end}
         />
-        <button type="button" aria-label={en ? "Clear signature" : "Vymazať podpis"} title={en ? "Clear" : "Vymazať"} onClick={clear}
-          style={{ position: "absolute", top: 8, right: 8, width: 48, height: 48, borderRadius: 12, border: "1px solid #D0D0D0", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
-          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3A3A3A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
-        </button>
+        {/* Popis a čiara sú len nad plátnom (pointer-events: none) — do obrázka podpisu sa nedostanú. */}
+        <span aria-hidden="true" style={{ position: "absolute", top: 14, left: 18, fontSize: 15, lineHeight: 1.2, color: "#4A5157", pointerEvents: "none" }}>{window.matchMedia?.("(pointer: fine)").matches ? (en ? "Sign here" : "Podpíšte sa") : (en ? "Sign with your finger" : "Podpíšte sa prstom")}</span>
+        <span aria-hidden="true" style={{ position: "absolute", left: 28, right: 28, bottom: 34, borderTop: "1.5px solid #9AA1A8", pointerEvents: "none" }} />
         </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 16px max(14px, env(safe-area-inset-bottom))", flexShrink: 0 }}>
-        <button ref={doneRef} type="button" className="btn btn-accent" style={{ width: "100%", minHeight: 56, fontSize: 18, fontWeight: 700, justifyContent: "center" }} onClick={done}>{en ? "Done" : "Hotovo"}</button>
-        <span className="sig-rotate-hint" style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center" }}>{en ? "Turn the phone for more space" : "Otočte telefón pre viac miesta"}</span>
+      <div style={{ display: "flex", gap: 10, padding: "0 16px max(16px, env(safe-area-inset-bottom))", flexShrink: 0, width: "100%", maxWidth: 932, alignSelf: "center", boxSizing: "border-box" }}>
+        <button type="button" className="btn btn-outline" aria-label={en ? "Clear signature" : "Vymazať podpis"} style={{ flex: "1 1 0", minHeight: 60, borderRadius: 14, fontSize: 18, justifyContent: "center", borderWidth: 1.5, borderColor: "var(--field-line)" }} onClick={clear}>{en ? "Clear" : "Vymazať"}</button>
+        <button ref={doneRef} type="button" className="btn btn-accent" style={{ flex: "2 1 0", minHeight: 60, borderRadius: 14, fontSize: 19, fontWeight: 700, justifyContent: "center" }} onClick={done}>{en ? "Done" : "Hotovo"}</button>
       </div>
     </div>
   );
@@ -21348,7 +22102,7 @@ function PhotoPickButtons({ onFiles, miss, onCamera, cameraLabel = "Odfotiť", g
         <NavIcon id="kamera" /> {cameraLabel}
         <input type="file" accept="image/*" capture="environment" onChange={pick} style={{ display: "none" }} />
       </label>
-      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", borderColor: "var(--line-strong)" }}>
+      <label className="btn btn-outline" style={{ minHeight: 48, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", borderColor: "var(--field-line)" }}>
         <NavIcon id="galeria" /> {galleryLabel}
         <input type="file" accept="image/*" multiple onChange={pick} style={{ display: "none" }} />
       </label>
@@ -22338,7 +23092,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
           <button type="button" className="btn btn-accent" style={bs} onClick={() => discardDraft(d, false)}>Zahodiť rozpracovaný protokol{why === "machine" ? " a začať odznova" : ""}</button>
         ) : (<>
           <button type="button" className="btn btn-accent" style={bs} onClick={() => restoreDraft(d)}>Pokračovať v rozpracovanom protokole (uložené {when})</button>
-          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--line-strong)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
+          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--field-line)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
         </>)}
       </Modal>
     );
@@ -22433,7 +23187,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
 
   if (screen === "view" && existing) {
     return (
-      <Modal headerExtra={<>{issueBtn}{canDelete && <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}</>} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
+      <Modal headerExtra={<>{issueBtn}{canDelete && <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}</>} eyebrow="Protokol o odovzdaní a prevzatí stroja" title={machine?.code || "Stroj"} onClose={onClose} xwide>
         {transportIssueBlock}
         {forcePhaseBlocked && (
           <div style={{ background: "var(--panel-2)", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 10 }}>
@@ -22508,7 +23262,7 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
       {!isReturnPhase && checkerWarn && !existing?.handoverDone && <div className={checkerWarnCls(checkerWarn)}>⚠ {checkerWarn}</div>}
       {!isReturnPhase && (
         checkerInspection?.resolved && !checkerInspection.skipped ? (
-          <button type="button" className="btn btn-outline" style={{ minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy, job)}>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 44, borderColor: "var(--field-line)" }} onClick={() => openPrintableChecklist(checkerInspection, machine, checkerInspection.checkerBy, job)}>
             <NavIcon id="hladat" size={16} /> Zobraziť kontrolu checkera{checkerInspection.checkerBy ? ` (${checkerInspection.checkerBy})` : ""}
           </button>
         ) : (
@@ -22649,9 +23403,9 @@ function HandoverProtocolModal({ job, machine, existing, myEmployee, user, onClo
         ].filter(Boolean)}
         left={(existing || canDelete) && (
           <>
-            {canDelete && existing && <KebabMenu up label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 44, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}
+            {canDelete && existing && <KebabMenu up label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, minHeight: 44, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }} actions={[{ label: "Zmazať protokol", danger: true, onClick: () => onDelete(existing.id) }]} />}
             {existing && (
-              <button type="button" className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => setScreen("view")}>
+              <button type="button" className="btn btn-outline" style={{ borderColor: "var(--field-line)" }} onClick={() => setScreen("view")}>
                 ← Späť na náhľad
               </button>
             )}
@@ -22964,7 +23718,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
           <button type="button" className="btn btn-accent" style={bs} onClick={() => discardDraft(d, false)}>Zahodiť rozpracovanú kontrolu{why === "machine" ? " a začať odznova" : ""}</button>
         ) : (<>
           <button type="button" className="btn btn-accent" style={bs} onClick={() => restoreDraft(d)}>Pokračovať v rozpracovanej kontrole (uložené {when})</button>
-          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--line-strong)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
+          <button type="button" className="btn btn-outline" style={{ ...bs, borderColor: "var(--field-line)" }} onClick={() => discardDraft(d, true)}>Začať odznova</button>
         </>)}
       </Modal>
     );
@@ -23019,7 +23773,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         )
       ) : selfTransport && (
         handoverDone ? (
-          <button type="button" className="btn btn-outline" style={{ marginBottom: 12, borderColor: "var(--line-strong)" }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
+          <button type="button" className="btn btn-outline" style={{ marginBottom: 12, borderColor: "var(--field-line)" }} onClick={() => openPrintableHandoverProtocol(job, machine, handoverProtocol)}>
             <NavIcon id="protokol" size={16} /> Zobraziť protokol o odovzdaní
           </button>
         ) : assignment.resolved && canEdit && onOpenHandover && !showForm ? ( // počas úpravy nie (Enter by otvoril protokol namiesto Uložiť)
@@ -23034,7 +23788,7 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
         )
       )}
       {assignment.resolved && !assignment.skipped && !showForm && (
-        <button type="button" className="btn btn-outline" style={{ marginBottom: 4, borderColor: "var(--line-strong)" }} onClick={() => openPrintableChecklist(assignment, machine, assignment.checkerBy, job)}>
+        <button type="button" className="btn btn-outline" style={{ marginBottom: 4, borderColor: "var(--field-line)" }} onClick={() => openPrintableChecklist(assignment, machine, assignment.checkerBy, job)}>
           <NavIcon id="tlaciaren" size={16} /> Tlačová verzia kontroly
         </button>
       )}
@@ -23185,10 +23939,10 @@ function CheckerInspectionModal({ assignment, job, machine, handoverDone, handov
               <input placeholder="Diel" aria-label="Diel" value={p.name} onChange={(e) => updatePartRow(p.id, { name: e.target.value })} data-miss={!p.name.trim() || undefined} style={{ flex: "2 1 160px" }} />
               <input placeholder="P/N" aria-label="P/N" value={p.partNumber} onChange={(e) => updatePartRow(p.id, { partNumber: e.target.value })} style={{ flex: "1 1 100px" }} />
               <input type="number" inputMode="numeric" min="1" placeholder="ks" aria-label="Počet kusov" value={p.qty} onChange={(e) => updatePartRow(p.id, { qty: e.target.value })} style={{ width: 70 }} />
-              <button type="button" className="btn btn-outline" aria-label="Odstrániť diel" style={{ minWidth: 44, minHeight: 44, borderColor: "var(--line-strong)" }} onClick={() => removePartRow(p.id)}>✕</button>
+              <button type="button" className="btn btn-outline" aria-label="Odstrániť diel" style={{ minWidth: 44, minHeight: 44, borderColor: "var(--field-line)" }} onClick={() => removePartRow(p.id)}>✕</button>
             </div>
           ))}
-          <button type="button" className="btn btn-outline" style={{ minHeight: 44, marginBottom: 10, borderColor: "var(--line-strong)" }} onClick={addPartRow}>+ Pridať použitý diel</button>
+          <button type="button" className="btn btn-outline" style={{ minHeight: 44, marginBottom: 10, borderColor: "var(--field-line)" }} onClick={addPartRow}>+ Pridať použitý diel</button>
         </>
       ) : (
         <div style={{ fontSize: 14, marginBottom: 10 }}>
@@ -27028,23 +27782,19 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     if (depoFilter) {
       list = list.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
     }
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    // k70d: viac výrazov oddelených čiarkou = stroj sedí aspoň na jeden („1330, 2632“)
+    const terms = search.toLowerCase().split(",").map((t) => t.trim()).filter(Boolean);
+    if (terms.length) {
+      const has = (v) => terms.some((q) => (v || "").toLowerCase().includes(q));
       // Zákazník sa hľadá naprieč VŠETKÝMI zákazkami a rezerváciami stroja (nie
       // len tou aktuálne prebiehajúcou), nech sa dá stroj nájsť aj podľa
       // budúcej/minulej zákazky pre danú firmu — presne na to je tento kalendár.
       const machineIdsByCustomer = new Set(
         [...jobs, ...reservations.filter((r) => r.status === "approved" || r.status === "pending")] // len rezervácie, ktoré Kalendár ukazuje
-          .filter((x) => (x.customer || "").toLowerCase().includes(q))
+          .filter((x) => has(x.customer))
           .map((x) => x.machineId)
       );
-      list = list.filter(
-        (m) =>
-          (m.code || "").toLowerCase().includes(q) ||
-          (m.type || "").toLowerCase().includes(q) ||
-          (m.depo || "").toLowerCase().includes(q) ||
-          machineIdsByCustomer.has(m.id)
-      );
+      list = list.filter((m) => has(m.code) || has(m.type) || has(m.depo) || machineIdsByCustomer.has(m.id));
     }
     if (sortMode === "category" && categoryLabelOf) {
       const modelByName = new Map((machineModels || []).map((mm) => [(mm.name || "").trim().toLowerCase(), mm]));
@@ -27287,7 +28037,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       </select>
     </>
   );
-  const navBtn = { minWidth: 40, minHeight: 40, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" };
+  const navBtn = { minWidth: 40, minHeight: 40, padding: "0 10px", borderRadius: 8, border: "1px solid var(--field-line)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" };
 
   return (
     <>
@@ -27308,7 +28058,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             <option value="">Všetky depá</option>
             {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ width: 240, minWidth: 180 }} />
+          <SearchInput placeholder="Hľadať stroj, zákazníka… (viac oddeľ čiarkou)" value={search} onChange={setSearch} style={{ width: 300, minWidth: 180 }} />
           <GearPopover>{settingsControls}</GearPopover>
           <button type="button" className="btn btn-ghost header-icon-btn tip-now" data-tip="Legenda" aria-label="Legenda" onClick={() => setLegendOpen(true)} style={{ color: "var(--text-dim)" }}>ⓘ</button>
         </div>
@@ -27317,7 +28067,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
           <span style={{ fontSize: 16, fontWeight: 700, minWidth: 120, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
           <button type="button" aria-label="Ďalší mesiac" style={navBtn} onClick={() => setMonthOffset((o) => o + 1)}>›</button>
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--line-strong)", marginLeft: 4 }} onClick={goToToday}>Dnes</button>
+            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--field-line)", marginLeft: 4 }} onClick={goToToday}>Dnes</button>
           )}
         </div>
       </div>
@@ -28208,7 +28958,38 @@ const PERM_GROUP = {
    Detail karta poškodenia / externej zákazky — podrobné údaje
    z nahlásenia + (len pri externej) tlačidlo Upraviť zákazku
 --------------------------------------------------------- */
-function ServiceEventDetailModal({ d, damages, portalRequests, onMerge, technicianById, machineById, protocolLogs, assignments, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine }) {
+// Tiket čaká na diely z protokolu (výsledok „Dodať diely“) — ktoré a v akom stave je žiadosť (1.0.875).
+const SP_PART_STAV = { "Čaká na schválenie": ["Žiadosť čaká na schválenie", "spill-wait"], "Čaká na objednanie": ["Schválené, čaká na objednanie", "spill-wait"], "Objednané": ["Objednané", "spill-done"], "Zamietnuté": ["Žiadosť zamietnutá", "spill-problem"] };
+function DamageWaitingParts({ d, spareParts, protocolLogs, onOpen }) {
+  if (d.resolved || d.stav !== "caka_diely") return null;
+  const all = (spareParts || []).filter((p) => p.damageId === d.id && p.protocolId);
+  if (!all.length) return null;
+  const lastId = [...all].sort(byKeys("-requestedAt"))[0].protocolId;
+  const parts = all.filter((p) => p.protocolId === lastId).sort(byKeys("id"));
+  const prot = (protocolLogs || []).find((p) => p.id === lastId);
+  const stavy = [...new Set(parts.map((p) => p.stav))];
+  return (
+    <>
+      <dt className="sr-only">Čaká na diely</dt>
+      <dd className="dmg-wait" style={{ gridColumn: "1 / -1" }}>
+        <div className="dmg-wait-h">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 8l9-5 9 5v8l-9 5-9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>
+          <b>Čaká na tieto diely</b>
+          <span>z protokolu {fmtDate(prot?.createdAt || parts[0].requestedAt).replace(/ \d{4}$/, "")} · {prot?.technicianName || parts[0].requestedBy || "—"}</span>
+        </div>
+        {parts.map((p) => (
+          <div key={p.id} className="dmg-wait-r"><b>{p.popisDielu || "—"}</b><span>{p.cisloDielu ? `P/N ${p.cisloDielu}` : "bez P/N"}</span><b className="tnum">{p.pocetKusov || "—"} ks</b></div>
+        ))}
+        <div className="dmg-wait-f">
+          {stavy.map((st) => <span key={st} className={"spill " + (SP_PART_STAV[st]?.[1] || "spill-wait")}>{SP_PART_STAV[st]?.[0] || st}</span>)}
+          <span style={{ flex: 1 }} />
+          {onOpen && <button type="button" className="sp-link" onClick={() => onOpen(parts[0])}>Otvoriť v Náhradných dieloch</button>}
+        </div>
+      </dd>
+    </>
+  );
+}
+function ServiceEventDetailModal({ d, damages, portalRequests, onMerge, technicianById, machineById, protocolLogs, assignments, user, onEdit, onClose, onBack, onOpenMachineCard, onSaveNote, onSaveContact, onComplete, onAssign, onAssignProtocol, onUnassignProtocol, onAttachMachine, spareParts, onOpenSpareParts }) {
   const [binderTab, setBinderTab, forgetBinder] = useBinderTab("dmg:" + d?.id);
   const techIds = d.technicianIds && d.technicianIds.length ? d.technicianIds : (d.technicianId ? [d.technicianId] : []);
   const techNames = techIds.map((id) => technicianById[id]?.name).filter(Boolean).join(", ") || "— nepridelené —";
@@ -28426,6 +29207,7 @@ function ServiceEventDetailModal({ d, damages, portalRequests, onMerge, technici
         )}
         {locationChanged && <><dt>Miesto pri nahlásení</dt><dd>{d.location}</dd></>}
         {d.popis && <><dt>{isSimple ? "Poznámka" : "Popis poruchy / zákazky"}</dt><dd style={{ whiteSpace: "pre-wrap" }}>{d.popis}</dd></>}
+        <DamageWaitingParts d={d} spareParts={spareParts} protocolLogs={protocolLogs} onOpen={onOpenSpareParts} />
         {missing.some((m) => m.onClick) && <><dt>Doplniť</dt><dd>{missing.map((m, i) => <React.Fragment key={m.label}>{i > 0 && ", "}{m.onClick
           ? <button type="button" onClick={m.onClick} style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "var(--text)", textDecoration: "underline", cursor: "pointer", textAlign: "left" }}>{m.label}</button>
           : <span style={{ color: "var(--text-dim)" }}>{m.label}</span>}</React.Fragment>)}</dd></>}
@@ -28864,7 +29646,7 @@ function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDe
             )
           ) : (
             !isDone && can(user, perm.assign) && damageInDeposOf(user, d, machineById) && (
-              <button className={assignedTech || (isSimple && !d.overdue) ? "btn btn-outline" : "btn btn-accent"} style={{ fontSize: 14, minHeight: 40, fontWeight: 600, ...(assignedTech || (isSimple && !d.overdue) ? { borderColor: "var(--line-strong)" } : {}) }} onClick={() => onAssign(d)}>
+              <button className={assignedTech || (isSimple && !d.overdue) ? "btn btn-outline" : "btn btn-accent"} style={{ fontSize: 14, minHeight: 40, fontWeight: 600, ...(assignedTech || (isSimple && !d.overdue) ? { borderColor: "var(--field-line)" } : {}) }} onClick={() => onAssign(d)}>
                 {assignedTech ? "Zmeniť pridelenie" : "Prideliť technikovi"}
               </button>
             )
@@ -28906,7 +29688,7 @@ function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDe
           <KebabMenu
             name="Ďalšie akcie"
             btnClass="btn btn-outline"
-            btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }}
+            btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }}
             label="⋯"
             actions={[
               isSimple && onProtocol && can(user, "protocol_write") && { label: "Vypísať protokol", onClick: () => onProtocol(d) },
@@ -29233,7 +30015,7 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
             <NavIcon id="protokol" size={16} /> Zhrnutie
           </button>
         )}
-        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }} actions={[
           onImport && can(user, "external_import_csv") && { label: "Import CSV", onClick: onImport },
           can(user, "external_clear_all") && { label: "Vymazať všetky externé zákazky", danger: true, onClick: onClearAll },
         ]} />
@@ -30072,7 +30854,7 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
         <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <SortSelect ls={ls} cols={[["revizia", "Termín revízie"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]]} when="always" />
         <div style={{ flex: 1 }} />
-        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }} actions={[
           onDedupe && { label: "Upratať duplicitné tikety", onClick: onDedupe },
           can(user, "revision_clear_all") && { label: "Vymazať všetky revízie", danger: true, onClick: onClearAll },
         ]} />
@@ -30722,7 +31504,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
                     </div>
                   )}
                 </div>
-                {canManage && !active && owned.length > 0 && <button className="btn btn-outline" aria-label={`Zástupy počas dovolenky — ${row.name}`} style={{ borderColor: "var(--line-strong)" }} onClick={() => openVacation(row, v)}>Zástupy</button>}
+                {canManage && !active && owned.length > 0 && <button className="btn btn-outline" aria-label={`Zástupy počas dovolenky — ${row.name}`} style={{ borderColor: "var(--field-line)" }} onClick={() => openVacation(row, v)}>Zástupy</button>}
                 {canManage && (active
                   ? <button className="btn btn-outline" aria-label={`Ukončiť dovolenku — ${row.name}`} onClick={() => endVacation(v, row, true)}>Ukončiť</button>
                   : <button className="btn btn-outline" aria-label={`Zrušiť plánovanú dovolenku — ${row.name}`} style={{ borderColor: "var(--danger)", color: "var(--danger-text)" }} onClick={() => endVacation(v, row, false)}>Zrušiť</button>)}
@@ -30744,7 +31526,7 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
                   <div style={{ color: "var(--text-dim)" }}>{dsp.ownedDepos(row.id).map(short).join(", ") || "bez depa"}</div>
                 </div>
                 <div>{contact(row)}</div>
-                {canManage && !rowVac && <button className="btn btn-outline" aria-label={`Dovolenka — ${row.name}`} style={{ borderColor: "var(--line-strong)" }} onClick={() => openVacation(row)}>Dovolenka</button>}
+                {canManage && !rowVac && <button className="btn btn-outline" aria-label={`Dovolenka — ${row.name}`} style={{ borderColor: "var(--field-line)" }} onClick={() => openVacation(row)}>Dovolenka</button>}
               </div>
             );
           })}
@@ -31047,7 +31829,7 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
         <SearchInput placeholder="Hľadať stroj, zákazku…" value={search} onChange={setSearch} style={{ minWidth: 220 }} />
         <SortSelect ls={ls} cols={[["skuska", "Termín skúšky"], ["stroj", "Stroj"], ["stav", "Stav"], ["technik", "Technik"], ["termin", "Termín servisu"]]} when="always" />
         <div style={{ flex: 1 }} />
-        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--line-strong)" }} actions={[
+        <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 40, minHeight: 40, padding: "0 10px", fontSize: 18, lineHeight: 1, borderColor: "var(--field-line)" }} actions={[
           can(user, "uradnaskuska_clear_all") && { label: "Vymazať všetky úradné skúšky", danger: true, onClick: onClearAll },
         ]} />
       </div>
@@ -31542,7 +32324,7 @@ function DamageResolutionModal({ damage, technicianById, protocolLogs, user, onC
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-outline" onClick={() => openPrintableServiceProtocol(p, [], can(user, "protocol_edit_locked"), isAdminUser(user))}>Zobraziť protokol</button>
             {p.imageUrl && (
-              <button className="btn btn-outline" style={{ borderColor: "var(--line-strong)" }} onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
+              <button className="btn btn-outline" style={{ borderColor: "var(--field-line)" }} onClick={() => openPhotoLightbox(p.imageUrl)}>Pôvodný snapshot</button>
             )}
           </div>
         </div>
@@ -32036,11 +32818,11 @@ function TechnicianPlanner({ hasServiceProtocol, onAssignDamage, extraFilters, t
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-          <button type="button" aria-label="Predošlý mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => goMonth(-1)}>‹</button>
+          <button type="button" aria-label="Predošlý mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--field-line)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => goMonth(-1)}>‹</button>
           <span style={{ fontSize: 16, fontWeight: 700, minWidth: 140, textAlign: "center", textTransform: "capitalize" }}>{displayedMonthLabel}</span>
-          <button type="button" aria-label="Ďalší mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--line-strong)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => goMonth(1)}>›</button>
+          <button type="button" aria-label="Ďalší mesiac" style={{ minWidth: 40, minHeight: 40, borderRadius: 8, border: "1px solid var(--field-line)", background: "var(--panel)", color: "var(--text)", fontSize: 18, cursor: "pointer" }} onClick={() => goMonth(1)}>›</button>
           {(monthOffset !== 0 || displayedMonthLabel !== monthLabel) && (
-            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--line-strong)" }} onClick={goToToday}>Dnes</button>
+            <button type="button" className="btn btn-outline" style={{ minHeight: 40, borderColor: "var(--field-line)" }} onClick={goToToday}>Dnes</button>
           )}
         </div>
       </div>
@@ -32612,7 +33394,7 @@ function AssignSlotModal({ slot, assignments, machines, damages, machineById, te
                   {!a.kind && techEditable && can(user, "plan_assign") && <button className="btn btn-outline" onClick={() => setEditingId(a.id)}>Upraviť</button>}
                   {/* Dovolenka/PN sa nepresúvajú dátumom (zástup checkera by ostal
                       na starom dni) — zmaže sa a zadá nanovo, zástup sa upraví sám. */}
-                  <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, padding: "0 12px", borderColor: "var(--line-strong)" }} actions={[
+                  <KebabMenu label="⋯" name="Ďalšie akcie" btnClass="btn btn-outline" btnStyle={{ minWidth: 44, padding: "0 12px", borderColor: "var(--field-line)" }} actions={[
                     !a.kind && linkedDamage && !linkedDamage.resolved && techEditable && can(user, "plan_assign") && { label: "Preplánovať", onClick: () => onReschedule(linkedDamage) },
                     QUICK_KINDS.includes(a.kind) && a.kind !== "dovolenka" && a.kind !== "pn" && techEditable && can(user, "plan_quick_events") && reschedulingId !== a.id && { label: "Preplánovať", onClick: () => { setReschedulingId(a.id); setRescheduleDate(a.date); } },
                     !a.kind && machine && isEzRevision(linkedDamage) && can(user, "ez_measurement_add") && { label: "Meranie VTZ EZ", onClick: () => openEzMeasurement(machine) },
@@ -34499,7 +35281,7 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
                 <td data-label="Číslo položky"><input value={r.cisloPolozky} onChange={(e) => updateRow(r.key, "cisloPolozky", e.target.value)} style={{ width: "100%", minWidth: 100 }} /></td>
                 <td data-label="Poznámka"><input value={r.poznamka} onChange={(e) => updateRow(r.key, "poznamka", e.target.value)} style={{ width: "100%", minWidth: 130 }} /></td>
                 <td className="td-actions">
-                  <button className="btn btn-outline" style={{ minWidth: 40, minHeight: 40, padding: 0, borderColor: "var(--line-strong)", color: "var(--text-dim)" }} title="Odstrániť riadok" aria-label="Odstrániť riadok" onClick={() => removeRow(r.key)}>✕</button>
+                  <button className="btn btn-outline" style={{ minWidth: 40, minHeight: 40, padding: 0, borderColor: "var(--field-line)", color: "var(--text-dim)" }} title="Odstrániť riadok" aria-label="Odstrániť riadok" onClick={() => removeRow(r.key)}>✕</button>
                 </td>
               </tr>
             ); })}
@@ -35116,6 +35898,17 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
   // Rozpracovaný protokol v zariadení — nenápadná pripomienka, nech sa nezabudne (Rado 17. 11.).
   const draftSec = (hpDrafts || []).map((d) => {
     const job = (jobs || []).find((j) => j.id === d.jobId);
+    if (draftKind(d) === "sp") {
+      return (
+        <div key={d.key} className="panel hp-draft-row sp-draft-row" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
+          <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <strong>Rozpracovaný servisný protokol — {nbHyphen(d.machineCode || "—")}</strong>
+            <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.customer, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
+          </span>
+          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>Pokračovať</button>
+        </div>
+      );
+    }
     if (draftKind(d) === "ci") {
       const a = (allAssignments || []).find((x) => x.id === d.assignmentId);
       return (
@@ -37805,6 +38598,7 @@ function GlobalStyle() {
         --ok-fill: #3b6d11; --warn-fill: #854f0b;
         --accent-fill-hover: #B5040F;
         --line-strong: #CFCFCF;
+        --field-line: var(--control-line); /* k70 R1 (k70e: jeden token s poliami, #858585 = 3,2 : 1 aj na --bg #F0F0F0): okraj polí, výberov a rámovaných tlačidiel; --line-strong ostáva pre deliace čiary */
         --s-neutral-bg: #EFEFEF; --s-neutral: #3A3A3A;
         --s-active-bg: #E7EEF9; --s-active: #1F4E99;
         --s-out-bg: #E8EDF2; --s-out: #3E5368;
@@ -37968,6 +38762,7 @@ function GlobalStyle() {
         --ok-fill: #2f6a1f; --warn-fill: #8a5a0c;
         --accent-fill-hover: #A50C16;
         --line-strong: #737c85;
+        --field-line: var(--line-strong);
         --s-neutral-bg: #30363c; --s-neutral: #dfe3e6;
         --s-active-bg: #1c3350; --s-active: #a9c8f5;
         --s-out-bg: #26303a; --s-out: #b4c3d2;
@@ -38216,7 +39011,7 @@ function GlobalStyle() {
       .btn-accent { background: var(--accent-fill); color: #fff; }
       .btn-accent:hover { background: var(--accent-fill-hover); }
       /* v1.0.805: neaktívne hlavné tlačidlo čitateľné (aj v tmavom režime) — sivé, nie bledočervené. */
-      .btn-accent:disabled { background: var(--s-neutral-bg); color: var(--text-dim); border-color: var(--line-strong); cursor: not-allowed; } /* k36: rám, nech nesplynie so sivou pätičkou */
+      .btn-accent:disabled { background: var(--s-neutral-bg); color: var(--text-dim); border-color: var(--field-line); cursor: not-allowed; } /* k36: rám, nech nesplynie so sivou pätičkou */
       .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
       .btn-ghost:hover { border-color: var(--text-dim); background: var(--panel-2); }
       /* .badge = typ alebo poznámka (Vývoz, dovolenka…), 12 px vetou; farby = rovnaké tóny ako .spill-* (jeden stav = jedna farba). */
@@ -38357,7 +39152,7 @@ function GlobalStyle() {
       .stackbar > div:first-child { border-radius: 4px 0 0 4px; }
       .stackbar > div:last-child { border-radius: 0 4px 4px 0; }
       .stack-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin-top: 10px; }
-      .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--r-md); overflow: hidden; background: var(--panel); max-width: 100%; }
+      .seg { display: inline-flex; border: 1px solid var(--field-line); border-radius: var(--r-md); overflow: hidden; background: var(--panel); max-width: 100%; }
       .seg > button { min-height: 40px; padding: 0 14px; border: 0; border-left: 1px solid var(--border); background: transparent; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; flex: 1; }
       .seg > button:first-child { border-left: 0; }
       .seg > button.on { background: var(--text); color: var(--panel); font-weight: 600; }
@@ -38379,7 +39174,7 @@ function GlobalStyle() {
         .tr-filt2:has(> .seg) { grid-template-columns: 1fr; } /* Prepravy: šofér a pás dep pod sebou */
       }
       .seg-n { margin-left: 6px; font-variant-numeric: tabular-nums; opacity: .75; }
-      .fchip { min-height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel); font: inherit; font-size: 14px; color: var(--text); cursor: pointer; display: inline-flex; align-items: center; }
+      .fchip { min-height: 36px; padding: 0 12px; border: 1px solid var(--field-line); border-radius: var(--r-pill); background: var(--panel); font: inherit; font-size: 14px; color: var(--text); cursor: pointer; display: inline-flex; align-items: center; }
       .fchip:hover { border-color: var(--text); }
       .fchip.on { background: var(--text); color: var(--panel); border-color: var(--text); }
       .fchip.problem { background: var(--danger-bg); color: var(--danger-text); border-color: transparent; font-weight: 600; }
@@ -38462,7 +39257,7 @@ function GlobalStyle() {
       .modal-panel:focus { outline: none; }
       .modal-panel:has(.ff-tried) [data-miss], .modal-panel [data-miss-auto] { outline: 2px solid var(--danger); outline-offset: 2px; border-radius: 8px; }
       .modal-panel:has(.ff-tried) .cki[data-miss] { outline: none; box-shadow: inset 4px 0 0 var(--danger); background: var(--danger-bg); }
-      .fck.fck-big { font-size: 16px; font-weight: 600; align-items: center; min-height: 52px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-md); }
+      .fck.fck-big { font-size: 16px; font-weight: 600; align-items: center; min-height: 52px; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: var(--r-md); }
       .modal-panel label.fck-big > input[type=checkbox] { width: 28px; height: 28px; }
       .btn > svg, .btn > span > svg { vertical-align: -3px; }
       .fchips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -38561,7 +39356,7 @@ function GlobalStyle() {
       .cki:first-child { border-top: 0; }
       .cki.prob { background: var(--danger-bg); }
       .ckt { flex: 1; min-width: 200px; font-size: 15px; }
-      .cks { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--panel); }
+      .cks { display: flex; border: 1px solid var(--field-line); border-radius: 8px; overflow: hidden; background: var(--panel); }
       .cks > button { min-height: 48px; min-width: 104px; padding: 0 12px; font: inherit; font-size: 14px; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
       .cks > button:first-child { border-left: 0; }
       .cks > button.okon { background: var(--s-done-bg); color: var(--s-done); font-weight: 700; }
@@ -38603,7 +39398,7 @@ function GlobalStyle() {
         .seg.chk-wrap:has(> :nth-child(4)):not(:has(> :nth-child(5))) > button:nth-child(odd) { border-left: 0; }
       }
       .chk-cls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-      .chk-cl { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+      .chk-cl { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--field-line); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
       .chk-cl b { font-size: 22px; line-height: 1; min-width: 20px; }
       .chk-cl small { display: block; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
       .chk-cl.on { box-shadow: inset 0 0 0 2px var(--text); background: var(--panel-2); }
@@ -38613,12 +39408,12 @@ function GlobalStyle() {
       .fphotos { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
       .fphoto { position: relative; width: 84px; height: 84px; }
       .fphoto img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
-      .fphoto button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
+      .fphoto button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--field-line); background: var(--panel); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
       /* k59: 9 pomenovaných záberov stroja (checker aj šofér); prázdne okienko ukáže predošlú fotku záberu. */
       .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-bottom: 10px; }
       .shot { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
       .shot > img, .shot-add { width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; border: 1px solid var(--border); object-fit: cover; cursor: pointer; display: block; }
-      .shot-add { position: relative; overflow: hidden; border: 1.5px dashed var(--line-strong); background: var(--panel-2); color: var(--text-dim); font-size: 26px; padding: 0; }
+      .shot-add { position: relative; overflow: hidden; border: 1.5px dashed var(--field-line); background: var(--panel-2); color: var(--text-dim); font-size: 26px; padding: 0; }
       .shot-add:disabled { cursor: default; }
       .shot-add .shot-prev { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; }
       .shot-add span { position: relative; }
@@ -38627,9 +39422,9 @@ function GlobalStyle() {
       /* k60: hlavné „Odfotiť 9 záberov“, galéria pod ním, mriežka na kontrolu (zmazanie/výmena až vo zväčšenej fotke), blok fotiek poškodení. */
       .shot-top { margin-bottom: 14px; }
       .shot-main { width: 100%; min-height: 56px; border: 0; border-radius: 10px; background: var(--text); color: var(--panel); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; }
-      .shot-gal { width: 100%; min-height: 48px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; border-color: var(--line-strong); }
+      .shot-gal { width: 100%; min-height: 48px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; border-color: var(--field-line); }
       /* 1.0.871 A2: zvoz bez fotiek na mieste — výnimka, nie lákadlo (prerušovaný okraj); oranžový stav po potvrdení. */
-      .shot-nophoto { width: 100%; min-height: 46px; margin: 0 0 8px; border: 1.5px dashed var(--line-strong); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+      .shot-nophoto { width: 100%; min-height: 46px; margin: 0 0 8px; border: 1.5px dashed var(--field-line); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
       .nophoto-state { border: 1.5px solid var(--warn); background: var(--warn-bg); border-radius: 10px; padding: 11px 12px; margin-bottom: 10px; }
       .nophoto-state b { color: var(--warn); font-size: 15px; }
       .nophoto-state .nps-a { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
@@ -38647,13 +39442,13 @@ function GlobalStyle() {
       .shot-dmg-h { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
       .shot-dmg:not(.warn) .shot-dmg-i { background: var(--panel-2); color: var(--text-dim); } /* červené len kým povinná fotka chýba (k62 terén D3) */
       .shot-dmg-i { width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; }
-      .shot-dmg-add { display: flex; align-items: center; justify-content: center; border: 1.5px dashed var(--line-strong); border-radius: 8px; background: var(--panel-2); color: var(--text-dim); font-size: 26px; cursor: pointer; }
-      .shot-opt { width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; min-height: 56px; margin-bottom: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+      .shot-dmg-add { display: flex; align-items: center; justify-content: center; border: 1.5px dashed var(--field-line); border-radius: 8px; background: var(--panel-2); color: var(--text-dim); font-size: 26px; cursor: pointer; }
+      .shot-opt { width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; min-height: 56px; margin-bottom: 10px; border: 1px dashed var(--field-line); border-radius: 10px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
       .shot-opt:disabled { cursor: default; }
       .shot-opt small { display: block; margin-top: 2px; font-size: 12px; color: var(--text-dim); }
       .shot.on .shot-l::after { content: " ✓"; color: var(--ok); font-weight: 700; }
       /* ✕ záberu: viditeľný krúžok 28 px, dotyková plocha 44 px (rukavice) */
-      .shot-x { position: absolute; top: -16px; right: -16px; width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; background: radial-gradient(circle, var(--panel) 0 13px, var(--line-strong) 13px 14px, transparent 14.5px); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
+      .shot-x { position: absolute; top: -16px; right: -16px; width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; background: radial-gradient(circle, var(--panel) 0 13px, var(--field-line) 13px 14px, transparent 14.5px); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer; }
       .shot-cam { position: fixed; inset: 0; z-index: 320; background: #000; color: #fff; display: flex; flex-direction: column; }
       .shot-cam-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(10px, env(safe-area-inset-top)) 14px 8px; }
       .shot-cam-btn { min-height: 48px; min-width: 48px; background: transparent !important; color: #fff !important; border: 1px solid #fff !important; font-size: 15px; }
@@ -38802,7 +39597,6 @@ function GlobalStyle() {
       }
       .utabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-top: 6px; overflow-x: auto; }
       @media (max-width: 720px) { .utabs { gap: 14px; } .utab { font-size: 14px !important; } } /* „Časová os“ sa zmestí na mobile */
-      @media not all and (max-width: 720px) and (orientation: portrait) { .sig-rotate-hint { display: none; } } /* „Otočte telefón“ len na telefóne na výšku */
       .utab { padding: 10px 0; border: none; border-bottom: 2px solid transparent; background: transparent; font: inherit; font-size: 15px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
       .utab:hover { color: var(--text); }
       .utab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 700; }
@@ -38869,6 +39663,187 @@ function GlobalStyle() {
          ══════════════════════════════════════════════════════ */
       /* Úzke okno PC (hlavička sa zalomí, zvonček je vľavo) — panel pod hlavičku k pravému okraju, nie mimo obrazovky. */
       @media (min-width: 721px) and (max-width: 1000px) { .dropdown-panel { position: fixed !important; left: auto !important; right: 8px !important; top: calc(var(--header-h, 62px) + 4px) !important; } }
+      /* Servisný protokol (1.0.875, návrh C) — kroky; motor (pôvodný formulár) je skrytý pod ním. */
+      .sp { background: var(--panel) !important; color: var(--text); font-family: 'Barlow', Arial, sans-serif; }
+      .sp .sp-engine { visibility: hidden; pointer-events: none; }
+      .sp-shell { position: absolute; inset: 0; top: env(safe-area-inset-top); display: flex; background: var(--panel); }
+      .sp-nav, .sp-side { display: none; }
+      .sp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .sp-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px 0; }
+      .sp-x { width: 44px; height: 44px; flex: none; border-radius: 12px; border: 1px solid var(--field-line); background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      .sp-ctx { flex: 1; min-width: 0; font-size: 15px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sp-saved-top, .sp-saved { font-size: 13px; color: var(--ok); white-space: nowrap; }
+      .sp-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+      .sp-steps li { flex: 1 1 0; min-width: 0; }
+      .sp-steps button { width: 100%; font: inherit; color: var(--text); background: transparent; border: 0; cursor: pointer; }
+      .sp-strip-nav { padding: 6px 16px 0; }
+      .sp-strip-nav .sp-steps button { height: 44px; padding: 19px 0; display: block; }
+      .sp-strip-nav .sp-steps button::before { content: ""; display: block; height: 6px; border-radius: 3px; background: var(--border); }
+      .sp-strip-nav .sp-steps button.done::before { background: var(--text); }
+      .sp-strip-nav .sp-steps button.on::before { background: var(--accent); }
+      .sp-strip-nav .sp-steps i, .sp-strip-nav .sp-steps-l { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .sp-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; -webkit-overflow-scrolling: touch; }
+      .sp-head { padding: 12px 0 6px; }
+      .sp-head > span { font-size: 15px; font-weight: 600; color: var(--text-dim); }
+      .sp-head h1, .sp-draft h1 { margin: 2px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; outline: none; }
+      .sp-fields { display: flex; flex-direction: column; gap: 16px; padding-top: 10px; }
+      .sp-f { display: flex; flex-direction: column; gap: 6px; font-size: 16px; font-weight: 600; min-width: 0; }
+      .sp-f > label, .sp-lbl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+      .sp-lbl-big { font-size: 18px; font-weight: 800; }
+      .sp-f input, .sp-f select, .sp-f textarea, .sp-chip-add { height: 56px; border: 1.5px solid var(--field-line); border-radius: 12px; padding: 0 14px; font: inherit; font-size: 18px; font-weight: 400; color: var(--text); background: var(--panel); width: 100%; min-width: 0; }
+      .sp-date { display: flex; gap: 8px; position: relative; }
+      .sp-cal { width: 56px; height: 56px; flex: none; border-radius: 12px; border: 1.5px solid var(--field-line); background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      .sp-f textarea { height: auto; min-height: 80px; padding: 12px 14px; resize: vertical; }
+      .sp-f.sp-auto input, .sp-f.sp-auto select { background: var(--panel-2); border-color: var(--border); }
+      body.dark .sp-f.sp-auto input, body.dark .sp-f.sp-auto select { border-style: dashed; border-color: var(--line-strong); }
+      .sp-f.sp-miss input, .sp-f.sp-miss select, .sp-f.sp-miss textarea, .sp-f.sp-miss .sp-outcomes { outline: 2px solid var(--danger); outline-offset: 2px; }
+      .sp-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--info-bg); color: var(--info); font-size: 12px; font-weight: 700; }
+      .sp-hint { font-size: 14px; font-weight: 400; color: var(--text-dim); }
+      .sp-hint-err, .sp-err { color: var(--danger-text); font-size: 14px; font-weight: 600; }
+      .sp-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .sp-grid2 .sp-f > label { min-height: 22px; } /* štítok „dnes“ (22 px) nesmie posunúť pole oproti susedovi */
+      @media (max-width: 520px) { .sp-grid2:has(.sp-date) { grid-template-columns: 1fr; } } /* úzky telefón: celý dátum vedľa tlačidla kalendára */
+      .sp-grid-qty { grid-template-columns: minmax(0, 1fr) 150px; align-items: end; }
+      .sp-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 16px; font-weight: 600; }
+      .sp-check input { width: 22px; height: 22px; accent-color: var(--accent); }
+      .sp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .sp-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 6px 0 14px; border-radius: 999px; background: var(--panel-2); font-size: 17px; font-weight: 400; }
+      .sp-chip:not(:has(button)) { padding-right: 14px; }
+      .sp-chip button { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      .sp-chip-add { width: auto; height: 48px; border-radius: 999px; border-style: dashed; font-size: 16px; padding: 0 16px; cursor: pointer; }
+      .sp-stepper { display: flex; align-items: center; gap: 6px; }
+      .sp-stepper button { width: 56px; height: 56px; flex: none; border-radius: 12px; border: 1.5px solid var(--field-line); background: var(--panel); color: var(--text); font-size: 26px; cursor: pointer; }
+      .sp-f .sp-stepper input { text-align: center; font-size: 22px; font-weight: 700; padding: 0 6px; }
+      .sp-grid-qty .sp-stepper button { width: 44px; }
+      .sp-work { display: flex; flex-direction: column; gap: 12px; }
+      .sp-hours { flex-direction: row; align-items: center; justify-content: space-between; }
+      .sp-hours .sp-stepper { max-width: 220px; }
+      .sp-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--panel-2); }
+      .sp-card-row { display: flex; align-items: center; gap: 10px; font-size: 17px; }
+      .sp-card-form { background: transparent; border: 1.5px solid var(--line-strong); gap: 12px; }
+      .sp-pd { display: flex; flex-direction: column; gap: 14px; }
+      .sp-pd .sp-card { flex-direction: row; align-items: center; gap: 10px; min-height: 56px; padding: 6px 6px 6px 14px; }
+      .sp-icon-btn { width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      .sp-dashed, .sp-outline { min-height: 52px; border-radius: 12px; border: 1.5px dashed var(--field-line); background: var(--panel); color: var(--text); font: inherit; font-size: 17px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+      .sp-outline { border-style: solid; }
+      .sp-outline.on { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+      .btn.sp-dark { min-height: 52px; border-radius: 12px; background: var(--text); color: var(--panel); font-size: 17px; font-weight: 700; justify-content: center; }
+      .sp-link { min-height: 44px; padding: 0 8px; border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 600; color: var(--accent-dark); cursor: pointer; align-self: flex-start; }
+      .sp-total { display: flex; align-items: center; justify-content: space-between; font-size: 16px; font-weight: 600; padding: 4px 2px; }
+      .sp-total b { font-size: 22px; color: var(--accent); }
+      .sp-outcomes { display: flex; flex-direction: column; gap: 8px; border-radius: 12px; }
+      .sp-ob { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--field-line); background: var(--panel); font: inherit; font-size: 17px; font-weight: 600; color: var(--text); text-align: left; cursor: pointer; }
+      .sp-ob-ok svg { color: var(--ok); } .sp-ob-warn svg { color: var(--warn); } .sp-ob-info svg { color: var(--info); } .sp-ob-danger svg { color: var(--danger); }
+      .sp-ob-ok[aria-pressed="true"] { border: 2px solid var(--ok); background: var(--ok-bg); color: var(--ok); }
+      .sp-ob-warn[aria-pressed="true"] { border: 2px solid var(--warn); background: var(--warn-bg); color: var(--warn); }
+      .sp-ob-info[aria-pressed="true"] { border: 2px solid var(--info); background: var(--info-bg); color: var(--info); }
+      .sp-ob-danger[aria-pressed="true"] { border: 2px solid var(--danger); background: var(--danger-bg); color: var(--danger-text); }
+      .sp-needed { margin-top: 4px; font-size: 15px; }
+      .sp-sum { display: flex; flex-direction: column; }
+      .sp-sr { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 4px; border-bottom: 1px solid var(--border); font-size: 16px; }
+      .sp-sr svg { flex: none; }
+      .sp-sr > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+      .sp-sr b { font-size: 17px; }
+      .sp-sr > div > span { color: var(--text-dim); font-size: 14px; overflow-wrap: anywhere; }
+      .sp-sr .sp-sr-bad { color: var(--danger-text); }
+      .sp-sr .sp-link { align-self: center; }
+      .sp-signed { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; min-height: 64px; border-radius: 12px; border: 0; background: var(--panel-2); color: var(--ok); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+      .sp-signed .sp-hint { flex-basis: 100%; text-align: center; }
+      .sp-signed-cust { justify-content: flex-start; padding: 8px 14px; color: var(--text); text-align: left; }
+      .sp-signed-cust img { width: 120px; height: 48px; object-fit: contain; background: #fff; border-radius: 6px; }
+      .sp-signed-cust .sp-hint { flex-basis: auto; text-align: left; display: block; }
+      .sp-signbtn { min-height: 120px; border-radius: 14px; border: 2px dashed var(--field-line); background: var(--panel); color: var(--text); font: inherit; font-size: 19px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+      .sp-signbtn span { font-size: 15px; font-weight: 400; color: var(--text-dim); }
+      .sp-signbtn-sm { min-height: 64px; }
+      .sp-sign-extra { margin: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+      .sp-sign-extra p { margin: 0; line-height: 1.35; }
+      .sp-foot { border-top: 1px solid var(--border); padding: 12px 16px max(16px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+      .sp-foot-btns { display: flex; gap: 10px; }
+      .sp-foot .btn { min-height: 60px; border-radius: 14px; font-size: 19px; font-weight: 700; justify-content: center; }
+      .sp-foot .sp-back { width: 104px; flex: none; font-size: 17px; font-weight: 600; border: 1.5px solid var(--field-line); }
+      .sp-foot .sp-next { flex: 1; display: inline-flex; align-items: center; gap: 8px; }
+      .btn.sp-big { min-height: 56px; font-size: 18px; justify-content: center; width: 100%; }
+      .sp-msg { font-size: 15px; font-weight: 600; color: var(--ok); }
+      .sp-msg.err { color: var(--danger-text); }
+      .sp-draft { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; max-width: 520px; }
+      .sp-draft p { margin: 0; font-size: 17px; }
+      .sp-loading { padding: 24px 0; color: var(--text-dim); }
+      .modal-overlay:has([data-sp-parts-dialog]) { z-index: 320 !important; } /* okno dielov nad protokolom (200) */
+      .dmg-wait { margin: 6px 0 !important; padding: 14px 16px !important; border: 1.5px solid color-mix(in srgb, var(--warn) 40%, transparent) !important; background: color-mix(in srgb, var(--warn-bg) 55%, var(--panel)); border-radius: 10px; }
+      .dmg-wait-h { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; color: var(--text); }
+      .dmg-wait-h svg { color: var(--warn); }
+      .dmg-wait-h b { font-size: 16px; flex: 1; }
+      .dmg-wait-h span, .dmg-wait-r span { font-size: 13px; color: var(--text-dim); }
+      .dmg-wait-r { display: grid; grid-template-columns: minmax(0, 1fr) 110px 70px; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
+      .dmg-wait-r b:last-child { text-align: right; }
+      @media (max-width: 520px) { /* úzka karta tiketu: P/N pod názov, názov dielu sa nezlomí uprostred slova */
+        .dmg-wait-h b { flex: 1 1 auto; }
+        .dmg-wait-r { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+        .dmg-wait-r span { grid-column: 1; grid-row: 2; }
+        .dmg-wait-r b:last-child { grid-column: 2; grid-row: 1; }
+      }
+      .dmg-wait-f { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 14px; }
+      @media (min-width: 720px) {
+        .sp-strip-nav { padding: 12px 24px 0; }
+        .sp-strip-nav .sp-steps button { height: auto; min-height: 44px; padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+        .sp-strip-nav .sp-steps button::before { display: none; }
+        .sp-strip-nav .sp-steps-l { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; text-align: center; }
+        .sp-strip-nav .sp-steps i { position: static; width: 28px; height: 28px; overflow: visible; clip: auto; }
+        .sp-body, .sp-foot, .sp-top { padding-left: max(24px, calc((100% - 680px) / 2)); padding-right: max(24px, calc((100% - 680px) / 2)); }
+        .sp-foot-btns { justify-content: flex-end; }
+        .sp-foot .sp-next { flex: 0 1 auto; padding: 0 32px; }
+      }
+      .sp-steps i { font-style: normal; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex: none; border: 2px solid var(--line-strong); color: var(--text-dim); }
+      .sp-steps .done i { background: var(--text); border-color: var(--text); color: var(--panel); }
+      .sp-steps .on i { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+      @media (min-width: 1200px) {
+        .sp-shell { background: var(--bg); }
+        .sp-nav { display: flex; flex-direction: column; gap: 4px; width: 300px; flex: none; background: var(--panel); border-right: 1px solid var(--border); padding: 22px 14px; overflow-y: auto; }
+        .sp-nav-head { padding: 0 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+        .sp-nav-code { font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 700; font-size: 40px; line-height: .95; overflow-wrap: anywhere; }
+        .sp-nav .sp-steps { flex-direction: column; gap: 4px; }
+        .sp-nav .sp-steps button { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 14px; border-radius: 12px; font-size: 16px; font-weight: 600; text-align: left; }
+        .sp-nav .sp-steps button.on { background: var(--accent-light); color: var(--accent-dark); }
+        .sp-nav .sp-steps button:hover:not(.on) { background: var(--panel-2); }
+        .sp-saved { margin-top: auto; padding: 0 14px; }
+        .sp-strip-nav, .sp-saved-top { display: none; }
+        .sp-main { max-width: 820px; }
+        .sp-top { padding: 22px 48px 0; }
+        .sp-body { padding: 0 48px 24px; }
+        .sp-head h1 { font-size: 34px; }
+        .sp-foot { padding: 12px 48px 32px; }
+        .sp-foot-btns { justify-content: flex-start; }
+        .sp-foot .btn { min-height: 54px; font-size: 18px; border-radius: 12px; }
+        .sp-f input, .sp-f select, .sp-chip-add { height: 48px; font-size: 17px; border-radius: 10px; }
+        .sp-stepper button { width: 48px; height: 48px; }
+        .sp-side { display: flex; flex-direction: column; width: 300px; margin-left: auto; flex: none; padding: 36px 28px 36px 0; }
+        .sp-side-card { background: var(--panel); border-radius: 14px; padding: 18px 18px 10px; }
+        .sp-side-card h2 { margin: 0 0 8px; font-size: 17px; font-weight: 800; }
+        .sp-sm { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; padding: 8px 0; border-top: 1px solid var(--border); }
+        .sp-sm span { color: var(--text-dim); flex: none; }
+        .sp-sm b { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+        .sp-cal { width: 48px; height: 48px; border-radius: 10px; }
+      }
+      /* k70e R1b: kruhové nástroje v lištách (⚙, ⓘ, lupa) majú okraj ako susedné ovládacie prvky, nie svetlý — inak pôsobia ako neaktívne. Hlavička nie je v .app-main. */
+      .app-main :is(.btn-ghost.header-icon-btn, .list-search-mobile-trigger) { border-color: var(--field-line) !important; color: var(--text) !important; }
+      /* k70e R3a: podpis na šírku (nízka výška) — súhrn „Prevzatie · stroj · zákazník“ v jednom riadku medzi nadpisom a Zrušiť, nech je plocha podpisu čo najvyššia (≥ 200 px pri 844×390). */
+      @media (max-height: 500px) and (orientation: landscape) {
+        .fullscreen-overlay:has(> .sig-sum) { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto; column-gap: 12px; }
+        .fullscreen-overlay:has(> .sig-sum) > .sig-head { display: contents !important; }
+        .fullscreen-overlay:has(> .sig-sum) > .sig-head > strong { grid-area: 1 / 1; align-self: center; padding-left: max(16px, env(safe-area-inset-left)); }
+        .fullscreen-overlay:has(> .sig-sum) > .sig-head > button { grid-area: 1 / 3; align-self: center; margin: 10px max(16px, env(safe-area-inset-right)) 10px 0; }
+        .fullscreen-overlay:has(> .sig-sum) > :nth-last-child(-n+2) { grid-column: 1 / -1; align-self: stretch !important; justify-self: center; }
+        .sig-sum { grid-area: 1 / 2; display: flex !important; gap: 0 !important; width: auto !important; max-width: none !important; margin: 0 !important; align-self: center !important; padding: 6px 12px !important; white-space: nowrap; overflow: hidden; font-size: 15px !important; }
+        .sig-sum > div { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 15px !important; } 
+        .sig-sum > div:first-child, .sig-sum > div:last-child { flex-shrink: 0; } /* názov (stroj S-…) a model ostanú celé, skráti sa zákazník */
+        .sig-sum > div > div { display: none; }
+        .sig-sum > div + div::before { content: " · "; color: var(--text-dim); }
+      }
+      @media (min-width: 1440px) { /* k70 R4 (k70e: od 1440 px): široký PC — hlavný stĺpec na stred medzi krokmi a súhrnom, tlačidlá hneď pod obsahom */
+        .sp-main { margin: 0 auto; }
+        .sp-side { margin-left: 0; }
+        .sp-body { flex: 0 1 auto; }
+      }
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none), (max-width: 1000px) and (max-height: 500px) {
         /* iOS "gumové" posúvanie stránky mimo obrazovku (najmä šikmým ťahom prsta) —
            len na mobile, na PC by to blokovalo bežné rolovanie kolieskom/scrollbarom. */
