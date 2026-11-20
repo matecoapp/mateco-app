@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useId } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
@@ -36,12 +36,49 @@ const MACHINE_CATEGORY_OPTIONS = [
   "Materiálová",
 ];
 // Verzia platformy zobrazená v hlavičke — s každou zmenou platformy sa zvýši o +1 (napr. 1.0.187).
-const APP_VERSION = "1.0.874";
+const APP_VERSION = "1.0.875";
 // Písmo Barlow priamo z platformy (public/fonts) — nič sa nesťahuje z Googlu. Absolútna adresa aj pre tlač a okno protokolu.
 const FONT_CSS_URL = typeof document !== "undefined" ? new URL("fonts/barlow.css", document.baseURI).href : "fonts/barlow.css";
 // „Čo je nové“ — po aktualizácii sa každému raz ukáže, čo sa týka jeho roly (roles: null = všetkým).
 // Pri ďalšej verzii stačí pridať záznam navrch; staršie záznamy netreba mazať (ukážu sa len tým, čo ich nevideli).
 const CHANGELOG = [
+  { v: "1.0.875", items: [
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Odkaz pre zákazníka (portál) platí 30 dní po vrátení stroja (predtým 14). Po skončení platnosti záložka Zákazník už neponúka Kopírovať, QR ani „Poslať zákazníkovi emailom“ — žltá poznámka „Odkaz už neplatí — platnosť skončila …“." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Zákaznícky portál: ťuknutie na telefónne číslo vždy volá (neotvorí e-mail pod ním). Pri otvorení hneď „Načítavam…“, pri neplatnom alebo ešte neaktívnom odkaze a pri chybe načítania kontakt (obchodník, inak linka porúch) a pri chybe „Skúsiť znova“. Formuláre s popisom poľa, chyba sa oznámi aj čítačke obrazovky." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Tlačidlá „Dispečer“, „Zavolať“, „Servis“ na kartách Dnes a Prepravy majú na telefóne rovnakú výšku ako ostatné a nezasahujú do „Navigovať“." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Neuložený protokol (napr. zákazku medzitým preradili): jedna správa s jedným pokynom — blok „Neuložené“ na Dnes; hláška naň len odkáže, horný pás sa už neukáže." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin"], text: "Riadok „Rozpracovaný protokol / kontrola“ na Dnes ponúka „Zahodiť“, keď protokol alebo kontrolu medzitým uložil niekto iný; dátum „uložené … o …“ sa už nerozdelí na dva riadky." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Prístupnosť: popisy polí vo formulároch sú prepojené s poľami aj pri výbere stroja/zákazníka a dátumoch, chýbajúce pole sa oznámi čítačke; menu (aj spodná lišta) hlási aktuálnu obrazovku, „Viac“ presunie fokus do ponuky; tlačidlo účtu má názov s menom." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Klávesnica: „Import dát“ v menu účtu, zväčšená fotka (Tab ostane vo fotke, Esc vráti na štítok) a pásy zákaziek, rezervácií a porúch v Kalendári (Tab + Enter otvorí)." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Náhradné diely na počítači: šípka zoradenia v úzkych stĺpcoch je vždy vidieť (dlhý názov stĺpca sa skráti)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Zákazky na telefóne: výber zoradenia je pod filtrami, stavové filtre ostanú vidieť. ERP podklady na menšej obrazovke: popis „Motohodiny, palivo“ ako v hlavičke." },
+    { roles: ["admin", "veduci_pozicovne"], text: "„Preradiť zákazky a rezervácie“ bez vybraného kolegu: okno ostane otvorené s „Ešte treba: výber kolegu“ (predtým sa zavrelo a nič sa nepreradilo)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik"], text: "Portál zákazníka: neplatný alebo ešte neaktívny odkaz a chyba načítania sa oznámia aj čítačke obrazovky." },
+    { roles: null, text: "Klávesnica: v prepínačoch typu „Konkrétny stroj / Model a počet kusov“ (aj klasifikácia kontroly, spôsob dopravy, stav úlohy) sa dá voľba meniť šípkami." },
+    { roles: null, text: "Pole hľadania v hlavičke ukáže celú nápovedu („viac oddeľte čiarkou“) po podržaní myši, keď sa na menšej obrazovke počítača skráti." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba", "fakturant_servis"], text: "Karta tiketu › výber protokolu: tlačidlo ✕ má pre čítačku názov „Zavrieť výber protokolu“." },
+    { roles: ["fakturant_pozicovna", "admin"], text: "ERP podklady › Mesačná fakturácia: pole hľadania je široké ako v Ukončených prenájmoch (nápoveda sa neoreže)." },
+    { roles: ["fakturant_pozicovna", "admin"], text: "ERP podklady › Mesačná fakturácia na telefóne a tablete: políčko na označenie prenájmu má 24 px ako ostatné (predtým 13 px)." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "admin"], text: "Kalendár: text na pásoch zákaziek a rezervácií je biely alebo tmavý podľa farby obchodníka — vždy ten čitateľnejší. Farby obchodníkov ostávajú rovnaké." },
+    { roles: null, text: "Formuláre: hlavné tlačidlo (napr. „Vytvoriť zákazku“, „Uložiť pridelenie“, „Pokračovať“ pri nahlásení poruchy) je aktívne aj vtedy, keď ešte niečo chýba, a dá sa naň prejsť aj klávesom Tab. Kliknutie nič neuloží, ukáže, čo chýba, a presunie vás na prvé chýbajúce pole." },
+    { roles: null, text: "Bez signálu alebo keď server neodpovedá, svieti pod hlavičkou žltý pás „Bez signálu“ alebo „Server nedostupný“. Je tam celý čas, kým výpadok trvá, a sám zmizne po pripojení." },
+    { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba"], text: "Dnes: rozpracovaný protokol alebo kontrola je priamo na karte prepravy alebo úlohy („rozpracované · uložené …“ a tlačidlo „Pokračovať v protokole“ / „Pokračovať v kontrole“). Samostatný riadok sa ukáže len vtedy, keď karta na Dnes nie je." },
+    { roles: null, text: "„Čo je nové“ otvoríte kedykoľvek v menu účtu (aktuálna verzia a 10 starších)." },
+    { roles: ["fakturant_servis", "dispecer_servisu", "veduci_servisu", "admin"], text: "Náhľad a tlač servisného protokolu: dátum je vždy po slovensky („30. 9. 2026“), aj keď má prehliadač alebo systém nastavenú angličtinu." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "dispecer_servisu", "veduci_servisu", "admin"], text: "Kalendár a Plán servisu na mobile: šípky mesiaca majú rovnaký okrúhly tvar ako ostatné nástroje v lište." },
+    { roles: ["fakturant_pozicovna", "admin"], text: "ERP podklady: nová záložka „Mesačná fakturácia“ – prenájmy so strojom u zákazníka za vybraný mesiac s obdobím a počtom dní, „Vyfakturované“ s číslom faktúry (aj hromadne pre označené riadky) a „Nefakturovať tento mesiac“ (obdobie sa prenesie do ďalšieho mesiaca)." },
+    { roles: ["fakturant_pozicovna", "admin"], text: "ERP podklady po vrátení stroja: pri mesačne fakturovanom prenájme obdobie len nevyfakturovaného zvyšku s poznámkou „mesačne vyfakturované do … (FA-…)“." },
+    { roles: ["obchodnik", "dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Nezáväzná rezervácia na model: v okne „Nezáväzná rezervácia“ prepnite na „Model a počet kusov“, vyberte depo, modely a počty kusov (napr. 2× Kĺbová 16 m + 1× Teleskop 20 m) — pri modeli vidíte orientačne „voľné X z Y“ v depe na zvolený termín. Žiadosť dostanú dispečeri zvoleného depa." },
+    { roles: ["dispecer_pozicovne", "veduci_pozicovne", "admin"], text: "Kalendár: pás „Čakajú na pridelenie stroja“ (model, zákazník, termín). V karte žiadosti priradíte každému kusu voľný stroj (žiadaný model z depa je navrchu, dá sa vybrať aj iný model) a „Prideliť a schváliť“ — kusy sa schvália ako bežné rezervácie po jednom stroji, zvyšok čaká." },
+    { roles: ["obchodnik"], text: "Po schválení rezervácie na model dostanete upozornenie s konkrétnymi strojmi; ak dispečer pridelil iný model, príde aj „Zmena modelu v rezervácii“. Premena na zákazku ostáva ako doteraz." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "dispecer_servisu", "veduci_servisu", "fakturant_servis", "veduci_technik_ba", "technik"], text: "Vyhľadávanie viacerých výrazov naraz – oddeľte ich čiarkou (napr. „S-103, S-117“) – funguje vo všetkých zoznamoch (Stroje, Zákazky, Prepravy, Zákazníci, ERP podklady, Poškodenia, Externé zákazky, Revízie, Úradné skúšky, Revízie EZ, Náhradné diely, Zamestnanci, Modely strojov) aj vo vyhľadávaní v hlavičke. Zobrazí sa všetko, čo sedí aspoň na jeden výraz." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "dispecer_servisu", "veduci_servisu", "fakturant_servis", "veduci_technik_ba", "technik"], text: "Mobil: po ťuknutí na lupu sa pole hľadania hneď otvorí aj s klávesnicou – stačí jedno ťuknutie." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: lišta ostane v jednom riadku aj na menších obrazovkách počítača (pole hľadania sa podľa šírky zúži)." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba", "fakturant_servis"], text: "Karta tiketu › „+ Prideliť ďalší protokol“: pri každom protokole tlačidlá „Náhľad“ a „Prideliť“ — ťuknutie na riadok už protokol nepriradí, najprv si ho môžete pozrieť." },
+    { roles: ["admin", "dispecer_servisu", "veduci_servisu", "veduci_technik_ba", "fakturant_servis"], text: "Poškodenia: nový zoznam „Ostatné protokoly“ (protokoly strojov požičovne bez tiketu) so strojom, depom, dátumom, technikom a popisom práce, s vyhľadávaním (viac výrazov oddeľte čiarkou), „Náhľad“ a „Prideliť k tiketu“ — ponúkne otvorené tikety toho stroja. Filter depa platí aj pre tento zoznam." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol: povinné polia majú pri názve hviezdičku (napr. „Počet MTH *“), vysvetlivka „* povinné“ je pod nadpisom kroku. „Ďalej“ pustí až po vyplnení povinných údajov kroku (aj MTH a hodiny číslom, km 0–5000) — inak dole „Ešte treba: …“ a kurzor skočí na prvé chýbajúce pole. Na pás krokov dopredu sa dá len po prvý neúplný krok." },
+    { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol: „Upraviť“ alebo „Doplniť“ v kontrole otvorí krok s tlačidlom „Späť na kontrolu“. Rozpracovaný protokol, ktorému chýbajú údaje v skoršom kroku, sa otvorí na prvom neúplnom kroku." },
+  ] },
   { v: "1.0.874", items: [
     { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Nový servisný protokol po krokoch: Zákazka → Stroj a porucha → Čo ste urobili → Použité diely → Cestovné a stav → Skontrolovať a podpísať. Krok otvoríte aj ťuknutím na pás krokov (na počítači zoznam krokov vľavo a vpravo „Doteraz v protokole“). Čo sa vypĺňa samo (zákazník, technici z pridelenia, dnešný dátum, stroj a model, miesto práce, čas cesty z km, celkový čas), je sivé so značkou „automaticky“ — dá sa prepísať." },
     { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Pri počte MTH pomôcka „Naposledy … MTH · kontrola/protokol dátum“ (posledná známa hodnota stroja, nevypĺňa sa). V dieloch tlačidlo „Žiadne diely neboli použité“. Na konci súhrn s „Upraviť“ / „Doplniť“ — „Uložiť a odoslať“ pri chýbajúcom údaji skočí rovno naň." },
@@ -52,7 +89,7 @@ const CHANGELOG = [
     { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna", "sofer", "externy_sofer", "technik", "veduci_technik_ba", "dispecer_servisu", "veduci_servisu", "fakturant_servis"], text: "Svetlý režim: polia, výbery, rámované tlačidlá aj nástroje v lištách (hľadať, ⚙, ⓘ) majú rovnaký tmavší okraj — lepšie viditeľné aj na slnku." },
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne", "veduci_servisu", "dispecer_servisu"], text: "Podpis (servisný protokol, protokol o odovzdaní / vrátení, výdaj dielov): plocha na celú obrazovku s popisom „Podpíšte sa prstom“ a čiarou, veľké tlačidlá Zrušiť, Vymazať a Hotovo. Pri otočení telefónu sa rozpísaný podpis zachová; na šírku je zhrnutie protokolu o odovzdaní v jednom riadku, aby bola plocha podpisu vyššia. Na počítači je plocha najviac 900 px široká, na stred, s popisom „Podpíšte sa“." },
     { roles: ["technik", "veduci_technik_ba", "admin", "veduci_servisu", "dispecer_servisu"], text: "Servisný protokol: Esc ho zavrie (rozpísaný sa najprv spýta). Pri dátume tlačidlo s kalendárom. Na širokom počítači (od 1440 px) je protokol na stred a tlačidlá hneď pod obsahom." },
-    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: vyhľadávanie viacerých strojov naraz – výrazy oddeľ čiarkou (napr. „1330, 2632, 1932“ ukáže GS-1330, GS-2632 aj GS-1932)." },
+    { roles: ["admin", "dispecer_pozicovne", "veduci_pozicovne", "obchodnik", "fakturant_pozicovna"], text: "Kalendár: vyhľadávanie viacerých strojov naraz – výrazy oddeľte čiarkou (napr. „1330, 2632, 1932“ ukáže GS-1330, GS-2632 aj GS-1932)." },
   ] },
   { v: "1.0.873", items: [
     { roles: ["sofer", "externy_sofer", "technik", "veduci_technik_ba", "admin", "dispecer_pozicovne", "veduci_pozicovne"], text: "Rozpracovaný protokol o odovzdaní / vrátení sa priebežne ukladá do zariadenia (fotky, zaškrtnutia, poznámky, podpisy). Po vybití telefónu alebo zatvorení platformy ponúkne pri ďalšom otvorení „Pokračovať v rozpracovanom protokole (uložené … o hh:mm)“ alebo „Začať odznova“. Po uložení protokolu (aj bez signálu) a pri „Zavrieť bez uloženia“ sa koncept zmaže, po 7 dňoch sám." },
@@ -1137,6 +1174,15 @@ function findMachineConflict(jobs, reservations, machineId, excludeJobId, from, 
   if (res) return `Stroj má v tom čase schválenú rezerváciu ${res.customer || ""} (${fmtDate(res.expectedStart)}).`;
   return null;
 }
+// Rezervácia na model (1.0.875): kus bez stroja — model a depo vybral obchodník, konkrétny stroj pridelí dispečer.
+const isModelPiece = (r) => !!r && !r.machineId && !!r.model;
+const resWhat = (r, m) => (m || !r?.model ? `stroj ${m?.code || "—"}` : `model ${r.model}`);
+// Voľné stroje na termín (orientačne): bez zákazky, schválenej rezervácie a otvorenej poruchy.
+function freeMachinesFor(machines, { jobs, reservations, damages }, from, to, filter) {
+  return (machines || []).filter((m) => !m.archived && filter(m) && !findMachineConflict(jobs, reservations, m.id, null, from, to || null)
+    && !(damages || []).some((d) => d.machineId === m.id && d.type === "poskodenie" && !d.resolved));
+}
+const rentalModels = (machines) => [...new Set((machines || []).filter((m) => !m.archived && m.type && (m.objekt || "Požičovňový stroj") === "Požičovňový stroj").map((m) => m.type))].sort((a, b) => a.localeCompare(b, "sk", { numeric: true }));
 // Podzáložky pod "Dokumenty" (rozbaľovacie menu) — zatiaľ pripravené prázdne,
 // dopĺňajú sa podľa toho, aké konkrétne dokumenty budú potrebné.
 const DOCUMENT_SUBTABS = {
@@ -2538,6 +2584,18 @@ function salespersonColor(name, salespeople) {
   if (emp) return emp.color;
   return SALESPEOPLE.find((s) => s.name === name)?.color || null;
 }
+// B4 (1.0.875): text na farbe obchodníka — biely alebo tmavý (#1a1a1a) podľa toho, čo má väčší kontrast (WCAG); farby sa nemenia.
+// k < 1 = pozadie stmavené (pruhy rezervácie).
+function textOnColor(hex, k = 1) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return "#fff";
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const ch = (i) => lin((parseInt(m[1].slice(i, i + 2), 16) / 255) * k);
+  const L = 0.2126 * ch(0) + 0.7152 * ch(2) + 0.0722 * ch(4);
+  const D = lin(0x1a / 255);
+  return (L + 0.05) / (D + 0.05) > 1.05 / (L + 0.05) ? "#1a1a1a" : "#fff";
+}
+export const _testK71b = { textOnColor }; // k71b.test.js
 const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // Rozdiel hodín zariadenia voči serveru (syncServerClock) — zle nastavený telefón nesmie zapísať zlý deň.
 // Pamätá sa aj pre štart bez signálu; malé rozdiely (< 2 min) sa ignorujú.
@@ -2794,6 +2852,8 @@ const fmtDate = (iso) => {
 const DATE_RE = /(\d{1,2}\. \d{1,2}\. \d{4}(?: –)?|\b[A-Z]{1,3}-\d{2,4}\b)/;
 const nbDates = (t) => (typeof t === "string" && DATE_RE.test(t) ? t.split(DATE_RE).map((x, i) => (i % 2 ? <span key={i} style={{ whiteSpace: "nowrap" }}>{x}</span> : x)) : t);
 // CSV pre Excel ostáva „02.11.2026“ (strojový tvar, Excel ho číta ako dátum).
+// Pás v Kalendári ako tlačidlo pre klávesnicu: Enter / medzerník = klik (ťahanie ostáva myšou, k69 D7).
+const barKeys = (label, open) => ({ role: "button", tabIndex: 0, "aria-label": label, onKeyDown: (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(); } } });
 const fmtDateCsv = (iso) => (typeof iso === "string" && iso ? iso.slice(0, 10).split("-").reverse().join(".") : "");
 // Dátum a čas „27. 10. 2026 14:05“ (čas firmy) — zvonček, Audit log, Stav platformy, zálohy (k37).
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
@@ -2903,7 +2963,8 @@ function useListSort(listKey) {
 // Hlavička stĺpca ako tlačidlo (Tab + Enter); šípka len pri stĺpci, podľa ktorého je zoradené.
 function SortBtn({ ls, k, children }) {
   const dir = ls.sort?.key === k ? ls.sort.dir : null;
-  return <button type="button" className="th-sort" onClick={() => ls.toggle(k)} title={dir === "desc" ? "Predvolené poradie" : dir ? "Zoradiť zostupne" : "Zoradiť"}>{children}<span aria-hidden="true">{dir === "asc" ? " ▲" : dir === "desc" ? " ▼" : ""}</span></button>;
+  // Stav zoradenia je v názve tlačidla (čítačka) — pri zložených hlavičkách („Odovzdal · dátum“) aria-sort na th nestačí.
+  return <button type="button" className="th-sort" onClick={() => ls.toggle(k)} title={dir === "desc" ? "Predvolené poradie" : dir ? "Zoradiť zostupne" : "Zoradiť"}><span className="th-sort-t">{children}</span><span aria-hidden="true">{dir === "asc" ? " ▲" : dir === "desc" ? " ▼" : ""}</span>{dir && <span className="sr-only">{dir === "asc" ? " (zoradené vzostupne)" : " (zoradené zostupne)"}</span>}</button>;
 }
 const sortAria = (ls, ...keys) => (keys.includes(ls.sort?.key) ? (ls.sort.dir === "asc" ? "ascending" : "descending") : undefined);
 function SortTh({ ls, k, children, ...rest }) {
@@ -3274,10 +3335,21 @@ const authStorage = {
   },
   removeItem(k) { try { localStorage.removeItem(k); } catch { delete _authMem[k]; } },
 };
+// B6 (1.0.875): server neodpovedá, hoci zariadenie má signál (brána 502/503/504 alebo sieťová chyba) — trvalý pás pod hlavičkou.
+let _serverDown = false;
+const _serverDownSubs = new Set();
+function setServerDown(v) { if (_serverDown !== v) { _serverDown = v; _serverDownSubs.forEach((f) => f(v)); } }
+function watchedFetch(...args) {
+  if (/\/functions\/v1\//.test(String(args[0]?.url || args[0]))) return fetch(...args); // chyba jednej funkcie nie je výpadok servera
+  return fetch(...args).then(
+    (r) => { setServerDown(r.status === 502 || r.status === 503 || r.status === 504); return r; },
+    (e) => { if (navigator.onLine && e?.name !== "AbortError") setServerDown(true); throw e; }
+  );
+}
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
-  { auth: { storage: authStorage } }
+  { auth: { storage: authStorage }, global: { fetch: watchedFetch } }
 );
 
 // Export fotiek priamo z appky do jedného ZIP súboru (záloha zo Storage bez
@@ -3496,7 +3568,7 @@ async function myHpDrafts(userId, kind) {
   await Promise.all(all.filter((d) => !fresh(d)).map((d) => idbDelete("drafts", d?.key)));
   return all.filter((d) => fresh(d) && userId && d.userId === userId && (!kind || draftKind(d) === kind));
 }
-const draftSavedText = (iso) => { const t = new Date(iso); return `${t.getDate()}. ${t.getMonth() + 1}. o ${t.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`; };
+const draftSavedText = (iso) => { const t = new Date(iso); return `${t.getDate()}.\u00a0${t.getMonth() + 1}.\u00a0o\u00a0${t.toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" })}`; }; // nezlomiteľné medzery — dátum sa v tlačidle nerozdelí (k68 S1)
 
 // Outbox — zápisy do tabuliek (protokoly, checklisty, ...), čo sa nepodarilo
 // odoslať ani po 4 pokusoch. Prežije zavretie appky/reštart telefónu, odošle
@@ -4828,16 +4900,22 @@ function findOtherLock(recordLocks, table, recordId, myUserId) {
   return (recordLocks || []).find((l) => l.table === table && l.recordId === recordId && l.userId !== myUserId && isLockActive(l)) || null;
 }
 
+// k71e: hľadanie viacerých výrazov oddelených čiarkou („1330, 2632“) — položka sedí, ak sedí aspoň na jeden; prázdne časti sa ignorujú.
+function searchTerms(s) {
+  return String(s || "").toLowerCase().split(",").map((t) => t.trim()).filter(Boolean);
+}
+
 /* ---------------------------------------------------------
    Searchable select
 --------------------------------------------------------- */
-function SearchInput({ value, onChange, placeholder, style }) {
+function SearchInput({ value, onChange, placeholder, style, title }) {
   // Na mobile (viď @media) je toto pole cez CSS schované za lupu — namiesto
   // trvalo zabratého miesta v riadku filtrov (rovnaký vzor ako GlobalSearch
   // v hlavičke). Rozbalené ostáva otvorené, kým v ňom niečo je — zavrieť ho
   // ide len prázdne (Vymazať/kliknutie mimo pri prázdnej hodnote).
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
   useEffect(() => {
     if (!mobileExpanded) return;
     function onDocClick(e) {
@@ -4852,7 +4930,8 @@ function SearchInput({ value, onChange, placeholder, style }) {
       <button
         type="button"
         className="list-search-mobile-trigger header-icon-btn"
-        onClick={() => setMobileExpanded(true)}
+        // k71e D6: pole sa zobrazí hneď (flushSync) a fokus ide doň v tom istom ťuknutí — klávesnica vyskočí na prvý raz.
+        onClick={() => { flushSync(() => setMobileExpanded(true)); inputRef.current?.focus(); }}
         aria-label="Hľadať"
         title="Hľadať"
         style={{ display: "none", background: "var(--panel-2)", border: "1px solid var(--border)", color: "var(--text-dim)", cursor: "pointer" }}
@@ -4865,7 +4944,8 @@ function SearchInput({ value, onChange, placeholder, style }) {
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           aria-label={placeholder}
-          autoFocus={mobileExpanded}
+          title={title}
+          ref={inputRef}
           style={{ width: "100%", paddingRight: value ? 26 : undefined }}
         />
         {value && (
@@ -5855,7 +5935,8 @@ function AskHost() {
 function AskModal({ q, onDone }) {
   const [val, setVal] = useState(q.input?.value || "");
   const [choice, setChoice] = useState({}); // q.groups: {kľúč skupiny: id kolegu | ""}
-  const missing = q.input?.required && !val.trim() ? [q.input.label.split(" (")[0].toLowerCase()] : [];
+  const missing = q.input?.required && !val.trim() ? [q.input.label.split(" (")[0].toLowerCase()]
+    : (q.groups || []).some((g) => !g.release && !choice[g.key]) ? ["výber kolegu"] : []; // skupina bez „uvoľniť“ — okno ostane, kým sa nevyberie (k69 S8)
   return (
     <Modal title={q.title || "Potvrdenie"} onClose={() => onDone(q.input || q.groups ? null : false)} elevated>
       <div className="ask-dlg" style={{ fontSize: 15, marginBottom: 18, lineHeight: 1.45, whiteSpace: "pre-line" }}>{q.message}</div>
@@ -5871,7 +5952,7 @@ function AskModal({ q, onDone }) {
         <div key={g.key} className="handoff-grp">
           <div className="handoff-t">{g.title} <span className="tnum">({g.items.length})</span></div>
           <ul>{g.items.slice(0, 5).map((t, i) => <li key={i}>{t}</li>)}{g.items.length > 5 && <li>… a {plural(g.items.length - 5, "ďalšia", "ďalšie", "ďalších")}</li>}</ul>
-          <Field label="Preradiť na">
+          <Field label={g.release ? "Preradiť na" : "Preradiť na *"}>
             <select value={choice[g.key] || ""} onChange={(e) => setChoice((c) => ({ ...c, [g.key]: e.target.value }))} style={{ width: "100%" }}>
               <option value="">{g.release ? g.keepLabel || "Nepreradiť — uvoľniť" : "— vyberte —"}</option>
               {g.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -5889,13 +5970,19 @@ function AskModal({ q, onDone }) {
 }
 
 function Field({ label, children }) {
-  // Popis spojený s poľom (čítačka obrazovky) — len keď je potomok jedno pole.
+  // Popis spojený s poľom (čítačka obrazovky) — jedno pole cez htmlFor, inak (nápoveda, výber stroja, zákazníka…) prvé pole cez aria-labelledby.
   const autoId = useId();
+  const ref = useRef(null);
   const single = React.isValidElement(children) && ["input", "select", "textarea"].includes(children.type);
   const id = single ? children.props.id || autoId : undefined;
+  useEffect(() => {
+    if (single) return;
+    const c = ref.current?.querySelector("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea");
+    if (c && !c.labels?.length && !c.hasAttribute("aria-label") && !c.hasAttribute("aria-labelledby")) c.setAttribute("aria-labelledby", `${autoId}l`);
+  });
   return (
-    <div className="fld">
-      <label className="fld-l" htmlFor={id}>{label}</label>
+    <div className="fld" ref={ref}>
+      <label className="fld-l" id={`${autoId}l`} htmlFor={id}>{label}</label>
       {single ? React.cloneElement(children, { id }) : children}
     </div>
   );
@@ -5909,13 +5996,16 @@ const closeOwnModal = (e) => e.currentTarget.closest(".modal-panel")?.querySelec
 function FormFoot({ missing, progress, left, cancel = true, confirm, children }) {
   const [tried, onTry] = useSaveTry();
   const has = missing?.length > 0;
+  // B5 (1.0.875): hlavné tlačidlo je pri chýbajúcich údajoch aktívne (aj pre klávesnicu) — klik nič neuloží, ukáže čo chýba a skočí na pole.
+  const kids = has ? React.Children.map(children, (c) => (React.isValidElement(c) && c.type === "button" && c.props.disabled && /\bbtn-accent\b/.test(c.props.className || "")
+    ? React.cloneElement(c, { disabled: false, onClick: undefined, "data-incomplete": true }) : c)) : children;
   return (
     <div className={`job-form-foot${confirm ? " ff-confirm" : ""}${tried && has ? " ff-tried" : ""}`}>
       {left}
       <MissPill missing={missing} tried={tried} progress={progress} />
       <div className="ff-btns" onClick={has ? onTry : undefined}>
         {cancel && <button type="button" className="btn btn-outline ff-cancel" onClick={closeOwnModal}>Zrušiť</button>}
-        {children}
+        {kids}
       </div>
     </div>
   );
@@ -5931,7 +6021,8 @@ function markEmptyRequired(panel) {
     .filter((c) => c && !String(c.value || "").trim());
   empty.forEach((c) => {
     c.setAttribute("data-miss-auto", "");
-    const off = () => c.removeAttribute("data-miss-auto");
+    c.setAttribute("aria-invalid", "true");
+    const off = () => { c.removeAttribute("data-miss-auto"); c.removeAttribute("aria-invalid"); };
     c.addEventListener("input", off, { once: true });
     c.addEventListener("change", off, { once: true });
   });
@@ -5952,6 +6043,15 @@ function useSaveTry() {
     if (e.target !== e.currentTarget && !e.target.closest("[data-incomplete]")) return;
     setTried(true);
     const panel = e.currentTarget.closest(".modal-panel");
+    // Chýbajúce pole aj pre čítačku (nie len červený rám) — do najbližšej zmeny poľa.
+    panel?.querySelectorAll("[data-miss]").forEach((m) => {
+      const c = m.matches("input, select, textarea") ? m : m.querySelector("input:not([type=hidden]):not([type=file]), select, textarea");
+      if (!c) return;
+      c.setAttribute("aria-invalid", "true");
+      const off = () => c.removeAttribute("aria-invalid");
+      c.addEventListener("input", off, { once: true });
+      c.addEventListener("change", off, { once: true });
+    });
     const t = panel?.querySelector("[data-miss]") || markEmptyRequired(panel);
     if (!t) return;
     t.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -6388,7 +6488,8 @@ function DispatcherApp() {
         if (await claimReminder("reservations", r, { reminderSentAt: sentAt }, "reminderSentAt")) won.push(r.id);
       }
       if (won.length === 0) return;
-      stale.filter((r) => won.includes(r.id)).forEach((r) => {
+      const groups = new Set(); // rezervácia na model: jedna pripomienka za žiadosť, nie za každý kus
+      stale.filter((r) => won.includes(r.id) && (!r.groupId || (!groups.has(r.groupId) && groups.add(r.groupId)))).forEach((r) => {
         const machine = machineById[r.machineId];
         if (r.obchodnik) {
           pushNotification({
@@ -6397,7 +6498,7 @@ function DispatcherApp() {
             roles: [],
             userName: r.obchodnik,
             title: "Nezáväzná rezervácia dlho nevybavená",
-            message: `Rezervácia stroja ${machine?.code || "—"} pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Overte, či je ešte aktuálna.`,
+            message: `Rezervácia (${resWhat(r, machine)}) pre ${r.customer} visí bez vybavenia už ${RESERVATION_STALE_DAYS}+ dní. Overte, či je ešte aktuálna.`,
             link: { module: "poziciovna", view: "calendar", reservationId: r.id },
           });
         }
@@ -6527,6 +6628,11 @@ function DispatcherApp() {
         const i = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : tabs.indexOf(t) + (e.key === "ArrowRight" ? 1 : -1);
         const next = tabs[(i + tabs.length) % tabs.length];
         if (next) { e.preventDefault(); next.focus(); next.click(); }
+      } else if (role === "radio" && ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) {
+        const opts = [...(t.closest('[role="radiogroup"]')?.querySelectorAll('[role="radio"]:not(:disabled)') || [])];
+        const i = opts.indexOf(t) + (e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1);
+        const next = opts[(i + opts.length) % opts.length];
+        if (next && next !== t) { e.preventDefault(); next.focus(); next.click(); }
       } else if (role === "menuitem" && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
         const items = [...(t.closest('[role="menu"]')?.querySelectorAll('[role="menuitem"]') || [])];
         const i = items.indexOf(t) + (e.key === "ArrowDown" ? 1 : -1);
@@ -6836,7 +6942,8 @@ function DispatcherApp() {
     const stillMine = job && myEmployee?.id && [job.driverId, job.returnDriverId].includes(myEmployee.id);
     const paper = _paperConflict.has(item.id);
     const why = paper ? "dispečing medzitým zapísal papierový protokol" : !job ? "zákazku medzičasom zmazal dispečing" : job.notRealized ? "zákazka bola medzičasom zrušená (stroj neodišiel)" : stillMine ? "databáza zápis odmietla (oprávnenie alebo zmena na zákazke)" : "zákazka bola medzičasom pridelená inému šoférovi";
-    rejectedProtocolTexts.current.set(item.id, `Protokol k stroju ${machine?.code || ""} (${job?.customer || "zákazka"}) sa NEULOŽIL — ${why}.\n\nProtokol aj s podpismi ostáva v tomto zariadení. Zavolajte dispečing.`);
+    // Terén má na Dnes blok „Neuložené“ s pokynom a tlačidlom na dispečera — hláška naň len odkáže (jedna správa, jeden pokyn; k69 terén S7).
+    rejectedProtocolTexts.current.set(item.id, `Protokol k stroju ${machine?.code || ""} (${job?.customer || "zákazka"}) sa NEULOŽIL — ${why}.\n\nProtokol aj s podpismi ostáva v tomto zariadení. ${DNES_ROLES.includes(currentUser?.role) ? "Čo ďalej, nájdete na Dnes v časti „Neuložené“." : "Zavolajte dispečing."}`);
     showNotice(rejectedProtocolTexts.current.get(item.id));
     notifyDispatchers({
       kind: "handover_protocol",
@@ -6870,7 +6977,7 @@ function DispatcherApp() {
     }
     // Kontrolu medzičasom zrušil dispečer — zámerné odmietnutie, rieši ho len sekcia „Neuložené“ na Dnes so „Zahodiť“ (k62 terén S1).
     if (table === "assignments" && /bola zrušená/.test(why || "")) return;
-    showNotice(`${what}${code ? ` (${code})` : ""} sa neuložil${end}${why ? ` — ${why}` : ` — databáza ${end === "a" ? "ju" : "ho"} odmietla`}.\n\n${table === "partHandovers" && /podpíšte znova/.test(why || "") ? "Sám sa neuloží — na Dnes v časti „Neuložené“ ho zahoďte a výdaj podpíšte so zákazníkom znova." : "Záznam ostáva v tomto zariadení a odošle sa sám, keď to bude možné. Nič nemažte a zavolajte kanceláriu."}`);
+    showNotice(`${what}${code ? ` (${code})` : ""} sa neuložil${end}${why ? ` — ${why}` : ` — databáza ${end === "a" ? "ju" : "ho"} odmietla`}.\n\n${table === "partHandovers" && /podpíšte znova/.test(why || "") ? "Sám sa neuloží — na Dnes v časti „Neuložené“ ho zahoďte a výdaj podpíšte so zákazníkom znova." : DNES_ROLES.includes(currentUser?.role) ? "Záznam ostáva v tomto zariadení. Čo ďalej, nájdete na Dnes v časti „Neuložené“." : "Záznam ostáva v tomto zariadení a odošle sa sám, keď to bude možné. Nič nemažte a zavolajte kanceláriu."}`);
     pushNotificationRef.current?.({ roles: ["dispecer_servisu", "veduci_servisu"], kind: "assignment_service", title: `${what} z terénu sa neuložil${end}`,
       message: `${currentUser?.name || "Kolega"} má v zariadení ${acc}${code ? ` (${code})` : ""}, ${which} databáza odmietla${why ? `: ${why}` : ""}. Skontrolujte pridelenie a ozvite sa.` });
   };
@@ -7361,9 +7468,12 @@ function DispatcherApp() {
     }
     return currentUser;
   }, [currentUser, viewAsRole]);
+  // Terén vidí odmietnutý záznam na Dnes v bloku „Neuložené“ s pokynom — horný pás by to len opakoval inými slovami (k69 terén S7).
+  const outboxBlockedStrip = outboxBlockedCall > 0 && !DNES_ROLES.includes(effectiveUser?.role);
 
   // Rozpracované protokoly v zariadení (koncepty) — riadok na Dnes; načítanie zároveň zmaže koncepty staršie ako 7 dní.
   const [hpDrafts, setHpDrafts] = useState([]);
+  const [draftsOnCards, setDraftsOnCards] = useState(""); // B8: koncepty zobrazené priamo na karte prepravy šoféra
   useEffect(() => {
     if (!currentUser?.id) { setHpDrafts([]); return; }
     const load = () => myHpDrafts(currentUser.id).then(setHpDrafts);
@@ -8788,7 +8898,8 @@ function DispatcherApp() {
     if (!currentUser) return;
     const ids = notifications.filter((n) => n.kind === "reservation" && /^Žiadosť o (nezáväznú rezerváciu|zákazku)$/.test(n.title || "") && n.link?.reservationId
       && !(n.readBy || []).includes(currentUser.id) && !settledReqTried.current.has(n.id)
-      && reservations.some((r) => r.id === n.link.reservationId && r.status !== "pending")).map((n) => n.id);
+      && reservations.some((r) => r.id === n.link.reservationId && r.status !== "pending"
+        && !(r.groupId && reservations.some((x) => x.groupId === r.groupId && x.status === "pending")))).map((n) => n.id); // na model: až keď nečaká žiadny kus
     if (!ids.length) return;
     ids.forEach((id) => settledReqTried.current.add(id));
     markNotificationsRead(ids);
@@ -9305,6 +9416,26 @@ function DispatcherApp() {
     // schvaľovanie), len text upozornenia a karta to dajú dispečerovi jasne
     // najavo, nech vie rovno konvertovať bez ďalšieho dopytovania obchodníka.
     const requestedAsJob = !!data.requestedAsJob;
+    if (data.items?.length) {
+      // Na model (1.0.875): kus = jedna čakajúca rezervácia bez stroja (spoločné groupId); stroje pridelí a schváli dispečer depa.
+      const groupId = uid();
+      const createdAt = new Date(serverNowMs()).toISOString();
+      const recs = data.items.flatMap(({ model, qty }) => Array.from({ length: qty }, () => ({
+        id: uid(), groupId, model, depo: data.depo, customer: data.customer, toLocation: data.toLocation, obchodnik: data.obchodnik,
+        expectedStart: data.expectedStart, expectedEnd: data.expectedEnd || null, notes: data.notes || "", requestedAsJob,
+        status: "pending", createdBy: currentUser?.name || "", createdAt,
+      })));
+      persistReservations((reservations) => [...reservations, ...recs]);
+      const what = data.items.map((i) => `${i.qty}× ${i.model}`).join(" + ");
+      notifyDispatchers({ attachTo: recs[0],
+        kind: "reservation",
+        title: requestedAsJob ? "Žiadosť o zákazku" : "Žiadosť o nezáväznú rezerváciu",
+        message: `${currentUser?.name || "Obchodník"} žiada o ${requestedAsJob ? "zákazku" : "nezáväznú rezerváciu"} na model: ${what} (depo ${data.depo}) pre ${data.customer}, ${data.toLocation || "—"} (obchodník: ${data.obchodnik}), predpokladaný začiatok ${fmtDate(data.expectedStart)}. Pridelte konkrétne stroje a schváľte.`,
+        link: { module: "poziciovna", view: "calendar", reservationId: recs[0].id },
+      }, { depos: [data.depo] });
+      showToast(requestedAsJob ? "Žiadosť o zákazku bola odoslaná." : "Žiadosť o rezerváciu bola odoslaná.");
+      return recs[0];
+    }
     const record = {
       id: uid(),
       machineId: data.machineId,
@@ -9358,6 +9489,33 @@ function DispatcherApp() {
         link: { module: "poziciovna", view: "calendar", reservationId: r.id },
       });
     }
+    return true;
+  }
+  // Rezervácia na model: dispečer pridelí kusom konkrétne stroje a tie sa schvália (zvyšok čaká). pairs = [[id rezervácie, id stroja]]
+  function assignReservationMachines(pairs, onBlocked) {
+    if (!can(effectiveUser, "reservation_convert") || officeOffline("reservations")) return false;
+    const rows = pairs.map(([id, machineId]) => ({ r: reservations.find((x) => x.id === id), m: machineById[machineId] }));
+    if (rows.some(({ r, m }) => !m || !isModelPiece(r) || r.status !== "pending")) { (onBlocked || showNotice)("Žiadosť medzitým vybavil kolega — skontrolujte ju znova."); return false; }
+    for (const { r, m } of rows) {
+      const clash = findMachineConflict(jobs, reservations, m.id, null, r.expectedStart, r.expectedEnd || null);
+      if (clash) { (onBlocked || showNotice)(`${m.code}: ${clash} Vyberte iný stroj.`); return false; }
+    }
+    if (new Set(rows.map(({ m }) => m.id)).size < rows.length) { (onBlocked || showNotice)("Ten istý stroj je pridelený dvom kusom — vyberte iný."); return false; }
+    const byId = new Map(rows.map(({ r, m }) => [r.id, m.id]));
+    const at = new Date(serverNowMs()).toISOString();
+    persistReservations((list) => list.map((x) => (byId.has(x.id) ? { ...x, machineId: byId.get(x.id), status: "approved", assignedBy: currentUser?.name || "", assignedAt: at } : x)));
+    // Upozornenie za každý kus zvlášť, priviazané k jeho zápisu — odíde len za kus, ktorý DB naozaj prijala (súbeh dvoch dispečerov).
+    rows.forEach(({ r, m }) => {
+      const base = { attachTo: r.id, kind: "reservation", roles: [], userName: r.obchodnik || null, link: { module: "poziciovna", view: "calendar", reservationId: r.id } };
+      pushNotification({ ...base,
+        title: "Rezervácia schválená",
+        message: `Vaša nezáväzná rezervácia (${r.customer}, od ${fmtDate(r.expectedStart)}, model ${r.model}) bola schválená — pridelený stroj ${m.code} (${m.type || "—"}, depo ${m.depo || "—"}).`,
+      });
+      if ((m.type || "") !== r.model) pushNotification({ ...base,
+        title: "Zmena modelu v rezervácii",
+        message: `Dispečer pridelil iný model, než ste žiadali (${r.customer}): namiesto ${r.model} stroj ${m.code} (${m.type || "—"}). Overte to so zákazníkom.`,
+      });
+    });
     return true;
   }
   // Otvorená karta rezervácie berie živý záznam — kolega ju mohol medzitým premeniť, zrušiť alebo zmazať (k55).
@@ -9449,6 +9607,17 @@ function DispatcherApp() {
   function revertHandoverProtocolErpProcessed(id) {
     const ids = new Set([].concat(id));
     persistHandoverProtocols((handoverProtocols) => handoverProtocols.map((h) => (ids.has(h.id) ? { ...h, erpProcessed: false } : h)));
+  }
+  // Mesačná fakturácia bežiacich prenájmov — záznam za mesiac k protokolu o odovzdaní (erpMonthly); rec null = zrušiť.
+  function setHandoverErpMonthly(month, items, toast) {
+    const recs = new Map(items.map((x) => [x.id, x.rec]));
+    const at = new Date(serverNowMs()).toISOString(), by = currentUser?.name || "";
+    const ok = persistHandoverProtocols((handoverProtocols) => handoverProtocols.map((h) => {
+      if (!recs.has(h.id)) return h;
+      const rest = erpMonthlyList(h).filter((e) => e.month !== month), rec = recs.get(h.id);
+      return { ...h, erpMonthly: rec ? [...rest, { month, ...rec, at, by }].sort(byKeys((e) => e.month)) : rest };
+    }));
+    if (ok !== false && toast) showToast(toast);
   }
   // Prijme "odfotenie" vyplneného protokolu z vnoreného formulára (postMessage), uloží
   // obrázok do Supabase Storage a vytvorí k nemu záznam — priradený k poškodeniu/
@@ -10023,27 +10192,27 @@ function DispatcherApp() {
     notifyDispatchers({
       kind: "reservation",
       title: "Podnet: premeniť rezerváciu na zákazku",
-      message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) na skutočnú zákazku.`,
+      message: `${currentUser?.name || "Obchodník"} navrhuje premeniť rezerváciu (${resWhat(r, machine)}, depo ${machine?.depo || r.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) na skutočnú zákazku.`,
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
-    }, { machine });
+    }, machine ? { machine } : { depos: [r.depo] });
   }
   function requestReservationDelete(r) {
     const machine = machineById[r.machineId];
     notifyDispatchers({
       kind: "reservation",
       title: "Podnet: zmazať rezerváciu",
-      message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — obchod pravdepodobne nevyšiel.`,
+      message: `${currentUser?.name || "Obchodník"} navrhuje zmazať rezerváciu (${resWhat(r, machine)}, depo ${machine?.depo || r.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — obchod pravdepodobne nevyšiel.`,
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
-    }, { machine });
+    }, machine ? { machine } : { depos: [r.depo] });
   }
   function requestReservationReminder(r) {
     const machine = machineById[r.machineId];
     notifyDispatchers({
       kind: "reservation",
       title: "Pripomienka: nevybavená rezervácia",
-      message: `${currentUser?.name || "Obchodník"} pripomína rezerváciu (stroj ${machine?.code || "—"}, depo ${machine?.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — čaká na vybavenie.`,
+      message: `${currentUser?.name || "Obchodník"} pripomína rezerváciu (${resWhat(r, machine)}, depo ${machine?.depo || r.depo || "—"}, ${r.customer}, ${r.toLocation || "—"}) — čaká na vybavenie.`,
       link: { module: "poziciovna", view: "calendar", reservationId: r.id },
-    }, { machine });
+    }, machine ? { machine } : { depos: [r.depo] });
   }
 
   // opts.silent: volá sa z iného miesta ako formulár "Nahlásiť poškodenie"
@@ -11461,14 +11630,14 @@ function DispatcherApp() {
       : statusFilter === "awaitingOut" ? m.awaitingOut : statusFilter === "awaitingPickup" ? !!m.awaitingPickup
       : m.status === statusFilter && (statusFilter !== "free" || (!m.hasOpenDamage && !m.inPrep && !m.awaitingPickup)) && (statusFilter !== "active" || !m.awaitingOut));
     if (dashboardDepoFilter) list = list.filter((m) => (m.depo || "").toLowerCase() === dashboardDepoFilter.toLowerCase());
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const terms = searchTerms(search);
+    if (terms.length) {
       list = list.filter(
-        (m) =>
+        (m) => terms.some((q) =>
           (m.code || "").toLowerCase().includes(q) ||
           (m.type || "").toLowerCase().includes(q) ||
           (m.depo || "").toLowerCase().includes(q) ||
-          (m.currentJob?.customer || "").toLowerCase().includes(q)
+          (m.currentJob?.customer || "").toLowerCase().includes(q))
       );
     }
     return list;
@@ -12934,6 +13103,7 @@ function DispatcherApp() {
                 machineById={enrichedMachineById}
                 onMark={markHandoverProtocolErpProcessed}
                 onRevert={revertHandoverProtocolErpProcessed}
+                onMonthly={setHandoverErpMonthly}
                 onOpenProtocol={(job) => setShowHandoverProtocol(job)}
               />
             ),
@@ -13011,6 +13181,7 @@ function DispatcherApp() {
         currentUser={currentUser}
         onSaveNotificationPrefs={(prefs) => updateProfileInfo(currentUser.id, { notificationPrefs: prefs })}
         onOpenTour={() => setTourOpen(true)}
+        onOpenWhatsNew={() => { setWhatsNewOlder(false); setWhatsNew(whatsNewFor(currentUser.role, "0").slice(0, 11)); }} /* B9: aktuálna verzia + 10 starších (zbalené) */
         pushEnabled={pushEnabled}
         onEnablePush={enablePush}
         onDisablePush={disablePush}
@@ -13074,14 +13245,14 @@ function DispatcherApp() {
         </div>
       )}
 
-      {outboxCount > 0 && ((outboxStrip && outboxShown > 0) || outboxBlockedCall > 0) && (
+      {outboxCount > 0 && ((outboxStrip && outboxShown > 0) || outboxBlockedStrip) && (
         <div className="sync-strip" role="status">
           {outboxShown > 0 && <>
             {!navigator.onLine && <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.6a10 10 0 0 1 14 0" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="m3 3 18 18" /></svg>}
             <span>{!navigator.onLine && "Bez signálu · "}{changesText(Math.max(1, outboxShown))} na odoslanie</span>
             <span className="sync-more">{navigator.onLine ? "— odosiela sa… (pomalé spojenie)" : "— odošle sa samo, keď sa platforma pripojí"}. Netreba nič robiť, len platformu nezmazať.</span>
           </>}
-          {outboxBlockedCall > 0 && <span style={{ fontSize: 13 }}>Záznam sa neuložil — databáza ho odmietla (prácu medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Záznam ostáva v tomto zariadení; zavolajte kanceláriu.</span>}
+          {outboxBlockedStrip && <span style={{ fontSize: 13 }}>Záznam sa neuložil — databáza ho odmietla (prácu medzitým preradili, zrušili alebo zmazali, alebo váš účet nemá prístup). Záznam ostáva v tomto zariadení; zavolajte kanceláriu.</span>}
         </div>
       )}
 
@@ -13138,6 +13309,7 @@ function DispatcherApp() {
           <TodayView
             blockedItems={outboxBlockedList}
             hpDrafts={hpDrafts}
+            draftsOnCards={draftsOnCards}
             onOpenHpDraft={(d) => {
               if (draftKind(d) === "sp") { openProtocol(d.params || {}); return; } // rozpracovaný servisný protokol — ponúkne Pokračovať / Začať odznova
               if (draftKind(d) === "ci") {
@@ -13202,6 +13374,8 @@ function DispatcherApp() {
                 damages={damages}
                 dnes
                 unsavedProtocols={outboxBlockedList.filter((x) => x.table === "handoverProtocols").length}
+                hpDrafts={hpDrafts}
+                onDraftsOnCards={setDraftsOnCards}
                 otherOpen={phMineWaiting(partHandovers, myEmployee, today).length}
                 jobs={jobs}
                 drivers={drivers}
@@ -13426,6 +13600,7 @@ function DispatcherApp() {
             machineById={enrichedMachineById}
             onMark={markHandoverProtocolErpProcessed}
             onRevert={revertHandoverProtocolErpProcessed}
+            onMonthly={setHandoverErpMonthly}
             onOpenProtocol={(job) => setShowHandoverProtocol(job)}
           />
         )}
@@ -13561,6 +13736,8 @@ function DispatcherApp() {
                 onComplete={handleAttemptCompleteDamage}
                 onProtocol={(d) => openProtocol(buildProtocolParams(d, technicians, enrichedMachineById))}
                 onAttachMachine={(d) => setAttachMachineTarget(d)}
+                protocolLogs={protocolLogs}
+                onAssignProtocol={assignProtocolToDamage}
                 highlightDamageId={highlightDamageId}
                 onClearAll={() => askDelete("VŠETKY poškodenia strojov požičovne", clearAllPoskodenia, true)}
                 onOpenSummary={() => setDamagesSummaryOpen(true)}
@@ -14260,6 +14437,9 @@ function DispatcherApp() {
         <ReservationCardModal
           reservation={reservationCardTarget}
           machine={machineById[reservationCardTarget.machineId]}
+          assignCtx={{ machines, jobs, reservations, damages }}
+          onAssign={assignReservationMachines}
+          onOpenReservation={setReservationCardTarget}
           salespeople={salespeople}
           user={effectiveUser}
           blacklistMatch={((ico) => findBlacklistEntry(blacklist, reservationCardTarget.customer, ico) || findBlacklistNameTwin(blacklist, reservationCardTarget.customer, ico))(customers.find((c) => (c.firma || "").trim().toLowerCase() === (reservationCardTarget.customer || "").trim().toLowerCase())?.ico)}
@@ -14319,7 +14499,7 @@ function DispatcherApp() {
               roles: [],
               userName: r.obchodnik || null,
               title: "Rezervácia zmazaná",
-              message: `Vaša nezáväzná rezervácia (stroj ${machine?.code || "—"}, ${r.customer}) bola zmazaná. Dôvod: ${reason}`,
+              message: `Vaša nezáväzná rezervácia (${resWhat(r, machine)}, ${r.customer}) bola zmazaná. Dôvod: ${reason}`,
             });
             setRejectReservationTarget(null);
             setReservationCardTarget(null);
@@ -15583,7 +15763,7 @@ function MailChoiceModal({ mail, onClose }) {
    User menu — jedno rozbaľovacie miesto pre všetky nastavenia
    (tmavý režim, mail, admin veci) namiesto radu tlačidiel v hlavičke
 --------------------------------------------------------- */
-function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout, variant }) {
+function UserMenu({ onOpenTour, onOpenWhatsNew, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, viewAsRole, onSetViewAsRole, darkMode, onToggleDarkMode, onOpenUserAdmin, onExportBackup, onImportBackup, canExport, canImport, onLogout, variant }) {
   const [open, setOpen] = useState(false);
   useEscClose(open, setOpen); // Esc zavrie menu (ako ⋯)
   const [showPrefs, setShowPrefs] = useState(false);
@@ -15631,6 +15811,8 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
       <button
         onClick={() => setOpen((v) => !v)}
         title={`${currentUser.name} · ${roleLabel(currentUser.role)}`}
+        aria-label={isCompactVariant ? `Účet: ${currentUser.name} · ${roleLabel(currentUser.role)}` : undefined}
+        aria-expanded={open}
         className={isCompactVariant ? "header-icon-btn" : undefined}
         style={
           isMobileVariant
@@ -15732,6 +15914,11 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
             <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenTour?.(); setOpen(false); }}>
               <NavIcon id="kompas" size={16} /> Sprievodca platformou
             </button>
+            {onOpenWhatsNew && (
+              <button style={itemStyle} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")} onClick={() => { onOpenWhatsNew(); setOpen(false); }}>
+                <NavIcon id="bublina" size={16} /> Čo je nové
+              </button>
+            )}
 
             {isAdmin && (
               <>
@@ -15761,13 +15948,17 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
                     <NavIcon id="export" size={16} /> Export dát
                   </button>
                 )}
-                {canImport && (
-                  <label
-                    style={{ ...itemStyle, display: "block" }}
+                {canImport && (<>
+                  {/* tlačidlo (nie label) — dá sa spustiť aj klávesnicou (k69 V2) */}
+                  <button
+                    type="button"
+                    style={itemStyle}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    onClick={(e) => e.currentTarget.nextElementSibling.click()}
                   >
                     <NavIcon id="import" size={16} /> Import dát
+                  </button>
                     <input
                       type="file"
                       accept="application/json,.json"
@@ -15779,8 +15970,7 @@ function UserMenu({ onOpenTour, currentUser, onSaveNotificationPrefs, pushEnable
                         setOpen(false);
                       }}
                     />
-                  </label>
-                )}
+                </>)}
               </>
             )}
 
@@ -16685,6 +16875,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
   // (na webe sa mobileExpanded nikdy nepoužije, tam je input vidno vždy).
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     function onDocClick(e) {
@@ -16697,13 +16888,9 @@ function GlobalSearch({ searchIndex, onNavigate }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const q = query.trim().toLowerCase();
-  const results =
-    q.length < 2
-      ? []
-      : (searchIndex || [])
-          .filter((r) => r.searchText.includes(q))
-          .slice(0, 8);
+  const terms = searchTerms(query).filter((t) => t.length >= 2);
+  // Do 8 výsledkov na každý výraz, nech druhý výraz nezatlačí prvý.
+  const results = [...new Set(terms.flatMap((t) => (searchIndex || []).filter((r) => r.searchText.includes(t)).slice(0, 8)))];
 
   return (
     <div
@@ -16714,7 +16901,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
       <button
         type="button"
         className="global-search-mobile-trigger header-icon-btn"
-        onClick={() => setMobileExpanded(true)}
+        onClick={() => { flushSync(() => setMobileExpanded(true)); inputRef.current?.focus(); }} // k71e D6: fokus na prvé ťuknutie
         aria-label="Hľadať"
         style={{ display: "none", background: "#fff", border: "none", color: "var(--accent-fill)", cursor: "pointer" }}
       >
@@ -16722,6 +16909,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
       </button>
       <div className="global-search-input-wrap" style={{ position: "relative", width: "100%" }}>
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -16731,9 +16919,10 @@ function GlobalSearch({ searchIndex, onNavigate }) {
           onKeyDown={(e) => { if (e.key === "ArrowDown") { const f = boxRef.current?.querySelector("[data-sr]"); if (f) { e.preventDefault(); f.focus(); } } }}
           aria-label="Hľadať"
           role="combobox"
-          aria-expanded={open && q.length >= 2}
+          aria-expanded={open && terms.length > 0}
           aria-autocomplete="list"
-          placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie…"
+          placeholder="Hľadať stroj, zákazku, zákazníka, poškodenie… (viac oddeľte čiarkou)"
+          title="Hľadať stroj, zákazku, zákazníka, poškodenie… (viac oddeľte čiarkou)" // pri 1100–1150 px sa nápoveda v poli skráti
           style={{
             width: "100%",
             border: "1px solid rgba(0,0,0,.1)",
@@ -16756,7 +16945,7 @@ function GlobalSearch({ searchIndex, onNavigate }) {
             ✕
           </button>
         )}
-        {open && q.length >= 2 && (
+        {open && terms.length > 0 && (
           <div
             className="panel"
             style={{
@@ -16980,6 +17169,7 @@ function NavList({ modules, module, view, exclude = [], collapsed, rowClass, onG
               <button
                 className={`${rowClass}${active ? " active" : ""}`}
                 aria-label={t.label}
+                aria-current={active ? "page" : undefined}
                 onClick={() => {
                   if (!t.dropdown) return onGo(m.id, t.id);
                   if (collapsed) onExpand?.();
@@ -17075,7 +17265,15 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
   // Esc zavrie ponuku aj keď fokus ostal na stránke (tlačidlo v lište sa pri otvorenej ponuke skryje); fokus späť až po prekreslení.
   useEffect(() => {
     if (!sheet) return;
+    document.querySelector(".mnav-sheet .mnav-row")?.focus({ preventScroll: true }); // fokus do ponuky (k69 S5)
     const onKey = (e) => {
+      if (e.key === "Tab") { // Tab krúži len v ponuke, nie po stránke pod ňou
+        const els = [...document.querySelectorAll(".mnav-sheet button")];
+        const i = els.indexOf(document.activeElement);
+        e.preventDefault();
+        els[(i < 0 ? 0 : i + (e.shiftKey ? -1 : 1) + els.length) % els.length]?.focus();
+        return;
+      }
       if (e.key !== "Escape") return;
       e.preventDefault(); e.stopImmediatePropagation(); setSheet(null);
       setTimeout(() => document.querySelector(sheet === "plus" ? ".mnav-plus" : ".mnav-viac")?.closest("button")?.focus({ preventScroll: true }), 0);
@@ -17095,7 +17293,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
   const isActive = (t) => t && t.mod && module === t.mod && (t.group || [t.id]).includes(view);
   const item = (t) =>
     t && (
-      <button key={t.id} className={`mnav-t${isActive(t) ? " active" : ""}`} onClick={() => (t.id === "telefon" ? onOpenPhoneDirectory() : go(t.mod, t.id))}>
+      <button key={t.id} className={`mnav-t${isActive(t) ? " active" : ""}`} aria-current={isActive(t) ? "page" : undefined} onClick={() => (t.id === "telefon" ? onOpenPhoneDirectory() : go(t.mod, t.id))}>
         <NavIcon id={navKey(t)} size={22} />
         <span>{{ plan: "Plán", podklady: "Podklady" }[navKey(t)] || t.label}</span>
         {t.badge > 0 && <span className="mnav-b">{t.badge}</span>}
@@ -17104,7 +17302,7 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
   const restActive = !isActive(all.find((t) => t.id === "dnes")) && !isActive(s0) && !isActive(s1);
   return (
     <>
-      <div className="mobile-tech-actions mnav-bar">
+      <nav className="mobile-tech-actions mnav-bar" aria-label="Hlavné menu">
         {item(all.find((t) => t.id === "dnes"))}
         {item(s0)}
         {actions.length > 0 && (
@@ -17120,11 +17318,11 @@ function MobileTabBar({ modules, module, view, role, actions, onGo, onPickDoc, o
             {restBadge > 0 && <span className="mnav-b dot" title={`Niečo čaká v ďalších častiach (${restBadge})`} aria-label={`${restBadge} v ďalších častiach`} />}
           </button>
         )}
-      </div>
+      </nav>
       {sheet && (
         <div className="mobile-nav-overlay">
           <div className="mobile-nav-scrim" onClick={() => setSheet(null)} />
-          <div className="mnav-sheet">
+          <div className="mnav-sheet" role="dialog" aria-modal="true" aria-label={sheet === "plus" ? "Nové" : "Viac"}>
             <div className="mnav-grab" />
             {sheet === "plus" ? (
               <>
@@ -17207,7 +17405,7 @@ function extractPhone(text) {
   const m = (text || "").match(/(\+?\d[\d \/-]{6,}\d)/);
   return m ? m[1].trim() : null;
 }
-function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenPhoneDirectory, searchIndex, onSearchNavigate, quickActions, phoneInBar }) {
+function Header({ onOpenTour, onOpenWhatsNew, darkMode, onToggleDarkMode, onExportBackup, onImportBackup, currentUser, onSaveNotificationPrefs, pushEnabled, onEnablePush, onDisablePush, effectiveUser, viewAsRole, onSetViewAsRole, onLogout, onOpenUserAdmin, myNotifications, unreadNotificationCount, onMarkNotificationRead, onMarkAllNotificationsRead, onNavigateNotification, onOpenPhoneDirectory, searchIndex, onSearchNavigate, quickActions, phoneInBar }) {
   // Skutočná výška hlavičky sa mení (mobile zalomenie na 2 riadky, rôzne
   // zoom/rozlíšenie) — meria sa a ukladá do --header-h, aby sa podľa nej
   // vedeli "prilepiť" hlavičky tabuliek presne POD hlavičku, nie pod ňu.
@@ -17229,6 +17427,16 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
     window.addEventListener("offline", upd);
     return () => { window.removeEventListener("online", upd); window.removeEventListener("offline", upd); };
   }, []);
+  const [serverDown, setServerDownState] = useState(_serverDown);
+  useEffect(() => { _serverDownSubs.add(setServerDownState); return () => { _serverDownSubs.delete(setServerDownState); }; }, []);
+  // Bez práce by sa výpadok nezistil — malá sonda (pri výpadku každých 15 s, inak každých 30 s).
+  useEffect(() => {
+    if (!online) return;
+    const t = setInterval(() => {
+      if (!document.hidden) supabase.from("profiles").select("id", { head: true }).limit(1).then(() => {}, () => {});
+    }, serverDown ? 15000 : 30000);
+    return () => clearInterval(t);
+  }, [online, serverDown]);
   return (
     <div ref={headerRef} style={{ background: "var(--panel)", position: "sticky", top: 0, zIndex: 100, marginTop: "calc(-1 * env(safe-area-inset-top))" }}>
       {/* Červená aj pod stavovou lištou iPhonu. iOS 26 rozmazáva pás o niečo vyšší než stavová lišta — +14 px len tam, kde lišta je (na PC 0). */}
@@ -17290,6 +17498,7 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
                     currentUser={currentUser}
                     onSaveNotificationPrefs={onSaveNotificationPrefs}
                     onOpenTour={onOpenTour}
+                    onOpenWhatsNew={onOpenWhatsNew}
                     pushEnabled={pushEnabled}
                     onEnablePush={onEnablePush}
                     onDisablePush={onDisablePush}
@@ -17311,6 +17520,7 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
                     currentUser={currentUser}
                     onSaveNotificationPrefs={onSaveNotificationPrefs}
                     onOpenTour={onOpenTour}
+                    onOpenWhatsNew={onOpenWhatsNew}
                     pushEnabled={pushEnabled}
                     onEnablePush={onEnablePush}
                     onDisablePush={onDisablePush}
@@ -17331,6 +17541,13 @@ function Header({ onOpenTour, darkMode, onToggleDarkMode, onExportBackup, onImpo
           </div>
         </div>
       </div>
+      {(!online || serverDown) && (
+        <div className="sync-strip" role="status">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.6a10 10 0 0 1 14 0" /><path d="M8.5 16.3a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="M3 3l18 18" /></svg>
+          <span>{!online ? "Bez signálu" : "Server nedostupný"}</span>
+          <span className="sync-more">— vidíte naposledy načítané údaje. Zmeny v kancelárii sa teraz neuložia, protokoly v teréne sa odošlú samé.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -17468,6 +17685,10 @@ function spIssues(s, me) {
   if (!s.outcome) add(4, "outcome", "ako zásah dopadol");
   return out;
 }
+// k71g: poradie polí v kroku (ako na obrazovke) — „Ešte treba“, skok fokusom aj „Uložiť a odoslať“ idú na prvé chýbajúce zhora.
+const SP_ORDER = "client techs date serial model mth extText fault type cat km travel address outcome".split(" ");
+const spRank = (x) => { const m = /^(work|hours)(\d+)$/.exec(x.f); return x.step * 1000 + (m ? 2 * m[2] + (m[1] === "hours") : SP_ORDER.indexOf(x.f)); };
+const spSorted = (list) => list.sort((a, b) => spRank(a) - spRank(b));
 
 // Zapíše hodnoty do skrytého formulára rovnako, ako by ich technik vyplnil v ňom (udalosti input/blur, jeho funkcie).
 async function spApplyToEngine(win, s, applied) {
@@ -17551,12 +17772,14 @@ async function spCropSig(url) {
   } catch { return url; }
 }
 // miss = true (len rám) alebo text, čo chýba (rám + „Ešte treba: …“ pre čítačku cez aria-describedby).
-function SpField({ id, label, tag, hint, auto, miss, children }) {
+// req = povinné (k71g): hviezdička pri názve len pre oko, čítačka dostane aria-required.
+const SpReq = () => <span className="sp-req" aria-hidden="true">*</span>;
+function SpField({ id, label, tag, hint, auto, miss, req, children }) {
   const desc = [hint && id + "-h", typeof miss === "string" && id + "-e"].filter(Boolean).join(" ") || undefined;
-  const kids = React.Children.map(children, (c) => (React.isValidElement(c) && c.props.id === id ? React.cloneElement(c, { "aria-invalid": miss ? true : undefined, "aria-describedby": desc }) : c));
+  const kids = React.Children.map(children, (c) => (React.isValidElement(c) && c.props.id === id ? React.cloneElement(c, { "aria-invalid": miss ? true : undefined, "aria-describedby": desc, "aria-required": req || undefined }) : c));
   return (
     <div className={"sp-f" + (auto ? " sp-auto" : "") + (miss ? " sp-miss" : "")}>
-      <label htmlFor={id}>{label}{tag && <span className="sp-tag">{tag}</span>}</label>
+      <label htmlFor={id}>{label}{req && <SpReq />}{tag && <span className="sp-tag">{tag}</span>}</label>
       {kids}
       {typeof miss === "string" && <span id={id + "-e"} className="sp-hint sp-hint-err">Ešte treba: {miss}</span>}
       {hint && <span id={id + "-h"} className="sp-hint">{hint}</span>}
@@ -17640,6 +17863,8 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
   const [seen, setSeen] = useState(0); // najďalší navštívený krok — hotové sa značia len po návšteve
   useEffect(() => { setSeen((x) => Math.max(x, step)); }, [step]);
   const [miss, setMiss] = useState(null); // pole, na ktoré sa skočilo pri chýbajúcom údaji
+  const [tried, setTried] = useState(-1); // krok, v ktorom „Ďalej“ narazilo na chýbajúce údaje (rám na všetkých + „Ešte treba“)
+  const [fromSum, setFromSum] = useState(false); // krok otvorený zo súhrnu → „Späť na kontrolu“
   const [partsDlg, setPartsDlg] = useState(false);
   const [sign, setSign] = useState(null); // "sig-tech" | "sig-cust"
   const [sending, setSending] = useState(false);
@@ -17729,7 +17954,9 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
   }, []);
   function resumeDraft(d) {
     setS((cur) => ({ ...(cur || {}), ...d.data }));
-    setStep(Math.min(5, d.data?.step || 0)); setSeen(Math.min(5, d.data?.seen ?? d.data?.step ?? 0));
+    // koncept zo staršej verzie mohol obísť kontrolu — otvorí sa najďalej na prvom neúplnom kroku
+    const bad = spIssues({ ...(s || {}), ...d.data }, me).reduce((m, x) => Math.min(m, x.step), 5);
+    setStep(Math.min(5, d.data?.step || 0, bad)); setSeen(Math.min(5, d.data?.seen ?? d.data?.step ?? 0));
     setSavedAt(d.savedAt);
     setDraftAsk(null); setDraftChecked(true);
   }
@@ -17792,10 +18019,19 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
   const ready = !!(eng && s);
   useEffect(() => { headRef.current?.focus({ preventScroll: true }); }, [step, ready, draftChecked, draftAsk]);
   const L = eng?.lists;
-  const issues = ready ? spIssues(s, me) : [];
+  const issues = ready ? spSorted(spIssues(s, me)) : [];
   const issueOf = (f) => issues.find((x) => x.f === f);
-  const missMsg = (f) => (miss?.f === f && issueOf(f)?.msg) || null; // rám len kým problém trvá
-  const goStep = (i) => { setStep(i); setMiss(null); };
+  const missMsg = (f) => { const x = issueOf(f); return (x && (miss?.f === f || (tried === step && x.step === step)) && x.msg) || null; }; // rám len kým problém trvá
+  const goStep = (i) => { setStep(i); setMiss(null); setTried(-1); if (i === 5) setFromSum(false); };
+  // Dopredu len cez kroky bez chýbajúcich údajov (k71g) — inak skok na prvé chýbajúce pole.
+  const reach = (i) => i <= step || !issues.some((x) => x.step < i);
+  function gate(target) {
+    const bad = issues.find((x) => x.step < target);
+    if (!bad) { goStep(target); return; }
+    setStep(bad.step); setMiss(bad); setTried(bad.step);
+  }
+  const firstBad = issues[0]?.step;
+  const stepMissing = tried === step ? issues.filter((x) => x.step === step).map((x) => x.msg) : [];
   async function submit() {
     if (!issues.length) {
       setSending(true); setEngMsg(null);
@@ -17846,7 +18082,7 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
     setMatForm({ desc: "", pn: "", qty: "1" });
     return true;
   };
-  function next() { if (step === 3) commitMat(); goStep(Math.min(5, step + 1)); }
+  function next() { if (step === 3) commitMat(); gate(Math.min(5, step + 1)); }
   function chooseOutcome(o) {
     if (o.label === "Dodať diely") { setPartsDlg(true); return; }
     up({ outcome: o.label });
@@ -17869,12 +18105,12 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
   const stepBody = !ready ? null : [
     // 1 Zákazka
     <>
-      <SpField id="sp-client" label="Zákazník" tag={s.client === autoV.client ? "automaticky" : null} auto={s.client === autoV.client} miss={missMsg("client")}>
+      <SpField id="sp-client" label="Zákazník" req tag={s.client === autoV.client ? "automaticky" : null} auto={s.client === autoV.client} miss={missMsg("client")}>
         <input id="sp-client" value={s.client} onChange={(e) => up({ client: e.target.value })} />
       </SpField>
       <SpField id="sp-contact" label="Kontaktná osoba"><input id="sp-contact" value={s.contact} placeholder="Meno a priezvisko" onChange={(e) => up({ contact: e.target.value })} /></SpField>
       <div className={"sp-f" + (missMsg("techs") ? " sp-miss" : "")}>
-        <span className="sp-lbl" id="sp-techs-l">Technici{s.techs.join(",") === (autoV.techs || []).join(",") && params?.tech && <span className="sp-tag">z pridelenia</span>}</span>
+        <span className="sp-lbl" id="sp-techs-l">Technici<SpReq /><span className="sr-only">{" (povinné)"}</span>{s.techs.join(",") === (autoV.techs || []).join(",") && params?.tech && <span className="sp-tag">z pridelenia</span>}</span>
         <div className="sp-chips" role="group" aria-labelledby="sp-techs-l">
           {s.techs.map((n) => (
             <span key={n} className="sp-chip">{n}{!(me && n.toLowerCase() === me.toLowerCase()) && (
@@ -17892,7 +18128,7 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
         {issueOf("techs") && <span className="sp-hint sp-hint-err">Ešte treba: {issueOf("techs").msg}</span>}
       </div>
       <div className="sp-grid2">
-        <SpField id="sp-date" label="Dátum" tag={s.date === autoV.date ? "dnes" : null} auto={s.date === autoV.date} miss={missMsg("date")}><SpDateInput id="sp-date" value={s.date} onChange={(date) => up({ date })} /></SpField>
+        <SpField id="sp-date" label="Dátum" req tag={s.date === autoV.date ? "dnes" : null} auto={s.date === autoV.date} miss={missMsg("date")}><SpDateInput id="sp-date" value={s.date} onChange={(date) => up({ date })} /></SpField>
         <SpField id="sp-jobNumber" label="Číslo zákazky"><input id="sp-jobNumber" inputMode="numeric" placeholder="nepovinné" value={s.jobNumber} onChange={(e) => up({ jobNumber: e.target.value.replace(/\D/g, "") })} /></SpField>
       </div>
     </>,
@@ -17900,11 +18136,11 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
     <>
       <label className="sp-check"><input type="checkbox" checked={s.external} onChange={(e) => up({ external: e.target.checked, serial: "", model: "", machineId: null, extText: "", fault: "", type: "", cat: "" })} /> Externý stroj (manuálne zadanie)</label>
       <div className="sp-grid2">
-        <SpField id="sp-serial" label={s.external ? "Sériové číslo" : "Stroj"} tag={s.serial && s.serial === autoV.serial ? (params?.damageId ? "z tiketu" : "automaticky") : null} auto={!!s.serial && s.serial === autoV.serial} miss={missMsg("serial")}>
+        <SpField id="sp-serial" label={s.external ? "Sériové číslo" : "Stroj"} req tag={s.serial && s.serial === autoV.serial ? (params?.damageId ? "z tiketu" : "automaticky") : null} auto={!!s.serial && s.serial === autoV.serial} miss={missMsg("serial")}>
           <input id="sp-serial" list={s.external ? undefined : "sp-machines"} value={s.serial} placeholder="S/N alebo kód" autoComplete="off" onChange={(e) => pickSerial(e.target.value)} />
           {!s.external && <datalist id="sp-machines">{machineOpts.map((m) => <option key={m.serial} value={m.serial}>{m.model}</option>)}</datalist>}
         </SpField>
-        <SpField id="sp-model" label="Model" tag={!s.external ? "automaticky" : null} auto={!s.external} miss={missMsg("model")}>
+        <SpField id="sp-model" label="Model" req={s.external} tag={!s.external ? "automaticky" : null} auto={!s.external} miss={missMsg("model")}>
           <input id="sp-model" value={s.model} readOnly={!s.external} placeholder={s.external ? "Zadajte model…" : "doplní sa podľa stroja"} onChange={(e) => up({ model: e.target.value })} />
         </SpField>
       </div>
@@ -17914,14 +18150,14 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
           <div><button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => window.postMessage({ type: "mateco_switch_to_ticket_protocol", damageId: openTicket.damageId }, window.location.origin)}>Prejsť na zákazku</button></div>
         </div>
       )}
-      <SpField id="sp-mth" label="Počet MTH" miss={missMsg("mth")} hint={lastMth ? `Naposledy ${fmtMth(lastMth.v)} MTH · ${lastMth.src} ${fmtDate(lastMth.d)}` : null}>
+      <SpField id="sp-mth" label="Počet MTH" req miss={missMsg("mth")} hint={lastMth ? `Naposledy ${fmtMth(lastMth.v)} MTH · ${lastMth.src} ${fmtDate(lastMth.d)}` : null}>
         <input id="sp-mth" inputMode="decimal" value={s.mth} placeholder="hod." autoComplete="off" onChange={(e) => up({ mth: e.target.value })} />
       </SpField>
       {s.external ? (
-        <SpField id="sp-extText" label="Popis poruchy" miss={missMsg("extText")}><textarea id="sp-extText" rows={3} value={s.extText} placeholder="Popis poruchy na externom stroji…" onChange={(e) => up({ extText: e.target.value })} /></SpField>
+        <SpField id="sp-extText" label="Popis poruchy" req miss={missMsg("extText")}><textarea id="sp-extText" rows={3} value={s.extText} placeholder="Popis poruchy na externom stroji…" onChange={(e) => up({ extText: e.target.value })} /></SpField>
       ) : (
         <>
-          <SpField id="sp-fault" label="Kód poruchy" miss={missMsg("fault")}>
+          <SpField id="sp-fault" label="Kód poruchy" req miss={missMsg("fault")}>
             <select id="sp-fault" value={s.fault} onChange={(e) => setFault(e.target.value)}>
               <option value="">— Vybrať —</option>
               {L.faults.map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
@@ -17929,13 +18165,13 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
           </SpField>
           {s.fault && <span className="sp-hint" style={{ marginTop: -8 }}>{faultObj(L.faults, s.fault)?.desc}</span>}
           <div className="sp-grid2">
-            <SpField id="sp-type" label="Typ poruchy" miss={missMsg("type")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
+            <SpField id="sp-type" label="Typ poruchy" req miss={missMsg("type")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
               <select id="sp-type" value={s.type} disabled={autoFault} onChange={(e) => up({ type: e.target.value })}>
                 <option value="">— Vybrať —</option>
                 {L.types.filter((f) => autoFault ? f.code === s.type : !L.hiddenTypes.includes(f.code)).map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
               </select>
             </SpField>
-            <SpField id="sp-cat" label="Kategória" miss={missMsg("cat")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
+            <SpField id="sp-cat" label="Kategória" req miss={missMsg("cat")} tag={autoFault ? "automaticky" : null} auto={autoFault}>
               <select id="sp-cat" value={s.cat} disabled={autoFault} onChange={(e) => up({ cat: e.target.value })}>
                 <option value="">— Vybrať —</option>
                 {L.cats.filter((f) => autoFault ? f.code === s.cat : !L.hiddenCats.includes(f.code)).map((f) => <option key={f.code} value={f.code}>{f.code} · {f.name}</option>)}
@@ -17950,14 +18186,14 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
       <datalist id="sp-works">{L.works.map((w) => <option key={w} value={w} />)}</datalist>
       {s.works.map((w, i) => (
         <div key={i} className={s.works.length > 1 ? "sp-card sp-work" : "sp-work"}>
-          <SpField id={"sp-work" + i} label={s.works.length > 1 ? `Vykonaná práca ${i + 1}` : "Vykonaná práca"} miss={missMsg("work" + i)}>
+          <SpField id={"sp-work" + i} label={s.works.length > 1 ? `Vykonaná práca ${i + 1}` : "Vykonaná práca"} req={i === 0} miss={missMsg("work" + i)}>
             <input id={"sp-work" + i} data-sp-work list="sp-works" value={w.work} placeholder="Vybrať alebo napísať" autoComplete="off" onChange={(e) => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, work: e.target.value } : y)) }))} />
           </SpField>
           <div className={"sp-f sp-hours" + (missMsg("hours" + i) ? " sp-miss" : "")}>
-            <label htmlFor={"sp-hours" + i}>Hodiny</label>
+            <label htmlFor={"sp-hours" + i}>Hodiny<SpReq /></label>
             <div className="sp-stepper">
               <button type="button" aria-label="Ubrať pol hodiny" onClick={() => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: spDec(Math.max(0, (parseFloat(spNum(y.hours)) || 0) - 0.5)) } : y)) }))}>−</button>
-              <input id={"sp-hours" + i} data-sp-hours inputMode="decimal" value={w.hours} placeholder="0,0" autoComplete="off" onChange={(e) => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: e.target.value } : y)) }))} />
+              <input id={"sp-hours" + i} data-sp-hours aria-required aria-invalid={missMsg("hours" + i) ? true : undefined} inputMode="decimal" value={w.hours} placeholder="0,0" autoComplete="off" onChange={(e) => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: e.target.value } : y)) }))} />
               <button type="button" aria-label="Pridať pol hodiny" onClick={() => up((x) => ({ works: x.works.map((y, j) => (j === i ? { ...y, hours: spDec(Math.min(24, (parseFloat(spNum(y.hours)) || 0) + 0.5)) } : y)) }))}>+</button>
             </div>
           </div>
@@ -18002,11 +18238,11 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
           <input id="sp-travel" inputMode="decimal" value={travelShown} placeholder="—" autoComplete="off" onChange={(e) => up({ travelHours: e.target.value, travelManual: !!e.target.value.trim() })} />
         </SpField>
       </div>
-      <SpField id="sp-address" label="Miesto práce" tag={s.address && s.address === autoV.address ? "automaticky" : null} auto={!!s.address && s.address === autoV.address} miss={missMsg("address")}>
+      <SpField id="sp-address" label="Miesto práce" req tag={s.address && s.address === autoV.address ? "automaticky" : null} auto={!!s.address && s.address === autoV.address} miss={missMsg("address")}>
         <input id="sp-address" value={s.address} placeholder="Lokalita / adresa" onChange={(e) => up({ address: e.target.value })} />
       </SpField>
       <div className={"sp-f" + (missMsg("outcome") ? " sp-miss" : "")}>
-        <span className="sp-lbl sp-lbl-big" id="sp-outcome-l">Ako zásah dopadol</span>
+        <span className="sp-lbl sp-lbl-big" id="sp-outcome-l">Ako zásah dopadol<SpReq /><span className="sr-only">{" (povinné)"}</span></span>
         <div className="sp-outcomes" role="group" aria-labelledby="sp-outcome-l">
           {SP_OUTCOMES.map((o, k) => (
             <button key={o.label} id={k === 0 ? "sp-outcome" : undefined} type="button" className={`sp-ob sp-ob-${o.tone}`} aria-pressed={s.outcome === o.label} onClick={() => chooseOutcome(o)}>
@@ -18034,7 +18270,7 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
               {bad ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16v.5" /></svg>
                 : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
               <div><b>{r.t}</b><span className={bad ? "sp-sr-bad" : undefined}>{bad ? `chýba: ${issues.filter((x) => x.step === r.i).map((x) => x.msg).join(", ")}` : r.v}</span></div>
-              <button type="button" className="sp-link" aria-label={`${bad ? "Doplniť" : "Upraviť"}: ${r.t}`} onClick={() => { goStep(r.i); if (bad) setMiss(bad); }}>{bad ? "Doplniť" : "Upraviť"}</button>
+              <button type="button" className="sp-link" aria-label={`${bad ? "Doplniť" : "Upraviť"}: ${r.t}`} onClick={() => { goStep(r.i); setFromSum(true); if (bad) setMiss(bad); }}>{bad ? "Doplniť" : "Upraviť"}</button>
             </div>
           );
         })}
@@ -18069,9 +18305,9 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
   const steps = (
     <ol className="sp-steps">
       {SP_STEPS.map((x, i) => (
-        <li key={i}><button type="button" aria-current={i === step ? "step" : undefined} onClick={() => goStep(i)} className={i === step ? "on" : stepDone(i) && i < 5 ? "done" : ""}>
+        <li key={i}><button type="button" aria-current={i === step ? "step" : undefined} aria-disabled={!reach(i) || undefined} title={reach(i) ? undefined : `Najprv doplňte krok ${firstBad + 1} (${SP_STEPS[firstBad].nav})`} onClick={() => reach(i) && goStep(i)} className={i === step ? "on" : stepDone(i) && i < 5 ? "done" : ""}>
           <i aria-hidden="true">{i !== step && stepDone(i) && i < 5 ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12l5 5 9-10" /></svg> : i + 1}</i>
-          <span className="sp-steps-l">{x.nav}</span><span className="sr-only">{i === step ? " (aktuálny krok)" : stepDone(i) && i < 5 ? " (hotové)" : ""}</span>
+          <span className="sp-steps-l">{x.nav}</span><span className="sr-only">{i === step ? " (aktuálny krok)" : stepDone(i) && i < 5 ? " (hotové)" : ""}{reach(i) ? "" : ` (najprv doplňte krok ${firstBad + 1})`}</span>
         </button></li>
       ))}
     </ol>
@@ -18107,6 +18343,7 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
                 <div className="sp-head">
                   <span>{step + 1} zo 6</span>
                   <h1 ref={headRef} tabIndex={-1}>{SP_STEPS[step].t}</h1>
+                  {step < 5 && step !== 3 && <div className="sp-legend" aria-hidden="true"><SpReq /> povinné</div>}
                 </div>
                 <div className="sp-fields">{stepBody[step]}</div>
               </>
@@ -18115,9 +18352,12 @@ function ProtocolModal({ html, params, onClose, user, assignments, protocolLogs 
           {ready && draftChecked && !draftAsk && (
             <div className="sp-foot">
               {engMsg && <div className={"sp-msg" + (engMsg.err ? " err" : "")} role={engMsg.err ? "alert" : "status"}>{engMsg.text}</div>}
+              {stepMissing.length > 0 && <div className="sp-msg err" role="alert" data-sp-missing>Ešte treba: {stepMissing.join(", ")}</div>}
               <div className="sp-foot-btns">
                 {step > 0 && <button type="button" className="btn btn-ghost sp-back" onClick={() => goStep(step - 1)}>Späť</button>}
-                {step < 5 ? (
+                {step < 5 && fromSum ? (
+                  <button type="button" className="btn btn-accent sp-next" data-sp-tosum onClick={() => gate(5)}>Späť na kontrolu</button>
+                ) : step < 5 ? (
                   <button type="button" className="btn btn-accent sp-next" data-sp-next onClick={next}>Ďalej: {SP_STEPS[step].next}
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
                   </button>
@@ -18172,12 +18412,25 @@ function PhotoLightboxModal({ src: src0, list, onClose }) {
   const n = list?.length || 0;
   const src = n ? list[idx].url : src0;
   const go = (d) => setIdx((i) => (i + d + n) % n);
+  // Okno pre klávesnicu a čítačku (k69 S4): fokus na „Zavrieť“, Tab len vo fotke, po zatvorení späť na štítok fotky.
+  const boxRef = useRef(null);
+  const [opener] = useState(() => document.activeElement);
+  useEffect(() => {
+    boxRef.current?.querySelector(".lb-close")?.focus({ preventScroll: true });
+    return () => { if (opener?.isConnected && opener !== document.body) opener.focus({ preventScroll: true }); };
+  }, [opener]);
   // Esc zavrie len fotku — capture, aby nezavrel aj okno pod ňou (ako PrintProtocolModal).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); onClose(); }
       else if (n > 1 && e.key === "ArrowRight") go(1);
       else if (n > 1 && e.key === "ArrowLeft") go(-1);
+      else if (e.key === "Tab" && boxRef.current) {
+        const els = [...boxRef.current.querySelectorAll("button")];
+        const i = els.indexOf(document.activeElement);
+        e.preventDefault(); e.stopImmediatePropagation();
+        els[(i < 0 ? 0 : i + (e.shiftKey ? -1 : 1) + els.length) % els.length]?.focus();
+      }
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
@@ -18185,6 +18438,10 @@ function PhotoLightboxModal({ src: src0, list, onClose }) {
   const navBtn = { minHeight: 48, minWidth: 48, fontSize: 22, background: "transparent", color: "#fff", border: "1px solid #fff", cursor: "pointer" };
   return (
     <div
+      ref={boxRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={n ? list[idx].caption || "Fotka" : "Náhľad fotky"}
       className="fullscreen-overlay"
       style={{ position: "fixed", inset: 0, background: "#111", zIndex: 300, display: "flex", flexDirection: "column", cursor: "zoom-out" }}
       onClick={onClose}
@@ -18196,7 +18453,7 @@ function PhotoLightboxModal({ src: src0, list, onClose }) {
             onClick={(e) => { e.stopPropagation(); onClose(); a.onClick(); }}>{a.label}</button>
         ))}
         <button
-          className="btn"
+          className="btn lb-close"
           style={{ minHeight: 48, fontSize: 15, background: "transparent", color: "#fff", border: "1px solid #fff", cursor: "pointer" }}
           onClick={onClose}
         >
@@ -18231,6 +18488,25 @@ const PRINT_BAR_CSS = `.toolbar{display:flex!important;justify-content:flex-end!
 // Mobil: A4 strana (.page) sa zmenší na šírku displeja (zoom), nie posúvanie do strany; pri tlači plná veľkosť.
 const FIT_PAGE_JS = `<script>(function(){function f(){var v=document.documentElement.clientWidth;document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";var w=e.offsetWidth+16;e.style.zoom=w>v?String(v/w):"";});}function r(){document.querySelectorAll(".page").forEach(function(e){e.style.zoom="";});}addEventListener("DOMContentLoaded",f);addEventListener("resize",f);addEventListener("beforeprint",r);addEventListener("afterprint",f);})();</script>`;
 const _htmlDecode = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+// B11 (1.0.875): natívne pole dátumu vykreslí prehliadač v jazyku svojho rozhrania (anglický Chrome/Windows = 09/30/2026).
+// Mimo úpravy sa v náhľade a tlači ukáže dátum po slovensky; HTML protokolu (srcdoc) ani uložené údaje sa nemenia.
+function skDateInPreview(doc) {
+  const el0 = doc?.getElementById("jobDateInput");
+  if (!el0 || !doc.body) return;
+  const sync = () => {
+    const el = doc.getElementById("jobDateInput");
+    if (!el) return;
+    let sp = doc.getElementById("jobDateSk");
+    if (!sp) { sp = doc.createElement("span"); sp.id = "jobDateSk"; sp.className = "datefield"; el.after(sp); }
+    const t = el.value ? fmtDate(el.value) : "";
+    if (sp.textContent !== t) sp.textContent = t;
+  };
+  const st = doc.createElement("style");
+  st.textContent = "body:not(.editing) #jobDateInput { display: none; } body.editing #jobDateSk { display: none; }";
+  doc.head.appendChild(st);
+  sync();
+  new MutationObserver(sync).observe(doc.body, { attributes: true, attributeFilter: ["class"] }); // koniec/zrušenie úpravy
+}
 function PrintProtocolModal({ html, onClose }) {
   const title = _htmlDecode((html.match(/<meta name="mateco-bar" content="([^"]*)"/) || html.match(/<title>([^<]*)<\/title>/) || [])[1] || "Protokol");
   const doc = html.replace("</head>", `<style>${PRINT_BAR_CSS}</style>${FIT_PAGE_JS}</head>`);
@@ -18246,7 +18522,7 @@ function PrintProtocolModal({ html, onClose }) {
         <iframe
           title="Servisný protokol"
           srcDoc={doc}
-          onLoad={(e) => e.currentTarget.contentWindow?.addEventListener("keydown", (ev) => { if (ev.key === "Escape") onClose(); })}
+          onLoad={(e) => { e.currentTarget.contentWindow?.addEventListener("keydown", (ev) => { if (ev.key === "Escape") onClose(); }); skDateInPreview(e.currentTarget.contentDocument); }}
           sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-same-origin allow-popups"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
         />
@@ -18308,7 +18584,7 @@ function Dashboard({
       </div>
 
       <div className="tbar">
-        <SearchInput placeholder="Hľadať stroj, zákazníka…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+        <SearchInput placeholder="Stroj, zákazník… (viac oddeľte čiarkou)" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
         <FilterPopover activeCount={activeFilterCount} onClear={clearFilters}>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Stav</div>
@@ -18483,15 +18759,15 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
     if (depoFilter && (j.fromDepo || "").toLowerCase() !== depoFilter.toLowerCase() && (j.returnDepo || "").toLowerCase() !== depoFilter.toLowerCase()) {
       return false;
     }
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const terms = searchTerms(search);
+    if (terms.length) {
       const m = machineById[j.machineId];
-      const hit =
+      const hit = terms.some((q) =>
         (m?.code || "").toLowerCase().includes(q) ||
         (m?.type || "").toLowerCase().includes(q) ||
         (j.fromDepo || "").toLowerCase().includes(q) ||
         (j.returnDepo || "").toLowerCase().includes(q) ||
-        (j.customer || "").toLowerCase().includes(q);
+        (j.customer || "").toLowerCase().includes(q));
       if (!hit) return false;
     }
     return true;
@@ -18504,14 +18780,15 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
   function matchesSearchAndDepoRes(r) {
     if (obchodnikFilter && r.obchodnik !== obchodnikFilter) return false;
     const m = machineById[r.machineId];
-    if (depoFilter && (m?.depo || "").toLowerCase() !== depoFilter.toLowerCase()) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const hit =
+    if (depoFilter && (m?.depo || r.depo || "").toLowerCase() !== depoFilter.toLowerCase()) return false;
+    const terms = searchTerms(search);
+    if (terms.length) {
+      const hit = terms.some((q) =>
         (m?.code || "").toLowerCase().includes(q) ||
         (m?.type || "").toLowerCase().includes(q) ||
         (m?.depo || "").toLowerCase().includes(q) ||
-        (r.customer || "").toLowerCase().includes(q);
+        (r.model || "").toLowerCase().includes(q) || // kus rezervácie na model ešte nemá stroj (k71d)
+        (r.customer || "").toLowerCase().includes(q));
       if (!hit) return false;
     }
     return true;
@@ -18553,11 +18830,11 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
   if (obchodnikFilter) {
     filtered = filtered.filter((j) => j.obchodnik === obchodnikFilter);
   }
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     filtered = filtered.filter((j) => {
       const m = machineById[j.machineId];
-      return (
+      return terms.some((q) =>
         (m?.code || "").toLowerCase().includes(q) ||
         (m?.type || "").toLowerCase().includes(q) ||
         (j.fromDepo || "").toLowerCase().includes(q) ||
@@ -18607,7 +18884,7 @@ function JobsBoard({ jobs, reservations, machineById, driverById, hpDoneByJob, t
         </div>
       )}
         </div>
-        <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+        <div className="jobs-tright" style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
           <SortSelect ls={ls} when="always" cols={[["zakaznik", "Zákazník"], ["stroj", "Stroj"], ["zaciatok", "Začiatok"], ["koniec", "Koniec"], ["obchodnik", "Obchodník"], ["sofer", "Šofér"], ["stav", "Stav"]]} />
           {can(user, "job_import_csv") && <button className="btn btn-ghost" onClick={onImportJobs}>Import CSV</button>}
           {can(user, "job_clear_all") && <KebabMenu label="⋯" name="Ďalšie akcie" actions={[{ label: "Vymazať všetky zákazky", danger: true, onClick: onClearAll }]} />}
@@ -18687,7 +18964,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
   const [drillObchodnikFilter, setDrillObchodnikFilter] = useState("");
 
   function itemDepo(item, isReservation) {
-    if (isReservation) return machineById[item.machineId]?.depo || "";
+    if (isReservation) return machineById[item.machineId]?.depo || item.depo || "";
     return item.fromDepo || item.returnDepo || "";
   }
   const drillItems = tile.items.filter(
@@ -18720,7 +18997,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
                     style={{ fontWeight: 700, fontSize: 15, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}
                     onClick={() => onOpenReservation(r)}
                   >
-                    {m?.code || "—"}
+                    {m?.code || r.model || "—"}
                   </button>
                   <span className="tnum" style={{ fontSize: 15 }}>
                     od {fmtDate(r.expectedStart)}{r.expectedEnd ? ` do ${fmtDate(r.expectedEnd)}` : ""} · {r.customer}
@@ -18787,7 +19064,7 @@ function JobsQuickDrilldownModal({ tile, machineById, salespeople, onClose, onOp
    ktoré šofér ani nemôže/nepotrebuje používať) veľké karty zoskupené podľa dňa,
    so stavom protokolu ako výraznou akciou.
 --------------------------------------------------------- */
-function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items, doneZvozCount = 0, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue }) {
+function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items, doneZvozCount = 0, machineById, handoverProtocols, onOpenJob, today, tomorrow, highlightTransportId, onDismissTransportHighlight, myTransportNotes, onMarkTransportNoteDriverDone, onReportIssue, hpDrafts, onDraftsOnCards }) {
   useEffect(() => {
     if (!highlightTransportId) return;
     document.getElementById(`transport-${highlightTransportId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -18836,16 +19113,23 @@ function DriverTransportsList({ dnes, unsavedProtocols = 0, otherOpen = 0, items
 
   // Vývoz s vyplneným protokolom je hotový — nie je „ďalšia“ úloha, ostáva dole (QR, protokol pre zákazníka).
   const isDone = (t) => t.type === "vyvoz" && handoverProtocols.some((h) => h.jobId === t.jobId);
+  // B8: rozpracovaný protokol k preprave je na jej karte; Dnes potom samostatný riadok neukáže (kľúče cez onDraftsOnCards).
+  const draftOf = (t) => !isDone(t) && t.date <= today && (hpDrafts || []).find((d) => draftKind(d) === "hp" && d.jobId === t.jobId && (d.phase === "vratenie") === (t.type !== "vyvoz"));
+  const draftsOnCards = dnes ? items.map(draftOf).filter(Boolean).map((d) => d.key).join("|") : "";
+  useLayoutEffect(() => {
+    onDraftsOnCards?.(draftsOnCards);
+    return () => onDraftsOnCards?.("");
+  }, [draftsOnCards, onDraftsOnCards]);
   // „Dnes“ šoféra: prvá preprava (po termíne / dnes) ako veľká karta, ostatné ako kompaktné riadky (ťuk = celá karta).
   if (dnes) {
     const card = (t, hero) => (
       <DriverTransportCard key={t.id} t={t} hero={hero} machineById={machineById} handoverProtocols={handoverProtocols} onOpenJob={onOpenJob}
-        highlighted={t.id === highlightTransportId} onDismissHighlight={onDismissTransportHighlight} onReportIssue={onReportIssue} preview={t.date > today} />
+        highlighted={t.id === highlightTransportId} onDismissHighlight={onDismissTransportHighlight} onReportIssue={onReportIssue} preview={t.date > today} draft={draftOf(t)} />
     );
     const row = (t) => (
       <TodayCompactRow key={t.id} id={`transport-${t.id}`} problem={t.overdue} defaultOpen={t.id === highlightTransportId}
         title={`${t.type === "vyvoz" ? "Vývoz" : "Zvoz"} · ${machineById[t.machineId]?.code || "—"}`}
-        sub={[t.customer, t.date !== today ? fmtDate(t.date) : "", t.checkerWarn && !isDone(t) ? (t.checkerWarn.startsWith(CHECKER_INFO_PREFIX) ? "drobné nedostatky stroja" : t.checkerWarn.startsWith(CHECKER_LOWERED_PREFIX) ? "poznámka checkera ku stavu stroja" : t.checkerWarn.startsWith("Checker") ? "⚠ problém pri kontrole stroja" : "⚠ otvorené poškodenie") : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
+        sub={[draftOf(t) ? "rozpracovaný protokol" : "", t.customer, t.date !== today ? fmtDate(t.date) : "", t.checkerWarn && !isDone(t) ? (t.checkerWarn.startsWith(CHECKER_INFO_PREFIX) ? "drobné nedostatky stroja" : t.checkerWarn.startsWith(CHECKER_LOWERED_PREFIX) ? "poznámka checkera ku stavu stroja" : t.checkerWarn.startsWith("Checker") ? "⚠ problém pri kontrole stroja" : "⚠ otvorené poškodenie") : ""].filter(Boolean).join(" · ")}>{card(t)}</TodayCompactRow>
     );
     const nowAll = items.filter((t) => t.overdue || t.date === today);
     const doneNow = nowAll.filter(isDone);
@@ -18958,7 +19242,7 @@ function checkerProblemText(job, assignments, damages) {
 const CHECKER_INFO_PREFIX = "Kontrola checkera — drobné nedostatky: ";
 const CHECKER_LOWERED_PREFIX = "Checker klasifikoval stav ako ";
 const checkerWarnCls = (w) => (w.startsWith(CHECKER_INFO_PREFIX) || w.startsWith(CHECKER_LOWERED_PREFIX) ? "fnote fnote-y" : "fnote fnote-r");
-function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight, onReportIssue, preview }) {
+function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJob, highlighted, onDismissHighlight, onReportIssue, preview, draft }) {
   const machine = machineById[t.machineId];
   const isVyvoz = t.type === "vyvoz";
   const hp = handoverProtocols.find((h) => h.jobId === t.jobId);
@@ -18967,8 +19251,11 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
   const clickable = true;
   // Pred dňom prepravy sa protokol ešte vyplniť nedá — karta otvorí len náhľad.
   const isPreview = preview && (isVyvoz ? !hp : !hp?.returnDone);
+  // B8: rozpracovaný protokol z tohto zariadenia je priamo na karte (namiesto samostatného riadku na Dnes).
+  const draftOn = draft && !isPreview && !(isVyvoz && hp);
   const statusText = isPreview
     ? `Náhľad — protokol od ${fmtDate(t.date)}`
+    : draftOn ? "Pokračovať v protokole"
     : isVyvoz
     ? !hp
       ? "Vyplniť protokol"
@@ -18986,6 +19273,7 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
         <div className="today-hero-sub">{t.customer && <>{t.customer}<br /></>}{t.from} → {t.to}</div>
         {t.issue && <div style={{ fontSize: 14, color: "var(--danger-text)", fontWeight: 600, whiteSpace: "pre-line" }}><NavIcon id="problem" size={16} /> {t.issue}</div>}
         {t.checkerWarn && !hp && <div className={checkerWarnCls(t.checkerWarn)} style={{ margin: 0 }}>⚠ {t.checkerWarn}</div>}
+        {draftOn && <div className="today-draft">Rozpracovaný protokol · uložené {draftSavedText(draft.savedAt)}</div>}
         <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : "btn-accent"} today-main`} onClick={open}>{statusLabel}</button>
         {t.site && !(isVyvoz && hp) && <a className="btn btn-outline today-nav" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.site)}`} target="_blank" rel="noopener noreferrer"><NavIcon id="navigovat" size={20} /> Navigovať</a>}
         {(t.customerPhone || t.dispatcher?.phone || onReportIssue) && (
@@ -19031,6 +19319,7 @@ function DriverTransportCard({ t, hero, machineById, handoverProtocols, onOpenJo
       </div>
       {t.issue && <div style={{ fontSize: 12, color: "var(--danger)", fontWeight: 600, marginBottom: 10, whiteSpace: "pre-line" }}><NavIcon id="problem" size={16} /> {t.issue}</div>}
       {t.checkerWarn && !hp && <div className={checkerWarnCls(t.checkerWarn)} style={{ marginTop: 0 }}>⚠ {t.checkerWarn}</div>}
+      {draftOn && <div className="today-draft" style={{ marginBottom: 8 }}>Rozpracovaný protokol · uložené {draftSavedText(draft.savedAt)}</div>}
       {/* Rovnaké poradie ako karta na Dnes: hlavná akcia → Navigovať → Dispečer / Zavolať / Problém (návrh dizajnu 23. 10.) */}
       <button type="button" className={`btn ${isVyvoz && hp ? "btn-ghost" : isPreview ? "btn-outline" : "btn-accent"}`} style={{ width: "100%", minHeight: 46, marginBottom: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, ...(isVyvoz && hp ? { color: statusColor } : {}) }} onClick={(e) => { e.stopPropagation(); open(); }}>{statusLabel}</button>
       {t.site && !(isVyvoz && hp) && (
@@ -19107,7 +19396,7 @@ function TransportDateInput({ date, onSave, title, check }) {
     />
   );
 }
-function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey, assignments, unsavedProtocols = 0, otherOpen = 0 }) {
+function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machineById, today, tomorrow, dayAfterTomorrow, user, myEmployee, assignDriver, assignReturnDriver, onSetTransportDate, onCheckTransportDate, depoCheckers, checkerSubstitutions, technicianById, handoverProtocols, onOpenJob, getTransportSendStatus, recordTransportSend, highlightTransportId, onDismissTransportHighlight, transportNotes, onReportTransportIssue, notesRefreshKey, assignments, unsavedProtocols = 0, otherOpen = 0, hpDrafts, onDraftsOnCards }) {
   // Šoférovi patriace "Prevoz" dlaždice — poznámky o presune stroja medzi
   // depami, ktoré mu priradil dispečer/vedúci požičovne, ešte nenahlásené
   // ako hotové. Tabuľka "transportNotes" ostáva v DB prísne zamknutá len na
@@ -19275,15 +19564,15 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
     if (depoFilter && t.from.toLowerCase() !== depoFilter.toLowerCase() && t.to.toLowerCase() !== depoFilter.toLowerCase()) {
       return false;
     }
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const terms = searchTerms(search);
+    if (terms.length) {
       const m = machineById[t.machineId];
-      const hit =
+      const hit = terms.some((q) =>
         (m?.code || "").toLowerCase().includes(q) ||
         (m?.type || "").toLowerCase().includes(q) ||
         t.from.toLowerCase().includes(q) ||
         t.to.toLowerCase().includes(q) ||
-        (t.customer || "").toLowerCase().includes(q);
+        (t.customer || "").toLowerCase().includes(q));
       if (!hit) return false;
     }
     return true;
@@ -19331,11 +19620,11 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
       (t) => t.from.toLowerCase() === depoFilter.toLowerCase() || t.to.toLowerCase() === depoFilter.toLowerCase()
     );
   }
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     filtered = filtered.filter((t) => {
       const m = machineById[t.machineId];
-      return (
+      return terms.some((q) =>
         (m?.code || "").toLowerCase().includes(q) ||
         (m?.type || "").toLowerCase().includes(q) ||
         t.from.toLowerCase().includes(q) ||
@@ -19366,6 +19655,8 @@ function TransportsOverview({ dnes, damages, jobs, drivers, jobDispatcher, machi
         myTransportNotes={myTransportNotes}
         onMarkTransportNoteDriverDone={handleMarkTransportNoteDriverDone}
         onReportIssue={can(user, "transport_issue_report") ? onReportTransportIssue : null}
+        hpDrafts={hpDrafts}
+        onDraftsOnCards={onDraftsOnCards}
       />
     );
   }
@@ -19718,11 +20009,11 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
   const [roleFilter, setRoleFilter] = useState("");
   const [depoFilter, setDepoFilter] = useState("");
   const manageableRoles = manageableEmployeeRoles(user);
-  const q = search.trim().toLowerCase();
+  const terms = searchTerms(search);
   const mine = employees.filter((e) => manageableRoles.includes(e.role) && (showArchived || !e.archived));
   const depoOptions = [...new Set(mine.map((e) => e.depo).filter(Boolean))].sort(depoSort);
   const visible = mine.filter(
-    (e) => (!q || e.name.toLowerCase().includes(q)) && (!roleFilter || e.role === roleFilter) && (!depoFilter || e.depo === depoFilter)
+    (e) => (!terms.length || terms.some((q) => e.name.toLowerCase().includes(q))) && (!roleFilter || e.role === roleFilter) && (!depoFilter || e.depo === depoFilter)
   ).sort(byKeys("name"));
   const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
 
@@ -19781,7 +20072,7 @@ function AdministrativaView({ employees, profiles, user, onAdd, onEdit, onArchiv
         </thead>
         <tbody>
           {visible.length === 0 && (
-            <tr><td className="td-plain" colSpan={showArchived ? 8 : 7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>{roleFilter || depoFilter || q ? "Žiadny zamestnanec nezodpovedá filtru." : "Zatiaľ žiadni zamestnanci."}</td></tr>
+            <tr><td className="td-plain" colSpan={showArchived ? 8 : 7} style={{ textAlign: "center", padding: 30, color: "var(--text-dim)" }}>{roleFilter || depoFilter || terms.length ? "Žiadny zamestnanec nezodpovedá filtru." : "Zatiaľ žiadni zamestnanci."}</td></tr>
           )}
           {visible.map((e) => {
             const linkedProfile = e.linkedUserId ? profileById[e.linkedUserId] : null;
@@ -20110,7 +20401,8 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
   const [search, setSearch] = useState("");
   const canAdd = can(user, "customer_add");
   const q = search.trim().toLowerCase();
-  const visible = (q ? customers.filter((c) => (c.firma || "").toLowerCase().includes(q)) : customers)
+  const terms = searchTerms(search);
+  const visible = (terms.length ? customers.filter((c) => terms.some((t) => (c.firma || "").toLowerCase().includes(t))) : customers)
     .slice()
     .sort(byKeys("firma"));
   // Po 200 ako Zákazky (rozhodnutie 24. 10.) — pri tisícoch zákazníkov sa nevykresľujú všetci naraz.
@@ -20133,7 +20425,7 @@ function CustomersView({ customers, jobs, blacklist, user, onAdd, onImport, onOp
   return (
     <div>
       <div className="tbar">
-        <SearchInput placeholder="Hľadať firmu…" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
+        <SearchInput placeholder="Hľadať firmu… (viac oddeľte čiarkou)" value={search} onChange={setSearch} style={{ minWidth: 260 }} />
         <SortSelect ls={ls} cols={[["firma", "Firma"], ["ico", "IČO"], ["odberatel", "Číslo odberateľa"], ["kontakty", "Kontaktné osoby"], ["zakazky", "Aktívne zákazky"]]} />
         {canAdd && (
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
@@ -24145,6 +24437,7 @@ function ApprovePortalExtensionModal({ request, job, conflictFor, onClose, onCon
     </Modal>
   );
 }
+const PORTAL_VALID_DAYS = 30; // odkaz pre zákazníka platí do 30 dní po vrátení stroja — rovnako get_portal_job a submit_portal_request (step140-a)
 function JobDetailModal({ job, machine, machineById, customerRec, driverById, drivers, dispatchers, actingDispatcher, onSetDispatcher, onAssignDriver, onAssignReturnDriver, technicianById, depoCheckers, checkerSubstitutions, salespeople, handoverProtocol, myEmployee, user, assignments, onOpenCheckerInspection, onClose, onEdit, onComplete, onUncomplete, onReportDamage, onOpenHandoverProtocol, onBack, onOpenMachineCard, onReportTransportIssue, onResolveTransportIssue, onGeneratePortalLink, onTogglePortalRevoked, onRotatePortalToken, portalRequests, onApprovePortalExtension, onRejectPortalRequest, onConvertPortalProblem , onEmailDriver, onEmailCustomer, machineDamages, onOpenDamage, onResolveDispute, onSavePaperProtocol}) {
   const [binderTab, setBinderTab, forgetBinder] = useBinderTab("job:" + job.id); // null | "kontroly" | "protokol" | "zakaznik"
   const showPortalPanel = binderTab === "zakaznik";
@@ -24160,6 +24453,12 @@ function JobDetailModal({ job, machine, machineById, customerRec, driverById, dr
     : null;
   // Zákazka z importu (prevzaté mimo systému) nemá protokoly ani checklisty — odkaz pre zákazníka sa jej nevydáva (Rado 1. 11.).
   const portalImported = !portalLink && !!handoverProtocol?.migratedWithoutHandover;
+  // Platnosť odkazu — rovnaké pravidlo ako get_portal_job: od skoršieho zo začiatku/vývozu do 30 dní po vrátení (ukončená bez vývozu: po konci).
+  const portalFrom = [job.startDate, job.departureDate].filter(isRealISODate).sort()[0];
+  const portalBack = handoverProtocol?.returnDone ? [handoverProtocol.returnDate, job.endDate].find(isRealISODate)
+    : !handoverProtocol?.handoverDone && job.status === "completed" ? [job.endDate].find(isRealISODate) || null : null;
+  const portalUntil = portalBack ? addDaysISO(portalBack, PORTAL_VALID_DAYS) : null;
+  const portalExpired = !!portalUntil && portalUntil < todayISO();
   // Karta otvorená z upozornenia rovno na záložke Zákazník — odkaz vytvoriť hneď (inak by ostalo „Generujem odkaz…“).
   const portalReadOnly = !can(user, "job_edit"); // obchodník: odkaz len vidí, nevydáva ani nemení
   useEffect(() => { if (binderTab === "zakaznik" && !portalLink && !portalImported && !portalReadOnly && onGeneratePortalLink && navigator.onLine !== false) onGeneratePortalLink(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -24413,23 +24712,14 @@ function JobDetailModal({ job, machine, machineById, customerRec, driverById, dr
           {portalLink ? (
             <>
             <div style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12, ...(job.portalRevoked ? { textDecoration: "line-through", color: "var(--text-dim)" } : {}) }} aria-label={job.portalRevoked ? "Zneplatnený odkaz" : "Odkaz pre zákazníka"} />
-              {!job.portalRevoked && <button className="btn btn-ghost" onClick={(e) => copyWithFeedback(e, portalLink)}>Kopírovať</button>}
+              <input readOnly value={portalLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 200, fontSize: 12, ...(job.portalRevoked || portalExpired ? { textDecoration: "line-through", color: "var(--text-dim)" } : {}) }} aria-label={job.portalRevoked ? "Zneplatnený odkaz" : portalExpired ? "Odkaz s ukončenou platnosťou" : "Odkaz pre zákazníka"} />
+              {!job.portalRevoked && !portalExpired && <button className="btn btn-ghost" onClick={(e) => copyWithFeedback(e, portalLink)}>Kopírovať</button>}
             </div>
-            {!job.portalRevoked && (() => {
-              // Rovnaké pravidlo ako get_portal_job: od skoršieho zo začiatku/vývozu do 14 dní po vrátení.
-              const today = todayISO();
-              const from = [job.startDate, job.departureDate].filter(isRealISODate).sort()[0];
-              const back = handoverProtocol?.returnDone ? [handoverProtocol.returnDate, job.endDate].find(isRealISODate)
-                : !handoverProtocol?.handoverDone && job.status === "completed" ? [job.endDate].find(isRealISODate) || null : null; // ukončená bez vývozu: koniec + 14 dní
-              const until = back ? addDaysISO(back, 14) : null;
-              return (
-                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-                  {until && until < today ? `Platnosť skončila ${fmtDate(until)}.`
-                    : `Platný${from ? ` od ${fmtDate(from)}` : ""} ${until ? `do ${fmtDate(until)}` : `do 14 dní po vrátení${isRealISODate(job.endDate) && job.endDate >= today ? ` (pri vrátení ${fmtDate(job.endDate)} do ${fmtDate(addDaysISO(job.endDate, 14))})` : ""}`}`}
-                </div>
-              );
-            })()}
+            {!job.portalRevoked && (portalExpired
+              ? <div className="fnote fnote-y" style={{ marginBottom: 8 }}>Odkaz už neplatí — platnosť skončila {fmtDate(portalUntil)} ({PORTAL_VALID_DAYS} dní po vrátení stroja). Zákazník cez neho nič neuvidí, preto sa už neposiela.</div>
+              : <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+                  {`Platný${portalFrom ? ` od ${fmtDate(portalFrom)}` : ""} ${portalUntil ? `do ${fmtDate(portalUntil)}` : `do ${PORTAL_VALID_DAYS} dní po vrátení${isRealISODate(job.endDate) && job.endDate >= todayISO() ? ` (pri vrátení ${fmtDate(job.endDate)} do ${fmtDate(addDaysISO(job.endDate, PORTAL_VALID_DAYS))})` : ""}`}`}
+                </div>)}
             </>
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
@@ -24439,8 +24729,8 @@ function JobDetailModal({ job, machine, machineById, customerRec, driverById, dr
             </div>
           )}
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-            {portalQr && !job.portalRevoked && <img src={portalQr} alt="QR kód pre zákazníka" style={{ width: 120, height: 120 }} />}
-            {onEmailCustomer && portalLink && !job.portalRevoked && (
+            {portalQr && !job.portalRevoked && !portalExpired && <img src={portalQr} alt="QR kód pre zákazníka" style={{ width: 120, height: 120 }} />}
+            {onEmailCustomer && portalLink && !job.portalRevoked && !portalExpired && (
               <button className="btn btn-ghost" onClick={onEmailCustomer}><NavIcon id="mail" size={16} /> Poslať zákazníkovi emailom</button>
             )}
           </div>
@@ -24650,6 +24940,16 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
   const [saveCustomer, setSaveCustomer] = useState(!existing);
   const [requestedAsJob, setRequestedAsJob] = useState(src?.requestedAsJob || false);
   const canConvert = can(currentUser, "reservation_convert"); // dispečer/vedúci — rezervácia je hneď schválená
+  // Na model (1.0.875): modely + počet kusov a depo; konkrétne stroje pridelí dispečer depa pri schválení.
+  const [byModel, setByModel] = useState(!!src?.items);
+  const [items, setItems] = useState(src?.items || [{ model: "", qty: 1 }]);
+  const [depo, setDepo] = useState(src?.depo || "");
+  const models = useMemo(() => rentalModels(machines), [machines]);
+  const freeOf = (model) => {
+    const pool = machines.filter((m) => !m.archived && m.type === model && m.depo === depo);
+    return { y: pool.length, x: isRealISODate(expectedStart) ? freeMachinesFor(pool, { jobs, reservations, damages }, expectedStart, expectedEnd || null, () => true).length : pool.length };
+  };
+  const itemsOk = depo && items.every((it) => it.model && Number(it.qty) >= 1);
 
   const machineOptions = machines.filter((m) => !m.archived || m.id === existing?.machineId).map((m) => ({ value: m.id, label: `${m.code}${m.type ? " — " + m.type : ""}`, badge: machineStateBadge(m, { jobs, reservations, damages, excludeResId: existing?.id, from: expectedStart, to: expectedEnd || null }) })).sort((a, b) => a.label.localeCompare(b.label, "sk", { numeric: true }));
 
@@ -24660,7 +24960,7 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
   // je do toho dátumu stále obsadený — dátumový prekryv sám o sebe vylúči staré,
   // dávno ukončené zákazky, netreba to riešiť cez stav.
   const conflict = useMemo(() => {
-    if (!machineId || !expectedStart) return null;
+    if (byModel || !machineId || !expectedStart) return null;
     const job = (jobs || []).find(
       (j) =>
         j.machineId === machineId &&
@@ -24677,19 +24977,21 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
     );
     if (otherReservation) return { type: "reservation", label: otherReservation.customer || "iná rezervácia" };
     return null;
-  }, [machineId, expectedStart, expectedEnd, jobs, reservations, existing]);
+  }, [byModel, machineId, expectedStart, expectedEnd, jobs, reservations, existing]);
 
-  const pendingPrep = machineId ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
-  const openBreakdown = machineId && !pendingPrep ? (damages || []).find((d) => d.machineId === machineId && d.type === "poskodenie" && !d.resolved) : null;
+  const pendingPrep = machineId && !byModel ? (damages || []).find((d) => d.machineId === machineId && d.prepCheck && !d.resolved) : null;
+  const openBreakdown = machineId && !byModel && !pendingPrep ? (damages || []).find((d) => d.machineId === machineId && d.type === "poskodenie" && !d.resolved) : null;
   // Predpokladaný koniec logicky nemôže byť pred predpokladaným začiatkom.
   const dateOrderInvalid = expectedEnd && expectedEnd < expectedStart;
 
-  const canSave = machineId && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict && !dateOrderInvalid;
+  const canSave = (byModel ? itemsOk : machineId) && customer.trim() && toLocation.trim() && obchodnik && expectedStart && !conflict && !dateOrderInvalid;
 
   return (
     <Modal title={existing ? "Upraviť nezáväznú rezerváciu" : "Nezáväzná rezervácia stroja"} onClose={onClose} xwide>
       <div className="fhint" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
-        {canConvert && (!existing || existing.status === "approved")
+        {byModel
+          ? <>Vyberte model a počet kusov — konkrétne stroje pridelí dispečer zvoleného depa pri schválení (upozornenie dostanú dispečeri tohto depa). Nič to nezaväzuje, stroje zablokuje až schválenie.</>
+          : canConvert && (!existing || existing.status === "approved")
           ? <>Rezervácia je hneď schválená a stroj v danom termíne zablokuje. Ak obchod vyjde, premeňte ju priamo na skutočnú zákazku.</>
           : <>Nič to nezaväzuje — stroj zablokuje až po schválení dispečerom. Upozorní dispečera depa stroja, že sa
         o tento stroj rokuje. Ak obchod vyjde, premenia ju priamo na skutočnú zákazku.</>}
@@ -24697,12 +24999,48 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
       <div className="job-form-cols">
         <fieldset>
           <legend>REZERVÁCIA</legend>
+        {!existing && !prefillMachineId && (
+          <div className="seg" role="radiogroup" aria-label="Rezervácia na" style={{ display: "flex", width: "100%", marginBottom: 14 }}>
+            {[[false, "Konkrétny stroj"], [true, "Model a počet kusov"]].map(([v, l]) => (
+              <button key={l} type="button" role="radio" aria-checked={byModel === v} className={byModel === v ? "on" : ""} onClick={() => setByModel(v)}>{l}</button>
+            ))}
+          </div>
+        )}
+        {byModel ? (
+          <>
+            <Field label="Depo *">
+              <select value={depo} onChange={(e) => setDepo(e.target.value)} style={{ width: "100%" }}>
+                <option value="">— vybrať depo —</option>
+                {DEPO_OPTIONS.filter((d) => d !== "Externé").map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </Field>
+            {items.map((it, i) => {
+              const f = it.model && depo ? freeOf(it.model) : null;
+              return (
+                <Field key={i} label={`Model ${items.length > 1 ? i + 1 + " " : ""}*`}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select aria-label="Model" value={it.model} onChange={(e) => setItems((l) => l.map((x, k) => (k === i ? { ...x, model: e.target.value } : x)))} style={{ flex: 1, minWidth: 0 }}>
+                      <option value="">— vybrať model —</option>
+                      {models.filter((m) => m === it.model || !items.some((x) => x.model === m)).map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <input aria-label="Počet kusov" type="number" min={1} max={20} value={it.qty} onChange={(e) => setItems((l) => l.map((x, k) => (k === i ? { ...x, qty: Math.max(1, Math.min(20, Math.floor(Number(e.target.value) || 1))) } : x)))} style={{ width: 72 }} />
+                    <span aria-hidden="true">ks</span>
+                    {items.length > 1 && <button type="button" className="btn btn-ghost" aria-label="Odobrať model" onClick={() => setItems((l) => l.filter((_, k) => k !== i))}>✕</button>}
+                  </div>
+                  {f && <div className="fhint" style={f.x < it.qty ? { color: "var(--danger-text)" } : undefined}>Orientačne voľné {f.x} z {f.y} v depe {depo} v tomto termíne{f.x < it.qty ? " — dispečer môže prideliť iný model alebo stroj z iného depa" : ""}.</div>}
+                </Field>
+              );
+            })}
+            <button type="button" className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={() => setItems((l) => [...l, { model: "", qty: 1 }])}>+ Ďalší model</button>
+          </>
+        ) : (
         <Field label="Stroj *">
           <SearchSelect options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Vybrať stroj…" disabled={!!prefillMachineId} />
           {/* Rezerváciu to neblokuje — len upozorní, rovnako ako Nová zákazka a import. */}
           {pendingPrep ? <div role="status" className="fnote fnote-y" style={{ marginTop: 6 }}>⚠ Stroj je v príprave do požičovne — zákazku naň nepôjde vytvoriť, kým sa príprava nedokončí.</div>
             : openBreakdown && <div role="status" className="fnote fnote-y" style={{ marginTop: 6 }}>⚠ Stroj má otvorenú poruchu (nahlásená {fmtDate(openBreakdown.dateReported)}{openBreakdown.popis ? `: ${openBreakdown.popis}` : ""}) — overte termín opravy so servisom.</div>}
         </Field>
+        )}
         <Field label="Zákazník *">
           <CustomerAutocomplete
             value={customer}
@@ -24796,7 +25134,7 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
           <span>Uložiť/aktualizovať tohto zákazníka v databáze zákazníkov</span>
         </label>
       )}
-      <FormFoot missing={[!machineId && "stroj", !customer.trim() && "zákazník", !obchodnik && "obchodník", !toLocation.trim() && "kam", !expectedStart && "začiatok"].filter(Boolean)}>
+      <FormFoot missing={[...(byModel ? [!depo && "depo", !items.every((it) => it.model) && "model"] : [!machineId && "stroj"]), !customer.trim() && "zákazník", !obchodnik && "obchodník", !toLocation.trim() && "kam", !expectedStart && "začiatok"].filter(Boolean)}>
       <button
         className="btn btn-accent"
         disabled={!canSave}
@@ -24805,7 +25143,7 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
             onSaveCustomer?.({ firma: customer.trim(), contacts: pendingContacts });
           }
           onSave({
-            machineId,
+            ...(byModel ? { items: items.map((it) => ({ model: it.model, qty: Number(it.qty) })), depo } : { machineId }),
             customer: customer.trim(),
             toLocation: toLocation.trim(),
             obchodnik,
@@ -24828,8 +25166,9 @@ function AddReservationModal({ machines, jobs, reservations, damages, salespeopl
    Karta nezáväznej rezervácie — obchodník si len pozrie,
    dispečer/vedúci požičovne ju vie premeniť na zákazku alebo zmazať.
 --------------------------------------------------------- */
-function ReservationCardModal({ reservation, machine, salespeople, user, blacklistMatch, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete, onRequestReminder, onOpenConvertedJob }) {
+function ReservationCardModal({ reservation, machine, assignCtx, onAssign, onOpenReservation, salespeople, user, blacklistMatch, onClose, onDelete, onConvert, onEdit, onApprove, onRequestConvert, onRequestDelete, onRequestReminder, onOpenConvertedJob }) {
   const r = reservation;
+  const unassigned = isModelPiece(r); // na model, stroj ešte nepridelený (1.0.875)
   const isConverted = r.status === "converted";
   const isCancelled = r.status === "cancelled"; // zrušená zmazaním zákazky z nej (DB, step125)
   // Premenená rezervácia (napr. otvorená zo starej notifikácie) už nemá akcie —
@@ -24839,14 +25178,26 @@ function ReservationCardModal({ reservation, machine, salespeople, user, blackli
   const canRequest = !canActDirectly && !isConverted && !isCancelled && can(user, "reservation_add");
   const dot = salespersonColor(r.obchodnik, salespeople);
   const [approveErr, setApproveErr] = useState(""); // kolízia pri schválení — v paneli, nie plávajúca hláška cez nadpis
+  const [picks, setPicks] = useState({}); // id kusu → id prideleného stroja
+  const group = r.groupId ? (assignCtx?.reservations || []).filter((x) => x.groupId === r.groupId).sort(byKeys("model", "createdAt", "id")) : [r];
+  const toAssign = canActDirectly ? group.filter((x) => isModelPiece(x) && x.status === "pending") : [];
+  // Len voľné stroje v termíne: najprv žiadaný model z depa obchodníka, potom ten istý model z iných dep, potom iné modely (dispečer môže dať iný model).
+  const freeOpts = useMemo(() => !toAssign.length ? [] : freeMachinesFor(assignCtx.machines, assignCtx, r.expectedStart, r.expectedEnd, (m) => (m.objekt || "Požičovňový stroj") === "Požičovňový stroj"),
+    [toAssign.length, assignCtx, r.expectedStart, r.expectedEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+  const optsFor = (piece) => freeOpts.filter((m) => m.id === picks[piece.id] || !Object.values(picks).includes(m.id))
+    .map((m) => ({ m, k: [(m.type || "") === piece.model ? 0 : 1, m.depo === piece.depo ? 0 : 1] }))
+    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || (a.m.code || "").localeCompare(b.m.code || "", "sk", { numeric: true }))
+    .map(({ m }) => ({ value: m.id, label: `${m.code} — ${m.type || "bez modelu"} · ${m.depo || "—"}`, badge: (m.type || "") !== piece.model ? { text: "Iný model", cls: "spill-wait" } : null }));
+  const picked = Object.entries(picks).filter(([id, mId]) => mId && toAssign.some((x) => x.id === id));
+  const pickedOtherModel = picked.some(([id, mId]) => (freeOpts.find((m) => m.id === mId)?.type || "") !== toAssign.find((x) => x.id === id)?.model);
   return (
     <Modal
       eyebrow={r.requestedAsJob ? "Žiadosť o zákazku" : isPending ? "Žiadosť o rezerváciu" : "Nezáväzná rezervácia"}
       title={
         <>
-          {machine?.code || "—"}
-          {machine?.type && <span className="side-title-sub">{machine.type}</span>}
-          {isPending ? <span className="spill spill-wait">Čaká na schválenie</span> : isConverted ? <span className="spill spill-done">Premenená na zákazku</span> : r.status === "approved" ? <span className={"spill " + STATUS_CLS.reservation}>Schválená</span> : isCancelled ? <span className="spill spill-problem">Zrušená</span> : null}
+          {machine?.code || (unassigned ? r.model : "—")}
+          {machine?.type ? <span className="side-title-sub">{machine.type}</span> : unassigned && <span className="side-title-sub">depo {r.depo || "—"}</span>}
+          {isPending && unassigned ? <span className="spill spill-wait">Čaká na pridelenie stroja</span> : isPending ? <span className="spill spill-wait">Čaká na schválenie</span> : isConverted ? <span className="spill spill-done">Premenená na zákazku</span> : r.status === "approved" ? <span className={"spill " + STATUS_CLS.reservation}>Schválená</span> : isCancelled ? <span className="spill spill-problem">Zrušená</span> : null}
         </>
       }
       onClose={onClose}
@@ -24877,9 +25228,10 @@ function ReservationCardModal({ reservation, machine, salespeople, user, blackli
             </>
           )}
           <div className="side-foot-btns one-row" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {canActDirectly && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
-            {canActDirectly && isPending && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={() => { setApproveErr(""); onApprove(setApproveErr); }}>✓ Schváliť</button>}
-            {canActDirectly && <button className="btn btn-accent" onClick={onConvert}>Premeniť na zákazku</button>}
+            {canActDirectly && !unassigned && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={onEdit}>Upraviť</button>}
+            {canActDirectly && isPending && !unassigned && <button className="btn btn-ghost" style={{ borderColor: "var(--text)" }} onClick={() => { setApproveErr(""); onApprove(setApproveErr); }}>✓ Schváliť</button>}
+            {canActDirectly && !unassigned && <button className="btn btn-accent" onClick={onConvert}>Premeniť na zákazku</button>}
+            {toAssign.length > 0 && <button className="btn btn-accent" disabled={!picked.length} onClick={() => { setApproveErr(""); if (onAssign(picked, setApproveErr) !== false) setPicks({}); }}>✓ Prideliť a schváliť{picked.length ? ` (${picked.length})` : ""}</button>}
             {canRequest && <button className="btn btn-accent" onClick={onRequestConvert}>Nahlásiť ako zákazku</button>}
           </div>
         </>
@@ -24893,9 +25245,38 @@ function ReservationCardModal({ reservation, machine, salespeople, user, blackli
           Obchodník žiada rovno o zákazku, nie len rezerváciu — netreba čakať, stačí premeniť.
         </div>
       )}
-      {isPending && (
+      {isPending && !unassigned && (
         <div className="fnote fnote-y" style={{ marginBottom: 8 }}>
           Čaká na schválenie — v kalendári je zobrazená bledšie, kým ju dispečer alebo vedúci požičovne neschváli.
+        </div>
+      )}
+      {isPending && unassigned && (
+        <div className="fnote fnote-y" style={{ marginBottom: 8 }}>
+          Rezervácia na model — {toAssign.length ? "ku každému kusu vyberte voľný stroj a schváľte. Kusy bez stroja ostanú čakať." : `čaká, kým dispečer depa ${r.depo || "—"} pridelí konkrétny stroj. Stroj zablokuje až schválenie.`}
+        </div>
+      )}
+      {toAssign.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          {toAssign.map((x, i) => (
+            <Field key={x.id} label={`${i + 1}. kus · ${x.model}`}>
+              <SearchSelect options={optsFor(x)} value={picks[x.id] || ""} onChange={(v) => setPicks((p) => ({ ...p, [x.id]: v }))} placeholder="Vybrať voľný stroj…" />
+            </Field>
+          ))}
+          {!freeOpts.length && <div className="fnote fnote-r">V tomto termíne nie je voľný žiadny stroj.</div>}
+          {pickedOtherModel && <div role="status" className="fnote fnote-i">Obchodník dostane upozornenie, že ste pridelili iný model.</div>}
+        </div>
+      )}
+      {group.length > 1 && toAssign.length < group.length && (
+        <div style={{ marginBottom: 12 }}>
+          <div className="fhint" style={{ marginBottom: 4 }}>Kusy tejto žiadosti</div>
+          {group.map((x) => (
+            <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 14, padding: "3px 0" }}>
+              <span>{x.model}</span><span aria-hidden="true">→</span>
+              {x.id === r.id ? <b>{assignCtx.machines.find((m) => m.id === x.machineId)?.code || "bez stroja"}</b>
+                : <button type="button" className="btn-link" onClick={() => onOpenReservation(x)}>{assignCtx.machines.find((m) => m.id === x.machineId)?.code || "bez stroja"}</button>}
+              <span className="fhint" style={{ margin: 0 }}>{isModelPiece(x) ? "čaká na pridelenie" : x.status === "approved" ? "schválená" : x.status === "converted" ? "premenená na zákazku" : x.status === "cancelled" ? "zrušená" : "čaká na schválenie"}</span>
+            </div>
+          ))}
         </div>
       )}
       {isConverted && (
@@ -25202,12 +25583,13 @@ function AddJobModal({ depoCheckers, machines, drivers, customers, blacklist, jo
               value={endDate}
               min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
+              aria-invalid={dateOrderInvalid || (endRequired && !endDate) || undefined} aria-describedby="jf-end-hint"
               style={{ width: "100%", borderColor: dateClash || dateOrderInvalid ? "var(--danger)" : undefined, outline: dateClash || dateOrderInvalid ? "2px solid var(--danger)" : undefined }}
             />
             {dateOrderInvalid ? (
-              <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{endDate < startDate ? "Koniec zákazky nemôže byť pred jej začiatkom." : departureAfterEnd ? "Vývoz nemôže byť po konci zákazky." : "Zvoz nemôže byť pred koncom zákazky."}</div>
+              <div id="jf-end-hint" role="alert" style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{endDate < startDate ? "Koniec zákazky nemôže byť pred jej začiatkom." : departureAfterEnd ? "Vývoz nemôže byť po konci zákazky." : "Zvoz nemôže byť pred koncom zákazky."}</div>
             ) : (
-              <div style={{ fontSize: 11, color: endRequired && !endDate ? "var(--danger)" : "var(--text-dim)", marginTop: 4 }}>{endRequired ? "Ukončená zákazka musí mať koniec." : "Nechajte prázdne, ak koniec zákazky ešte nie je známy."}</div>
+              <div id="jf-end-hint" style={{ fontSize: 11, color: endRequired && !endDate ? "var(--danger)" : "var(--text-dim)", marginTop: 4 }}>{endRequired ? "Ukončená zákazka musí mať koniec." : "Nechajte prázdne, ak koniec zákazky ešte nie je známy."}</div>
             )}
           </Field>
           </div>
@@ -25348,9 +25730,11 @@ function AddJobModal({ depoCheckers, machines, drivers, customers, blacklist, jo
         {conflict?.type === "converted" && onOpenJob && <button type="button" className="btn btn-accent ff-main" onClick={() => onOpenJob(conflict.job)}>Otvoriť zákazku</button>}
         <button
           className="btn btn-accent ff-main"
-          disabled={!canSave}
+          disabled={!canSave && !missingFields.length}
+          data-incomplete={(!canSave && missingFields.length > 0) || undefined}
           style={conflict?.type === "converted" ? { display: "none" } : undefined}
           onClick={async () => {
+            if (!canSave) return; // B5: chýbajúce údaje — klik prejde na .ff-try (ukáže, čo chýba)
             if (officeOffline("jobs")) return; // bez signálu nič — ani zákazník (inak by vznikol bez zákazky)
             // Vývoz v minulosti (A7): stroj už odišiel → kontrola checkera sa nezaloží (protokol cez papierový protokol alebo šofér s 9 zábermi);
             // neodišiel → kontrola na dnes. Zrušiť = neuložiť.
@@ -27264,6 +27648,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   <div
                     key={`brk-${d.id}-${pc.from}`}
                     className="gantt-bar-wrap"
+                    {...(onBreakdownClick ? barKeys(`Porucha ${m.code || ""}: ${d.popis || ""}`.trim(), () => onBreakdownClick(m.id, pc.from, d)) : {})}
                     onClick={(e) => {
                       if (!onBreakdownClick) return;
                       const r = e.currentTarget.getBoundingClientRect();
@@ -27319,6 +27704,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   <div
                     key={j.id}
                     className={draggable ? "gantt-bar-wrap draggable" : "gantt-bar-wrap"}
+                    {...barKeys(`Zákazka ${j.customer || ""}, ${fmtDate(j.startDate)} – ${j.endDate ? fmtDate(j.endDate) : "bez konca"}`, () => onOpenJob(j))}
                     onClick={() => {
                       if (suppressClickRef.current) { suppressClickRef.current = false; return; }
                       onOpenJob(j);
@@ -27378,7 +27764,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         left: "calc(var(--gantt-name-col) + 6px)",
                         width: "fit-content",
                         fontSize: 10,
-                        color: "#fff",
+                        color: isDone ? "var(--text)" /* ukončená je priesvitná — text podľa pozadia stránky */ : textOnColor(bg),
                         fontWeight: 600,
                         pointerEvents: "none",
                         paddingLeft: startTurn ? `${cellPct}%` : undefined, // popisok za deň výmeny
@@ -27486,6 +27872,7 @@ const CalendarGrid = React.memo(function CalendarGrid({
                   <div
                     key={r.id}
                     className={draggable ? "gantt-bar-wrap draggable" : "gantt-bar-wrap"}
+                    {...barKeys(`Rezervácia ${r.customer || ""}, ${fmtDate(r.expectedStart)} – ${r.expectedEnd ? fmtDate(r.expectedEnd) : "bez konca"}`, () => onOpenReservation(r))}
                     onClick={() => {
                       if (suppressClickRef.current) { suppressClickRef.current = false; return; }
                       onOpenReservation(r);
@@ -27534,9 +27921,9 @@ const CalendarGrid = React.memo(function CalendarGrid({
                         width: "fit-content",
                         fontSize: 10,
                         // Čakajúca rezervácia má priesvitné pozadie — biely text by na ňom nebol čitateľný.
-                        color: isPending ? "var(--text)" : "#fff",
+                        color: isPending ? "var(--text)" : textOnColor(bg, 0.82),
                         fontWeight: 600,
-                        textShadow: isPending ? "none" : "0 1px 2px rgba(0,0,0,.6)",
+                        textShadow: isPending ? "none" : textOnColor(bg, 0.82) === "#fff" ? "0 1px 2px rgba(0,0,0,.6)" : "0 0 2px rgba(255,255,255,.8)", // pruhy sú svetlé aj tmavé
                         pointerEvents: "none",
                         paddingLeft: startTurn ? `${cellPct}%` : undefined, // popisok za deň výmeny
                       }}
@@ -27752,11 +28139,19 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
     const map = {};
     (reservations || []).forEach((r) => {
       if (r.status !== "approved" && r.status !== "pending") return;
+      if (!r.machineId) return; // na model bez stroja — pás „Čakajú na pridelenie stroja“
       if ((r.expectedEnd && r.expectedEnd < windowStartISO) || r.expectedStart > windowEndISO) return;
       (map[r.machineId] = map[r.machineId] || []).push(r);
     });
     return map;
   }, [reservations, windowStartISO, windowEndISO]);
+  // Pás hore: rezervácie na model bez prideleného stroja — jedna položka = žiadosť a model (počet kusov).
+  const awaitingMachine = useMemo(() => {
+    const g = new Map();
+    (reservations || []).filter((r) => isModelPiece(r) && r.status === "pending" && (!depoFilter || r.depo === depoFilter)).sort(byKeys("expectedStart", "createdAt", "id"))
+      .forEach((r) => { const k = `${r.groupId || r.id}|${r.model}`; if (g.has(k)) g.get(k).n++; else g.set(k, { r, n: 1 }); });
+    return [...g.values()];
+  }, [reservations, depoFilter]);
 
   const categoryLabelOf = useMemo(() => {
     if (sortMode !== "category") return null;
@@ -27783,7 +28178,7 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
       list = list.filter((m) => (m.depo || "").toLowerCase() === depoFilter.toLowerCase());
     }
     // k70d: viac výrazov oddelených čiarkou = stroj sedí aspoň na jeden („1330, 2632“)
-    const terms = search.toLowerCase().split(",").map((t) => t.trim()).filter(Boolean);
+    const terms = searchTerms(search);
     if (terms.length) {
       const has = (v) => terms.some((q) => (v || "").toLowerCase().includes(q));
       // Zákazník sa hľadá naprieč VŠETKÝMI zákazkami a rezerváciami stroja (nie
@@ -28058,7 +28453,8 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
             <option value="">Všetky depá</option>
             {depoOptions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <SearchInput placeholder="Hľadať stroj, zákazníka… (viac oddeľ čiarkou)" value={search} onChange={setSearch} style={{ width: 300, minWidth: 180 }} />
+          {/* k71e D4: pole sa zúži s oknom (300 px od ~1190 px), nech sa lišta pri 1101–1189 px nezalomí; pod ~1145 px je nápoveda orezaná, celá je v title/aria-label */}
+          <SearchInput placeholder="Stroj, zákazník… (viac oddeľte čiarkou)" title="Stroj, zákazník… (viac oddeľte čiarkou)" value={search} onChange={setSearch} style={{ width: "clamp(200px, calc(100vw - 890px), 300px)", minWidth: 180 }} />
           <GearPopover>{settingsControls}</GearPopover>
           <button type="button" className="btn btn-ghost header-icon-btn tip-now" data-tip="Legenda" aria-label="Legenda" onClick={() => setLegendOpen(true)} style={{ color: "var(--text-dim)" }}>ⓘ</button>
         </div>
@@ -28072,6 +28468,16 @@ function CalendarView({ machines, jobs, reservations, damages, salespeople, toda
         </div>
       </div>
 
+      {awaitingMachine.length > 0 && (
+        <div className="fnote fnote-y cal-await" role="region" aria-label="Čakajú na pridelenie stroja">
+          <b>Čakajú na pridelenie stroja ({awaitingMachine.reduce((a, x) => a + x.n, 0)}):</b>
+          {awaitingMachine.map(({ r, n }) => (
+            <button key={r.id} type="button" className="btn-link" onClick={() => onOpenReservation(r)}>
+              {nbDates(`${n}× ${r.model} · ${r.customer || "—"} · ${fmtDate(r.expectedStart)}${r.expectedEnd ? ` – ${fmtDate(r.expectedEnd)}` : ""}${depoFilter ? "" : ` · ${DEPO_SHORT_LABELS[r.depo] || r.depo || "—"}`}`)}
+            </button>
+          ))}
+        </div>
+      )}
       <>
       <div className="panel" style={{ padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {relevantMachines.length === 0 && (
@@ -28725,6 +29131,7 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, on
             onFocus={() => setShowList(true)}
             onBlur={(e) => { if (!e.currentTarget.parentElement.contains(e.relatedTarget)) setShowList(false); }} // Tab do zoznamu ho nezavrie
             onKeyDown={onListKey}
+            data-miss={!selected || undefined}
             placeholder="Píšte sériové číslo alebo model…"
             style={{ width: "100%" }}
             autoFocus
@@ -28775,7 +29182,7 @@ function QuickDamagePickerModal({ machines, onClose, onPick, onUnknownSerial, on
           </div>
         </>
       )}
-      <FormFoot>
+      <FormFoot missing={!selected ? ["stroj"] : []}>
         <button className="btn btn-accent" disabled={!selected} onClick={() => onPick(selected.id)}>
           Pokračovať
         </button>
@@ -28865,6 +29272,7 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
             onChange={(e) => { setText(e.target.value); setSelectedId(""); setShowList(true); }}
             onFocus={() => setShowList(true)}
             onKeyDown={onListKey}
+            data-miss={!selected || undefined}
             placeholder="Píšte sériové číslo alebo model…"
             style={{ width: "100%" }}
             autoFocus
@@ -28897,7 +29305,7 @@ function AttachMachineModal({ damage, machines, onClose, onAttach }) {
           ⚠ {mismatches.join(" ")} Overte si, že ide o správny stroj.
         </div>
       )}
-      <FormFoot>
+      <FormFoot missing={!selected ? ["stroj"] : []}>
         <button className="btn btn-accent" disabled={!selected} onClick={() => onAttach(selected)}>
           Priradiť stroj
         </button>
@@ -29114,31 +29522,35 @@ function ServiceEventDetailModal({ d, damages, portalRequests, onMerge, technici
             <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Nepriradené protokoly pre tento stroj</div>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setShowAssignProtocolPicker(false)}>✕</button>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} aria-label="Zavrieť výber protokolu" onClick={() => setShowAssignProtocolPicker(false)}>✕</button>
               </div>
               {unassignedProtocolsForMachine.length === 0 ? (
                 <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Pre tento stroj nie sú žiadne nepriradené protokoly.</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {/* k71f: ťuknutie na riadok už nepriraďuje — najprv Náhľad, potom Prideliť (Rado 19. 11.). */}
                   {unassignedProtocolsForMachine.map((p) => (
-                    <button
+                    <div
                       key={p.id}
                       className="panel"
-                      style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)", background: "none", width: "100%" }}
-                      onClick={() => { onAssignProtocol(p.id); setShowAssignProtocolPicker(false); }}
+                      style={{ padding: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", border: "1px solid var(--border)", width: "100%" }}
                     >
                       {p.imageUrl ? (
-                        <img src={p.imageUrl} alt="Protokol" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
+                        <img src={p.imageUrl} alt="" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} />
                       ) : (
                         <div style={{ width: 50, height: 50, borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0, background: "var(--panel-2)" }} />
                       )}
-                      <div style={{ fontSize: 12, color: "var(--text)" }}>
+                      <div style={{ fontSize: 12, color: "var(--text)", flex: 1, minWidth: 140 }}>
                         <div style={{ color: "var(--text-dim)", marginBottom: 2 }}>{fmtDate(p.createdAt)} — {p.technicianName || "—"}</div>
                         <div style={{ whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                           {p.workDescription || "— bez popisu vykonanej práce —"}
                         </div>
                       </div>
-                    </button>
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: "auto" }}>
+                        <button type="button" className="btn btn-ghost" aria-label={`Náhľad protokolu z ${fmtDate(p.createdAt)}`} onClick={() => openPrintableServiceProtocol(p, [], false, isAdminUser(user))}>Náhľad</button>
+                        <button type="button" className="btn btn-outline" aria-label={`Prideliť protokol z ${fmtDate(p.createdAt)}`} onClick={() => { onAssignProtocol(p.id); setShowAssignProtocolPicker(false); }}>Prideliť</button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -29703,7 +30115,7 @@ function ServiceEventCard({ d, technicianById, machineById, user, onAssign, onDe
   );
 }
 
-function DamagesView({ damages, technicians, assignments, machineById, user, onAssign, onDelete, onOpenDetail, onComplete, onProtocol, onAttachMachine, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today, onImport, targetDepo, onTargetDepoConsumed }) {
+function DamagesView({ damages, protocolLogs, technicians, assignments, machineById, user, onAssign, onDelete, onOpenDetail, onComplete, onProtocol, onAttachMachine, onAssignProtocol, highlightDamageId, onClearAll, onOpenSummary, onBulkAssign, today, onImport, targetDepo, onTargetDepoConsumed }) {
   const [activeFilters, setActiveFilters] = useState(() => new Set(["new", "assigned"]));
   const [depoFilter, setDepoFilter] = useState(targetDepo || null);
   // Prišli sme z dlaždice na Dnes s vybraným depom — zoznam sa otvorí na ňom (číslo sedí).
@@ -29752,11 +30164,11 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
   }
   // Vedúci technik (BA) vidí v zozname len svoje depá (BA + NR).
   // Vedúci technik BA vidí všetky záznamy; prideľovať smie len svojim technikom.
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     statusFiltered = statusFiltered.filter((d) => {
       const m = machineById[d.machineId];
-      return (
+      return terms.some((q) =>
         (d.code || "").toLowerCase().includes(q) ||
         (d.model || "").toLowerCase().includes(q) ||
         (m?.depo || "").toLowerCase().includes(q) ||
@@ -29768,6 +30180,19 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
   const technicianById = useMemo(() => Object.fromEntries(technicians.map((t) => [t.id, t])), [technicians]);
   const ls = useListSort("poskodenia");
   const sorted = applyListSort([...statusFiltered].sort(byKeys("-dateReported", "-createdAt")), ls.sort, ticketSortCols(technicianById));
+  // k71f: „Ostatné protokoly“ — protokoly strojov z flotily bez tiketu (ako na karte stroja), s rovnakým filtrom depa ako tikety.
+  const [looseSearch, setLooseSearch] = useState("");
+  const [looseAssign, setLooseAssign] = useState(null);
+  const canAssignLoose = onAssignProtocol && (can(user, "damage_status") || can(user, "external_status"));
+  const looseAll = (protocolLogs || []).filter((p) => p.machineId && isLooseProtocol(p));
+  const looseTerms = searchTerms(looseSearch);
+  const looseList = looseAll.filter((p) => {
+    const m = machineById[p.machineId];
+    if (depoFilter && machineDispatchDepo(m).toLowerCase() !== depoFilter.toLowerCase()) return false;
+    return !looseTerms.length || looseTerms.some((q) =>
+      [m?.code, m?.type, machineDispatchDepo(m), p.machineSerial, p.machineModel, p.technicianName, p.workDescription, fmtDate(p.createdAt)].some((v) => (v || "").toLowerCase().includes(q))
+    );
+  }).sort(byKeys("-createdAt"));
 
   function locationLabel(d) {
     const m = machineById[d.machineId];
@@ -29873,6 +30298,53 @@ function DamagesView({ damages, technicians, assignments, machineById, user, onA
           }}
         />
       )}
+
+      {looseAll.length > 0 && (
+        <section style={{ marginTop: 28 }} aria-labelledby="loose-proto-h">
+          <h2 id="loose-proto-h" className="today-sec" style={{ marginBottom: 2 }}>Ostatné protokoly · {looseList.length}</h2>
+          <p className="page-intro" style={{ marginBottom: 10 }}>Protokoly strojov požičovne bez priradeného tiketu{depoFilter ? ` · depo ${depoFilter}` : ""}</p>
+          <div className="tbar">
+            <SearchInput placeholder="Hľadať stroj, technika, popis…" value={looseSearch} onChange={setLooseSearch} style={{ minWidth: 280 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {looseList.length === 0 && (
+              <div className="panel" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)", boxShadow: "none", borderRadius: 12 }}>Žiadne protokoly v tomto filtri.</div>
+            )}
+            {looseList.map((p) => {
+              const m = machineById[p.machineId];
+              return (
+                <div key={p.id} className="panel loose-proto" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                  <div className="tnum" style={{ minWidth: 90, fontSize: 14, color: "var(--text-dim)" }}>{p.createdAt ? fmtDate(p.createdAt) : "—"}</div>
+                  <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{m?.code || p.machineSerial || "—"}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{[m?.type || p.machineModel, m && `Depo: ${machineDispatchDepo(m) || "—"}`].filter(Boolean).join(" · ") || "—"}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", minWidth: 100 }}>{p.technicianName || "—"}</div>
+                  <div style={{ fontSize: 12, flex: "2 1 200px", minWidth: 0, whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.workDescription || "— bez popisu vykonanej práce —"}</div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: "auto" }}>
+                    <button type="button" className="btn btn-ghost" aria-label={`Náhľad protokolu ${m?.code || ""} z ${fmtDate(p.createdAt)}`} onClick={() => openPrintableServiceProtocol(p, [], false, isAdminUser(user))}>Náhľad</button>
+                    {canAssignLoose && (
+                      <button type="button" className="btn btn-outline" aria-label={`Prideliť k tiketu protokol ${m?.code || ""} z ${fmtDate(p.createdAt)}`} onClick={() => setLooseAssign(p)}>Prideliť k tiketu</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {looseAssign && (
+        <AssignProtocolToExternalModal
+          protocol={looseAssign}
+          machine={{ code: machineById[looseAssign.machineId]?.code || looseAssign.machineSerial, model: machineById[looseAssign.machineId]?.type || looseAssign.machineModel }}
+          damages={damages.filter((d) => d.machineId === looseAssign.machineId && !d.resolved && PROTOCOL_PAIRABLE_DAMAGE_TYPES.includes(d.type))}
+          onClose={() => setLooseAssign(null)}
+          onAssign={(damageId) => {
+            onAssignProtocol(looseAssign.id, damageId);
+            setLooseAssign(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -29916,12 +30388,12 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   const [assignPickerFor, setAssignPickerFor] = useState(null);
   const unassignedProtocols = (protocolLogs || []).filter((p) => !p.damageId && !p.machineId);
   let unassignedFiltered = unassignedProtocols.filter((p) => !!p.invoiced === showInvoiced);
-  if (unassignedSearch.trim()) {
-    const q = unassignedSearch.trim().toLowerCase();
-    unassignedFiltered = unassignedFiltered.filter((p) =>
+  const unassignedTerms = searchTerms(unassignedSearch);
+  if (unassignedTerms.length) {
+    unassignedFiltered = unassignedFiltered.filter((p) => unassignedTerms.some((q) =>
       (p.clientName || "").toLowerCase().includes(q) ||
       (p.machineModel || "").toLowerCase().includes(q) ||
-      (p.machineSerial || "").toLowerCase().includes(q)
+      (p.machineSerial || "").toLowerCase().includes(q))
     );
   }
   unassignedFiltered = [...unassignedFiltered].sort(byKeys("-createdAt"));
@@ -29956,10 +30428,10 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   }
   // Vedúci technik (BA) vidí v zozname len svoje depá (BA + NR).
   // Vedúci technik BA vidí všetky záznamy; prideľovať smie len svojim technikom.
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     statusFiltered = statusFiltered.filter((d) => {
-      return (
+      return terms.some((q) =>
         (d.code || "").toLowerCase().includes(q) ||
         (d.model || "").toLowerCase().includes(q) ||
         (d.serialNumber || "").toLowerCase().includes(q) ||
@@ -30170,12 +30642,13 @@ function ExternalServiceView({ damages, protocolLogs, technicians, user, onAdd, 
   );
 }
 
-function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign }) {
+// k71f: s `machine` (Poškodenia › Ostatné protokoly) ponúka otvorené tikety stroja z flotily namiesto externých zákaziek.
+function AssignProtocolToExternalModal({ protocol, damages, machine, onClose, onAssign }) {
   const [q, setQ] = useState("");
-  const query = q.trim().toLowerCase();
+  const terms = searchTerms(q);
   const filtered = damages.filter((d) => {
-    if (!query) return true;
-    return (
+    if (!terms.length) return true;
+    return terms.some((query) =>
       (d.customer || "").toLowerCase().includes(query) ||
       (d.model || "").toLowerCase().includes(query) ||
       (d.serialNumber || "").toLowerCase().includes(query) ||
@@ -30183,16 +30656,21 @@ function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign })
     );
   }).sort(byKeys("-dateReported", "-createdAt"));
   return (
-    <Modal eyebrow="Priradiť protokol" title="K externej zákazke" onClose={onClose} wide>
+    <Modal eyebrow="Priradiť protokol" title={machine ? "K tiketu stroja" : "K externej zákazke"} onClose={onClose} wide>
       <div className="fsum">
-        <div><span>Protokol — zákazník</span>{protocol.clientName || "— bez zákazníka —"}</div>
-        <div><span>Stroj</span><span className="tnum">{[protocol.machineModel, protocol.machineSerial].filter(Boolean).join(" · ") || "—"}</span></div>
+        {machine ? (
+          <div><span>Stroj</span><span className="tnum">{[machine.code, machine.model].filter(Boolean).join(" · ") || "—"}</span></div>
+        ) : (<>
+          <div><span>Protokol — zákazník</span>{protocol.clientName || "— bez zákazníka —"}</div>
+          <div><span>Stroj</span><span className="tnum">{[protocol.machineModel, protocol.machineSerial].filter(Boolean).join(" · ") || "—"}</span></div>
+        </>)}
         <div><span>Dátum</span><span className="tnum">{protocol.createdAt ? fmtDate(protocol.createdAt) : "—"}</span></div>
+        {machine && <div><span>Technik</span>{protocol.technicianName || "—"}</div>}
       </div>
-      <SearchInput placeholder="Hľadať zákazníka, model, sériové číslo…" value={q} onChange={setQ} style={{ width: "100%", marginBottom: 10 }} />
+      {!machine && <SearchInput placeholder="Hľadať zákazníka, model, sériové číslo… (viac oddeľte čiarkou)" value={q} onChange={setQ} style={{ width: "100%", marginBottom: 10 }} />}
       <div className="flist" style={{ maxHeight: "50vh", overflowY: "auto" }}>
         {filtered.length === 0 && (
-          <div style={{ padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Žiadna zhoda.</div>
+          <div style={{ padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>{machine ? "Pre tento stroj momentálne nie je žiadny otvorený tiket." : "Žiadna zhoda."}</div>
         )}
         {filtered.map((d) => (
           <button
@@ -30201,8 +30679,13 @@ function AssignProtocolToExternalModal({ protocol, damages, onClose, onAssign })
             onClick={() => onAssign(d.id)}
           >
             <span style={{ minWidth: 0 }}>
-              <span style={{ display: "block", fontWeight: 600 }}>{d.customer || "— bez zákazníka —"}</span>
-              <small className="tnum">{[d.model, d.serialNumber].filter(Boolean).join(" · ") || "—"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</small>
+              {machine ? (<>
+                <span style={{ display: "block", fontWeight: 600 }}>{oneLinePopis(d.popis, 90) || "—"}</span>
+                <small className="tnum">{DAMAGE_TYPE_LABELS[d.type] || "tiket"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</small>
+              </>) : (<>
+                <span style={{ display: "block", fontWeight: 600 }}>{d.customer || "— bez zákazníka —"}</span>
+                <small className="tnum">{[d.model, d.serialNumber].filter(Boolean).join(" · ") || "—"} · {d.dateReported ? fmtDate(d.dateReported) : "—"}</small>
+              </>)}
             </span>
             {d.resolved ? <span className="spill spill-done">vyriešené</span> : <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>›</span>}
           </button>
@@ -30584,7 +31067,7 @@ function EzAssignModal({ meas, ezTechs, onClose, onSave }) {
           </Field>
         </div>
       )}
-      <FormFoot left={meas.assignedTechnicianId && (
+      <FormFoot missing={ezTechs.length ? [!technicianId && "technik", !date && "termín"].filter(Boolean) : []} left={meas.assignedTechnicianId && (
         <button className="btn btn-danger-outline" onClick={() => onSave(null, null)}>Zrušiť pridelenie</button>
       )}>
         <button className="btn btn-accent" disabled={!technicianId || !date} onClick={() => onSave(technicianId, date)}>Prideliť</button>
@@ -30648,11 +31131,11 @@ function EzMeasurementsView({ measurements, myEmployee, user, technicians, onPro
   const today = todayISO();
 
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const terms = searchTerms(search);
     return (measurements || [])
       .filter((m) => (showHistory ? m.processed : !m.processed))
       .filter((m) => assignFilter === "all" || (assignFilter === "unassigned" ? !m.assignedTechnicianId : m.assignedTechnicianId === myEmployee?.id))
-      .filter((m) => !q || (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q) || (m.assignedTechnicianName || "").toLowerCase().includes(q))
+      .filter((m) => !terms.length || terms.some((q) => (m.machineCode || "").toLowerCase().includes(q) || (m.createdBy || "").toLowerCase().includes(q) || (m.assignedTechnicianName || "").toLowerCase().includes(q)))
       .sort(showHistory ? byKeys("-date", "-createdAt") : byKeys("date", "createdAt")); // nespracované od najstaršieho (k64 D6)
   }, [measurements, showHistory, search, assignFilter, myEmployee?.id]);
   const confirming = (measurements || []).find((m) => m.id === confirmId);
@@ -30810,11 +31293,11 @@ function RevisionsView({ damages, technicians, machineById, user, onAssign, onCo
   }
   // Vedúci technik (BA) vidí v zozname len svoje depá (BA + NR).
   // Vedúci technik BA vidí všetky záznamy; prideľovať smie len svojim technikom.
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     filtered = filtered.filter((d) => {
       const m = machineById[d.machineId];
-      return (
+      return terms.some((q) =>
         (d.code || "").toLowerCase().includes(q) ||
         (d.model || "").toLowerCase().includes(q) ||
         (m?.depo || "").toLowerCase().includes(q) ||
@@ -31221,11 +31704,12 @@ function ErpOrderNumberModal({
           autoFocus
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          data-miss={!value.trim() || undefined}
           style={{ width: "100%" }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); if (value.trim()) onConfirm(value.trim()); } }}
         />
       </Field>
-      <FormFoot confirm>
+      <FormFoot confirm missing={!value.trim() ? [label.toLowerCase()] : []}>
         <button className="btn btn-accent" disabled={!value.trim()} onClick={() => onConfirm(value.trim())}>{confirmLabel}</button>
       </FormFoot>
     </Modal>
@@ -31575,7 +32059,175 @@ function DispatchersView({ dispatchers, dsp, today, canManage, showUncovered, on
   );
 }
 
-function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, damages, onMark, onRevert, onOpenProtocol }) {
+// Mesačná fakturácia bežiacich prenájmov (1.0.875) — záznamy k protokolu o odovzdaní:
+// h.erpMonthly = [{ month: "2026-11", from, to, days, invoice, at, by } | { month, skip: true, at, by }].
+const MONTHS_SK_FULL = ["január", "február", "marec", "apríl", "máj", "jún", "júl", "august", "september", "október", "november", "december"];
+const fmtMonth = (ym) => `${MONTHS_SK_FULL[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+const erpMonthlyList = (h) => (Array.isArray(h?.erpMonthly) ? h.erpMonthly.filter((e) => e && typeof e.month === "string") : []);
+// Posledné mesačné vyúčtovanie (najneskorší vyfakturovaný deň), okrem mesiaca `except`.
+function erpMonthlyLast(h, except) {
+  return erpMonthlyList(h).reduce((m, e) => (!e.skip && e.month !== except && isRealISODate(e.to) && (!m || e.to > m.to) ? e : m), null);
+}
+// Obdobie za mesiac: od odovzdania (alebo dňa po poslednom vyfakturovanom) do konca mesiaca; „Nefakturovať“ ho prenesie ďalej.
+function erpMonthlyPeriod(h, out, month) {
+  const entry = erpMonthlyList(h).find((e) => e.month === month) || null;
+  if (entry && !entry.skip) return { entry, from: entry.from, to: entry.to, days: entry.days };
+  const last = erpMonthlyLast(h, month);
+  const from = last ? addDaysISO(last.to, 1) : out, to = monthEndISO(month);
+  return { entry, from, to, days: isRealISODate(from) && from <= to ? daysBetween(from, to) + 1 : 0 };
+}
+// Zrušiť sa dá len posledné vyúčtovanie — ďalšie obdobie naň nadväzuje.
+const erpMonthlyUndoable = (h, entry) => !erpMonthlyList(h).some((e) => !e.skip && e.month > entry.month);
+
+function ErpMonthlyView({ handoverProtocols, jobById, machineById, onMonthly, onOpenProtocol, tabs }) {
+  const today = todayISO(), curMonth = today.slice(0, 7);
+  const [month, setMonth] = useState(curMonth);
+  const [search, setSearch] = useState("");
+  const [billPrompt, setBillPrompt] = useState(null); // { rows, all }
+  const [confirmAll, setConfirmAll] = useState(null);
+  const running = useMemo(() => handoverProtocols.filter((h) => h.handoverDone && !h.returnDone).map((h) => {
+    const job = jobById[h.jobId];
+    return { h, job, machine: machineById[h.machineId], out: String(h.handoverDate || "").slice(0, 10) || (job ? jobFrom(job) : "") };
+  }).filter((x) => isRealISODate(x.out)), [handoverProtocols, jobById, machineById]);
+  const monthOpts = useMemo(() => {
+    const first = running.reduce((m, x) => (x.out.slice(0, 7) < m ? x.out.slice(0, 7) : m), curMonth);
+    const opts = [];
+    for (let m = curMonth; m >= first && opts.length < 36; m = addDaysISO(m + "-01", -1).slice(0, 7)) opts.push(m);
+    if (!opts.includes(month)) opts.push(month);
+    return opts;
+  }, [running, curMonth, month]);
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return running
+      .map((x) => ({ ...x, p: erpMonthlyPeriod(x.h, x.out, month) }))
+      .filter(({ p }) => p.entry || p.days > 0)
+      .filter(({ job, machine }) => !q || [machine?.type, machine?.code, job?.customer, job?.cisloZmluvy].some((v) => (v || "").toLowerCase().includes(q)))
+      .sort(byKeys((x) => (x.p.entry ? (x.p.entry.skip ? 1 : 2) : 0), (x) => x.job?.customer, (x) => x.out));
+  }, [running, month, search]);
+  const open = rows.filter((r) => !r.p.entry);
+  // Hromadne len označené riadky (Rado 19. 11.: 3b) — jedna faktúra; skryté hľadaním sa nefakturujú.
+  const [sel, setSel] = useState(() => new Set());
+  const picked = open.filter((r) => sel.has(r.h.id)), allSel = open.length > 0 && picked.length === open.length;
+  const toggleSel = (id) => setSel((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const ls = useListSort("erp_mesacne");
+  const shownRows = useMemo(() => applyListSort(rows, ls.sort, {
+    stroj: (x) => x.machine?.code, zakaznik: (x) => x.job?.customer, zmluva: (x) => x.job?.cisloZmluvy, obdobie: (x) => x.p.from, dni: (x) => x.p.days,
+  }), [rows, ls.sort]);
+  const mName = fmtMonth(month);
+  const bill = (list, invoice) => onMonthly(month, list.map((r) => ({ id: r.h.id, rec: { from: r.p.from, to: r.p.to, days: r.p.days, invoice } })), `Vyfakturované za ${mName}.`);
+  return (
+    <div>
+      {tabs}
+      <div className="tbar">
+        <select value={month} onChange={(e) => { setMonth(e.target.value); setSel(new Set()); }} aria-label="Mesiac fakturácie">
+          {monthOpts.map((m) => <option key={m} value={m}>{fmtMonth(m)}</option>)}
+        </select>
+        <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 340 }} />
+        <SortSelect ls={ls} cols={[["stroj", "Stroj"], ["zakaznik", "Zákazník"], ["zmluva", "Č. zmluvy"], ["obdobie", "Obdobie"], ["dni", "Počet dní"]]} when="1280" />
+      </div>
+      {open.length > 0 && (
+        <div className="tbar" style={{ alignItems: "center" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, minHeight: 40, cursor: "pointer", fontSize: 14 }}>
+            <input type="checkbox" checked={allSel} ref={(el) => { if (el) el.indeterminate = picked.length > 0 && !allSel; }} onChange={() => setSel(allSel ? new Set() : new Set(open.map((r) => r.h.id)))} />
+            Označiť všetky zobrazené ({open.length})
+          </label>
+          <button className="btn btn-outline" disabled={!picked.length} aria-describedby={picked.length ? undefined : "erp-mes-hint"} onClick={() => setBillPrompt({ rows: picked, all: true })}>Vyfakturovať označené ({picked.length})</button>
+          {!picked.length && <span id="erp-mes-hint" style={{ fontSize: 13, color: "var(--text-dim)" }}>Označte prenájmy, ktoré idú na jednu faktúru.</span>}
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 10px" }}>
+        Prenájmy so strojom u zákazníka (protokol o odovzdaní, bez vrátenia). Obdobie: od odovzdania alebo od dňa po poslednom mesačnom vyúčtovaní do konca mesiaca. Po vrátení stroja pôjde do ERP podkladov len nevyfakturovaný zvyšok.
+      </div>
+      {rows.length === 0 ? (
+        <div className="panel" style={{ padding: 30, textAlign: "center", color: "var(--text-dim)", boxShadow: "none", borderRadius: 12 }}>
+          Žiadne prenájmy na fakturáciu za {mName}.
+        </div>
+      ) : (
+        <div className="panel jobs-wrap" style={{ boxShadow: "none", borderRadius: 12 }}>
+        <table className="table-cards jobs-table tc900 tc1280">
+          <thead>
+            <tr>
+              <SortTh ls={ls} k="stroj">Stroj</SortTh>
+              <SortTh ls={ls} k="zakaznik">Zákazník</SortTh>
+              <SortTh ls={ls} k="zmluva" style={{ width: 1, whiteSpace: "nowrap" }}>Č. zmluvy</SortTh>
+              <SortTh ls={ls} k="obdobie">Obdobie na fakturáciu</SortTh>
+              <SortTh ls={ls} k="dni">Počet dní</SortTh>
+              <th>Stav</th>
+              <th><span className="sr-only">Akcie</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {shownRows.map((r) => {
+              const { h, job, machine, p } = r, e = p.entry;
+              const last = erpMonthlyLast(h, month);
+              return (
+                <tr key={h.id}>
+                  <td className="td-plain">
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      {!e && <input type="checkbox" checked={sel.has(h.id)} onChange={() => toggleSel(h.id)} aria-label={`Označiť na fakturáciu: ${job?.customer || "—"}, stroj ${machine?.code || "—"}`} style={{ marginTop: 3, flexShrink: 0 }} />}
+                      <div>
+                        <strong className="tnum">{machine?.code || "—"}</strong>
+                        <div className="cell-sub">{(machine?.type || "—").replace(/(\d) m\b/g, "$1 m")}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td data-label="Zákazník">{job?.customer || "—"}</td>
+                  <td data-label="Číslo zmluvy" className="tnum">{job?.cisloZmluvy || <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
+                  <td data-label="Obdobie" className="tnum">
+                    {nbDates(`${fmtDate(p.from)} – ${fmtDate(p.to)}`)}
+                    {last && (!e || e.skip) && <div className="cell-sub">{nbDates(`mesačne vyfakturované do ${fmtDate(last.to)}`)}</div>}
+                  </td>
+                  <td data-label="Počet dní" className="tnum">{e?.skip ? <span style={{ color: "var(--text-dim)" }}>—</span> : plural(p.days, "deň", "dni", "dní")}</td>
+                  <td data-label="Stav">
+                    {!e ? <span className="spill spill-wait">Na fakturáciu</span>
+                      : e.skip ? <span className="spill" style={{ whiteSpace: "normal" }}>Nefakturuje sa tento mesiac — prenesie sa ďalej</span>
+                      : <span className="spill spill-done" style={{ whiteSpace: "normal" }}>Vyfakturované za {mName} · {e.invoice}</span>}
+                  </td>
+                  <td className="td-actions" style={{ textAlign: "right", whiteSpace: "nowrap", flexWrap: "wrap", gap: 6 }}>
+                    {job && <button className="btn btn-ghost" style={{ background: "var(--panel-2)" }} onClick={() => onOpenProtocol(job)}>Náhľad</button>}{" "}
+                    {!e ? (<>
+                      <button className="btn btn-ghost" onClick={() => onMonthly(month, [{ id: h.id, rec: { skip: true } }], `Za ${mName} sa nefakturuje — obdobie sa prenesie do ďalšieho mesiaca.`)}>Nefakturovať tento mesiac</button>{" "}
+                      <button className="btn btn-outline" onClick={() => setBillPrompt({ rows: [r] })}>Vyfakturované</button>
+                    </>) : erpMonthlyUndoable(h, e) && (
+                      <button className="btn btn-outline" onClick={async () => (await askConfirm({ title: "Zrušiť?", message: e.skip ? `Obdobie sa vráti medzi nevyfakturované za ${mName}.` : `Zruší sa „Vyfakturované za ${mName}“ (faktúra ${e.invoice}). Obdobie sa vráti medzi nevyfakturované.`, confirmLabel: "Zrušiť záznam" })) && onMonthly(month, [{ id: h.id, rec: null }], "Zrušené — obdobie je znova na fakturáciu.")}>Zrušiť</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </div>
+      )}
+      {billPrompt && (
+        <ErpOrderNumberModal
+          count={billPrompt.rows.length}
+          title={`Vyfakturované za ${mName}`}
+          label="Číslo faktúry"
+          confirmLabel="Vyfakturované"
+          helpText={billPrompt.all ? `Priradí sa označeným prenájmom (${billPrompt.rows.length}).` : `Obdobie ${fmtDate(billPrompt.rows[0].p.from)} – ${fmtDate(billPrompt.rows[0].p.to)} (${plural(billPrompt.rows[0].p.days, "deň", "dni", "dní")}) sa uloží ako vyfakturované za ${mName}.`}
+          onClose={() => setBillPrompt(null)}
+          onConfirm={(invoice) => {
+            if (billPrompt.all) { setConfirmAll(invoice); return; }
+            bill(billPrompt.rows, invoice);
+            setBillPrompt(null);
+          }}
+        />
+      )}
+      {billPrompt && confirmAll != null && (
+        <ConfirmActionModal
+          message={`Označiť ${plural(billPrompt.rows.length, "prenájom", "prenájmy", "prenájmov")} ako vyfakturované za ${mName} faktúrou ${confirmAll}?`}
+          confirmLabel="Áno, vyfakturované"
+          onClose={() => setConfirmAll(null)}
+          onConfirm={() => { bill(billPrompt.rows, confirmAll); setBillPrompt(null); setSel(new Set()); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, damages, onMark, onRevert, onOpenProtocol, onMonthly }) {
+  const [tab, setTab] = useState("vratene");
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
   const [markPrompt, setMarkPrompt] = useState(null); // { ids, all, initial }
@@ -31585,13 +32237,13 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
   const jobById = useMemo(() => Object.fromEntries(jobs.map((j) => [j.id, j])), [jobs]);
   const returned = useMemo(() => handoverProtocols.filter((h) => h.returnDone), [handoverProtocols]);
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const terms = searchTerms(search);
     return returned
       .map((h) => ({ h, job: jobById[h.jobId], machine: machineById[h.machineId] }))
       .filter(({ h }) => (showHistory ? h.erpProcessed : !h.erpProcessed))
       .filter(({ job, machine }) => {
-        if (!q) return true;
-        return [machine?.type, machine?.code, job?.customer, job?.cisloZmluvy].some((v) => (v || "").toLowerCase().includes(q));
+        if (!terms.length) return true;
+        return terms.some((q) => [machine?.type, machine?.code, job?.customer, job?.cisloZmluvy].some((v) => (v || "").toLowerCase().includes(q)));
       })
       // nespracované od najstaršieho vrátenia (Rado 7. 11.), História od posledne spracovaného (k62 dizajn D2)
       .sort(showHistory ? byKeys([(x) => x.h.erpProcessedAt, -1], [(x) => x.h.returnDate, -1], [(x) => x.h.createdAt, -1], [(x) => x.h.id, -1])
@@ -31604,10 +32256,19 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
     mth: (x) => { const [a, b] = jobMthPair(assignments, x.h.jobId, x.h); return a != null && b != null ? b - a : null; },
     faktura: (x) => x.h.erpOrderNumber, spracovane: (x) => x.h.erpProcessedAt,
   }), [rows, ls.sort, assignments]);
+  const head = (<>
+    <h1 className="page-h1" style={{ marginBottom: 14 }}>ERP podklady</h1>
+    <div className="seg" role="group" aria-label="Druh podkladu" style={{ marginBottom: 12 }}>
+      {[["vratene", "Ukončené prenájmy"], ["mesacne", "Mesačná fakturácia"]].map(([id, label]) => (
+        <button key={id} type="button" className={tab === id ? "on" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>
+      ))}
+    </div>
+  </>);
+  if (tab === "mesacne") return <ErpMonthlyView handoverProtocols={handoverProtocols} jobById={jobById} machineById={machineById} onMonthly={onMonthly} onOpenProtocol={onOpenProtocol} tabs={head} />;
 
   return (
     <div>
-      <h1 className="page-h1" style={{ marginBottom: 14 }}>ERP podklady</h1>
+      {head}
       <div className="tbar">
         <SearchInput placeholder="Hľadať model, sériové číslo, zákazníka, číslo zmluvy…" value={search} onChange={setSearch} style={{ minWidth: 340 }} />
         <SortSelect ls={ls} cols={sortCols} when="1280" />
@@ -31659,7 +32320,10 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
                 {(() => {
                   // Návrh 11: obdobie podľa protokolov, motohodiny a upozornenia — fakturant nemusí otvárať protokol.
                   const out = String(h.handoverDate || "").slice(0, 10) || (job ? jobFrom(job) : ""), back = String(h.returnDate || "").slice(0, 10);
-                  const days = isRealISODate(out) && isRealISODate(back) ? daysBetween(out, back) + 1 : null;
+                  // Mesačne vyfakturovaný prenájom: záverečný riadok len nevyfakturovaný zvyšok (1.0.875).
+                  const mb = erpMonthlyLast(h), from = mb ? addDaysISO(mb.to, 1) : out;
+                  const days = isRealISODate(from) && isRealISODate(back) ? Math.max(0, daysBetween(from, back) + 1) : null;
+                  const mbNote = mb ? ` · mesačne vyfakturované do ${fmtDate(mb.to)} (${[...new Set(erpMonthlyList(h).filter((e) => !e.skip && e.invoice).map((e) => e.invoice))].join(", ")})` : "";
                   const [a, b] = jobMthPair(assignments, h.jobId, h);
                   const late = job?.endDate && back > job.endDate ? daysBetween(job.endDate, back) : 0;
                   const phs = ["handover", "return"].filter((ph) => h[ph + "Done"]);
@@ -31672,10 +32336,10 @@ function ErpPozicovnaView({ handoverProtocols, assignments, jobs, machineById, d
                   // Okno „po vrátení“ končí ďalším odovzdaním stroja — potom je to poškodenie ďalšieho nájomcu.
                   const nextOut = isRealISODate(back) ? handoverProtocols.reduce((min, x) => { const o = String(x.handoverDate || "").slice(0, 10); return x.jobId !== h.jobId && x.machineId === h.machineId && x.handoverDone && o >= back && (!min || o < min) ? o : min; }, "") : "";
                   const dmg = dmgs.some((d) => !during(d) && (!nextOut || d.dateReported < nextOut)), dmgRental = dmgs.some(during);
-                  const flags = [late > 0 && ["spill-wait", `Vrátené po termíne +${plural(late, "deň", "dni", "dní")}`], dispute && ["spill-problem", "Zákazník nesúhlasí s protokolom"], disputeDone && ["spill-done", "Nesúhlas vybavený"], awaiting && ["spill-wait", "Čaká na potvrdenie zákazníka"], dmgRental && ["spill-problem", "Poškodenie počas prenájmu"], dmg && ["spill-problem", "Poškodenie po vrátení"]].filter(Boolean);
+                  const flags = [late > 0 && ["spill-wait", `Vrátené po termíne +${plural(late, "deň", "dni", "dní")}`], dispute && ["spill-problem", "Zákazník nesúhlasí s protokolom"], disputeDone && ["spill-done", "Nesúhlas vybavený"], awaiting && ["spill-wait", "Čaká na potvrdenie zákazníka"], dmgRental && ["spill-problem", "Poškodenie počas prenájmu"], dmg && ["spill-problem", "Poškodenie po vrátení"], mb && back && mb.to > back && ["spill-problem", `Mesačne vyfakturované až do ${fmtDate(mb.to)} — vrátené skôr`]].filter(Boolean);
                   return <>
-                    <td data-label="Obdobie" className="tnum">{nbDates(`${isRealISODate(out) ? fmtDate(out) : "—"} – ${back ? fmtDate(back) : "—"}`)}{days != null && <div className="cell-sub">{plural(days, "deň", "dni", "dní")}{nbDates(job?.startDate && job?.endDate && (job.startDate !== out || job.endDate !== back) ? ` · zmluvne ${fmtDate(job.startDate)} – ${fmtDate(job.endDate)}` : "")}</div>}</td>
-                    <td data-label="Motohodiny" className="tnum" style={{ whiteSpace: "nowrap" }}>{a != null || b != null ? `${a != null ? fmtMth(a) : "—"} → ${b != null ? fmtMth(b) : "—"}` : "—"}{a != null && b != null && <div className="cell-sub">+{fmtMth(b - a)} MTH</div>}{jobFuelLines(assignments, h.jobId).map((t) => <div key={t} className="cell-sub">{t}</div>)}</td>
+                    <td data-label="Obdobie" className="tnum">{nbDates(`${isRealISODate(from) && !(mb && days === 0) ? fmtDate(from) : "—"} – ${back ? fmtDate(back) : "—"}`)}{days != null && <div className="cell-sub">{plural(days, "deň", "dni", "dní")}{nbDates(mbNote)}{nbDates(job?.startDate && job?.endDate && (job.startDate !== out || job.endDate !== back) ? ` · zmluvne ${fmtDate(job.startDate)} – ${fmtDate(job.endDate)}` : "")}</div>}</td>
+                    <td data-label="Motohodiny, palivo" className="tnum" style={{ whiteSpace: "nowrap" }}>{a != null || b != null ? `${a != null ? fmtMth(a) : "—"} → ${b != null ? fmtMth(b) : "—"}` : "—"}{a != null && b != null && <div className="cell-sub">+{fmtMth(b - a)} MTH</div>}{jobFuelLines(assignments, h.jobId).map((t) => <div key={t} className="cell-sub">{t}</div>)}</td>
                     <td data-label="Upozornenia">{flags.length ? <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{flags.map(([c, t]) => <span key={t} className={`spill ${c}`} style={{ whiteSpace: "normal", borderRadius: 8 }}>{t}</span>)}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>}</td>
                   </>;
                 })()}
@@ -31787,11 +32451,11 @@ function UradneSkuskyView({ damages, technicians, machineById, today, user, onAs
   }
   // Vedúci technik (BA) vidí v zozname len svoje depá (BA + NR).
   // Vedúci technik BA vidí všetky záznamy; prideľovať smie len svojim technikom.
-  if (search.trim()) {
-    const q = search.toLowerCase();
+  const terms = searchTerms(search);
+  if (terms.length) {
     filtered = filtered.filter((d) => {
       const m = machineById[d.machineId];
-      return (
+      return terms.some((q) =>
         (d.code || "").toLowerCase().includes(q) ||
         (d.model || "").toLowerCase().includes(q) ||
         (m?.depo || "").toLowerCase().includes(q) ||
@@ -31973,7 +32637,7 @@ function DamageAssignModal({ damage, technicians, user, assignments, today, hasS
   return (
     <Modal eyebrow="Prideliť" title={damage.code} onClose={onClose} onBack={onBack}>
       <Field label="Technici * (dá sa vybrať viac)">
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
+        <div data-miss={!technicianIds.length || undefined} style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
           {assignableTechnicians.filter((t) => !empGone(t)).map((t) => {
             const absence = absenceOn(t.id);
             const workload = workloadOn(t.id);
@@ -32010,11 +32674,7 @@ function DamageAssignModal({ damage, technicians, user, assignments, today, hasS
         return again.length > 0 && <div className="fnote fnote-y" style={{ marginBottom: 10 }}>{again.map((id) => technicians.find((t) => t.id === id)?.name).filter(Boolean).join(", ")} už {fmtDate(date)} k tomuto tiketu protokol vypísal — uložením pribudne druhý zásah v ten istý deň.</div>;
       })()}
       {damage.stav === "caka_diely" && <div className="fnote fnote-y" style={{ marginBottom: 10 }}>Tiket čaká na diely — pridelením na dnes alebo neskôr ho prepnete na „Pridelené“.</div>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
-          Uložiť pridelenie
-        </button>
-        {hasExistingAssignment && (
+      <FormFoot cancel={false} missing={[!technicianIds.length && "technik", !date && "deň"].filter(Boolean)} left={hasExistingAssignment && (
           <button
             className="btn btn-ghost"
             style={{ color: "var(--danger)" }}
@@ -32023,8 +32683,11 @@ function DamageAssignModal({ damage, technicians, user, assignments, today, hasS
           >
             Zrušiť priradenie
           </button>
-        )}
-      </div>
+        )}>
+        <button className="btn btn-accent" disabled={!canSave} onClick={() => onSave(technicianIds, date)}>
+          Uložiť pridelenie
+        </button>
+      </FormFoot>
     </Modal>
   );
 }
@@ -34301,7 +34964,7 @@ function PoziciovnaStatistiky({ machines, machineModels, assignments, jobs, rese
   const lostByModel = {};
   // „Stratená“ = nepremenená rezervácia, ktorej začiatok už prešiel (čakajúce a budúce ešte žijú).
   periodReservations.filter((r) => !isConv(r) && isRealISODate(r.expectedStart) && r.expectedStart < today).forEach((r) => {
-    const t = machineById.get(r.machineId)?.type || "— bez modelu —";
+    const t = machineById.get(r.machineId)?.type || r.model || "— bez modelu —";
     lostByModel[t] = (lostByModel[t] || 0) + 1;
   });
   const shortRows = rentabilityRows.filter((r) => r.pct >= 85).sort((a, b) => b.pct - a.pct);
@@ -35308,8 +35971,9 @@ function AddSparePartModal({ canManage, defaultDepo, depoOptions, machines, onCl
 
 function MachineModelsView({ machineModels, onUpdate, onDelete }) {
   const [search, setSearch] = useState("");
-  const filtered = search.trim()
-    ? machineModels.filter((mm) => (mm.name || "").toLowerCase().includes(search.trim().toLowerCase()))
+  const terms = searchTerms(search);
+  const filtered = terms.length
+    ? machineModels.filter((mm) => terms.some((q) => (mm.name || "").toLowerCase().includes(q)))
     : machineModels;
   const sorted = [...filtered].sort(byKeys("name"));
   const missingCount = machineModels.filter((mm) => !mm.category).length;
@@ -35327,7 +35991,7 @@ function MachineModelsView({ machineModels, onUpdate, onDelete }) {
         </div>
       )}
       <div className="tbar">
-        <SearchInput placeholder="Hľadať model…" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
+        <SearchInput placeholder="Hľadať model… (viac oddeľte čiarkou)" value={search} onChange={setSearch} style={{ minWidth: 300 }} />
       </div>
       <div className="panel table-wrap jobs-wrap" style={{ padding: 0, boxShadow: "none", borderRadius: 12 }}>
         <table className="table-cards jobs-table models-table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -35819,7 +36483,7 @@ function TechWeekStrip({ assignments, weeklyDuty, myId, today, onGo, lateN = 0, 
     </section>
   );
 }
-function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDiscardBlocked, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
+function TodayView({ blockedItems, hpDrafts, draftsOnCards, onOpenHpDraft, allAssignments, onDiscardBlocked, onRetryBlocked, jobDispatcher, user, myEmployee, today, tomorrow, assignments, handoverProtocols, damages, jobs, machineById, partHandovers, ezMeasurements, weeklyDuty, hasServiceProtocol,
   onProtocol, onInspection, onEzDay, onPartHandover, onOpenDamage, whoPanel, transportsPanel, onAskDaily, employees, depoCheckers, checkerSubstitutions, onGo, onDriverReport }) {
   const role = user?.role;
   const isDriver = role === "sofer" || role === "externy_sofer";
@@ -35895,8 +36559,12 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
     </>
   );
 
+  // B8 (1.0.875): koncept k úlohe technika (kontrola, servisný protokol) alebo k preprave šoféra je priamo na jej karte — samostatný riadok len bez karty.
+  const draftFor = (a) => (hpDrafts || []).find((d) => (a.kind === "kontrolaStroja" ? draftKind(d) === "ci" && d.assignmentId === a.id
+    : !a.kind && draftKind(d) === "sp" && (a.damageId ? d.params?.damageId === a.damageId : d.params?.assignmentId === a.id)));
+  const onCard = (d) => (draftsOnCards || "").split("|").includes(d.key) || (!isDriver && [...late, ...todays].some((a) => draftFor(a) === d)); // late/todays: len vetva technika (volá sa až pri vykreslení)
   // Rozpracovaný protokol v zariadení — nenápadná pripomienka, nech sa nezabudne (Rado 17. 11.).
-  const draftSec = (hpDrafts || []).map((d) => {
+  const draftSec = () => (hpDrafts || []).filter((d) => !onCard(d)).map((d) => {
     const job = (jobs || []).find((j) => j.id === d.jobId);
     if (draftKind(d) === "sp") {
       return (
@@ -35905,29 +36573,31 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
             <strong>Rozpracovaný servisný protokol — {nbHyphen(d.machineCode || "—")}</strong>
             <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.customer, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
           </span>
-          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>Pokračovať</button>
+          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)} aria-label={`Pokračovať — rozpracovaný servisný protokol ${d.machineCode || ""}`.trim()}>Pokračovať</button>
         </div>
       );
     }
     if (draftKind(d) === "ci") {
       const a = (allAssignments || []).find((x) => x.id === d.assignmentId);
+      const lbl = a && !a.resolved && !a.skipped && !a.cancelledAt ? "Pokračovať" : "Zahodiť"; // uložená / zrušená inde — okno ponúkne len zahodenie (k68 S2)
       return (
         <div key={d.key} className="panel hp-draft-row ci-draft-row" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
           <span style={{ flex: "1 1 200px", minWidth: 0 }}>
             <strong>Rozpracovaná kontrola — {nbHyphen(machineById[a?.machineId]?.code || d.machineCode || "—")}</strong>
             <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.phase === "vratenie" ? "po vrátení" : "pred vývozom", job?.customer || d.customer, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
           </span>
-          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>{a ? "Pokračovať" : "Zahodiť"}</button>
+          <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)} aria-label={`${lbl} — rozpracovaná kontrola ${machineById[a?.machineId]?.code || d.machineCode || ""}`.trim()}>{lbl}</button>
         </div>
       );
     }
+    const lbl = job && !(handoverProtocols || []).find((h) => h.jobId === job.id)?.[d.phase === "vratenie" ? "returnDone" : "handoverDone"] ? "Pokračovať" : "Zahodiť"; // fázu uložil niekto iný (k68 S2)
     return (
       <div key={d.key} className="panel hp-draft-row" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
         <span style={{ flex: "1 1 200px", minWidth: 0 }}>
           <strong>Rozpracovaný protokol — {job?.customer || d.customer || "—"}</strong>
           <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)" }}>{nbHyphen([d.phase === "vratenie" ? "vrátenie" : "prevzatie", machineById[job?.machineId]?.code || d.machineCode, `uložené ${draftSavedText(d.savedAt)}`].filter(Boolean).join(" · "))}</span>
         </span>
-        <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)}>{job ? "Pokračovať" : "Zahodiť"}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => onOpenHpDraft(d)} aria-label={`${lbl} — rozpracovaný protokol ${job?.customer || d.customer || ""}`.trim()}>{lbl}</button>
       </div>
     );
   });
@@ -35936,7 +36606,7 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
     return (
       <div className="today-col" style={{ maxWidth: 720 }}>
         {header()}
-        {draftSec}
+        {draftSec()}
         {blockedSec}
         {whoPanel}
         {transportsPanel}
@@ -35989,7 +36659,14 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
       ...(selfAwaiting(a) ? { tag: "OSOBNÝ ODBER · ODOVZDAŤ", rowTitle: `Osobný odber · ${m?.code || "—"} — odovzdať zákazníkovi` } : {}),
       actions: [{ label: selfAwaiting(a) ? "Odovzdať zákazníkovi" : "Skontrolovať", onClick: () => onInspection(a) }] };
   };
-  const itemFor = (a, late) => (a.kind === "kontrolaStroja" ? checkItem(a, late) : servisItem(a, late));
+  const withDraft = (a, it) => {
+    const d = draftFor(a);
+    if (!d) return it;
+    const note = `rozpracované · uložené ${draftSavedText(d.savedAt)}`;
+    return { ...it, sub: <>{it.sub}<span className="today-draft">{note}</span></>, heroSub: <>{it.heroSub}<span className="today-draft">{note}</span></>, rowSub: [note, it.rowSub].filter(Boolean).join(" · "),
+      actions: [{ ...it.actions[0], label: a.kind === "kontrolaStroja" ? "Pokračovať v kontrole" : "Pokračovať v protokole" }, ...it.actions.slice(1)] };
+  };
+  const itemFor = (a, late) => withDraft(a, a.kind === "kontrolaStroja" ? checkItem(a, late) : servisItem(a, late));
   // Úloha k už vyriešenému tiketu (kolega ho opravil skôr) nie je „mešká“.
   // Jedna definícia „úlohy“ pre text, Môj týždeň aj odznak: otvorená, tiket nie je vyriešený ani nečaká na diely (technik nemôže nič, dispečer ju naplánuje znova).
   const isWork = (a) => (a.kind === "kontrolaStroja" || !a.kind) && open(a) && !(a.damageId && (damageById[a.damageId]?.resolved || damageById[a.damageId]?.stav === "caka_diely"));
@@ -36025,7 +36702,7 @@ function TodayView({ blockedItems, hpDrafts, onOpenHpDraft, allAssignments, onDi
   return (
     <div className="today-col" style={{ maxWidth: 820 }}>
       {header(<> · <b style={{ color: "var(--text)", fontWeight: 600 }}>{total === 0 ? `${hero ? "Na dnes nemáte nič, ďalšie je až zajtra" : "Na dnes nemáte nič otvorené"}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.` : `Máte ${todayWhat}${doneToday ? ` · hotové dnes: ${doneToday}` : ""}.`}</b></>)}
-      {draftSec}
+      {draftSec()}
       {blockedSec}
       {whoPanel}
       <TechWeekStrip assignments={assignments} weeklyDuty={weeklyDuty} myId={myId} today={today} onGo={onGo} lateN={late.length} isWork={isWork} />
@@ -36344,7 +37021,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     const mismatch = (notifications || []).filter((n) => n.title === "Nesúlad depa pri zvoze" && !(n.readBy || []).includes(user.id)).sort(byKeys("-createdAt"));
     const portal = (portalRequests || []).filter((r) => r.type !== "problem" && r.status === "pending" && jobById[r.jobId] && !jobById[r.jobId].notRealized && isMyJob(jobById[r.jobId])).sort(byKeys("createdAt"));
     const ending = mine.filter((j) => j.status !== "completed" && !j.notRealized && j.endDate && j.endDate <= tomorrow).sort(byKeys("endDate", "createdAt")); // aj dávno po konci — zabudnuté neukončené
-    const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo })).sort(byKeys("expectedStart", "createdAt"));
+    const resv = (reservations || []).filter((r) => r.status === "pending" && isMyJob({ fromDepo: machineById[r.machineId]?.depo || r.depo })).sort(byKeys("expectedStart", "createdAt"));
     const todayT = transports.filter((t) => t.date === today).sort(byKeys("type", (t) => t.j.createdAt));
     const lateT = transports.filter((t) => t.driverId && t.date < today && t.date >= addDaysISO(today, -14)) /* ako Prepravy (14 dní) */.sort(byKeys("date", "type", (t) => t.j.createdAt)); // so šoférom, ale bez protokolu
     const issues = mine.filter((j) => j.transportIssueNote && !hpByJob[j.id]?.returnDone).sort(byKeys((j) => j.departureDate || j.startDate, "createdAt")); // po protokole o vrátení už nie (rozhodnutie 23. 10.)
@@ -36376,7 +37053,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
         ? <> · zvoz: {driverById[j.returnDriverId]?.name || "—"} · {nbDates(fmtDate(j.pickupDate || j.endDate))}</> /* stav zvozu ako pri obchodníkovom „KONČÍ“ (návrh k34) */
         : <> · <span style={{ color: "var(--danger-text)", fontWeight: 600 }}>zvoz bez šoféra</span></>)}</>,
       actions: [can(user, "job_complete") && { label: "Ukončiť zákazku", onClick: () => onCompleteJob(j) }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
-    resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
+    resv.forEach((r) => rows.push({ key: r.id, tag: r.requestedAsJob ? "ŽIADOSŤ O ZÁKAZKU" : "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${isModelPiece(r) ? r.model : mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.createdBy ? `zadal ${r.createdBy}` : "", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
     // Revízia/ÚS stroja vyprší ešte počas prenájmu (rovnaké pravidlo ako upozornenie a „Teraz treba“, step97).
     const isoD = isRealISODate;
     const revExp = [];
@@ -36534,7 +37211,7 @@ function todayOfficeModel({ user, myEmployee, today, tomorrow, jobs, reservation
     portal.forEach((r) => { const j = jobById[r.jobId]; rows.push({ key: r.id, tag: "PORTÁL", tone: "red", title: `${j.customer || "—"} — ${r.type === "problem" ? "nahlásený problém" : `zmena vrátenia na ${fmtDate(r.requestedEndDate)}`}`, sub: r.type === "problem" ? "rieši servis · info pre vás" : "schvaľuje dispečer · info pre vás", actions: [{ label: "Otvoriť zákazku", onClick: () => onOpenJob(j) }, j.customerPhone && { label: "Zavolať", href: `tel:${j.customerPhone}` }] }); });
     ending.forEach((j) => rows.push({ key: j.id, tag: j.endDate === today ? "KONČÍ DNES" : `KONČÍ ${fmtDate(j.endDate)}`, tone: "warn", title: `${j.customer || "—"} · ${mcode(j.machineId)}`, sub: j.selfReturn ? "osobné vrátenie v depe" : j.returnDriverId ? "" : "zvoz zatiaľ bez šoféra",
       actions: [j.customerPhone && { label: "Zavolať", href: `tel:${j.customerPhone}` }, { label: "Otvoriť", onClick: () => onOpenJob(j) }] }));
-    resv.forEach((r) => rows.push({ key: r.id, tag: "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: r.status === "pending" ? "čaká na schválenie dispečerom" : "schválená, čaká na zákazku", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
+    resv.forEach((r) => rows.push({ key: r.id, tag: "REZERVÁCIA", tone: "info", title: `${r.customer || "—"} · ${isModelPiece(r) ? r.model : mcode(r.machineId)} od ${fmtDate(r.expectedStart)}`, sub: isModelPiece(r) ? "čaká na pridelenie stroja" : r.status === "pending" ? "čaká na schválenie dispečerom" : "schválená, čaká na zákazku", actions: [{ label: "Otvoriť", onClick: () => onOpenReservation(r) }] }));
   }
 
   // ───────── Fakturant požičovne: ERP podklady priamo tu ─────────
@@ -37009,6 +37686,15 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
   const dataOk = !!(shown.customer || "").trim() && phItemsValid(shown.items) && (!!rec || phPlaceOk(shown));
   const customerOk = customerAbsent ? photos.length > 0 : !!(customerSig && customerName.trim());
   const canSave = uploading === 0 && dataOk && customerOk && !!handerSig && !changedSinceOpen;
+  // B5: neúplné odovzdanie — tlačidlo ostáva aktívne, klik skočí na prvé chýbajúce (povinné pole, kontrola zmien, podpis).
+  function jumpToMissing(e) {
+    const panel = e.currentTarget.closest(".modal-panel");
+    markEmptyRequired(panel);
+    const t = panel?.querySelector("[data-ph-miss], [data-miss-auto]");
+    if (!t) return;
+    t.scrollIntoView({ behavior: "smooth", block: "center" });
+    (t.matches("input, textarea, select, button") ? t : t.querySelector("input, button"))?.focus({ preventScroll: true });
+  }
   function save() {
     if (!canSave) return;
     const nowIso = new Date(serverNowMs()).toISOString();
@@ -37048,7 +37734,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
               Ešte treba: {[changedSinceOpen && "kontrola zmenených dielov so zákazníkom", !dataOk && "odberateľ a diely (názov, PN, počet)", !customerOk && (customerAbsent ? "fotka" : "meno a podpis odberateľa"), !handerSig && "podpis odovzdávajúceho", uploading > 0 && "dokončenie nahrávania fotiek"].filter(Boolean).join(", ")}.
             </span>
           )}
-          <button className="btn btn-accent" style={{ marginLeft: "auto" }} disabled={!canSave} onClick={save}>Odovzdať a podpísať</button>
+          <button className="btn btn-accent" style={{ marginLeft: "auto" }} data-incomplete={!canSave || undefined} onClick={canSave ? save : jumpToMissing}>Odovzdať a podpísať</button>
         </>
       }
     >
@@ -37072,7 +37758,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         <div style={{ background: "var(--danger-bg, #fde8e8)", border: "1px solid var(--danger)", borderRadius: 8, padding: "8px 10px", marginBottom: 12, fontSize: 13 }}>
           ⚠ Dispečer medzitým zmenil diely alebo odberateľa (vyššie sú aktuálne). Skontrolujte ich so zákazníkom — podpis odberateľa treba dať znova.
           <div style={{ marginTop: 6 }}>
-            <button className="btn btn-ghost" onClick={() => { setSeen({ items: rec.items, customer: rec.customer }); setCustomerSig(null); }}>Skontrolované so zákazníkom</button>
+            <button className="btn btn-ghost" data-ph-miss onClick={() => { setSeen({ items: rec.items, customer: rec.customer }); setCustomerSig(null); }}>Skontrolované so zákazníkom</button>
           </div>
         </div>
       )}
@@ -37088,7 +37774,7 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         <input type="checkbox" checked={customerAbsent} onChange={(e) => setCustomerAbsent(e.target.checked)} /> Odberateľ nie je prítomný (namiesto podpisu fotka)
       </label>
       {customerAbsent ? (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }} data-ph-miss={!photos.length || undefined}>
           <PhotoPickButtons onFiles={addPhotos} />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{photos.map((p, i) => <img key={i} src={p} alt={`Foto ${i + 1}`} style={{ height: 60, borderRadius: 4 }} />)}</div>
           {uploading > 0 && <div style={{ fontSize: 12 }}>Nahrávam fotky…</div>}
@@ -37098,8 +37784,8 @@ function PartHandoverSignModal({ rec, customers, machines, user, myEmployee, onC
         <Field label="Meno preberajúceho *"><input value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: "100%" }} /></Field>
       )}
       <div className="resp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        {customerAbsent ? <div /> : <div><SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} /><PrivacyNote /></div>}
-        <SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} />
+        {customerAbsent ? <div /> : <div data-ph-miss={!customerSig || undefined}><SignaturePad label="Podpis odberateľa" value={customerSig} onChange={setCustomerSig} /><PrivacyNote /></div>}
+        <div data-ph-miss={!handerSig || undefined}><SignaturePad label={`Podpis odovzdávajúceho (${myName || "ja"})`} value={handerSig} onChange={setHanderSig} /></div>
       </div>
     </Modal>
   );
@@ -37383,7 +38069,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
   const q = searchQuery.trim().toLowerCase();
   const searchResults = q
     ? applyListSort(searchScope
-        .filter((p) => (p.cisloDielu || "").toLowerCase().includes(q) || (p.popisDielu || "").toLowerCase().includes(q))
+        .filter((p) => searchTerms(q).some((t) => (p.cisloDielu || "").toLowerCase().includes(t) || (p.popisDielu || "").toLowerCase().includes(t)))
         .sort(byKeys([(p) => p.requestedAt || p.createdAt, -1])), ls.sort, spSort)
     : [];
 
@@ -37553,7 +38239,7 @@ function SparePartsView({ spareParts, machines, myEmployee, user, today, targetD
       )}
 
       <div className="tbar" style={{ marginBottom: 4 }}>
-        <SearchInput placeholder="Hľadať diel (číslo, popis) — všetky depá…" value={searchQuery} onChange={setSearchQuery} style={{ flex: "1 1 280px", maxWidth: 480 }} />
+        <SearchInput placeholder="Hľadať diel (číslo, popis) — všetky depá… (viac oddeľte čiarkou)" value={searchQuery} onChange={setSearchQuery} style={{ flex: "1 1 280px", maxWidth: 480 }} />
         {q && <button className="btn btn-outline" onClick={() => setSearchQuery("")}>✕ Zrušiť hľadanie</button>}
         <SortSelect ls={ls} cols={[["dodavatel", "Dodávateľ"], ["cisloDielu", "Číslo dielu"], ["popisDielu", "Popis dielu"], ["pocetKusov", "Počet kusov"], ["urcenie", "Určenie"], ["stav", "Stav"], ["datum", "Dátum objednania"], ["nakupna", "Nákupná objednávka"]]} />
         {!q && (
@@ -38345,7 +39031,7 @@ function AuditLogView({ profiles, employees = [], machines = [], jobs = [], dama
                 const pj = !data?.code && data?.jobId ? jobs.find((j) => j.id === data.jobId) : null;
                 const pjLabel = pj ? [machines.find((m) => m.id === (data.machineId || pj.machineId))?.code, pj.customer].filter(Boolean).join(" · ") : "";
                 const plLabel = e.table_name === "protocolLogs" ? [nameOf[data?.machineId] || data?.machineSerial, data?.clientName].filter(Boolean).join(" · ") : ""; // servisný protokol: stroj · zákazník
-                const rsLabel = e.table_name === "reservations" && data ? [data.customer, nameOf[data.machineId], data.expectedStart && fmtRange(data.expectedStart, data.expectedEnd || data.expectedStart)].filter(Boolean).join(" · ") : ""; // rezervácia: zákazník · stroj · termín
+                const rsLabel = e.table_name === "reservations" && data ? [data.customer, nameOf[data.machineId] || data.model, data.expectedStart && fmtRange(data.expectedStart, data.expectedEnd || data.expectedStart)].filter(Boolean).join(" · ") : ""; // rezervácia: zákazník · stroj · termín
                 const label = rsLabel || data?.code || data?.name || data?.customer || data?.cisloDielu || pjLabel || plLabel || e.record_id;
                 const n = e.group.length;
                 const revs = e.table_name === "damages" && e.action === "insert" && e.group.every((x) => ["revizia", "uradnaSkuska"].includes(x.new_data?.type));
@@ -38663,6 +39349,7 @@ function GlobalStyle() {
       .today-hero-id { font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
       .today-hero-id small { font-size: 20px; font-weight: 500; color: var(--text-dim); }
       .today-hero-sub { font-size: 17px; line-height: 1.35; }
+      .today-draft { display: block; font-size: 14px; font-weight: 600; color: var(--s-wait); } /* B8: rozpracovaný protokol/kontrola na karte */
       .today-hero .btn { min-height: 48px; font-size: 16px; border-radius: var(--r-lg); display: flex; align-items: center; justify-content: center; gap: 6px; }
       .today-hero .btn.today-main { min-height: 56px; font-size: 18px; font-weight: 700; }
       .today-hero .btn.today-nav { min-height: 52px; font-size: 17px; font-weight: 700; }
@@ -38809,7 +39496,7 @@ function GlobalStyle() {
         .bell-check { min-height: 44px !important; }
         .user-menu-panel button { min-height: 44px; }
         .stat-info-btn { width: 44px; height: 44px; margin: -14px -6px; }
-        a[href^="tel:"], a[href^="mailto:"], .side-dl dd > button { padding-top: 13px !important; padding-bottom: 13px !important; margin-top: -13px; margin-bottom: -13px; }
+        a[href^="tel:"]:not(.btn), a[href^="mailto:"]:not(.btn), .side-dl dd > button { padding-top: 13px !important; padding-bottom: 13px !important; margin-top: -13px; margin-bottom: -13px; }
       }
       /* Zvonček pripnutý vpravo (PC od 1600 px): obsah sa zúži, s maSKotom sa delí o miesto — otvorený je vždy jeden. */
       .panel.bell-side { position: fixed; top: var(--header-h, 56px); right: 0; bottom: 0; width: 360px; overflow-y: auto; z-index: 60; border-width: 0 0 0 1px; border-radius: 0; box-shadow: none; }
@@ -38875,6 +39562,7 @@ function GlobalStyle() {
            vedľa labelu, nech sa nemusí posúvať do boku ani pri dlhších
            hodnotách (popis dielu a pod.). */
         table.table-cards td input, table.table-cards td select { width: 100% !important; max-width: 200px; }
+        table.table-cards td input[type="checkbox"] { width: 24px !important; height: 24px; } /* označenie riadku (Mesačná fakturácia) sa nenaťahuje, na dotyk 24 px ako inde */
         /* Riadkové akcie (Zmazať a pod.) v karte — väčšie dotykové pole než
            na desktope, nech sa na mobile dá bezpečne trafiť prstom. */
         table.table-cards td.td-actions button { min-height: 36px; padding: 6px 14px !important; }
@@ -38973,7 +39661,7 @@ function GlobalStyle() {
       }
       /* sticky bunka stroja má z-index:2 → pri hoveri ju zdvihnúť, inak bublinu prekryjú ďalšie riadky */
       .gantt-name-wrap:hover, .gantt-name-wrap:focus-within { z-index: 60 !important; }
-      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip, .gantt-name-wrap:focus .gantt-tooltip, .gantt-transport-icon:hover .gantt-tooltip { visibility: visible; opacity: 1; }
+      .gantt-bar-wrap:hover .gantt-tooltip, .gantt-bar-wrap:focus-visible .gantt-tooltip, .gantt-name-wrap:hover .gantt-tooltip, .gantt-name-wrap:focus .gantt-tooltip, .gantt-transport-icon:hover .gantt-tooltip { visibility: visible; opacity: 1; }
       /* Ťahanie zákazky/rezervácie v Gantte (presun/zmena termínu) — stredná
          časť bloku = kurzor "uchopiť" (presun), tenké 8px pruhy na okrajoch =
          kurzor na zmenu šírky (zmena len začiatku/konca). Samotné ťahanie
@@ -39211,6 +39899,10 @@ function GlobalStyle() {
       @media (min-width: 1200px) {
         .sp-fixed { table-layout: fixed; }
         .sp-fixed th { white-space: nowrap !important; }
+        .sp-fixed .th-sort { display: inline-flex; max-width: 100%; } /* úzky stĺpec: oreže sa text, šípka zoradenia ostane vidieť (k68 V1) */
+        .sp-fixed .th-sort-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .sp-fixed .th-sort > [aria-hidden] { flex: none; white-space: pre; }
+        .sp-fixed th:has(.sp-cp) .th-sort { max-width: calc(100% - 26px); } /* miesto pre ⧉, nech pri prechode myšou neprekryje šípku */
         .sp-fixed td :is(input, select) { min-width: 0 !important; max-width: 100% !important; }
         .sp-fixed td:last-child, .sp-fixed th:last-child { padding-right: 8px; }
         .sp-fixed .spc-vyber { width: 40px; } .sp-fixed .spc-dodavatel { width: 10%; } .sp-fixed .spc-cisloPolozky { width: 8.6%; } .sp-fixed .spc-pocetKusov { width: 7.6%; }
@@ -39274,6 +39966,7 @@ function GlobalStyle() {
         .seg.rev-depo > button { padding: 0 14px; }
         .jobs-filt.chip-scroll { display: flex; align-items: center; gap: 8px; width: auto; flex: 1 1 0; min-width: 0; } /* stav, depo a rýchle filtre v jednom riadku vedľa lupy */
         .jobs-quick { flex-basis: auto; }
+        .jobs-tright { order: 2; flex-basis: 100%; margin-left: 0 !important; } /* výber zoradenia pod filtrami, nevytlačí stavové čipy (k68 S5) */
       }
       /* Plán servisu › Prehľad 5 dní na mobile: dni technika pod sebou namiesto vodorovného posúvania (k66 dizajn D3). */
       @media (max-width: 600px) { .plan5-grid { grid-template-columns: minmax(0, 1fr) !important; } .plan5-day { min-width: 0 !important; border-right: 0 !important; } .plan5-day + .plan5-day { border-top: 1px solid var(--border); } }
@@ -39315,6 +40008,8 @@ function GlobalStyle() {
       .fnote { border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-bottom: 14px; }
       .fnote-i { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
       .fnote-y { background: var(--s-wait-bg); color: var(--s-wait); }
+      .cal-await { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 12px; padding: 6px 12px; flex-shrink: 0; max-height: 96px; overflow-y: auto; }
+      .cal-await .btn-link { color: inherit; }
       .fnote-g { background: var(--s-done-bg); color: var(--s-done); }
       .fnote-r { background: var(--danger-bg); color: var(--danger-text); border-left: 3px solid var(--danger); font-weight: 600; }
       .fhint { font-size: 13px; color: var(--text-dim); margin-top: 4px; font-weight: 400; }
@@ -39676,6 +40371,7 @@ function GlobalStyle() {
       .sp-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
       .sp-steps li { flex: 1 1 0; min-width: 0; }
       .sp-steps button { width: 100%; font: inherit; color: var(--text); background: transparent; border: 0; cursor: pointer; }
+      .sp-steps button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
       .sp-strip-nav { padding: 6px 16px 0; }
       .sp-strip-nav .sp-steps button { height: 44px; padding: 19px 0; display: block; }
       .sp-strip-nav .sp-steps button::before { content: ""; display: block; height: 6px; border-radius: 3px; background: var(--border); }
@@ -39697,6 +40393,8 @@ function GlobalStyle() {
       .sp-f.sp-auto input, .sp-f.sp-auto select { background: var(--panel-2); border-color: var(--border); }
       body.dark .sp-f.sp-auto input, body.dark .sp-f.sp-auto select { border-style: dashed; border-color: var(--line-strong); }
       .sp-f.sp-miss input, .sp-f.sp-miss select, .sp-f.sp-miss textarea, .sp-f.sp-miss .sp-outcomes { outline: 2px solid var(--danger); outline-offset: 2px; }
+      .sp-req { color: var(--danger-text); font-weight: 800; }
+      .sp-legend { margin-top: 4px; font-size: 14px; color: var(--text-dim); }
       .sp-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--info-bg); color: var(--info); font-size: 12px; font-weight: 700; }
       .sp-hint { font-size: 14px; font-weight: 400; color: var(--text-dim); }
       .sp-hint-err, .sp-err { color: var(--danger-text); font-size: 14px; font-weight: 600; }
@@ -39986,6 +40684,7 @@ function GlobalStyle() {
           width: 100%;
         }
         .global-search-box.global-search-mobile-open .global-search-input-wrap input { flex: 1 1 auto; }
+        .global-search-box.global-search-mobile-open [role=listbox] { left: auto !important; right: 0; } /* k71e: výsledky zarovnané k pravému okraju — od ľavého okraja poľa pretekali za obrazovku */
         .global-search-mobile-close { display: flex !important; }
         .panel { padding: 12px !important; }
         button.panel.today-tile { padding-right: 40px !important; } /* text dlaždice nesiaha pod › (šípka right 14 px) */
@@ -40266,6 +40965,7 @@ function GlobalStyle() {
         .cal-bar .list-search-box:not(.list-search-mobile-open) { min-width: 0 !important; width: auto !important; }
         .cal-bar .list-search-box.list-search-mobile-open .list-search-mobile-trigger { display: none !important; }
         .cal-bar .list-search-box.list-search-mobile-open .list-search-input-wrap { display: block !important; }
+        .cal-bar .list-search-box.list-search-mobile-open { width: 300px !important; } /* k71e D4: rozbalené pole na tablete ostáva 300 px (inline šírka sa pod 1190 px zužuje) */
       }
       /* Pásy v pláne servisu majú biely text na farbe stavu — v tmavom režime sú tie farby svetlé, preto tu plné tmavšie. */
       .app-shell.dark .gantt-scroll .gantt-cell { --danger: #c62f36; --info: #2b6cb0; --ok: #3d7a28; --warn: #9a5f0c; }
@@ -40277,6 +40977,8 @@ function GlobalStyle() {
         :where(.app-shell) :where(.utab, .mnav-row, .kebab-item, summary, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]), select) { min-height: 44px; }
         .app-shell .seg > button, .app-shell .fchip, .app-shell .tbar :is(input:not([type=checkbox]):not([type=radio]), select), .app-shell :is(.jobs-table, .frow, .tbar) .btn { min-height: 44px; }
         :where(.app-shell) :where(.btn, .utab, button[aria-label$="mesiac"], .depo-chip-btn) { min-width: 44px; }
+        /* D5 (1.0.875): šípky mesiaca v lištách Kalendára a Plánu servisu sú kruhy 44 px ako ⚙, ⓘ a lupa vedľa nich — jeden tvar nástrojov. */
+        .app-shell :is(.cal-bar, .plan-bar) button[aria-label$="mesiac"] { border-radius: 999px !important; width: 44px; padding: 0 !important; }
         .app-shell :is(button, a, select, input, summary, [role=button]):is([style*="min-height: 2"], [style*="min-height: 3"], [style*="min-height: 40px"], [style*="min-height: 41px"], [style*="min-height: 42px"], [style*="min-height: 43px"], [style*="height: 3"], [style*="height: 40px"]):not(.gantt-scroll *) { min-height: 44px !important; }
         .app-shell :is(button, a, [role=button]):is([style*="min-width: 2"], [style*="min-width: 3"], [style*="min-width: 40px"], [style*="min-width: 41px"], [style*="min-width: 42px"], [style*="min-width: 43px"]):not(.gantt-scroll *) { min-width: 44px !important; }
         /* Písmo min. 13 px — drobné inline veľkosti (9–12,5 px) mimo Ganttu, spodná lišta, odznaky, päta. */
@@ -40540,3 +41242,5 @@ export const _testK59 = { suggestCheckClass, shotPhotoMap, checkerTicketText, CH
 export const _testK60a = { fuelFields, fuelText, cleanDone, checkerTicketText, sortShotItems, shotPhotoMap };
 export const _testK61a = { inspectionClosedText, checkerProblemText };
 export const _testK64d = { mergeOnFresh, windowPatch, isLooseProtocol }; // k64d.test.js
+export const _testK71c = { erpMonthlyPeriod, erpMonthlyLast, erpMonthlyUndoable, fmtMonth }; // k71c.test.js
+export const _testK71e = { searchTerms }; // k71e.test.js

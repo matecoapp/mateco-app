@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 // Texty protokolu (SK zhodné s App.jsx, EN preklad) — spoločný modul s platformou.
 import {
@@ -200,11 +200,22 @@ function buildOfficialProtocolHtml(data, en) {
 // Vzhľad podľa základu dizajnu platformy (v1.0.793): nadpisy sekcií Barlow Condensed,
 // telefóny/emaily čiernou, tlačidlá 48 px, rizikové tlačidlo s červeným obrysom.
 const SEC = { fontFamily: "'Barlow Condensed', 'Barlow', Arial, sans-serif", fontSize: 15, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "#5A5A5A", margin: "18px 0 6px" };
-const LINK = { color: "#1A1A1A", textDecoration: "none", padding: "13px 0" }; // inline odkaz: väčšia plocha na ťuknutie (44 px) bez zmeny riadkov (k66 dizajn D4)
+const LINK = { color: "#1A1A1A", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, minHeight: 44, maxWidth: "100%" }; // plocha na ťuknutie 44 px; inline odsadenie prekrývalo telefón e-mailom pod ním (k69 V1)
 // Čiarové ikony z platformy (NAV_ICON_PATHS v App.jsx) namiesto emoji, ktoré každý systém kreslí inak.
 const ICO = { telefon: "M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z", tlaciaren: "M6 9V3h12v6 M6 17H3v-7h18v7h-3 M6 13h12v8H6z" };
 function Ico({ id, size = 16 }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-0.2em" }}><path d={ICO[id]} /></svg>;
+}
+// Stavy bez obsahu zákazky (neplatný / ešte neaktívny odkaz, chyba) — komu zavolať: obchodník, ak ho poznáme, inak linka porúch (k69 S7).
+function HelpContact({ data }) {
+  const t = useT();
+  return (
+    <div style={{ marginTop: 14, fontSize: 15, color: "#1A1A1A" }}>
+      {data?.salespersonPhone
+        ? <div>{t("Váš obchodník", "Your sales representative")}: <a href={`tel:${data.salespersonPhone}`} style={LINK}><Ico id="telefon" /> {data.salespersonPhone}</a></div>
+        : <div>{t("Nahlasovanie porúch", "Fault reporting")}: <a href="tel:+421905979484" style={LINK}><Ico id="telefon" /> +421 905 979 484</a></div>}
+    </div>
+  );
 }
 const BTN = { width: "100%", minHeight: 48, padding: "10px 14px", borderRadius: 8, background: "#fff", fontFamily: "inherit", fontWeight: 600, fontSize: 15, cursor: "pointer" };
 
@@ -273,7 +284,7 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
             <><label htmlFor={`cf-koment-${phaseLabel}`} style={{ display: "block", fontSize: 14, marginBottom: 4 }}>{t("S čím nesúhlasíte?", "What do you disagree with?")} *</label>
               <textarea id={`cf-koment-${phaseLabel}`} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} style={{ width: "100%", border: "1px solid #CFCFCF", borderRadius: 8, padding: 10, fontSize: 15, boxSizing: "border-box" }} /></>
           )}
-          {error && <div style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {t(...error)}</div>}
+          {error && <div role="alert" style={{ fontSize: 14, color: "#8E0A12", marginTop: 6 }}>⚠ {t(...error)}</div>}
           <div style={{ fontSize: 12, color: "#5A5A5A", marginTop: 8 }}>
             {mode === "agree" ? t("Meno a podpis uložíme k protokolu.", "We will store your name and signature with the protocol.") : t("Meno a komentár uložíme k protokolu.", "We will store your name and comment with the protocol.")} <a href={t(PRIVACY_URL, PRIVACY_URL_EN)} target="_blank" rel="noopener noreferrer" style={{ color: "#5A5A5A", textDecoration: "underline", display: "inline-flex", alignItems: "center", minHeight: 44 }}>{t("Ochrana osobných údajov", "Privacy policy")}</a>
           </div>
@@ -390,10 +401,13 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   const boxRef = useRef(null);
   const wasLocked = useRef(jobLocked);
   useEffect(() => { if (wasLocked.current && !jobLocked) setSentH(0); wasLocked.current = jobLocked; }, [jobLocked]); // žiadosť vybavená → dá sa poslať ďalšia
+  const sentRef = useRef(null);
+  const fieldId = useId();
+  useEffect(() => { if (sentH) sentRef.current?.focus(); }, [sentH]); // fokus z tlačidla, ktoré zmizlo, na potvrdenie (k69 S3)
 
   if (sentH) {
     return (
-      <div role="status" style={{ minHeight: sentH, boxSizing: "border-box", border: "1px solid #A9D5B4", background: "#EEF8F0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+      <div ref={sentRef} tabIndex={-1} role="status" style={{ minHeight: sentH, boxSizing: "border-box", border: "1px solid #A9D5B4", background: "#EEF8F0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: "#1E6B33" }}>{t("Odoslané", "Sent")} ✓</div>
         <div style={{ fontSize: 14, color: "#3A3A3A" }}>{type === "problem" ? t("Hlásenie sme dostali.", "We have received your report.") : t("Žiadosť o zmenu dátumu sme dostali.", "We have received your request to change the date.")} {t("Stav nájdete vyššie vo „Vaše žiadosti“.", "You can follow its status above under ‘Your requests’.")}</div>
       </div>
@@ -462,22 +476,23 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
 
   return (
     <div ref={boxRef} style={{ border: "1px solid #E2E2E2", borderRadius: 8, padding: 12 }}>
-      {type === "problem" ? (
-        <textarea maxLength={2000}
+      {type === "problem" ? (<>
+        <label htmlFor={fieldId} style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{t("Čo sa deje so strojom?", "What is wrong with the machine?")}</label>
+        <textarea id={fieldId} autoFocus maxLength={2000}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={3}
           placeholder={t("Čo presne sa deje…", "What exactly is happening…")}
           style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, padding: 10, borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
         />
-      ) : (
+      </>) : (
         <>
           <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 6 }}>
             {t("Vyberte nový dátum vrátenia stroja — či už chcete prenájom predĺžiť, alebo stroj vrátiť skôr.", "Choose a new return date for the machine — whether you want to extend the rental or return the machine earlier.")}
           </div>
           {currentEnd && <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{t("Teraz do", "Currently until")} {fmtDate(currentEnd, en)}</div>}
           <input
-            type="date"
+            type="date" autoFocus
             min={todayBA()}
             max={maxEnd}
             aria-label={t("Nový dátum vrátenia", "New return date")}
@@ -487,7 +502,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
           />
         </>
       )}
-      {error && <div style={{ fontSize: 14, color: "#8E0A12", background: "#FDF1F1", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>⚠ {Array.isArray(error) ? t(...error) : REASON_LABEL[error]}</div>}
+      {error && <div role="alert" style={{ fontSize: 14, color: "#8E0A12", background: "#FDF1F1", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>⚠ {Array.isArray(error) ? t(...error) : REASON_LABEL[error]}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
@@ -527,7 +542,7 @@ function RequestHistory({ requests }) {
   if (!requests || requests.length === 0) return null;
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ ...SEC, marginTop: 0 }}>{t("Vaše žiadosti", "Your requests")}</div>
+      <h2 style={{ ...SEC, marginTop: 0 }}>{t("Vaše žiadosti", "Your requests")}</h2>
       {requests.map((r, i) => {
         const st = PORTAL_REQUEST_STATUS_LABEL[r.status] || PORTAL_REQUEST_STATUS_LABEL.pending;
         return (
@@ -580,6 +595,7 @@ function Flag({ code }) {
 }
 
 export default function CustomerPortal({ token }) {
+  const [retry, setRetry] = useState(0); // „Skúsiť znova“ po chybe načítania
   const [state, setState] = useState("loading"); // loading | ok | invalid | error
   const [data, setData] = useState(null);
   useEffect(() => { document.body.style.margin = "0"; }, []); // bez bieleho rámika okolo hlavičky
@@ -667,7 +683,7 @@ export default function CustomerPortal({ token }) {
           setState("ok");
         });
     }
-    refetch(true, 2);
+    refetch(true, retry ? 0 : 2);
     const interval = setInterval(() => refetch(false), 20000);
     function onVisible() {
       if (document.visibilityState === "visible") refetch(false);
@@ -682,7 +698,7 @@ export default function CustomerPortal({ token }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-  }, [token]);
+  }, [token, retry]);
 
   // Dispečer prenájom ukončil, stroj čaká na zvoz — predĺženie sa už neponúka (k38 S1).
   const completed = !!data?.completed && !data.returnDone && !data.notRealized;
@@ -704,7 +720,7 @@ export default function CustomerPortal({ token }) {
           <span style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px", flexShrink: 0 }}>
             <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 20, display: "block" }} />
           </span>
-          <span style={{ fontWeight: 600, fontSize: 15, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{t("Stav vašej zákazky", "Your order status")}</span>
+          <h1 style={{ fontWeight: 600, fontSize: 15, flex: 1, minWidth: 0, lineHeight: 1.2, margin: 0 }}>{t("Stav vašej zákazky", "Your order status")}</h1>
           <div role="group" aria-label="Jazyk / Language" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
             {["sk", "en"].map((l) => (
               <button key={l} type="button" lang={l} aria-pressed={lang === l} aria-label={l === "sk" ? "Slovensky" : "English"} onClick={() => setLang(l)}
@@ -726,13 +742,15 @@ export default function CustomerPortal({ token }) {
           </div>
         )}
         {state === "invalid" && (
-          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
+          <div role="status" style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             {t("Tento odkaz už nie je platný.", "This link is no longer valid.")}
+            <HelpContact data={data} />
           </div>
         )}
         {state === "notyet" && (
-          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
+          <div role="status" style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             {t(`Odkaz bude aktívny od ${fmtDate(data?.activeFrom)} — od dňa vývozu stroja.`, `The link will be active from ${fmtDate(data?.activeFrom, true)} — the day the machine is delivered.`)}
+            <HelpContact data={data} />
           </div>
         )}
         {/* v1.0.808: krátka výzva hore — potvrdenie protokolu je až pri protokole na konci stránky */}
@@ -743,8 +761,10 @@ export default function CustomerPortal({ token }) {
           </button>
         )}
         {state === "error" && (
-          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
+          <div role="alert" style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", padding: 24, textAlign: "center", color: "#5A5A5A", fontSize: 15 }}>
             {t("Nepodarilo sa načítať stav zákazky. Skúste to prosím neskôr.", "The order status could not be loaded. Please try again later.")}
+            <button type="button" onClick={() => setRetry((n) => n + 1)} style={{ ...BTN, border: "1px solid #1A1A1A", color: "#1A1A1A", marginTop: 14 }}>{t("Skúsiť znova", "Try again")}</button>
+            <HelpContact data={data} />
           </div>
         )}
         {state === "ok" && data && (
@@ -843,7 +863,7 @@ export default function CustomerPortal({ token }) {
                   </div>
                 )}
 
-                <div style={SEC}>{t("Kontakty", "Contacts")}</div>
+                <h2 style={SEC}>{t("Kontakty", "Contacts")}</h2>
                 {/* Archivovaný obchodník: bez mena a e-mailu, jeho služobný telefón prechádza na nového (Rado 4. 11.). */}
                 {(data.salespersonName || (data.salespersonArchived && data.salespersonPhone)) && (
                   <div style={{ marginBottom: 10, fontSize: 15 }}>
@@ -872,7 +892,7 @@ export default function CustomerPortal({ token }) {
 
               {!data.notRealized && <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                <div style={{ ...SEC, margin: 0 }}>{t("Odovzdávací protokol", "Handover protocol")}{data.protocolNumber ? t(` č. ${data.protocolNumber}`, ` no. ${data.protocolNumber}`) : ""}</div>
+                <h2 style={{ ...SEC, margin: 0 }}>{t("Odovzdávací protokol", "Handover protocol")}{data.protocolNumber ? t(` č. ${data.protocolNumber}`, ` no. ${data.protocolNumber}`) : ""}</h2>
                 {((data.handoverDone && !data.migratedWithoutHandover) || data.returnDone) && (
                   <button
                     onClick={() => {

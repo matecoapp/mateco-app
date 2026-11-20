@@ -25,7 +25,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Text hneď pri otvorení (slabý signál: zákaznícky portál sťahuje celú platformu) — React ho prepíše. -->
+    <div id="root"><p role="status" style="text-align:center;padding:56px 16px;margin:0;color:#5A5A5A;font:15px Arial,sans-serif">Načítavam… / Loading…</p></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
