@@ -147,7 +147,7 @@ function buildOfficialProtocolHtml(data, en) {
     </div>
   </div>
   <div class="meta">
-    <div><span class="l">${L("Sériové číslo")}:</span>${esc(data.machineCode)}</div>
+    <div><span class="l">${L("Sériové číslo")}:</span>${esc(extMachineCode(data.machineCode) ? "" : data.machineCode)}</div>
     <div><span class="l">${L("Typ / Názov")}:</span>${esc(data.machineType)}</div>
     <div><span class="l">${L("Nájomca")}:</span>${esc(data.customer)}</div>
     <div><span class="l">${L("Nájomná zmluva č.")}:</span>${esc(data.cisloZmluvy)}</div>
@@ -175,7 +175,7 @@ function buildOfficialProtocolHtml(data, en) {
         ${data.returnCustomerAbsent ? absentBlock(data.returnCustomerConfirm, data.returnAbsentAt, data.returnDriverName) : sigBlock(data.returnCustomerSignature, L("Za nájomcu"), data.returnCustomerName)}
         ${sigBlock(data.returnDriverSignature, L("Za prenajímateľa"), data.returnDriverName)}
       </div>`
-        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.completed && !data.notRealized ? (en ? `Rental ended — the machine is awaiting ${data.selfReturn ? "return to the depot" : "collection"}.` : `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.`) : L("Stroj je v prenájme — zatiaľ nebol vrátený.")}</div>`}
+        : `<div style="font-size:10.5px;color:#666;padding:8px 0;">${data.supplierReturn && data.completed && !data.notRealized ? (en ? "External transport – collected by the supplier" : "Externá preprava – stroj odvezie dodávateľ") : data.completed && !data.notRealized ? (en ? `Rental ended — the machine is awaiting ${data.selfReturn ? "return to the depot" : "collection"}.` : `Prenájom ukončený — stroj čaká na ${data.selfReturn ? "vrátenie do depa" : "zvoz"}.`) : L("Stroj je v prenájme — zatiaľ nebol vrátený.")}</div>`}
     </div>
   </div>
   <div class="legal">
@@ -300,6 +300,21 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
   );
 }
 
+// Externý stroj (objekt „Externý stroj“) má interný kód EXT-… — zákazník ho nevidí, hlavný údaj je názov stroja pre zákazku (R5).
+// shortcut: portál dostáva len kód, nie objekt — podľa predpony; ak pribudnú externé stroje s iným kódom, poslať príznak z get_portal RPC.
+const extMachineCode = (code) => /^EXT-/i.test(code || "");
+
+// EXT zákazka: prepravu v danom smere zabezpečuje dodávateľ — namiesto protokolu len „Externá preprava“ (1.0.876).
+function ExternalTransportPhase({ title, first, back }) {
+  const t = useT();
+  return (
+    <div style={first ? { padding: "10px 0" } : { borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 14, color: "#5A5A5A" }}>{back ? t("Externá preprava – stroj odvezie dodávateľ", "External transport – collected by the supplier") : t("Externá preprava – stroj privezie dodávateľ", "External transport – delivered by the supplier")}</div>
+    </div>
+  );
+}
+
 function ProtocolPhase({ title, date, statusKey, noteKey, checklist, custSig, driverSig, custAbsent, confirm, photos, photoLabels, onConfirm, paper }) {
   const t = useT();
   const en = useContext(LangCtx) === "en";
@@ -403,6 +418,9 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   useEffect(() => { if (wasLocked.current && !jobLocked) setSentH(0); wasLocked.current = jobLocked; }, [jobLocked]); // žiadosť vybavená → dá sa poslať ďalšia
   const sentRef = useRef(null);
   const fieldId = useId();
+  // B5 ako formuláre platformy (k72i): „Odoslať“ pri prázdnom popise je aktívne — klik ukáže „Chýba“ a vráti do poľa.
+  const [tried, setTried] = useState(false);
+  const missing = type === "problem" && !filled(message);
   useEffect(() => { if (sentH) sentRef.current?.focus(); }, [sentH]); // fokus z tlačidla, ktoré zmizlo, na potvrdenie (k69 S3)
 
   if (sentH) {
@@ -445,6 +463,7 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
   const maxEnd = new Date(Date.now() + 366 * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   async function handleSubmit() {
     if (busy.current) return;
+    if (missing) { setTried(true); document.getElementById(fieldId)?.focus(); return; }
     if (type === "extension" && endDate > maxEnd) { setError(["Dátum môže byť najviac rok dopredu — dlhší prenájom dohodnite s obchodníkom.", "The date can be at most a year ahead — please arrange a longer rental with your sales representative."]); return; }
     busy.current = true;
     setSending(true);
@@ -459,14 +478,14 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
       setEndDate("");
     } else {
       // Kód / dvojica textov — hláška sa preloží aj po prepnutí jazyka (k65 portál D1).
-      setError(REASON_LABEL[reason] ? reason : navigator.onLine ? ["Nepodarilo sa odoslať. Skúste to prosím neskôr.", "Sending failed. Please try again later."] : ["Ste bez signálu — skúste to znova po pripojení.", "You are offline — please try again once you are connected."]);
+      setError(REASON_LABEL[reason] ? reason : navigator.onLine ? ["Nepodarilo sa odoslať. Skúste to znova.", "Sending failed. Please try again."] : ["Ste bez signálu — skúste to znova po pripojení.", "You are offline — please try again once you are connected."]);
     }
   }
 
   if (!open) {
     return (
       <button
-        onClick={() => { setOpen(true); if (type === "extension") setEndDate(currentEnd && currentEnd >= todayBA() ? currentEnd : todayBA()); }} // po termíne — prešlý koniec sa vybrať nedá, predvyplní sa dnešok
+        onClick={() => { setOpen(true); setTried(false); if (type === "extension") setEndDate(currentEnd && currentEnd >= todayBA() ? currentEnd : todayBA()); }} // po termíne — prešlý koniec sa vybrať nedá, predvyplní sa dnešok
         style={primary ? { ...BTN, border: "none", background: "#E30613", color: "#fff" } : { ...BTN, border: type === "problem" ? "1px solid #C4040F" : "1px solid #1A1A1A", color: type === "problem" ? "#C4040F" : "#1A1A1A" }}
       >
         {type === "problem" ? `⚠ ${t("Nahlásiť problém so strojom", "Report a problem with the machine")}` : t("Zmeniť dátum vrátenia", "Change the return date")}
@@ -483,8 +502,11 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
           onChange={(e) => setMessage(e.target.value)}
           rows={3}
           placeholder={t("Čo presne sa deje…", "What exactly is happening…")}
-          style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, padding: 10, borderRadius: 6, border: "1px solid #CFCFCF", marginBottom: 8 }}
+          aria-invalid={(tried && missing) || undefined}
+          aria-describedby={missing ? fieldId + "-m" : undefined}
+          style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 15, padding: 10, borderRadius: 6, border: tried && missing ? "2px solid #C4040F" : "1px solid #CFCFCF", marginBottom: 8 }}
         />
+        {missing && <div id={fieldId + "-m"} role={tried ? "alert" : undefined} style={{ fontSize: 14, marginBottom: 8, ...(tried ? { color: "#8E0A12", fontWeight: 600 } : { color: "#5A5A5A" }) }}>{tried ? t("Chýba: popis problému", "Missing: description of the problem") : t("Ešte treba: popis problému", "Still needed: description of the problem")}</div>}
       </>) : (
         <>
           <div style={{ fontSize: 14, color: "#5A5A5A", marginBottom: 6 }}>
@@ -506,8 +528,8 @@ function RequestForm({ type, jobLocked, currentEnd, primary, onSubmit }) {
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit}
-          disabled={sending || (type === "problem" ? !filled(message) : !endDate || endDate === currentEnd)}
-          style={{ ...BTN, flex: 1, border: "none", ...((type === "problem" ? !filled(message) : !endDate || endDate === currentEnd) ? { background: "#EFEFEF", color: "#767676", cursor: "default" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
+          disabled={sending || (type !== "problem" && (!endDate || endDate === currentEnd))}
+          style={{ ...BTN, flex: 1, border: "none", ...((type !== "problem" && (!endDate || endDate === currentEnd)) ? { background: "#EFEFEF", color: "#767676", cursor: "default" } : { background: "#E30613", color: "#fff" }), opacity: sending ? 0.6 : 1 }}
         >
           {sending ? t("Odosiela sa…", "Sending…") : t("Odoslať", "Send")}
         </button>
@@ -701,7 +723,9 @@ export default function CustomerPortal({ token }) {
   }, [token, retry]);
 
   // Dispečer prenájom ukončil, stroj čaká na zvoz — predĺženie sa už neponúka (k38 S1).
-  const completed = !!data?.completed && !data.returnDone && !data.notRealized;
+  // EXT zákazka (1.0.876): zvoz dodávateľom — po ukončení je stroj späť (protokol o vrátení nebude).
+  const supDone = !!data?.supplierReturn && !!data.completed && !data.notRealized;
+  const completed = !!data?.completed && !data.returnDone && !data.notRealized && !supDone;
   // Po termíne: stroj je u zákazníka po zmluvnom konci — zákazník má vedieť, že sa od neho niečo čaká (N2, k34).
   // „Stroj už odišiel? — Áno“ bez protokolu: stroj je u zákazníka, hoci protokol ešte nie je (k65 portál S3).
   const atCustomer = !!data && (!!data.handoverDone || !!data.departed);
@@ -777,8 +801,8 @@ export default function CustomerPortal({ token }) {
                 </div>
                 <span
                   style={{
-                    background: pickupLate ? "#FDEBD3" : data.returnDone || data.notRealized || completed ? "#EFEFEF" : overdue || departureLate ? "#FDEBD3" : "#E7EEF9",
-                    color: pickupLate ? "#8A4100" : data.returnDone || data.notRealized || completed ? "#3A3A3A" : overdue || departureLate ? "#8A4100" : "#1F4E99",
+                    background: pickupLate ? "#FDEBD3" : data.returnDone || supDone || data.notRealized || completed ? "#EFEFEF" : overdue || departureLate ? "#FDEBD3" : "#E7EEF9",
+                    color: pickupLate ? "#8A4100" : data.returnDone || supDone || data.notRealized || completed ? "#3A3A3A" : overdue || departureLate ? "#8A4100" : "#1F4E99",
                     fontSize: 13,
                     fontWeight: 600,
                     padding: "4px 12px",
@@ -786,13 +810,13 @@ export default function CustomerPortal({ token }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {data.notRealized ? t("Nerealizovaná", "Did not take place") : data.returnDone || completed ? t("Ukončené", "Ended") : !atCustomer ? (data.selfPickup ? t("Čaká na vyzdvihnutie", "Awaiting collection") : t("Čaká na dodanie stroja", "Awaiting delivery")) : overdue ? t("Po termíne", "Overdue") : !data.handoverDone ? t("Stroj je u vás", "The machine is with you") : t("Aktívny prenájom", "Active rental")}
+                  {data.notRealized ? t("Nerealizovaná", "Did not take place") : data.returnDone || supDone || completed ? t("Ukončené", "Ended") : !atCustomer ? (data.selfPickup ? t("Čaká na vyzdvihnutie", "Awaiting collection") : t("Čaká na dodanie stroja", "Awaiting delivery")) : overdue ? t("Po termíne", "Overdue") : !data.handoverDone ? t("Stroj je u vás", "The machine is with you") : t("Aktívny prenájom", "Active rental")}
                 </span>
               </div>
 
               <div style={{ background: "#F7F7F7", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                {data.machineCode && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title={t("Sériové číslo", "Serial number")}>{data.machineCode}</div>}
-                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
+                {data.machineCode && !extMachineCode(data.machineCode) && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title={t("Sériové číslo", "Serial number")}>{data.machineCode}</div>}
+                <div style={extMachineCode(data.machineCode) ? { fontSize: 20, fontWeight: 700, marginBottom: 2 } : { fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
                   {data.machineType || t("Stroj", "Machine")}
                 </div>
                 {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A", overflowWrap: "anywhere" }}>{data.address}</div>}
@@ -845,7 +869,7 @@ export default function CustomerPortal({ token }) {
                     {t("Zákazka sa nerealizovala — stroj nebol vydaný. V prípade otázok kontaktujte obchodníka.", "This order did not take place — the machine was not handed over. If you have any questions, please contact your sales representative.")}
                   </div>
                 )}
-                {!data.returnDone && !data.notRealized && (
+                {!data.returnDone && !supDone && !data.notRealized && (
                   <div style={{ display: "flex", flexDirection: overdue && !pickupPlanned ? "column-reverse" : "column", gap: 8, marginBottom: 14 }}>
                     {/* Pred dodaním stroja nie je čo nahlásiť servisu — zákazník volá obchodníka (Rado 1. 11.). */}
                     {(atCustomer || data.migratedWithoutHandover) && <RequestForm
@@ -908,7 +932,9 @@ export default function CustomerPortal({ token }) {
                   </button>
                 )}
               </div>
-              {!data.handoverDone ? (
+              {!data.handoverDone && data.supplierPickup ? (
+                <ExternalTransportPhase title={t("Prevzatie", "Handover")} first />
+              ) : !data.handoverDone ? (
                 <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>{data.returnDone ? t("Prevzatie nebolo zdokumentované.", "The handover was not documented.") : t("Zatiaľ nevypísaný.", "Not filled in yet.")}</div>
               ) : data.migratedWithoutHandover ? (
                 <div style={{ fontSize: 14, color: "#5A5A5A", padding: "10px 0" }}>
@@ -931,8 +957,10 @@ export default function CustomerPortal({ token }) {
                   paper={data.handoverPaper && paperProtocolLine(false, data.handoverDate, data.handoverDriverName, data.handoverCustomerName, en)}
                 />
               )}
-              {(data.handoverDone || data.returnDone) && (
-                data.returnDone ? (
+              {(data.handoverDone || data.returnDone || data.supplierPickup) && (
+                !data.returnDone && data.supplierReturn ? (
+                  <ExternalTransportPhase title={t("Vrátenie", "Return")} back />
+                ) : data.returnDone ? (
                   <ProtocolPhase
                     title="Vrátenie"
                     date={data.returnDate}
