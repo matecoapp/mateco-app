@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>mateco — Interná platforma</title>
+    <!-- Odkaz zákazníckeho portálu (?portal=…) má hneď pri otvorení názov portálu, nie internej platformy (1.0.877). -->
+    <script>if (/[?&]portal=/.test(location.search)) { var l = ""; try { l = localStorage.getItem("mateco-portal-lang") || ""; } catch (e) {} var L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""]; var sk = l ? l === "sk" : L.some(function (x) { return /^(sk|cs)\b/i.test(x || ""); }); document.title = sk ? "mateco — zákaznícky portál" : "mateco — customer portal"; }</script>
 
     <!-- PWA — umožňuje "Pridať na plochu" a otvorenie na celú obrazovku bez adresného riadku -->
     <link rel="manifest" href="./manifest.json" />

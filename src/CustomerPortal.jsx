@@ -147,7 +147,7 @@ function buildOfficialProtocolHtml(data, en) {
     </div>
   </div>
   <div class="meta">
-    <div><span class="l">${L("Sériové číslo")}:</span>${esc(extMachineCode(data.machineCode) ? "" : data.machineCode)}</div>
+    <div><span class="l">${L("Sériové číslo")}:</span>${esc(isExtMachine(data) ? "" : data.machineCode)}</div>
     <div><span class="l">${L("Typ / Názov")}:</span>${esc(data.machineType)}</div>
     <div><span class="l">${L("Nájomca")}:</span>${esc(data.customer)}</div>
     <div><span class="l">${L("Nájomná zmluva č.")}:</span>${esc(data.cisloZmluvy)}</div>
@@ -159,6 +159,7 @@ function buildOfficialProtocolHtml(data, en) {
       <div class="colhead">${L("PREVZATIE")} (${data.handoverDate ? fd(data.handoverDate) : "—"})</div>
       ${data.migratedWithoutHandover
         ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">${L("Zákazka bola prevzatá zákazníkom pred zavedením tohto systému — prevzatie nie je zdokumentované.")}</div>`
+        : data.supplierPickup && !data.handoverDone ? `<div style="font-size:10.5px;color:#666;padding:8px 0;">${en ? "External transport – delivered by the supplier" : "Externá preprava – stroj privezie dodávateľ"}</div>`
         : data.handoverPaper ? paperBlock(false)
         : `${checklistCol("handoverStatus", "handoverNote")}
       <div class="sigs">
@@ -302,7 +303,8 @@ function ConfirmProtocolBox({ phaseLabel, onSubmit, hasPhotos }) {
 
 // Externý stroj (objekt „Externý stroj“) má interný kód EXT-… — zákazník ho nevidí, hlavný údaj je názov stroja pre zákazku (R5).
 // shortcut: portál dostáva len kód, nie objekt — podľa predpony; ak pribudnú externé stroje s iným kódom, poslať príznak z get_portal RPC.
-const extMachineCode = (code) => /^EXT-/i.test(code || "");
+// 877 (Rado 19a): databáza posiela príznak externalMachine a kód EXT-… už nie; podľa predpony len pri staršej DB.
+const isExtMachine = (data) => !!data?.externalMachine || /^EXT-/i.test(data?.machineCode || "");
 
 // EXT zákazka: prepravu v danom smere zabezpečuje dodávateľ — namiesto protokolu len „Externá preprava“ (1.0.876).
 function ExternalTransportPhase({ title, first, back }) {
@@ -551,6 +553,7 @@ const AUTO_REPLY = {
   not_realized: ["Zákazka sa nerealizovala.", "The rental did not take place."],
   job_deleted: ["Zákazka bola zmazaná.", "The order has been cancelled."],
   job_restored: ["Žiadosť bola zrušená, pošlite ju prosím znova.", "The request was cancelled, please send it again."], // zákazka obnovená z Koša (Rado 16. 11.)
+  machine_for_sale: ["Stroj je určený na predaj — prenájom nie je možné predĺžiť. V prípade otázok kontaktujte obchodníka.", "This machine is being sold — the rental cannot be extended. If you have any questions, please contact your sales representative."],
   returned: ["Stroj už bol vrátený.", "The machine has already been returned."],
   completed_awaiting_pickup: ["Prenájom je už ukončený — stroj čaká na zvoz. V prípade otázok kontaktujte obchodníka.", "The rental has already ended — the machine is awaiting collection. If you have any questions, please contact your sales representative."],
 };
@@ -677,9 +680,13 @@ export default function CustomerPortal({ token }) {
     // bežný prípad prekryje a "naozaj neplatný" odkaz ukáže len o pár sekúnd neskôr.
     function refetch(showLoading, attemptsLeft = 0) {
       if (showLoading) setState((s) => (s === "verifying" ? s : "loading"));
-      supabase
-        .rpc("get_portal_job", { p_token: token })
-        .then(({ data: result, error }) => {
+      // Visiaca odpoveď (slabý signál): po 15 s chybový blok s „Skúsiť znova“, nie večné „Načítavam…“ (k73 portál D2).
+      const ac = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ac && setTimeout(() => ac.abort(), 15000);
+      let q = supabase.rpc("get_portal_job", { p_token: token });
+      if (ac) q = q.abortSignal(ac.signal);
+      q.then(({ data: result, error }) => {
+          if (timer) clearTimeout(timer);
           if (cancelled) return;
           if (error) {
             console.error("get_portal_job zlyhalo", error);
@@ -815,8 +822,8 @@ export default function CustomerPortal({ token }) {
               </div>
 
               <div style={{ background: "#F7F7F7", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                {data.machineCode && !extMachineCode(data.machineCode) && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title={t("Sériové číslo", "Serial number")}>{data.machineCode}</div>}
-                <div style={extMachineCode(data.machineCode) ? { fontSize: 20, fontWeight: 700, marginBottom: 2 } : { fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
+                {data.machineCode && !isExtMachine(data) && <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 2 }} title={t("Sériové číslo", "Serial number")}>{data.machineCode}</div>}
+                <div style={isExtMachine(data) ? { fontSize: 20, fontWeight: 700, marginBottom: 2 } : { fontSize: 15, fontWeight: 500, marginBottom: 2 }}>
                   {data.machineType || t("Stroj", "Machine")}
                 </div>
                 {data.address && !data.selfPickup && <div style={{ fontSize: 14, color: "#5A5A5A", overflowWrap: "anywhere" }}>{data.address}</div>}
