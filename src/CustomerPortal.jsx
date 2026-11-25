@@ -747,11 +747,11 @@ export default function CustomerPortal({ token }) {
     <LangCtx.Provider value={lang}>
     <div style={{ minHeight: "100vh", background: "#F2F2F2", color: "#1A1A1A", fontFamily: "'Barlow', Arial, sans-serif" }}>
       <header style={{ background: "#E30613", padding: "6px 16px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", color: "#fff", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 2 }}> {/* lupa 200 % (≈195 px): nadpis pod logo, EN ostane na obrazovke (k78 portál D3) */}
           <span style={{ display: "inline-flex", alignItems: "center", background: "#fff", borderRadius: 6, padding: "3px 10px", flexShrink: 0 }}>
             <img src={`data:image/png;base64,${MATECO_LOGO_B64}`} alt="mateco" style={{ height: 20, display: "block" }} />
           </span>
-          <h1 style={{ fontWeight: 600, fontSize: 15, flex: 1, minWidth: 0, lineHeight: 1.2, margin: 0 }}>{t("Stav vašej zákazky", "Your order status")}</h1>
+          <h1 style={{ fontWeight: 600, fontSize: 15, flex: "1 1 110px", minWidth: 0, lineHeight: 1.2, margin: 0 }}>{t("Stav vašej zákazky", "Your order status")}</h1>
           <div role="group" aria-label="Jazyk / Language" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
             {["sk", "en"].map((l) => (
               <button key={l} type="button" lang={l} aria-pressed={lang === l} aria-label={l === "sk" ? "Slovensky" : "English"} onClick={() => setLang(l)}
@@ -801,7 +801,7 @@ export default function CustomerPortal({ token }) {
         {state === "ok" && data && (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E2E2E2", overflow: "hidden" }}>
             <div style={{ padding: "16px 18px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                 <div>
                   <div style={{ fontSize: 13, color: "#5A5A5A" }}>{data.code ? (data.code.includes(" · ") ? t("Zákazka", "Order") : t("Zákazka č.", "Order no.")) : data.cisloZmluvy ? t("Zmluva č.", "Agreement no.") : t("Zákazka", "Order")}</div>
                   <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{data.code || data.cisloZmluvy || data.customer || (data.startDate ? t(`Zákazka od ${fmtDate(data.startDate)}`, `Order from ${fmtDate(data.startDate, true)}`) : "—")}</div>

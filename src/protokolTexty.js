@@ -17,7 +17,7 @@ export const HANDOVER_CHECKLIST_ITEMS = [
   "Revízie a denník zdvíhacieho zariadenia",
   "Návod na obsluhu",
   "Svetelný panel, rezervné koleso a predné koleso",
-  "aDBlue - regenerácia motora",
+  "AdBlue – regenerácia motora", // preklep papierového vzoru opravený (Rado 24. 11., 34b)
 ];
 export const HANDOVER_CHECKLIST_ITEMS_EN = [
   "Technical condition of the machine",

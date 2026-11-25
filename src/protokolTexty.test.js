@@ -5,7 +5,7 @@ import * as T from "./protokolTexty.js";
 const SK_CHECKLIST = [
   "Technický stav zariadenia", "Čistota stroja", "Zaškolenie obsluhy", "Nabitie akumulátorov", "Ovládací pult a ovládanie zariadenia",
   "Núdzové ovládanie zariadenia", "Stav náplní (olej, elektrolyt, nafta)", "Nabíjačka a pripojovací kábel", "Podložky pod podperné nohy", "Kľúče",
-  "Revízie a denník zdvíhacieho zariadenia", "Návod na obsluhu", "Svetelný panel, rezervné koleso a predné koleso", "aDBlue - regenerácia motora",
+  "Revízie a denník zdvíhacieho zariadenia", "Návod na obsluhu", "Svetelný panel, rezervné koleso a predné koleso", "AdBlue – regenerácia motora",
 ];
 const SK_RULES = [
   "V zmysle vyhlášky MPSVaR SR č. 508/2009, obsluhovať vyhradené zariadenie môžu len oprávnené osoby s príslušným osvedčením.",

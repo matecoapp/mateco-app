@@ -9,7 +9,8 @@ import CustomerPortal from "./CustomerPortal.jsx";
 function resetMobileZoom() {
   const viewport = document.querySelector('meta[name="viewport"]');
   if (!viewport) return;
-  const original = viewport.getAttribute("content");
+  // bez už pridaného zámku — dva rýchle odchody z polí (do 300 ms) by ho inak uložili ako „pôvodný“ natrvalo (k78 prístupnosť D1)
+  const original = viewport.getAttribute("content").replace(/, maximum-scale=1\.0/g, "");
   viewport.setAttribute("content", `${original}, maximum-scale=1.0`);
   window.setTimeout(() => {
     viewport.setAttribute("content", original);
