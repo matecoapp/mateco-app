@@ -40988,7 +40988,8 @@ function GlobalStyle() {
       .mnav-b.dot { width: 10px; height: 10px; padding: 0 !important; top: 4px; left: 58%; }
       .mnav-plus { width: 50px; height: 50px; border-radius: 50%; background: var(--accent-fill); color: #fff; display: flex; align-items: center; justify-content: center; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
       @media (max-height: 500px) { .mnav-plus { width: 42px; height: 42px; margin-top: 0; } } /* mobil na šírku: „+“ nevyčnieva z lišty a neprekrýva tlačidlá nad ňou (napr. Vyplniť protokol) */
-      .mnav-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-radius: 16px 16px 0 0; padding: 10px 14px calc(18px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; box-sizing: border-box; }
+      .mnav-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-radius: 16px 16px 0 0; padding: 10px 14px calc(18px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; box-sizing: border-box; overscroll-behavior: contain; }
+      .mobile-nav-scrim { touch-action: none; } /* pri otvorenom menu ťah po stmavenom pozadí neposúva stránku pod ním */
       .mnav-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 10px; }
       .mnav-sheet-title { font-weight: 700; margin: 2px 6px 6px; }
       .mnav-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 6px; border: none; border-bottom: 1px solid var(--border); background: transparent; font: inherit; font-size: 15px; color: var(--text); text-align: left; cursor: pointer; }
@@ -42058,7 +42059,9 @@ function GlobalStyle() {
       @media (max-width: 720px), (max-width: 1000px) and (pointer: coarse) and (hover: none), (max-width: 1000px) and (max-height: 500px) {
         /* iOS "gumové" posúvanie stránky mimo obrazovku (najmä šikmým ťahom prsta) —
            len na mobile, na PC by to blokovalo bežné rolovanie kolieskom/scrollbarom. */
-        html, body { overscroll-behavior: none; overflow-x: hidden; }
+        /* clip namiesto hidden: hidden na html aj body robil z body vnorenú posuvnú plochu — Chrome na Androide
+           potom prstom neposúval stránku (Dnes), posúvala sa až pod otvoreným menu. hidden ostáva pre staré prehliadače. */
+        html, body { overscroll-behavior: none; overflow-x: hidden; overflow-x: clip; }
 
         /* To isté pre servisný protokol — len na mobile, nech na PC ide bežné
            rolovanie kolieskom myši (predtým sa toto omylom aplikovalo vždy). */
